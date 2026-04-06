@@ -4,443 +4,612 @@ export type Json =
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[]
+  | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
+    PostgrestVersion: "14.5";
+  };
   public: {
     Tables: {
-      cases: {
-        Row: {
-          assigned_consultant: string | null
-          case_number: string
-          created_at: string
-          description: string | null
-          id: string
-          priority: string | null
-          status: string
-          title: string
-          type: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          assigned_consultant?: string | null
-          case_number: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          priority?: string | null
-          status?: string
-          title: string
-          type?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          assigned_consultant?: string | null
-          case_number?: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          priority?: string | null
-          status?: string
-          title?: string
-          type?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      deadline_alerts: {
-        Row: {
-          case_id: string
-          created_at: string
-          description: string | null
-          due_date: string
-          id: string
-          is_completed: boolean | null
-          title: string
-          user_id: string
-        }
-        Insert: {
-          case_id: string
-          created_at?: string
-          description?: string | null
-          due_date: string
-          id?: string
-          is_completed?: boolean | null
-          title: string
-          user_id: string
-        }
-        Update: {
-          case_id?: string
-          created_at?: string
-          description?: string | null
-          due_date?: string
-          id?: string
-          is_completed?: boolean | null
-          title?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "deadline_alerts_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      documents: {
-        Row: {
-          case_id: string | null
-          created_at: string
-          document_type: string | null
-          file_name: string
-          file_path: string
-          file_size: number | null
-          file_type: string | null
-          id: string
-          status: string | null
-          user_id: string
-        }
-        Insert: {
-          case_id?: string | null
-          created_at?: string
-          document_type?: string | null
-          file_name: string
-          file_path: string
-          file_size?: number | null
-          file_type?: string | null
-          id?: string
-          status?: string | null
-          user_id: string
-        }
-        Update: {
-          case_id?: string | null
-          created_at?: string
-          document_type?: string | null
-          file_name?: string
-          file_path?: string
-          file_size?: number | null
-          file_type?: string | null
-          id?: string
-          status?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "documents_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      invoices: {
-        Row: {
-          amount: number
-          case_id: string | null
-          created_at: string
-          description: string | null
-          due_date: string | null
-          id: string
-          invoice_number: string
-          paid_date: string | null
-          proof_of_payment: string | null
-          status: string
-          total_amount: number
-          updated_at: string
-          user_id: string
-          vat_amount: number | null
-        }
-        Insert: {
-          amount: number
-          case_id?: string | null
-          created_at?: string
-          description?: string | null
-          due_date?: string | null
-          id?: string
-          invoice_number: string
-          paid_date?: string | null
-          proof_of_payment?: string | null
-          status?: string
-          total_amount: number
-          updated_at?: string
-          user_id: string
-          vat_amount?: number | null
-        }
-        Update: {
-          amount?: number
-          case_id?: string | null
-          created_at?: string
-          description?: string | null
-          due_date?: string | null
-          id?: string
-          invoice_number?: string
-          paid_date?: string | null
-          proof_of_payment?: string | null
-          status?: string
-          total_amount?: number
-          updated_at?: string
-          user_id?: string
-          vat_amount?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "invoices_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      messages: {
-        Row: {
-          case_id: string
-          content: string
-          created_at: string
-          id: string
-          is_read: boolean | null
-          sender_id: string
-        }
-        Insert: {
-          case_id: string
-          content: string
-          created_at?: string
-          id?: string
-          is_read?: boolean | null
-          sender_id: string
-        }
-        Update: {
-          case_id?: string
-          content?: string
-          created_at?: string
-          id?: string
-          is_read?: boolean | null
-          sender_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "messages_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
-          company_name: string | null
-          created_at: string
-          email: string | null
-          full_name: string | null
-          id: string
-          id_number: string | null
-          phone: string | null
-          tax_number: string | null
-          updated_at: string
-          user_id: string
-        }
+          id: string;
+          role: Database["public"]["Enums"]["app_role"];
+          full_name: string | null;
+          email: string | null;
+          phone: string | null;
+          avatar_url: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
         Insert: {
-          company_name?: string | null
-          created_at?: string
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          id_number?: string | null
-          phone?: string | null
-          tax_number?: string | null
-          updated_at?: string
-          user_id: string
-        }
+          id: string;
+          role?: Database["public"]["Enums"]["app_role"];
+          full_name?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          avatar_url?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
         Update: {
-          company_name?: string | null
-          created_at?: string
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          id_number?: string | null
-          phone?: string | null
-          tax_number?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      user_roles: {
+          id?: string;
+          role?: Database["public"]["Enums"]["app_role"];
+          full_name?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          avatar_url?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      clients: {
         Row: {
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          id: string;
+          profile_id: string;
+          first_name: string | null;
+          last_name: string | null;
+          company_name: string | null;
+          tax_number: string | null;
+          sars_reference_number: string | null;
+          id_number: string | null;
+          client_code: string | null;
+          address_line_1: string | null;
+          address_line_2: string | null;
+          city: string | null;
+          province: string | null;
+          postal_code: string | null;
+          country: string | null;
+          notes: string | null;
+          assigned_consultant_id: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
         Insert: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          id?: string;
+          profile_id: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          company_name?: string | null;
+          tax_number?: string | null;
+          sars_reference_number?: string | null;
+          id_number?: string | null;
+          client_code?: string | null;
+          address_line_1?: string | null;
+          address_line_2?: string | null;
+          city?: string | null;
+          province?: string | null;
+          postal_code?: string | null;
+          country?: string | null;
+          notes?: string | null;
+          assigned_consultant_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
         Update: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
-    }
+          id?: string;
+          profile_id?: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          company_name?: string | null;
+          tax_number?: string | null;
+          sars_reference_number?: string | null;
+          id_number?: string | null;
+          client_code?: string | null;
+          address_line_1?: string | null;
+          address_line_2?: string | null;
+          city?: string | null;
+          province?: string | null;
+          postal_code?: string | null;
+          country?: string | null;
+          notes?: string | null;
+          assigned_consultant_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cases: {
+        Row: {
+          id: string;
+          client_id: string;
+          assigned_consultant_id: string | null;
+          case_title: string;
+          case_type: Database["public"]["Enums"]["case_type"];
+          status: Database["public"]["Enums"]["case_status"];
+          description: string | null;
+          sars_case_reference: string | null;
+          priority: number;
+          opened_at: string;
+          due_date: string | null;
+          closed_at: string | null;
+          last_activity_at: string;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          assigned_consultant_id?: string | null;
+          case_title: string;
+          case_type: Database["public"]["Enums"]["case_type"];
+          status?: Database["public"]["Enums"]["case_status"];
+          description?: string | null;
+          sars_case_reference?: string | null;
+          priority?: number;
+          opened_at?: string;
+          due_date?: string | null;
+          closed_at?: string | null;
+          last_activity_at?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          assigned_consultant_id?: string | null;
+          case_title?: string;
+          case_type?: Database["public"]["Enums"]["case_type"];
+          status?: Database["public"]["Enums"]["case_status"];
+          description?: string | null;
+          sars_case_reference?: string | null;
+          priority?: number;
+          opened_at?: string;
+          due_date?: string | null;
+          closed_at?: string | null;
+          last_activity_at?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      documents: {
+        Row: {
+          id: string;
+          client_id: string;
+          case_id: string | null;
+          document_request_id: string | null;
+          uploaded_by: string;
+          title: string;
+          file_name: string;
+          file_path: string;
+          file_size: number | null;
+          mime_type: string | null;
+          category: string | null;
+          status: Database["public"]["Enums"]["document_status"];
+          rejection_reason: string | null;
+          notes: string | null;
+          uploaded_at: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          case_id?: string | null;
+          document_request_id?: string | null;
+          uploaded_by: string;
+          title: string;
+          file_name: string;
+          file_path: string;
+          file_size?: number | null;
+          mime_type?: string | null;
+          category?: string | null;
+          status?: Database["public"]["Enums"]["document_status"];
+          rejection_reason?: string | null;
+          notes?: string | null;
+          uploaded_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          case_id?: string | null;
+          document_request_id?: string | null;
+          uploaded_by?: string;
+          title?: string;
+          file_name?: string;
+          file_path?: string;
+          file_size?: number | null;
+          mime_type?: string | null;
+          category?: string | null;
+          status?: Database["public"]["Enums"]["document_status"];
+          rejection_reason?: string | null;
+          notes?: string | null;
+          uploaded_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      conversations: {
+        Row: {
+          id: string;
+          client_id: string;
+          case_id: string | null;
+          subject: string | null;
+          created_by: string | null;
+          is_closed: boolean;
+          last_message_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          case_id?: string | null;
+          subject?: string | null;
+          created_by?: string | null;
+          is_closed?: boolean;
+          last_message_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          case_id?: string | null;
+          subject?: string | null;
+          created_by?: string | null;
+          is_closed?: boolean;
+          last_message_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_profile_id: string | null;
+          sender_type: Database["public"]["Enums"]["message_sender_type"];
+          message_text: string;
+          is_read: boolean;
+          read_at: string | null;
+          attachment_document_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_profile_id?: string | null;
+          sender_type: Database["public"]["Enums"]["message_sender_type"];
+          message_text: string;
+          is_read?: boolean;
+          read_at?: string | null;
+          attachment_document_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          sender_profile_id?: string | null;
+          sender_type?: Database["public"]["Enums"]["message_sender_type"];
+          message_text?: string;
+          is_read?: boolean;
+          read_at?: string | null;
+          attachment_document_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      invoices: {
+        Row: {
+          id: string;
+          client_id: string;
+          case_id: string | null;
+          invoice_number: string;
+          title: string | null;
+          description: string | null;
+          currency: string;
+          subtotal: number;
+          tax_amount: number;
+          total_amount: number;
+          amount_paid: number;
+          balance_due: number;
+          status: Database["public"]["Enums"]["invoice_status"];
+          issue_date: string;
+          due_date: string | null;
+          pdf_url: string | null;
+          payment_reference: string | null;
+          proof_of_payment_document_id: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          case_id?: string | null;
+          invoice_number: string;
+          title?: string | null;
+          description?: string | null;
+          currency?: string;
+          subtotal?: number;
+          tax_amount?: number;
+          total_amount?: number;
+          amount_paid?: number;
+          status?: Database["public"]["Enums"]["invoice_status"];
+          issue_date?: string;
+          due_date?: string | null;
+          pdf_url?: string | null;
+          payment_reference?: string | null;
+          proof_of_payment_document_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          case_id?: string | null;
+          invoice_number?: string;
+          title?: string | null;
+          description?: string | null;
+          currency?: string;
+          subtotal?: number;
+          tax_amount?: number;
+          total_amount?: number;
+          amount_paid?: number;
+          status?: Database["public"]["Enums"]["invoice_status"];
+          issue_date?: string;
+          due_date?: string | null;
+          pdf_url?: string | null;
+          payment_reference?: string | null;
+          proof_of_payment_document_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      alerts: {
+        Row: {
+          id: string;
+          client_id: string;
+          case_id: string | null;
+          invoice_id: string | null;
+          title: string;
+          description: string | null;
+          alert_type: Database["public"]["Enums"]["alert_type"];
+          status: Database["public"]["Enums"]["alert_status"];
+          alert_at: string;
+          acknowledged_at: string | null;
+          acknowledged_by: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          case_id?: string | null;
+          invoice_id?: string | null;
+          title: string;
+          description?: string | null;
+          alert_type?: Database["public"]["Enums"]["alert_type"];
+          status?: Database["public"]["Enums"]["alert_status"];
+          alert_at: string;
+          acknowledged_at?: string | null;
+          acknowledged_by?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          case_id?: string | null;
+          invoice_id?: string | null;
+          title?: string;
+          description?: string | null;
+          alert_type?: Database["public"]["Enums"]["alert_type"];
+          status?: Database["public"]["Enums"]["alert_status"];
+          alert_at?: string;
+          acknowledged_at?: string | null;
+          acknowledged_by?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+    };
     Views: {
-      [_ in never]: never
-    }
+      admin_dashboard_summary: {
+        Row: {
+          total_clients: number | null;
+          pending_reviews: number | null;
+          unpaid_invoices: number | null;
+          unread_messages: number | null;
+          reminders_due: number | null;
+        };
+      };
+      client_dashboard_summary: {
+        Row: {
+          profile_id: string | null;
+          client_id: string | null;
+          active_cases: number | null;
+          outstanding_document_requests: number | null;
+          unread_messages: number | null;
+          active_alerts: number | null;
+        };
+      };
+    };
     Functions: {
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
-    }
+      get_my_role: {
+        Args: Record<PropertyKey, never>;
+        Returns: Database["public"]["Enums"]["app_role"];
+      };
+      is_admin_or_consultant: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
+      };
+    };
     Enums: {
-      app_role: "admin" | "client"
-    }
+      app_role: "admin" | "consultant" | "client";
+      case_type:
+        | "individual_tax_return"
+        | "corporate_tax_return"
+        | "vat_registration"
+        | "provisional_tax"
+        | "tax_clearance_certificate"
+        | "sars_dispute_objection"
+        | "other";
+      case_status:
+        | "new"
+        | "under_review"
+        | "in_progress"
+        | "awaiting_client_documents"
+        | "awaiting_sars_response"
+        | "resolved"
+        | "closed";
+      document_status: "uploaded" | "pending_review" | "approved" | "rejected" | "requested";
+      message_sender_type: "admin" | "consultant" | "client" | "system";
+      alert_type:
+        | "sars_due_date"
+        | "missing_document"
+        | "payment_deadline"
+        | "general_deadline"
+        | "provisional_tax_date"
+        | "follow_up_required"
+        | "other";
+      alert_status: "active" | "acknowledged" | "resolved" | "dismissed";
+      invoice_status: "draft" | "issued" | "partially_paid" | "paid" | "overdue" | "cancelled";
+      payment_status: "pending" | "paid" | "failed" | "cancelled";
+    };
     CompositeTypes: {
-      [_ in never]: never
-    }
-  }
-}
+      [_ in never]: never;
+    };
+  };
+};
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
+type DefaultSchema = DatabaseWithoutInternals["public"];
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  TableName extends DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
+      Row: infer Row;
     }
-    ? R
+    ? Row
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer Row;
       }
-      ? R
+      ? Row
       : never
-    : never
+    : never;
 
 export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
+      Insert: infer Insert;
     }
-    ? I
+    ? Insert
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends { Insert: infer Insert }
+      ? Insert
       : never
-    : never
+    : never;
 
 export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
+      Update: infer Update;
     }
-    ? U
+    ? Update
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends { Update: infer Update }
+      ? Update
       : never
-    : never
+    : never;
 
 export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
+  DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+    : never;
 
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "client"],
+      app_role: ["admin", "consultant", "client"],
+      case_type: [
+        "individual_tax_return",
+        "corporate_tax_return",
+        "vat_registration",
+        "provisional_tax",
+        "tax_clearance_certificate",
+        "sars_dispute_objection",
+        "other",
+      ],
+      case_status: [
+        "new",
+        "under_review",
+        "in_progress",
+        "awaiting_client_documents",
+        "awaiting_sars_response",
+        "resolved",
+        "closed",
+      ],
+      document_status: ["uploaded", "pending_review", "approved", "rejected", "requested"],
+      message_sender_type: ["admin", "consultant", "client", "system"],
+      alert_type: [
+        "sars_due_date",
+        "missing_document",
+        "payment_deadline",
+        "general_deadline",
+        "provisional_tax_date",
+        "follow_up_required",
+        "other",
+      ],
+      alert_status: ["active", "acknowledged", "resolved", "dismissed"],
+      invoice_status: ["draft", "issued", "partially_paid", "paid", "overdue", "cancelled"],
+      payment_status: ["pending", "paid", "failed", "cancelled"],
     },
   },
-} as const
+} as const;

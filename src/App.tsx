@@ -4,6 +4,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import { RequireRole } from "@/components/auth/RequireRole";
+import { DashboardIndexRedirect } from "@/components/auth/DashboardIndexRedirect";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -19,6 +21,8 @@ import AdminOverview from "./pages/dashboard/admin/AdminOverview";
 import AdminClients from "./pages/dashboard/admin/AdminClients";
 import AdminCases from "./pages/dashboard/admin/AdminCases";
 import AdminInvoices from "./pages/dashboard/admin/AdminInvoices";
+import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
+import AdminMessages from "./pages/dashboard/admin/AdminMessages";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,17 +39,26 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/dashboard" element={<Dashboard />}>
-              <Route index element={<DashboardOverview />} />
-              <Route path="cases" element={<Cases />} />
-              <Route path="documents" element={<Documents />} />
-              <Route path="invoices" element={<Invoices />} />
-              <Route path="messages" element={<Messages />} />
-              <Route path="deadlines" element={<Deadlines />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route path="admin" element={<AdminOverview />} />
-              <Route path="admin/clients" element={<AdminClients />} />
-              <Route path="admin/cases" element={<AdminCases />} />
-              <Route path="admin/invoices" element={<AdminInvoices />} />
+              <Route index element={<DashboardIndexRedirect />} />
+
+              <Route element={<RequireRole allowedRoles={["client"]} />}>
+                <Route path="client" element={<DashboardOverview />} />
+                <Route path="client/cases" element={<Cases />} />
+                <Route path="client/documents" element={<Documents />} />
+                <Route path="client/invoices" element={<Invoices />} />
+                <Route path="client/messages" element={<Messages />} />
+                <Route path="client/deadlines" element={<Deadlines />} />
+                <Route path="client/settings" element={<SettingsPage />} />
+              </Route>
+
+              <Route element={<RequireRole allowedRoles={["admin", "consultant"]} />}>
+                <Route path="staff" element={<AdminOverview />} />
+                <Route path="staff/clients" element={<AdminClients />} />
+                <Route path="staff/cases" element={<AdminCases />} />
+                <Route path="staff/documents" element={<AdminDocuments />} />
+                <Route path="staff/invoices" element={<AdminInvoices />} />
+                <Route path="staff/messages" element={<AdminMessages />} />
+              </Route>
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

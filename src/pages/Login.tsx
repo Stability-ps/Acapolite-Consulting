@@ -1,29 +1,44 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, ArrowLeft } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const { dashboardPath, loading: authLoading, user } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      window.location.replace(dashboardPath);
+    }
+  }, [authLoading, dashboardPath, user]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      toast.error(error.message);
-    } else {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
       toast.success("Welcome back!");
-      navigate("/dashboard");
+      window.location.replace("/dashboard");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Sign in failed. Please try again.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -40,7 +55,7 @@ export default function Login() {
           </div>
 
           <h1 className="font-display text-2xl font-bold text-foreground mb-2">Welcome back</h1>
-          <p className="text-muted-foreground font-body text-sm mb-8">Sign in to your client portal</p>
+          <p className="text-muted-foreground font-body text-sm mb-8">Sign in to your Acapolite workspace</p>
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>

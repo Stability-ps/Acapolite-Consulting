@@ -1,37 +1,63 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, ArrowLeft } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const { dashboardPath, loading: authLoading, user } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      window.location.replace(dashboardPath);
+    }
+  }, [authLoading, dashboardPath, user]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Account created! Check your email to verify.");
-      navigate("/login");
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: "client",
+          },
+          emailRedirectTo: window.location.origin,
+        },
+      });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success("Account created successfully.");
+
+      if (data.session) {
+        window.location.replace("/dashboard");
+        return;
+      }
+
+      toast.success("Check your email to verify your account.");
+      window.location.replace("/login");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Sign up failed. Please try again.";
+      toast.error(message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -48,7 +74,7 @@ export default function Register() {
           </div>
 
           <h1 className="font-display text-2xl font-bold text-foreground mb-2">Create your account</h1>
-          <p className="text-muted-foreground font-body text-sm mb-8">Start managing your tax obligations today</p>
+          <p className="text-muted-foreground font-body text-sm mb-8">Create your secure client portal account</p>
 
           <form onSubmit={handleRegister} className="space-y-5">
             <div>

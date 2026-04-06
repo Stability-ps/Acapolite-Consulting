@@ -37,10 +37,10 @@ export function Hero() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4">
-            <Button asChild size="lg" variant="secondary" className="text-base font-semibold px-8 py-6 rounded-xl shadow-elevated">
+            <Button asChild size="lg" className="text-base font-semibold px-8 py-6 rounded-xl shadow-elevated bg-primary text-primary-foreground hover:bg-primary/90">
               <Link to="/login">Log In to Portal</Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="text-base font-semibold px-8 py-6 rounded-xl border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10">
+            <Button asChild size="lg" className="text-base font-semibold px-8 py-6 rounded-xl bg-white/95 !text-foreground hover:bg-white border border-white/70">
               <Link to="/register">
                 Create Account <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
