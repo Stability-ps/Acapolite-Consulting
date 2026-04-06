@@ -1,9 +1,13 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Search, UserPlus } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { useAuth } from "@/hooks/useAuth";
 
 type StaffClient = {
   id: string;
@@ -37,6 +41,46 @@ type StaffClient = {
   } | null;
 };
 
+type NewClientFormState = {
+  email: string;
+  fullName: string;
+  phone: string;
+  companyName: string;
+  firstName: string;
+  lastName: string;
+  taxNumber: string;
+  sarsReferenceNumber: string;
+  idNumber: string;
+  clientCode: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  province: string;
+  postalCode: string;
+  country: string;
+  notes: string;
+};
+
+const initialFormState: NewClientFormState = {
+  email: "",
+  fullName: "",
+  phone: "",
+  companyName: "",
+  firstName: "",
+  lastName: "",
+  taxNumber: "",
+  sarsReferenceNumber: "",
+  idNumber: "",
+  clientCode: "",
+  addressLine1: "",
+  addressLine2: "",
+  city: "",
+  province: "",
+  postalCode: "",
+  country: "South Africa",
+  notes: "",
+};
+
 function getClientName(client: StaffClient) {
   return (
     client.company_name ||
@@ -58,9 +102,26 @@ function getAddress(client: StaffClient) {
   ].filter(Boolean).join(", ");
 }
 
+function splitFullName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) {
+    return { firstName: "", lastName: "" };
+  }
+
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
 export default function AdminClients() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [formState, setFormState] = useState<NewClientFormState>(initialFormState);
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["staff-clients"],
@@ -106,22 +167,133 @@ export default function AdminClients() {
     || clients?.find((client) => client.id === selectedClientId)
     || null;
 
+  const updateForm = (key: keyof NewClientFormState, value: string) => {
+    setFormState((current) => ({ ...current, [key]: value }));
+  };
+
+  const resetCreateForm = () => {
+    setFormState(initialFormState);
+    setIsCreating(false);
+  };
+
+  const createClient = async () => {
+    const email = formState.email.trim().toLowerCase();
+
+    if (!email) {
+      toast.error("Enter the existing portal account email first.");
+      return;
+    }
+
+    setIsCreating(true);
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, full_name, phone")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (profileError) {
+      toast.error(profileError.message);
+      setIsCreating(false);
+      return;
+    }
+
+    if (!profile) {
+      toast.error("No portal profile was found for this email. Create the auth account first, then add the client here.");
+      setIsCreating(false);
+      return;
+    }
+
+    const { data: existingClient, error: existingClientError } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("profile_id", profile.id)
+      .maybeSingle();
+
+    if (existingClientError) {
+      toast.error(existingClientError.message);
+      setIsCreating(false);
+      return;
+    }
+
+    if (existingClient) {
+      toast.error("This portal account already has a client record.");
+      setIsCreating(false);
+      return;
+    }
+
+    const resolvedFullName = formState.fullName.trim() || profile.full_name || "";
+    const nameParts = splitFullName(resolvedFullName);
+    const firstName = formState.firstName.trim() || nameParts.firstName;
+    const lastName = formState.lastName.trim() || nameParts.lastName;
+
+    const { error: profileUpdateError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: resolvedFullName || null,
+        phone: formState.phone.trim() || profile.phone || null,
+      })
+      .eq("id", profile.id);
+
+    if (profileUpdateError) {
+      toast.error(profileUpdateError.message);
+      setIsCreating(false);
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("clients").insert({
+      profile_id: profile.id,
+      first_name: firstName || null,
+      last_name: lastName || null,
+      company_name: formState.companyName.trim() || null,
+      tax_number: formState.taxNumber.trim() || null,
+      sars_reference_number: formState.sarsReferenceNumber.trim() || null,
+      id_number: formState.idNumber.trim() || null,
+      client_code: formState.clientCode.trim() || null,
+      address_line_1: formState.addressLine1.trim() || null,
+      address_line_2: formState.addressLine2.trim() || null,
+      city: formState.city.trim() || null,
+      province: formState.province.trim() || null,
+      postal_code: formState.postalCode.trim() || null,
+      country: formState.country.trim() || "South Africa",
+      notes: formState.notes.trim() || null,
+      created_by: user?.id ?? null,
+    });
+
+    if (insertError) {
+      toast.error(insertError.message);
+      setIsCreating(false);
+      return;
+    }
+
+    toast.success("Client added successfully.");
+    setIsCreateOpen(false);
+    resetCreateForm();
+    await queryClient.invalidateQueries({ queryKey: ["staff-clients"] });
+  };
+
   return (
     <div>
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h1 className="mb-1 font-display text-2xl font-bold text-foreground">All Clients</h1>
-          <p className="text-sm text-muted-foreground font-body">Manage client profiles and open the full record from this list.</p>
+          <p className="text-sm text-muted-foreground font-body">Manage client profiles, open full records, and add new clients from existing portal accounts.</p>
         </div>
 
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search client, email, code, or tax number..."
-            className="rounded-xl pl-9"
-          />
+        <div className="flex w-full max-w-2xl items-center justify-end gap-3">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search client, email, code, or tax number..."
+              className="rounded-xl pl-9"
+            />
+          </div>
+          <Button type="button" className="rounded-xl shrink-0" onClick={() => setIsCreateOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Add New Client
+          </Button>
         </div>
       </div>
 
@@ -165,6 +337,112 @@ export default function AdminClients() {
           </p>
         </div>
       )}
+
+      <DashboardItemDialog
+        open={isCreateOpen}
+        onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) resetCreateForm();
+        }}
+        title="Add New Client"
+        description="Create a client record for an existing portal account. The email must already exist in auth/profiles."
+      >
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-border bg-accent/30 p-4">
+            <p className="text-sm text-foreground font-body">
+              Use the email of a user who already has a portal account. This screen creates the `clients` row and saves the client details.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Portal Account Email</label>
+              <Input value={formState.email} onChange={(event) => updateForm("email", event.target.value)} placeholder="client@example.com" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Full Name</label>
+              <Input value={formState.fullName} onChange={(event) => updateForm("fullName", event.target.value)} placeholder="Client full name" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Phone</label>
+              <Input value={formState.phone} onChange={(event) => updateForm("phone", event.target.value)} placeholder="+27 ..." className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">First Name</label>
+              <Input value={formState.firstName} onChange={(event) => updateForm("firstName", event.target.value)} placeholder="First name" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Last Name</label>
+              <Input value={formState.lastName} onChange={(event) => updateForm("lastName", event.target.value)} placeholder="Last name" className="rounded-xl" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Name</label>
+              <Input value={formState.companyName} onChange={(event) => updateForm("companyName", event.target.value)} placeholder="Optional for business clients" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Tax Number</label>
+              <Input value={formState.taxNumber} onChange={(event) => updateForm("taxNumber", event.target.value)} placeholder="Tax number" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Reference</label>
+              <Input value={formState.sarsReferenceNumber} onChange={(event) => updateForm("sarsReferenceNumber", event.target.value)} placeholder="SARS reference number" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
+              <Input value={formState.idNumber} onChange={(event) => updateForm("idNumber", event.target.value)} placeholder="ID number" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Code</label>
+              <Input value={formState.clientCode} onChange={(event) => updateForm("clientCode", event.target.value)} placeholder="Optional client code" className="rounded-xl" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Address Line 1</label>
+              <Input value={formState.addressLine1} onChange={(event) => updateForm("addressLine1", event.target.value)} placeholder="Street address" className="rounded-xl" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Address Line 2</label>
+              <Input value={formState.addressLine2} onChange={(event) => updateForm("addressLine2", event.target.value)} placeholder="Apartment, suite, building" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">City</label>
+              <Input value={formState.city} onChange={(event) => updateForm("city", event.target.value)} placeholder="City" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Province</label>
+              <Input value={formState.province} onChange={(event) => updateForm("province", event.target.value)} placeholder="Province" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Postal Code</label>
+              <Input value={formState.postalCode} onChange={(event) => updateForm("postalCode", event.target.value)} placeholder="Postal code" className="rounded-xl" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Country</label>
+              <Input value={formState.country} onChange={(event) => updateForm("country", event.target.value)} placeholder="Country" className="rounded-xl" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Notes</label>
+              <Textarea value={formState.notes} onChange={(event) => updateForm("notes", event.target.value)} placeholder="Internal notes about this client" className="rounded-xl" />
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => {
+                setIsCreateOpen(false);
+                resetCreateForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" className="rounded-xl" onClick={createClient} disabled={isCreating}>
+              {isCreating ? "Creating..." : "Create Client"}
+            </Button>
+          </div>
+        </div>
+      </DashboardItemDialog>
 
       <DashboardItemDialog
         open={!!selectedClient}

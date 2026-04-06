@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
   { label: "Portal", href: "#portal" },
@@ -11,6 +12,8 @@ const navItems = [
 ];
 
 export function LandingHeader() {
+  const { user, dashboardPath } = useAuth();
+
   return (
     <motion.header
       initial={{ opacity: 0, y: -24 }}
@@ -48,22 +51,36 @@ export function LandingHeader() {
         </nav>
 
         <div className="relative z-10 flex items-center gap-2">
-          <Button
-            asChild
-            variant="ghost"
-            className="hidden rounded-full border border-sky-300/12 bg-slate-950/18 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/14 hover:text-white hover:shadow-[0_8px_24px_rgba(255,255,255,0.10)] sm:inline-flex"
-          >
-            <Link to="/login">Log In</Link>
-          </Button>
-          <Button
-            asChild
-            className="rounded-full border border-sky-300/18 bg-white/95 px-5 text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_30px_rgba(255,255,255,0.18)]"
-          >
-            <Link to="/register">
-              Create Account
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+          {user ? (
+            <Button
+              asChild
+              className="rounded-full border border-sky-300/18 bg-white/95 px-5 text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_30px_rgba(255,255,255,0.18)]"
+            >
+              <Link to={dashboardPath}>
+                Dashboard
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          ) : (
+            <>
+              <Button
+                asChild
+                variant="ghost"
+                className="hidden rounded-full border border-sky-300/12 bg-slate-950/18 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/14 hover:text-white hover:shadow-[0_8px_24px_rgba(255,255,255,0.10)] sm:inline-flex"
+              >
+                <Link to="/login">Log In</Link>
+              </Button>
+              <Button
+                asChild
+                className="rounded-full border border-sky-300/18 bg-white/95 px-5 text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_30px_rgba(255,255,255,0.18)]"
+              >
+                <Link to="/register">
+                  Create Account
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </motion.header>
