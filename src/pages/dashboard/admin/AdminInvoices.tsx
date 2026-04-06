@@ -14,7 +14,7 @@ export default function AdminInvoices() {
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["admin-invoices"],
     queryFn: async () => {
-      const { data } = await supabase.from("invoices").select("*, profiles!invoices_user_id_fkey(full_name, email)").order("created_at", { ascending: false });
+      const { data } = await supabase.from("invoices").select("*").order("created_at", { ascending: false });
       return data ?? [];
     },
     enabled: isAdmin,
