@@ -1,4 +1,5 @@
 import { LandingHeader } from "@/components/landing/LandingHeader";
+import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
 import { Hero } from "@/components/landing/Hero";
 import { Features } from "@/components/landing/Features";
 import { HowItWorks } from "@/components/landing/HowItWorks";
@@ -16,6 +17,7 @@ const Index = () => {
       <Services />
       <CTA />
       <Footer />
+      <ScrollToTopButton />
     </div>
   );
 };
