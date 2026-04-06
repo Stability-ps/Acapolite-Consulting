@@ -56,7 +56,7 @@ export default function AdminInvoices() {
               {invoices?.map((inv: any) => (
                 <tr key={inv.id} className="border-b border-border last:border-0">
                   <td className="p-4 text-sm font-medium text-foreground font-body">{inv.invoice_number}</td>
-                  <td className="p-4 text-sm text-muted-foreground font-body">{inv.profiles?.full_name || inv.profiles?.email || "—"}</td>
+                  <td className="p-4 text-sm text-muted-foreground font-body">{inv.user_id.slice(0, 8)}...</td>
                   <td className="p-4 text-sm font-semibold text-foreground font-body text-right">R {Number(inv.total_amount).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</td>
                   <td className="p-4 text-sm text-muted-foreground font-body">{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "—"}</td>
                   <td className="p-4">

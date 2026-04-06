@@ -59,7 +59,7 @@ export default function AdminCases() {
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h3 className="font-display text-lg font-semibold text-foreground">{c.title}</h3>
-                  <p className="text-sm text-muted-foreground font-body">{c.case_number} · Client: {c.profiles?.full_name || c.profiles?.email || "Unknown"}</p>
+                  <p className="text-sm text-muted-foreground font-body">{c.case_number} · {c.type.replace(/_/g, " ")}</p>
                 </div>
                 <Badge variant="outline" className={statusColor(c.status)}>
                   {c.status.replace(/_/g, " ")}
