@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,13 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    full_name: "",
+    phone: "",
+    id_number: "",
+    tax_number: "",
+    company_name: "",
+  });
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -21,16 +28,7 @@ export default function SettingsPage() {
     enabled: !!user,
   });
 
-  const [form, setForm] = useState({
-    full_name: "",
-    phone: "",
-    id_number: "",
-    tax_number: "",
-    company_name: "",
-  });
-
-  // Sync form when profile loads
-  useState(() => {
+  useEffect(() => {
     if (profile) {
       setForm({
         full_name: profile.full_name || "",
@@ -40,7 +38,7 @@ export default function SettingsPage() {
         company_name: profile.company_name || "",
       });
     }
-  });
+  }, [profile]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
