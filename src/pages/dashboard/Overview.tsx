@@ -1,5 +1,6 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FolderOpen, FileText, MessageSquare, Bell, Upload, Send, Receipt, ArrowRight } from "lucide-react";
+import { FolderOpen, FileText, MessageSquare, Bell, Upload, Send, Receipt, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -61,6 +62,32 @@ export default function DashboardOverview() {
     },
     enabled: !!client,
   });
+
+  const { data: uploadedDocuments } = useQuery({
+    queryKey: ["overview-uploaded-documents", client?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("documents")
+        .select("id, title, category, status, uploaded_at")
+        .eq("client_id", client!.id)
+        .order("uploaded_at", { ascending: false })
+        .limit(6);
+      return data ?? [];
+    },
+    enabled: !!client,
+  });
+
+  const documentActivity = useMemo(() => {
+    const documents = uploadedDocuments ?? [];
+
+    return {
+      total: documents.length,
+      pendingReview: documents.filter((document) =>
+        ["uploaded", "pending_review"].includes(document.status)).length,
+      approved: documents.filter((document) => document.status === "approved").length,
+      recent: documents.slice(0, 3),
+    };
+  }, [uploadedDocuments]);
 
   const stats = [
     {
@@ -184,6 +211,66 @@ export default function DashboardOverview() {
 
         <div className="space-y-6">
           <div className="bg-card rounded-2xl border border-border shadow-card p-6">
+            <div className="flex items-center justify-between gap-4 mb-5">
+              <div>
+                <h2 className="font-display text-xl font-semibold text-foreground">Document Activity</h2>
+                <p className="text-sm text-muted-foreground font-body">Recent uploads and review progress.</p>
+              </div>
+              <Link to="/dashboard/client/documents" className="text-sm font-semibold text-primary hover:underline">
+                View all
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-5">
+              <div className="rounded-xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Uploaded</p>
+                <p className="font-display text-2xl text-foreground">{documentActivity.total}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">In Review</p>
+                <p className="font-display text-2xl text-foreground">{documentActivity.pendingReview}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Approved</p>
+                <p className="font-display text-2xl text-foreground">{documentActivity.approved}</p>
+              </div>
+            </div>
+
+            {documentActivity.recent.length > 0 ? (
+              <div className="space-y-3">
+                {documentActivity.recent.map((document) => (
+                  <div key={document.id} className="rounded-xl border border-border p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="font-body font-medium text-foreground truncate">
+                          {document.category || document.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-body mt-1">
+                          Uploaded {new Date(document.uploaded_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <span className={`text-xs font-semibold px-3 py-1 rounded-full font-body ${
+                        document.status === "approved"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : document.status === "rejected"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-sky-100 text-sky-700"
+                      }`}>
+                        {document.status.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center">
+                <Upload className="h-5 w-5 text-primary mx-auto mb-3" />
+                <p className="text-muted-foreground font-body">No uploaded documents yet.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-card rounded-2xl border border-border shadow-card p-6">
             <h2 className="font-display text-xl font-semibold text-foreground mb-5">Alerts and Deadlines</h2>
 
             {activeAlerts && activeAlerts.length > 0 ? (
@@ -225,6 +312,20 @@ export default function DashboardOverview() {
               ))}
             </div>
           </div>
+
+          {documentActivity.total > 0 ? (
+            <div className="bg-card rounded-2xl border border-border shadow-card p-6">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <h2 className="font-display text-lg font-semibold text-foreground">Your uploads are being tracked</h2>
+                  <p className="text-sm text-muted-foreground font-body mt-2">
+                    General uploads update the document activity panel. The top `Document Requests` card only changes when Acapolite creates a formal request for you.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
     </div>
