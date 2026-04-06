@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Send } from "lucide-react";
+import { Search, Send, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -275,16 +275,23 @@ export default function Messages() {
 
                     return (
                     <div key={message.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[78%] rounded-3xl px-4 py-3 ${
-                        isOwnMessage ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
-                      }`}>
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] mb-2 opacity-75">
-                          {getSenderLabel(isOwnMessage)}
-                        </p>
-                        <p className="text-sm font-body whitespace-pre-wrap">{message.message_text}</p>
-                        <p className={`text-xs mt-3 ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                          {new Date(message.created_at).toLocaleString()}
-                        </p>
+                      <div className={`flex max-w-[84%] items-end gap-3 ${isOwnMessage ? "flex-row-reverse" : "flex-row"}`}>
+                        {!isOwnMessage ? (
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(59,130,246,1),rgba(30,64,175,1))] text-white shadow-[0_12px_24px_rgba(30,64,175,0.22)]">
+                            <Shield className="h-4 w-4" />
+                          </div>
+                        ) : null}
+                        <div className={`rounded-3xl px-4 py-3 ${
+                          isOwnMessage ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                        }`}>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] opacity-75">
+                            {getSenderLabel(isOwnMessage)}
+                          </p>
+                          <p className="text-sm font-body whitespace-pre-wrap">{message.message_text}</p>
+                          <p className={`mt-3 text-xs ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                            {new Date(message.created_at).toLocaleString()}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}) : (
