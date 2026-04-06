@@ -17,7 +17,7 @@ export default function AdminCases() {
   const { data: cases, isLoading } = useQuery({
     queryKey: ["admin-cases"],
     queryFn: async () => {
-      const { data } = await supabase.from("cases").select("*, profiles!cases_user_id_fkey(full_name, email)").order("created_at", { ascending: false });
+      const { data } = await supabase.from("cases").select("*").order("created_at", { ascending: false });
       return data ?? [];
     },
     enabled: isAdmin,
