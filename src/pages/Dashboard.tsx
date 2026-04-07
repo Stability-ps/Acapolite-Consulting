@@ -25,19 +25,19 @@ export default function Dashboard() {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="app-shell min-h-screen flex w-full">
         <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <header className="border-b border-border bg-card px-4 py-3">
-            <div className="flex items-start gap-4">
-              <SidebarTrigger className="mt-1 mr-0 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm" />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-20 border-b border-border/70 bg-white/78 px-4 py-3 backdrop-blur-xl sm:px-6">
+            <div className="dashboard-page flex items-start gap-4">
+              <SidebarTrigger className="mt-1 mr-0 rounded-xl border border-primary/15 bg-primary text-primary-foreground hover:bg-primary/95 shadow-card" />
               <div>
-                <h2 className="font-display text-lg font-semibold text-foreground">{title}</h2>
+                <h2 className="font-display text-xl font-semibold text-foreground">{title}</h2>
                 <p className="text-sm text-muted-foreground font-body">{description}</p>
               </div>
             </div>
           </header>
-          <main className="flex-1 p-6 bg-background overflow-auto">
+          <main className="flex-1 overflow-auto px-4 py-5 sm:px-6 sm:py-6">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={location.pathname}
@@ -45,7 +45,7 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 exit={{ opacity: 0, y: -8, filter: "blur(3px)" }}
                 transition={{ duration: 0.24, ease: "easeOut" }}
-                className="h-full"
+                className="dashboard-page dashboard-surface min-h-full rounded-[1.75rem] border border-border/70 p-4 shadow-elevated sm:p-6 lg:p-7"
               >
                 <Outlet />
               </motion.div>

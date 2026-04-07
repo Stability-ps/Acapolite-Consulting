@@ -85,11 +85,19 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border/80">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2 px-3">
-            <AcapoliteLogo className={collapsed ? "h-8" : "h-10"} />
+          <SidebarGroupLabel className="px-3 pt-3">
+            <div className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <AcapoliteLogo className={collapsed ? "h-8" : "h-10"} />
+              {!collapsed ? (
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-sidebar-foreground">Acapolite Consulting</p>
+                  <p className="truncate text-xs text-sidebar-foreground/60">{role === "client" ? "Client portal" : "Staff workspace"}</p>
+                </div>
+              ) : null}
+            </div>
           </SidebarGroupLabel>
         </SidebarGroup>
 
@@ -100,13 +108,13 @@ export function AppSidebar() {
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <NavLink to={item.url} end className="hover:bg-sidebar-accent/50" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
+                    <NavLink to={item.url} end className="rounded-xl hover:bg-sidebar-accent/80" activeClassName="rounded-xl bg-white/10 text-sidebar-primary font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                       <item.icon className="mr-2 h-4 w-4 shrink-0" />
                       {!collapsed && (
                         <div className="flex items-center justify-between gap-2 w-full">
                           <span>{item.title}</span>
                           {item.title === "Messages" && (unreadMessageCount ?? 0) > 0 ? (
-                            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[10px] font-semibold text-sidebar-primary-foreground shadow-sm">
                               {unreadMessageCount}
                             </span>
                           ) : null}
@@ -123,11 +131,11 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-3">
         {!collapsed && (
-          <p className="text-xs text-sidebar-foreground/50 truncate mb-2 font-body">{user?.email}</p>
+          <p className="mb-2 truncate px-2 text-xs text-sidebar-foreground/50 font-body">{user?.email}</p>
         )}
         <SidebarMenuButton
           onClick={handleSignOut}
-          className="text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+          className="rounded-xl border border-white/8 bg-white/5 text-sidebar-foreground/75 hover:text-sidebar-foreground hover:bg-sidebar-accent/80"
           disabled={signingOut}
         >
           <LogOut className="mr-2 h-4 w-4" />
