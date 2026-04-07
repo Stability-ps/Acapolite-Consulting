@@ -1,3 +1,3 @@
-# Welcome to your Lovable project
+# Acapolite Tax Portal
 
-TODO: Document your project here
+Internal client and staff portal for Acapolite Consulting.
