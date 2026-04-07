@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 const contactEmail = "info@acapoliteconsulting.co.za";
-const whatsappNumber = "+27 67 557 5506";
-const whatsappHref = "https://wa.me/27675575506";
+const whatsappNumber = "+27 67 5775506";
+const whatsappHref = "https://wa.me/27675775506";
 
 export function CTA() {
   const [name, setName] = useState("");
