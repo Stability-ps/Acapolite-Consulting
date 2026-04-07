@@ -106,6 +106,21 @@ function getClientEnv(name: string) {
   return value;
 }
 
+function getCreateUserErrorMessage(message?: string | null) {
+  const normalizedMessage = message?.toLowerCase() ?? "";
+
+  if (
+    normalizedMessage.includes("already registered")
+    || normalizedMessage.includes("already exists")
+    || normalizedMessage.includes("duplicate")
+    || normalizedMessage.includes("email address is already")
+  ) {
+    return "An account with this email already exists.";
+  }
+
+  return message || "Unable to create the staff user.";
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: buildCorsHeaders(request) });
@@ -196,7 +211,7 @@ Deno.serve(async (request) => {
     });
 
     if (createUserError || !createdUserData.user) {
-      return jsonResponse(request, { error: createUserError?.message || "Unable to create the staff user." }, 400);
+      return jsonResponse(request, { error: getCreateUserErrorMessage(createUserError?.message) }, 400);
     }
 
     const createdUser = createdUserData.user;
