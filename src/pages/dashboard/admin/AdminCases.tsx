@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { toast } from "sonner";
 import type { Enums, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { getClientWarningSummary } from "@/lib/clientRisk";
 
 const statusOptions: Enums<"case_status">[] = [
   "new",
@@ -67,6 +69,30 @@ export default function AdminCases() {
     },
   });
 
+  const { data: riskClients } = useQuery({
+    queryKey: ["staff-case-risk-clients"],
+    queryFn: async () => {
+      const { data } = await supabase.from("clients").select("id, sars_outstanding_debt, returns_filed");
+      return data ?? [];
+    },
+  });
+
+  const { data: riskInvoices } = useQuery({
+    queryKey: ["staff-case-risk-invoices"],
+    queryFn: async () => {
+      const { data } = await supabase.from("invoices").select("client_id, status, balance_due");
+      return data ?? [];
+    },
+  });
+
+  const { data: riskRequests } = useQuery({
+    queryKey: ["staff-case-risk-document-requests"],
+    queryFn: async () => {
+      const { data } = await supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      return data ?? [];
+    },
+  });
+
   const clientOptions = useMemo(
     () =>
       (clients ?? []).map((client) => ({
@@ -76,6 +102,37 @@ export default function AdminCases() {
       })),
     [clients],
   );
+
+  const clientIssueMap = useMemo(() => {
+    const riskClientsById = new Map((riskClients ?? []).map((client) => [client.id, client]));
+    const outstandingInvoicesByClient = new Map<string, number>();
+    const outstandingRequestsByClient = new Map<string, number>();
+
+    for (const invoice of riskInvoices ?? []) {
+      const isOutstanding = ["issued", "partially_paid", "overdue"].includes(invoice.status) && Number(invoice.balance_due || 0) > 0;
+      if (!isOutstanding) continue;
+      outstandingInvoicesByClient.set(invoice.client_id, (outstandingInvoicesByClient.get(invoice.client_id) ?? 0) + 1);
+    }
+
+    for (const request of riskRequests ?? []) {
+      const isOutstanding = request.is_required && !request.is_fulfilled;
+      if (!isOutstanding) continue;
+      outstandingRequestsByClient.set(request.client_id, (outstandingRequestsByClient.get(request.client_id) ?? 0) + 1);
+    }
+
+    const map = new Map<string, ReturnType<typeof getClientWarningSummary>>();
+    for (const [clientId, client] of riskClientsById.entries()) {
+      map.set(
+        clientId,
+        getClientWarningSummary(client, {
+          outstandingInvoices: outstandingInvoicesByClient.get(clientId) ?? 0,
+          outstandingDocumentRequests: outstandingRequestsByClient.get(clientId) ?? 0,
+        }),
+      );
+    }
+
+    return map;
+  }, [riskClients, riskInvoices, riskRequests]);
 
   const updateStatus = async (caseId: string, status: Enums<"case_status">) => {
     const { error } = await supabase.from("cases").update({ status }).eq("id", caseId);
@@ -156,7 +213,7 @@ export default function AdminCases() {
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : (
         <div className="space-y-4">
-          {cases?.map((caseItem: { id: string; case_title: string; case_type: string; status: Enums<"case_status">; description: string | null; due_date: string | null; clients?: { company_name?: string | null; first_name?: string | null; last_name?: string | null; client_code?: string | null } | null }) => (
+          {cases?.map((caseItem: { id: string; client_id: string; case_title: string; case_type: string; status: Enums<"case_status">; description: string | null; due_date: string | null; clients?: { company_name?: string | null; first_name?: string | null; last_name?: string | null; client_code?: string | null } | null }) => (
             <div key={caseItem.id} className="bg-card rounded-xl border border-border shadow-card p-6">
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -170,6 +227,12 @@ export default function AdminCases() {
                 </Badge>
               </div>
               {caseItem.description && <p className="text-sm text-muted-foreground font-body mb-4">{caseItem.description}</p>}
+              {clientIssueMap.get(caseItem.client_id)?.hasIssues ? (
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {clientIssueMap.get(caseItem.client_id)?.reasons.join(" • ")}
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="text-xs text-muted-foreground font-body">
                   {caseItem.clients?.client_code ? `Client code: ${caseItem.clients.client_code}` : "No client code"}{caseItem.due_date ? ` | Due: ${new Date(caseItem.due_date).toLocaleDateString()}` : ""}

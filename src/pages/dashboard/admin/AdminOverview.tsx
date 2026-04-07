@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   Users,
   Upload,
   Receipt,
@@ -14,6 +15,7 @@ import {
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ElevenLabsWidget } from "@/components/dashboard/ElevenLabsWidget";
+import { getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
 
 type CaseStatusRow = {
   status: string;
@@ -22,7 +24,10 @@ type CaseStatusRow = {
 type RecentClient = {
   id: string;
   client_code: string | null;
+  client_type: string;
   company_name: string | null;
+  sars_outstanding_debt: number;
+  returns_filed: boolean;
   first_name: string | null;
   last_name: string | null;
   created_at: string;
@@ -48,9 +53,16 @@ type RecentDocument = {
 
 type InvoiceSnapshot = {
   id: string;
+  client_id: string;
   status: string;
   balance_due: number;
   total_amount: number;
+};
+
+type RiskDocumentRequest = {
+  client_id: string;
+  is_required: boolean;
+  is_fulfilled: boolean;
 };
 
 type DueAlert = {
@@ -110,7 +122,7 @@ export default function AdminOverview() {
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")
-        .select("id, client_code, company_name, first_name, last_name, created_at, profiles!clients_profile_id_fkey(full_name, email)")
+        .select("id, client_code, client_type, company_name, sars_outstanding_debt, returns_filed, first_name, last_name, created_at, profiles!clients_profile_id_fkey(full_name, email)")
         .order("created_at", { ascending: false })
         .limit(5);
       return (data ?? []) as RecentClient[];
@@ -132,8 +144,26 @@ export default function AdminOverview() {
   const { data: invoiceRows } = useQuery({
     queryKey: ["staff-overview-invoice-health"],
     queryFn: async () => {
-      const { data } = await supabase.from("invoices").select("id, status, balance_due, total_amount");
+      const { data } = await supabase.from("invoices").select("id, client_id, status, balance_due, total_amount");
       return (data ?? []) as InvoiceSnapshot[];
+    },
+  });
+
+  const { data: riskClients } = useQuery({
+    queryKey: ["staff-overview-risk-clients"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, client_code, client_type, company_name, sars_outstanding_debt, returns_filed, first_name, last_name");
+      return (data ?? []) as RecentClient[];
+    },
+  });
+
+  const { data: riskRequests } = useQuery({
+    queryKey: ["staff-overview-risk-document-requests"],
+    queryFn: async () => {
+      const { data } = await supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      return (data ?? []) as RiskDocumentRequest[];
     },
   });
 
@@ -200,6 +230,45 @@ export default function AdminOverview() {
       paidInvoices,
     };
   }, [invoiceRows]);
+
+  const attentionClients = useMemo(() => {
+    const outstandingInvoicesByClient = new Map<string, number>();
+    const outstandingRequestsByClient = new Map<string, number>();
+
+    for (const invoice of invoiceRows ?? []) {
+      const isOutstanding = ["issued", "partially_paid", "overdue"].includes(invoice.status) && Number(invoice.balance_due || 0) > 0;
+      if (!isOutstanding) continue;
+      outstandingInvoicesByClient.set(invoice.client_id, (outstandingInvoicesByClient.get(invoice.client_id) ?? 0) + 1);
+    }
+
+    for (const request of riskRequests ?? []) {
+      const isOutstanding = request.is_required && !request.is_fulfilled;
+      if (!isOutstanding) continue;
+      outstandingRequestsByClient.set(request.client_id, (outstandingRequestsByClient.get(request.client_id) ?? 0) + 1);
+    }
+
+    return (riskClients ?? [])
+      .map((client) => {
+        const warningSummary = getClientWarningSummary(client, {
+          outstandingInvoices: outstandingInvoicesByClient.get(client.id) ?? 0,
+          outstandingDocumentRequests: outstandingRequestsByClient.get(client.id) ?? 0,
+        });
+
+        return {
+          ...client,
+          warningSummary,
+        };
+      })
+      .filter((client) => client.warningSummary.hasIssues)
+      .sort((left, right) => {
+        if (right.warningSummary.issueCount !== left.warningSummary.issueCount) {
+          return right.warningSummary.issueCount - left.warningSummary.issueCount;
+        }
+
+        return right.warningSummary.debtAmount - left.warningSummary.debtAmount;
+      })
+      .slice(0, 5);
+  }, [invoiceRows, riskClients, riskRequests]);
 
   return (
     <div className="space-y-8">
@@ -288,6 +357,56 @@ export default function AdminOverview() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-card">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <div>
+              <h2 className="font-display text-xl font-semibold text-red-700">Attention Needed</h2>
+              <p className="text-sm text-red-700/80 font-body">Problem accounts with debt, unfiled returns, or outstanding billing and document issues.</p>
+            </div>
+          </div>
+          <Link to="/dashboard/staff/clients" className="text-sm font-semibold text-red-700 hover:underline">
+            Open clients
+          </Link>
+        </div>
+
+        {attentionClients.length > 0 ? (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {attentionClients.map((client) => (
+              <Link
+                key={client.id}
+                to={`/dashboard/staff/client-workspace?clientId=${client.id}`}
+                className="rounded-2xl border border-red-200 bg-white p-4 transition-shadow hover:shadow-elevated"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-body font-semibold text-foreground">{getClientName(client)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground font-body">
+                      {getClientTypeLabel(client.client_type)}{client.client_code ? ` • ${client.client_code}` : ""}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                    {client.warningSummary.issueCount} issues
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {client.warningSummary.reasons.map((reason) => (
+                    <span key={reason} className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                      {reason}
+                    </span>
+                  ))}
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-red-200 bg-white p-8 text-center">
+            <p className="text-sm text-red-700/80 font-body">No client accounts are currently flagged for urgent attention.</p>
+          </div>
+        )}
+      </section>
+
       <ElevenLabsWidget />
 
       <section className="grid gap-6 xl:grid-cols-3">
@@ -311,6 +430,9 @@ export default function AdminOverview() {
                 <p className="font-body font-medium text-foreground">{getClientName(client)}</p>
                 <p className="mt-1 text-xs text-muted-foreground font-body">
                   {client.profiles?.email || "No email"}{client.client_code ? ` • ${client.client_code}` : ""}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground font-body">
+                  {getClientTypeLabel(client.client_type)} • {client.returns_filed ? "Returns filed" : "Returns not filed"}
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground font-body">
                   Added {new Date(client.created_at).toLocaleDateString()}

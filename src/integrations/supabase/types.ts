@@ -52,12 +52,16 @@ export type Database = {
         Row: {
           id: string;
           profile_id: string;
+          client_type: string;
+          company_registration_number: string | null;
           first_name: string | null;
           last_name: string | null;
           company_name: string | null;
           tax_number: string | null;
           sars_reference_number: string | null;
           id_number: string | null;
+          sars_outstanding_debt: number;
+          returns_filed: boolean;
           client_code: string | null;
           address_line_1: string | null;
           address_line_2: string | null;
@@ -74,12 +78,16 @@ export type Database = {
         Insert: {
           id?: string;
           profile_id: string;
+          client_type?: string;
+          company_registration_number?: string | null;
           first_name?: string | null;
           last_name?: string | null;
           company_name?: string | null;
           tax_number?: string | null;
           sars_reference_number?: string | null;
           id_number?: string | null;
+          sars_outstanding_debt?: number;
+          returns_filed?: boolean;
           client_code?: string | null;
           address_line_1?: string | null;
           address_line_2?: string | null;
@@ -96,12 +104,16 @@ export type Database = {
         Update: {
           id?: string;
           profile_id?: string;
+          client_type?: string;
+          company_registration_number?: string | null;
           first_name?: string | null;
           last_name?: string | null;
           company_name?: string | null;
           tax_number?: string | null;
           sars_reference_number?: string | null;
           id_number?: string | null;
+          sars_outstanding_debt?: number;
+          returns_filed?: boolean;
           client_code?: string | null;
           address_line_1?: string | null;
           address_line_2?: string | null;

@@ -1,23 +1,30 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Search, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowRight, Search, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
-import { Link } from "react-router-dom";
+import { getClientIdentityFieldLabel, getClientIdentityLabel, getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
 
 type StaffClient = {
   id: string;
+  client_type: string;
+  company_registration_number: string | null;
   first_name: string | null;
   last_name: string | null;
   company_name: string | null;
   tax_number: string | null;
   sars_reference_number: string | null;
   id_number: string | null;
+  sars_outstanding_debt: number;
+  returns_filed: boolean;
   client_code: string | null;
   address_line_1: string | null;
   address_line_2: string | null;
@@ -46,12 +53,16 @@ type NewClientFormState = {
   email: string;
   fullName: string;
   phone: string;
+  clientType: "individual" | "company";
   companyName: string;
+  companyRegistrationNumber: string;
   firstName: string;
   lastName: string;
   taxNumber: string;
   sarsReferenceNumber: string;
   idNumber: string;
+  sarsOutstandingDebt: string;
+  returnsFiled: boolean;
   clientCode: string;
   addressLine1: string;
   addressLine2: string;
@@ -66,12 +77,16 @@ const initialFormState: NewClientFormState = {
   email: "",
   fullName: "",
   phone: "",
+  clientType: "individual",
   companyName: "",
+  companyRegistrationNumber: "",
   firstName: "",
   lastName: "",
   taxNumber: "",
   sarsReferenceNumber: "",
   idNumber: "",
+  sarsOutstandingDebt: "0",
+  returnsFiled: false,
   clientCode: "",
   addressLine1: "",
   addressLine2: "",
@@ -115,6 +130,10 @@ function splitFullName(fullName: string) {
   };
 }
 
+function formatCurrency(value: number) {
+  return `R ${Number(value || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export default function AdminClients() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -140,6 +159,52 @@ export default function AdminClients() {
     },
   });
 
+  const { data: riskInvoices } = useQuery({
+    queryKey: ["staff-client-risk-invoices"],
+    queryFn: async () => {
+      const { data } = await supabase.from("invoices").select("client_id, status, balance_due");
+      return data ?? [];
+    },
+  });
+
+  const { data: riskRequests } = useQuery({
+    queryKey: ["staff-client-risk-document-requests"],
+    queryFn: async () => {
+      const { data } = await supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      return data ?? [];
+    },
+  });
+
+  const clientIssueMap = useMemo(() => {
+    const outstandingInvoicesByClient = new Map<string, number>();
+    const outstandingRequestsByClient = new Map<string, number>();
+
+    for (const invoice of riskInvoices ?? []) {
+      const isOutstanding = ["issued", "partially_paid", "overdue"].includes(invoice.status) && Number(invoice.balance_due || 0) > 0;
+      if (!isOutstanding) continue;
+      outstandingInvoicesByClient.set(invoice.client_id, (outstandingInvoicesByClient.get(invoice.client_id) ?? 0) + 1);
+    }
+
+    for (const request of riskRequests ?? []) {
+      const isOutstanding = request.is_required && !request.is_fulfilled;
+      if (!isOutstanding) continue;
+      outstandingRequestsByClient.set(request.client_id, (outstandingRequestsByClient.get(request.client_id) ?? 0) + 1);
+    }
+
+    const map = new Map<string, ReturnType<typeof getClientWarningSummary>>();
+    for (const client of clients ?? []) {
+      map.set(
+        client.id,
+        getClientWarningSummary(client, {
+          outstandingInvoices: outstandingInvoicesByClient.get(client.id) ?? 0,
+          outstandingDocumentRequests: outstandingRequestsByClient.get(client.id) ?? 0,
+        }),
+      );
+    }
+
+    return map;
+  }, [clients, riskInvoices, riskRequests]);
+
   const filteredClients = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -153,13 +218,15 @@ export default function AdminClients() {
       const phone = (client.profiles?.phone || "").toLowerCase();
       const taxNumber = (client.tax_number || "").toLowerCase();
       const clientCode = (client.client_code || "").toLowerCase();
+      const clientType = (client.client_type || "").toLowerCase();
 
       return (
         name.includes(normalizedSearch) ||
         email.includes(normalizedSearch) ||
         phone.includes(normalizedSearch) ||
         taxNumber.includes(normalizedSearch) ||
-        clientCode.includes(normalizedSearch)
+        clientCode.includes(normalizedSearch) ||
+        clientType.includes(normalizedSearch)
       );
     });
   }, [clients, searchQuery]);
@@ -168,7 +235,7 @@ export default function AdminClients() {
     || clients?.find((client) => client.id === selectedClientId)
     || null;
 
-  const updateForm = (key: keyof NewClientFormState, value: string) => {
+  const updateForm = <K extends keyof NewClientFormState>(key: K, value: NewClientFormState[K]) => {
     setFormState((current) => ({ ...current, [key]: value }));
   };
 
@@ -244,12 +311,16 @@ export default function AdminClients() {
 
     const { error: insertError } = await supabase.from("clients").insert({
       profile_id: profile.id,
+      client_type: formState.clientType,
+      company_registration_number: formState.clientType === "company" ? formState.companyRegistrationNumber.trim() || null : null,
       first_name: firstName || null,
       last_name: lastName || null,
-      company_name: formState.companyName.trim() || null,
+      company_name: formState.clientType === "company" ? formState.companyName.trim() || null : null,
       tax_number: formState.taxNumber.trim() || null,
       sars_reference_number: formState.sarsReferenceNumber.trim() || null,
-      id_number: formState.idNumber.trim() || null,
+      id_number: formState.clientType === "individual" ? formState.idNumber.trim() || null : null,
+      sars_outstanding_debt: Number(formState.sarsOutstandingDebt || 0),
+      returns_filed: formState.returnsFiled,
       client_code: formState.clientCode.trim() || null,
       address_line_1: formState.addressLine1.trim() || null,
       address_line_2: formState.addressLine2.trim() || null,
@@ -270,7 +341,12 @@ export default function AdminClients() {
     toast.success("Client added successfully.");
     setIsCreateOpen(false);
     resetCreateForm();
-    await queryClient.invalidateQueries({ queryKey: ["staff-clients"] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-clients"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-client-risk-invoices"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-client-risk-document-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-overview-risk-clients"] }),
+    ]);
   };
 
   return (
@@ -287,7 +363,7 @@ export default function AdminClients() {
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search client, email, code, or tax number..."
+              placeholder="Search client, email, type, code, or tax number..."
               className="rounded-xl pl-9"
             />
           </div>
@@ -307,27 +383,44 @@ export default function AdminClients() {
               <tr className="border-b border-border">
                 <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Name</th>
                 <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Email</th>
-                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Phone</th>
+                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Type</th>
                 <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Tax Number</th>
                 <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Client Code</th>
+                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Status</th>
                 <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Joined</th>
               </tr>
             </thead>
             <tbody>
-              {filteredClients.map((client) => (
-                <tr
-                  key={client.id}
-                  className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-accent/30"
-                  onClick={() => setSelectedClientId(client.id)}
-                >
-                  <td className="p-4 text-sm font-medium text-foreground font-body">{getClientName(client)}</td>
-                  <td className="p-4 text-sm text-muted-foreground font-body">{client.profiles?.email || "-"}</td>
-                  <td className="p-4 text-sm text-muted-foreground font-body">{client.profiles?.phone || "-"}</td>
-                  <td className="p-4 text-sm text-muted-foreground font-body">{client.tax_number || "-"}</td>
-                  <td className="p-4 text-sm text-muted-foreground font-body">{client.client_code || "-"}</td>
-                  <td className="p-4 text-sm text-muted-foreground font-body">{new Date(client.created_at).toLocaleDateString()}</td>
-                </tr>
-              ))}
+              {filteredClients.map((client) => {
+                const warningSummary = clientIssueMap.get(client.id);
+
+                return (
+                  <tr
+                    key={client.id}
+                    className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-accent/30"
+                    onClick={() => setSelectedClientId(client.id)}
+                  >
+                    <td className="p-4 text-sm font-medium text-foreground font-body">{getClientName(client)}</td>
+                    <td className="p-4 text-sm text-muted-foreground font-body">{client.profiles?.email || "-"}</td>
+                    <td className="p-4 text-sm text-muted-foreground font-body">{getClientTypeLabel(client.client_type)}</td>
+                    <td className="p-4 text-sm text-muted-foreground font-body">{client.tax_number || "-"}</td>
+                    <td className="p-4 text-sm text-muted-foreground font-body">{client.client_code || "-"}</td>
+                    <td className="p-4 text-sm font-body">
+                      {warningSummary?.hasIssues ? (
+                        <span className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          {warningSummary.issueCount} warning{warningSummary.issueCount === 1 ? "" : "s"}
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                          Healthy
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 text-sm text-muted-foreground font-body">{new Date(client.created_at).toLocaleDateString()}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -361,6 +454,18 @@ export default function AdminClients() {
               <Input value={formState.email} onChange={(event) => updateForm("email", event.target.value)} placeholder="client@example.com" className="rounded-xl" />
             </div>
             <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Type</label>
+              <Select value={formState.clientType} onValueChange={(value) => updateForm("clientType", value as NewClientFormState["clientType"])}>
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="individual">Individual</SelectItem>
+                  <SelectItem value="company">Company</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">Full Name</label>
               <Input value={formState.fullName} onChange={(event) => updateForm("fullName", event.target.value)} placeholder="Client full name" className="rounded-xl" />
             </div>
@@ -376,10 +481,25 @@ export default function AdminClients() {
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">Last Name</label>
               <Input value={formState.lastName} onChange={(event) => updateForm("lastName", event.target.value)} placeholder="Last name" className="rounded-xl" />
             </div>
-            <div className="sm:col-span-2">
-              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Name</label>
-              <Input value={formState.companyName} onChange={(event) => updateForm("companyName", event.target.value)} placeholder="Optional for business clients" className="rounded-xl" />
-            </div>
+
+            {formState.clientType === "company" ? (
+              <>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Name</label>
+                  <Input value={formState.companyName} onChange={(event) => updateForm("companyName", event.target.value)} placeholder="Company name" className="rounded-xl" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Registration Number</label>
+                  <Input value={formState.companyRegistrationNumber} onChange={(event) => updateForm("companyRegistrationNumber", event.target.value)} placeholder="Registration number" className="rounded-xl" />
+                </div>
+              </>
+            ) : (
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
+                <Input value={formState.idNumber} onChange={(event) => updateForm("idNumber", event.target.value)} placeholder="ID number" className="rounded-xl" />
+              </div>
+            )}
+
             <div>
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">Tax Number</label>
               <Input value={formState.taxNumber} onChange={(event) => updateForm("taxNumber", event.target.value)} placeholder="Tax number" className="rounded-xl" />
@@ -389,13 +509,38 @@ export default function AdminClients() {
               <Input value={formState.sarsReferenceNumber} onChange={(event) => updateForm("sarsReferenceNumber", event.target.value)} placeholder="SARS reference number" className="rounded-xl" />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
-              <Input value={formState.idNumber} onChange={(event) => updateForm("idNumber", event.target.value)} placeholder="ID number" className="rounded-xl" />
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Outstanding / Debt</label>
+              <Input
+                value={formState.sarsOutstandingDebt}
+                onChange={(event) => updateForm("sarsOutstandingDebt", event.target.value)}
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                className="rounded-xl"
+              />
             </div>
             <div>
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Code</label>
               <Input value={formState.clientCode} onChange={(event) => updateForm("clientCode", event.target.value)} placeholder="Optional client code" className="rounded-xl" />
             </div>
+
+            <div className="sm:col-span-2 rounded-2xl border border-border bg-accent/30 p-4">
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="returns-filed"
+                  checked={formState.returnsFiled}
+                  onCheckedChange={(checked) => updateForm("returnsFiled", checked === true)}
+                />
+                <label htmlFor="returns-filed" className="text-sm font-semibold text-foreground font-body">
+                  Returns filed
+                </label>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground font-body">
+                Leave this unchecked when returns are still outstanding so the dashboard can raise a red warning.
+              </p>
+            </div>
+
             <div className="sm:col-span-2">
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">Address Line 1</label>
               <Input value={formState.addressLine1} onChange={(event) => updateForm("addressLine1", event.target.value)} placeholder="Street address" className="rounded-xl" />
@@ -455,14 +600,35 @@ export default function AdminClients() {
       >
         {selectedClient ? (
           <div className="space-y-6">
+            {(() => {
+              const warningSummary = clientIssueMap.get(selectedClient.id) ?? getClientWarningSummary(selectedClient);
+              return warningSummary.hasIssues ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+                    <div>
+                      <p className="font-body text-sm font-semibold text-red-700">Attention needed on this client account</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {warningSummary.reasons.map((reason) => (
+                          <span key={reason} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-700">
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Full Name</p>
                 <p className="font-body text-foreground">{selectedClient.profiles?.full_name || [selectedClient.first_name, selectedClient.last_name].filter(Boolean).join(" ") || "Not provided"}</p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Company</p>
-                <p className="font-body text-foreground">{selectedClient.company_name || "Individual client"}</p>
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Type</p>
+                <p className="font-body text-foreground">{getClientTypeLabel(selectedClient.client_type)}</p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Email</p>
@@ -476,6 +642,14 @@ export default function AdminClients() {
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div className="rounded-2xl border border-border p-4">
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Company Name</p>
+                <p className="font-body text-foreground">{selectedClient.company_name || "Not provided"}</p>
+              </div>
+              <div className="rounded-2xl border border-border p-4">
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">{getClientIdentityFieldLabel(selectedClient.client_type)}</p>
+                <p className="font-body text-foreground">{getClientIdentityLabel(selectedClient)}</p>
+              </div>
+              <div className="rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Tax Number</p>
                 <p className="font-body text-foreground">{selectedClient.tax_number || "Not provided"}</p>
               </div>
@@ -484,8 +658,12 @@ export default function AdminClients() {
                 <p className="font-body text-foreground">{selectedClient.sars_reference_number || "Not provided"}</p>
               </div>
               <div className="rounded-2xl border border-border p-4">
-                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">ID Number</p>
-                <p className="font-body text-foreground">{selectedClient.id_number || "Not provided"}</p>
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">SARS Outstanding / Debt</p>
+                <p className="font-body text-foreground">{formatCurrency(selectedClient.sars_outstanding_debt)}</p>
+              </div>
+              <div className="rounded-2xl border border-border p-4">
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Returns Filed</p>
+                <p className="font-body text-foreground">{selectedClient.returns_filed ? "Filed" : "Not filed"}</p>
               </div>
               <div className="rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Code</p>

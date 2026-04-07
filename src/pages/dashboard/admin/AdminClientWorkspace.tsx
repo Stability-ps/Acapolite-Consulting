@@ -6,13 +6,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
 import type { Enums, TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
+import { getClientIdentityFieldLabel, getClientIdentityLabel, getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
 import {
+  AlertTriangle,
   User,
   FolderOpen,
   Upload,
@@ -82,12 +85,16 @@ type ClientOption = {
 type ClientDetails = {
   id: string;
   profile_id: string;
+  client_type: string;
+  company_registration_number: string | null;
   first_name: string | null;
   last_name: string | null;
   company_name: string | null;
   tax_number: string | null;
   sars_reference_number: string | null;
   id_number: string | null;
+  sars_outstanding_debt: number;
+  returns_filed: boolean;
   client_code: string | null;
   address_line_1: string | null;
   address_line_2: string | null;
@@ -148,6 +155,12 @@ type ClientAlert = {
   status: string;
   alert_type: string;
   alert_at: string;
+};
+
+type ClientDocumentRequest = {
+  id: string;
+  is_required: boolean;
+  is_fulfilled: boolean;
 };
 
 type ClientConversation = {
@@ -234,12 +247,16 @@ export default function AdminClientWorkspace() {
   const [clientForm, setClientForm] = useState({
     full_name: "",
     phone: "",
+    client_type: "individual",
+    company_registration_number: "",
     first_name: "",
     last_name: "",
     company_name: "",
     tax_number: "",
     sars_reference_number: "",
     id_number: "",
+    sars_outstanding_debt: "0",
+    returns_filed: false,
     client_code: "",
     address_line_1: "",
     address_line_2: "",
@@ -345,6 +362,18 @@ export default function AdminClientWorkspace() {
     enabled: !!selectedClientId,
   });
 
+  const { data: clientDocumentRequests } = useQuery({
+    queryKey: ["staff-client-workspace-document-requests", selectedClientId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("document_requests")
+        .select("id, is_required, is_fulfilled")
+        .eq("client_id", selectedClientId);
+      return (data ?? []) as ClientDocumentRequest[];
+    },
+    enabled: !!selectedClientId,
+  });
+
   const { data: clientAlerts } = useQuery({
     queryKey: ["staff-client-workspace-alerts", selectedClientId],
     queryFn: async () => {
@@ -396,12 +425,16 @@ export default function AdminClientWorkspace() {
     setClientForm({
       full_name: clientDetails.profiles?.full_name || "",
       phone: clientDetails.profiles?.phone || "",
+      client_type: clientDetails.client_type === "company" ? "company" : "individual",
+      company_registration_number: clientDetails.company_registration_number || "",
       first_name: clientDetails.first_name || "",
       last_name: clientDetails.last_name || "",
       company_name: clientDetails.company_name || "",
       tax_number: clientDetails.tax_number || "",
       sars_reference_number: clientDetails.sars_reference_number || "",
       id_number: clientDetails.id_number || "",
+      sars_outstanding_debt: String(clientDetails.sars_outstanding_debt ?? 0),
+      returns_filed: clientDetails.returns_filed,
       client_code: clientDetails.client_code || "",
       address_line_1: clientDetails.address_line_1 || "",
       address_line_2: clientDetails.address_line_2 || "",
@@ -416,6 +449,15 @@ export default function AdminClientWorkspace() {
   const summary = useMemo(() => {
     const invoices = clientInvoices ?? [];
     const documents = clientDocuments ?? [];
+    const documentRequests = clientDocumentRequests ?? [];
+    const outstandingDocumentRequests = documentRequests.filter((request) => request.is_required && !request.is_fulfilled).length;
+    const outstandingInvoices = invoices.filter((invoice) => ["issued", "partially_paid", "overdue"].includes(invoice.status) && Number(invoice.balance_due || 0) > 0).length;
+    const warningSummary = clientDetails
+      ? getClientWarningSummary(clientDetails, {
+        outstandingInvoices,
+        outstandingDocumentRequests,
+      })
+      : null;
 
     return {
       cases: clientCases?.length ?? 0,
@@ -424,8 +466,11 @@ export default function AdminClientWorkspace() {
       conversations: clientConversations?.length ?? 0,
       outstandingBalance: invoices.reduce((sum, invoice) => sum + Number(invoice.balance_due || 0), 0),
       pendingDocuments: documents.filter((document) => ["uploaded", "pending_review"].includes(document.status)).length,
+      outstandingDocumentRequests,
+      outstandingInvoices,
+      warningSummary,
     };
-  }, [clientCases, clientDocuments, clientInvoices, clientConversations]);
+  }, [clientCases, clientDetails, clientDocumentRequests, clientDocuments, clientInvoices, clientConversations]);
 
   const selectedConversationRecord = clientConversations?.find((conversation) => conversation.id === selectedConversation) ?? null;
 
@@ -448,11 +493,15 @@ export default function AdminClientWorkspace() {
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-cases", selectedClientId] }),
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-documents", selectedClientId] }),
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-invoices", selectedClientId] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-document-requests", selectedClientId] }),
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-alerts", selectedClientId] }),
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-conversations", selectedClientId] }),
       queryClient.invalidateQueries({ queryKey: ["staff-overview-case-statuses"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-dashboard-summary"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-overview-invoice-health"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-overview-risk-clients"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-client-risk-document-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-client-risk-invoices"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-overview-due-alerts"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-overview-recent-documents"] }),
     ]);
@@ -480,12 +529,16 @@ export default function AdminClientWorkspace() {
     const { error: clientError } = await supabase
       .from("clients")
       .update({
+        client_type: clientForm.client_type,
+        company_registration_number: clientForm.client_type === "company" ? clientForm.company_registration_number.trim() || null : null,
         first_name: clientForm.first_name.trim() || null,
         last_name: clientForm.last_name.trim() || null,
-        company_name: clientForm.company_name.trim() || null,
+        company_name: clientForm.client_type === "company" ? clientForm.company_name.trim() || null : null,
         tax_number: clientForm.tax_number.trim() || null,
         sars_reference_number: clientForm.sars_reference_number.trim() || null,
-        id_number: clientForm.id_number.trim() || null,
+        id_number: clientForm.client_type === "individual" ? clientForm.id_number.trim() || null : null,
+        sars_outstanding_debt: Number(clientForm.sars_outstanding_debt || 0),
+        returns_filed: clientForm.returns_filed,
         client_code: clientForm.client_code.trim() || null,
         address_line_1: clientForm.address_line_1.trim() || null,
         address_line_2: clientForm.address_line_2.trim() || null,
@@ -835,6 +888,10 @@ export default function AdminClientWorkspace() {
                       <p className="font-body text-foreground">{clientDetails.profiles?.phone || "Not provided"}</p>
                     </div>
                     <div className="rounded-xl border border-border bg-accent/30 p-4">
+                      <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Type</p>
+                      <p className="font-body text-foreground">{getClientTypeLabel(clientDetails.client_type)}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-accent/30 p-4">
                       <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Assigned Consultant</p>
                       <p className="font-body text-foreground">{clientDetails.assigned_consultant?.full_name || clientDetails.assigned_consultant?.email || "Not assigned"}</p>
                     </div>
@@ -845,6 +902,18 @@ export default function AdminClientWorkspace() {
                     <div className="rounded-xl border border-border bg-accent/30 p-4">
                       <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">SARS Reference</p>
                       <p className="font-body text-foreground">{clientDetails.sars_reference_number || "Not provided"}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-accent/30 p-4">
+                      <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">{getClientIdentityFieldLabel(clientDetails.client_type)}</p>
+                      <p className="font-body text-foreground">{getClientIdentityLabel(clientDetails)}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-accent/30 p-4">
+                      <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">SARS Outstanding / Debt</p>
+                      <p className="font-body text-foreground">{formatCurrency(clientDetails.sars_outstanding_debt)}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-accent/30 p-4 sm:col-span-2">
+                      <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Returns Filed</p>
+                      <p className="font-body text-foreground">{clientDetails.returns_filed ? "Filed" : "Not filed"}</p>
                     </div>
                     <div className="rounded-xl border border-border bg-accent/30 p-4 sm:col-span-2">
                       <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Address</p>
@@ -868,6 +937,31 @@ export default function AdminClientWorkspace() {
                       <div className="rounded-xl border border-border bg-accent/30 p-4">
                         <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Active Alerts</p>
                         <p className="font-display text-2xl text-foreground">{clientAlerts?.filter((alert) => alert.status === "active").length ?? 0}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`rounded-2xl border p-6 shadow-card ${summary.warningSummary?.hasIssues ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className={`mt-0.5 h-5 w-5 shrink-0 ${summary.warningSummary?.hasIssues ? "text-red-600" : "text-emerald-600"}`} />
+                      <div className="space-y-3">
+                        <div>
+                          <h2 className={`font-display text-xl font-semibold ${summary.warningSummary?.hasIssues ? "text-red-700" : "text-emerald-700"}`}>
+                            {summary.warningSummary?.hasIssues ? "Risk Snapshot" : "Risk Snapshot Clear"}
+                          </h2>
+                          <p className={`text-sm font-body ${summary.warningSummary?.hasIssues ? "text-red-700/80" : "text-emerald-700/80"}`}>
+                            {summary.warningSummary?.hasIssues ? "This client account has issues that need attention." : "No active risk indicators are showing for this client right now."}
+                          </p>
+                        </div>
+                        {summary.warningSummary?.hasIssues ? (
+                          <div className="flex flex-wrap gap-2">
+                            {summary.warningSummary.reasons.map((reason) => (
+                              <span key={reason} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-700">
+                                {reason}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -1203,6 +1297,18 @@ export default function AdminClientWorkspace() {
                   />
                 </div>
                 <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Type</label>
+                  <Select value={clientForm.client_type} onValueChange={(value) => setClientForm((current) => ({ ...current, client_type: value }))}>
+                    <SelectTrigger className="w-full rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individual">Individual</SelectItem>
+                      <SelectItem value="company">Company</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Code</label>
                   <Input
                     value={clientForm.client_code}
@@ -1235,15 +1341,38 @@ export default function AdminClientWorkspace() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Name</label>
-                  <Input
-                    value={clientForm.company_name}
-                    onChange={(event) => setClientForm((current) => ({ ...current, company_name: event.target.value }))}
-                    placeholder="Company name"
-                    className="rounded-xl"
-                  />
-                </div>
+                {clientForm.client_type === "company" ? (
+                  <>
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Name</label>
+                      <Input
+                        value={clientForm.company_name}
+                        onChange={(event) => setClientForm((current) => ({ ...current, company_name: event.target.value }))}
+                        placeholder="Company name"
+                        className="rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Registration Number</label>
+                      <Input
+                        value={clientForm.company_registration_number}
+                        onChange={(event) => setClientForm((current) => ({ ...current, company_registration_number: event.target.value }))}
+                        placeholder="Registration number"
+                        className="rounded-xl"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
+                    <Input
+                      value={clientForm.id_number}
+                      onChange={(event) => setClientForm((current) => ({ ...current, id_number: event.target.value }))}
+                      placeholder="ID number"
+                      className="rounded-xl"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-foreground font-body">Tax Number</label>
                   <Input
@@ -1266,14 +1395,33 @@ export default function AdminClientWorkspace() {
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Outstanding / Debt</label>
                   <Input
-                    value={clientForm.id_number}
-                    onChange={(event) => setClientForm((current) => ({ ...current, id_number: event.target.value }))}
-                    placeholder="ID or registration number"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={clientForm.sars_outstanding_debt}
+                    onChange={(event) => setClientForm((current) => ({ ...current, sars_outstanding_debt: event.target.value }))}
+                    placeholder="0.00"
                     className="rounded-xl"
                   />
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="client-returns-filed"
+                    checked={clientForm.returns_filed}
+                    onCheckedChange={(checked) => setClientForm((current) => ({ ...current, returns_filed: checked === true }))}
+                  />
+                  <label htmlFor="client-returns-filed" className="text-sm font-semibold text-foreground font-body">
+                    Returns filed
+                  </label>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground font-body">
+                  Unchecked clients will be highlighted with a red warning in the admin dashboard risk views.
+                </p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
