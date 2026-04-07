@@ -23,6 +23,7 @@ import AdminCases from "./pages/dashboard/admin/AdminCases";
 import AdminInvoices from "./pages/dashboard/admin/AdminInvoices";
 import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
 import AdminMessages from "./pages/dashboard/admin/AdminMessages";
+import AdminClientWorkspace from "./pages/dashboard/admin/AdminClientWorkspace";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,7 @@ const App = () => (
               <Route element={<RequireRole allowedRoles={["admin", "consultant"]} />}>
                 <Route path="staff" element={<AdminOverview />} />
                 <Route path="staff/clients" element={<AdminClients />} />
+                <Route path="staff/client-workspace" element={<AdminClientWorkspace />} />
                 <Route path="staff/cases" element={<AdminCases />} />
                 <Route path="staff/documents" element={<AdminDocuments />} />
                 <Route path="staff/invoices" element={<AdminInvoices />} />

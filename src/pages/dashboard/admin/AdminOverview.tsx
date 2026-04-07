@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { ElevenLabsWidget } from "@/components/dashboard/ElevenLabsWidget";
 
 type CaseStatusRow = {
   status: string;
@@ -286,6 +287,8 @@ export default function AdminOverview() {
           </div>
         </div>
       </section>
+
+      <ElevenLabsWidget />
 
       <section className="grid gap-6 xl:grid-cols-3">
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">

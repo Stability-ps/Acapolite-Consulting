@@ -3,10 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -49,10 +50,7 @@ export default function Login() {
         </Link>
 
         <div className="bg-card rounded-2xl shadow-elevated border border-border p-8">
-          <div className="flex items-center gap-2 mb-6">
-            <Shield className="h-6 w-6 text-primary" />
-            <span className="font-display text-xl font-bold text-foreground">Acapolite</span>
-          </div>
+          <AcapoliteLogo className="mb-6 h-14" />
 
           <h1 className="font-display text-2xl font-bold text-foreground mb-2">Welcome back</h1>
           <p className="text-muted-foreground font-body text-sm mb-8">Sign in to your Acapolite workspace</p>

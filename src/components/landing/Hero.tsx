@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Shield, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
 export function Hero() {
   return (
@@ -27,15 +28,7 @@ export function Hero() {
             Secure SARS workflow management
           </div>
 
-          <div className="mb-6 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 backdrop-blur">
-              <Shield className="h-6 w-6 text-primary-foreground/85" />
-            </div>
-            <span className="font-display text-2xl font-bold tracking-tight text-primary-foreground">
-              Acapolite
-            </span>
-            <span className="text-lg font-body text-primary-foreground/70">Consulting</span>
-          </div>
+          <AcapoliteLogo className="mb-6 h-16 sm:h-20" />
 
           <h1 className="mb-6 font-display text-4xl font-bold leading-tight text-primary-foreground md:text-6xl lg:text-7xl">
             Expert Tax Consulting,{" "}

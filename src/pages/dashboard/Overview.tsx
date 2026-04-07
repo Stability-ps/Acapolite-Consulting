@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
+import { ElevenLabsWidget } from "@/components/dashboard/ElevenLabsWidget";
 
 function getFirstName(fullName?: string | null, fallback?: string | null) {
   if (fallback?.trim()) return fallback.trim();
@@ -210,6 +211,8 @@ export default function DashboardOverview() {
         </div>
 
         <div className="space-y-6">
+          <ElevenLabsWidget />
+
           <div className="bg-card rounded-2xl border border-border shadow-card p-6">
             <div className="flex items-center justify-between gap-4 mb-5">
               <div>

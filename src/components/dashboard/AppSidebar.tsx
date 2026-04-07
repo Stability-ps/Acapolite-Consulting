@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, FolderOpen, Upload, Receipt, MessageSquare, Bell, Settings, Users, Shield, LogOut,
+  LayoutDashboard, FolderOpen, Upload, Receipt, MessageSquare, Bell, Settings, Users, Shield, LogOut, UserRound,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
+import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
 const clientItems = [
   { title: "Overview", url: "/dashboard/client", icon: LayoutDashboard },
@@ -25,6 +26,7 @@ const clientItems = [
 const adminItems = [
   { title: "Overview", url: "/dashboard/staff", icon: Shield },
   { title: "Clients", url: "/dashboard/staff/clients", icon: Users },
+  { title: "Client 360", url: "/dashboard/staff/client-workspace", icon: UserRound },
   { title: "Cases", url: "/dashboard/staff/cases", icon: FolderOpen },
   { title: "Documents", url: "/dashboard/staff/documents", icon: Upload },
   { title: "Invoices", url: "/dashboard/staff/invoices", icon: Receipt },
@@ -87,8 +89,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="flex items-center gap-2 px-3">
-            <Shield className="h-5 w-5 text-sidebar-primary shrink-0" />
-            {!collapsed && <span className="font-display font-bold text-sm">Acapolite</span>}
+            <AcapoliteLogo className={collapsed ? "h-8" : "h-10"} />
           </SidebarGroupLabel>
         </SidebarGroup>
 

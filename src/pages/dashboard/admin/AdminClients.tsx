@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, UserPlus } from "lucide-react";
+import { ArrowRight, Search, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { Link } from "react-router-dom";
 
 type StaffClient = {
   id: string;
@@ -514,6 +515,15 @@ export default function AdminClients() {
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Notes</p>
                 <p className="whitespace-pre-wrap font-body text-foreground">{selectedClient.notes || "No internal notes yet."}</p>
               </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button asChild className="rounded-xl">
+                <Link to={`/dashboard/staff/client-workspace?clientId=${selectedClient.id}`}>
+                  Open Client 360
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
             </div>
           </div>
         ) : null}

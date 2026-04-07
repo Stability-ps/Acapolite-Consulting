@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Enums, TablesUpdate } from "@/integrations/supabase/types";
+import type { Enums, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Search } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { useAuth } from "@/hooks/useAuth";
 
 const invoiceStatuses: Enums<"invoice_status">[] = ["draft", "issued", "partially_paid", "paid", "overdue", "cancelled"];
 
@@ -52,11 +54,19 @@ function getStatusColor(status: string) {
 }
 
 export default function AdminInvoices() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<Enums<"invoice_status">>("draft");
+  const [invoiceTitle, setInvoiceTitle] = useState("");
+  const [invoiceDescription, setInvoiceDescription] = useState("");
+  const [invoiceDueDate, setInvoiceDueDate] = useState("");
+  const [invoiceTotalAmount, setInvoiceTotalAmount] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [clientsFormValue, setClientsFormValue] = useState("");
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["staff-invoices"],
@@ -66,6 +76,17 @@ export default function AdminInvoices() {
         .select("*, clients(company_name, first_name, last_name, client_code)")
         .order("created_at", { ascending: false });
       return (data ?? []) as StaffInvoice[];
+    },
+  });
+
+  const { data: clients } = useQuery({
+    queryKey: ["staff-invoice-clients"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("id, company_name, first_name, last_name, client_code")
+        .order("created_at", { ascending: false });
+      return data ?? [];
     },
   });
 
@@ -98,14 +119,35 @@ export default function AdminInvoices() {
   useEffect(() => {
     if (selectedInvoice) {
       setSelectedStatus(selectedInvoice.status);
+      setInvoiceTitle(selectedInvoice.title || "");
+      setInvoiceDescription(selectedInvoice.description || "");
+      setInvoiceDueDate(selectedInvoice.due_date || "");
+      setInvoiceTotalAmount(String(selectedInvoice.total_amount ?? ""));
     }
   }, [selectedInvoice]);
 
-  const updateStatus = async () => {
+  const resetCreateForm = () => {
+    setClientsFormValue("");
+    setInvoiceTitle("");
+    setInvoiceDescription("");
+    setInvoiceDueDate("");
+    setInvoiceTotalAmount("");
+    setSelectedStatus("draft");
+  };
+
+  const updateInvoice = async () => {
     if (!selectedInvoice) return;
 
     setSavingStatus(true);
-    const updates: TablesUpdate<"invoices"> = { status: selectedStatus };
+    const totalAmount = Number(invoiceTotalAmount);
+    const updates: TablesUpdate<"invoices"> = {
+      status: selectedStatus,
+      title: invoiceTitle.trim() || null,
+      description: invoiceDescription.trim() || null,
+      total_amount: Number.isNaN(totalAmount) ? selectedInvoice.total_amount : totalAmount,
+      subtotal: Number.isNaN(totalAmount) ? selectedInvoice.total_amount : totalAmount,
+      due_date: invoiceDueDate || null,
+    };
     const { error } = await supabase.from("invoices").update(updates).eq("id", selectedInvoice.id);
 
     if (error) {
@@ -119,6 +161,50 @@ export default function AdminInvoices() {
     await queryClient.invalidateQueries({ queryKey: ["staff-invoices"] });
   };
 
+  const createInvoice = async () => {
+    if (!clientsFormValue) {
+      toast.error("Select a client first.");
+      return;
+    }
+
+    const totalAmount = Number(invoiceTotalAmount);
+
+    if (Number.isNaN(totalAmount) || totalAmount < 0) {
+      toast.error("Enter a valid invoice amount.");
+      return;
+    }
+
+    setCreatingInvoice(true);
+
+    const payload: TablesInsert<"invoices"> = {
+      client_id: clientsFormValue,
+      invoice_number: `TEMP-${Date.now()}`,
+      title: invoiceTitle.trim() || null,
+      description: invoiceDescription.trim() || null,
+      subtotal: totalAmount,
+      tax_amount: 0,
+      total_amount: totalAmount,
+      amount_paid: 0,
+      due_date: invoiceDueDate || null,
+      status: selectedStatus,
+      created_by: user?.id ?? null,
+    };
+
+    const { error } = await supabase.from("invoices").insert(payload);
+
+    if (error) {
+      toast.error(error.message);
+      setCreatingInvoice(false);
+      return;
+    }
+
+    toast.success("Invoice created");
+    setCreatingInvoice(false);
+    setIsCreateOpen(false);
+    resetCreateForm();
+    await queryClient.invalidateQueries({ queryKey: ["staff-invoices"] });
+  };
+
   const overdueCount = (invoices ?? []).filter((invoice) => invoice.status === "overdue").length;
   const unpaidCount = (invoices ?? []).filter((invoice) => !["paid", "cancelled"].includes(invoice.status)).length;
 
@@ -129,7 +215,17 @@ export default function AdminInvoices() {
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">All Invoices</h1>
           <p className="text-muted-foreground font-body text-sm">Review client billing, open invoice details, and update payment status.</p>
         </div>
-        <div className="flex gap-3 text-sm font-body">
+        <div className="flex items-center gap-3 text-sm font-body">
+          <Button
+            type="button"
+            className="rounded-xl"
+            onClick={() => {
+              resetCreateForm();
+              setIsCreateOpen(true);
+            }}
+          >
+            Create Invoice
+          </Button>
           <div className="rounded-xl border border-border bg-card px-4 py-3">
             <p className="text-muted-foreground">Unpaid</p>
             <p className="font-display text-xl text-foreground">{unpaidCount}</p>
@@ -211,7 +307,7 @@ export default function AdminInvoices() {
           if (!open) setSelectedInvoiceId(null);
         }}
         title={selectedInvoice?.invoice_number ?? "Invoice Details"}
-        description="Review the full billing summary and update invoice status from this popup."
+        description="Review the full billing summary and edit invoice details from this popup."
       >
         {selectedInvoice ? (
           <div className="space-y-6">
@@ -222,7 +318,12 @@ export default function AdminInvoices() {
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Invoice Title</p>
-                <p className="font-body text-foreground">{selectedInvoice.title || selectedInvoice.description || "Service invoice"}</p>
+                <Input
+                  value={invoiceTitle}
+                  onChange={(event) => setInvoiceTitle(event.target.value)}
+                  placeholder="Service invoice"
+                  className="rounded-xl"
+                />
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issue Date</p>
@@ -230,14 +331,26 @@ export default function AdminInvoices() {
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Due Date</p>
-                <p className="font-body text-foreground">{selectedInvoice.due_date ? new Date(selectedInvoice.due_date).toLocaleDateString() : "Not set"}</p>
+                <Input
+                  type="date"
+                  value={invoiceDueDate}
+                  onChange={(event) => setInvoiceDueDate(event.target.value)}
+                  className="rounded-xl"
+                />
               </div>
             </div>
 
             <div className="grid sm:grid-cols-3 gap-4">
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Total Amount</p>
-                <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.total_amount).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={invoiceTotalAmount}
+                  onChange={(event) => setInvoiceTotalAmount(event.target.value)}
+                  className="rounded-xl"
+                />
               </div>
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Amount Paid</p>
@@ -247,6 +360,16 @@ export default function AdminInvoices() {
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Balance Due</p>
                 <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.balance_due).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">Description</label>
+              <Textarea
+                value={invoiceDescription}
+                onChange={(event) => setInvoiceDescription(event.target.value)}
+                placeholder="Optional billing description."
+                className="rounded-xl"
+              />
             </div>
 
             {selectedInvoice.payment_reference ? (
@@ -271,13 +394,109 @@ export default function AdminInvoices() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button type="button" className="rounded-xl" onClick={updateStatus} disabled={savingStatus}>
-                  {savingStatus ? "Saving..." : "Save Status"}
+                <Button type="button" className="rounded-xl" onClick={updateInvoice} disabled={savingStatus}>
+                  {savingStatus ? "Saving..." : "Save Invoice"}
                 </Button>
               </div>
             </div>
           </div>
         ) : null}
+      </DashboardItemDialog>
+
+      <DashboardItemDialog
+        open={isCreateOpen}
+        onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) resetCreateForm();
+        }}
+        title="Create Invoice"
+        description="Create a new invoice from the main admin billing tab."
+      >
+        <div className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">Client</label>
+            <Select value={clientsFormValue} onValueChange={setClientsFormValue}>
+              <SelectTrigger className="w-full rounded-xl">
+                <SelectValue placeholder="Select a client" />
+              </SelectTrigger>
+              <SelectContent>
+                {(clients ?? []).map((client: { id: string; company_name: string | null; first_name: string | null; last_name: string | null; client_code: string | null }) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.company_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || "Client"}
+                    {client.client_code ? ` (${client.client_code})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">Invoice Title</label>
+            <Input
+              value={invoiceTitle}
+              onChange={(event) => setInvoiceTitle(event.target.value)}
+              placeholder="Example: Tax Return Filing"
+              className="rounded-xl"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">Description</label>
+            <Textarea
+              value={invoiceDescription}
+              onChange={(event) => setInvoiceDescription(event.target.value)}
+              placeholder="Optional billing description."
+              className="rounded-xl"
+            />
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">Total Amount</label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={invoiceTotalAmount}
+                onChange={(event) => setInvoiceTotalAmount(event.target.value)}
+                placeholder="0.00"
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">Status</label>
+              <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as Enums<"invoice_status">)}>
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {invoiceStatuses.map((status) => (
+                    <SelectItem key={status} value={status}>{status.replace(/_/g, " ")}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">Due Date</label>
+            <Input
+              type="date"
+              value={invoiceDueDate}
+              onChange={(event) => setInvoiceDueDate(event.target.value)}
+              className="rounded-xl"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsCreateOpen(false)} disabled={creatingInvoice}>
+              Cancel
+            </Button>
+            <Button type="button" className="rounded-xl" onClick={createInvoice} disabled={creatingInvoice}>
+              {creatingInvoice ? "Creating..." : "Create Invoice"}
+            </Button>
+          </div>
+        </div>
       </DashboardItemDialog>
     </div>
   );
