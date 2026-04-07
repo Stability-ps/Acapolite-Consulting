@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { getAppBaseUrl } from "@/lib/siteUrl";
 import { toast } from "sonner";
 
 interface GoogleAuthButtonProps {
@@ -38,7 +39,7 @@ export function GoogleAuthButton({ disabled, onLoadingChange }: GoogleAuthButton
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
+          redirectTo: `${getAppBaseUrl()}/dashboard`,
         },
       });
 

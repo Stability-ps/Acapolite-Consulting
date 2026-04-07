@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
+import { getAppBaseUrl } from "@/lib/siteUrl";
 
 function getRecoveryTypeFromHash() {
   if (typeof window === "undefined") {
@@ -47,7 +48,7 @@ export default function ResetPassword() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${getAppBaseUrl()}/reset-password`,
       });
 
       if (error) {

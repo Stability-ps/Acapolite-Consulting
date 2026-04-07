@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
+import { getAppBaseUrl } from "@/lib/siteUrl";
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -36,7 +37,7 @@ export default function Register() {
             full_name: fullName,
             role: "client",
           },
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: `${getAppBaseUrl()}/login`,
         },
       });
 
