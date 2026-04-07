@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -21,9 +22,10 @@ export default function Login() {
     }
   }, [authLoading, dashboardPath, user]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
+
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -55,15 +57,46 @@ export default function Login() {
           <h1 className="font-display text-2xl font-bold text-foreground mb-2">Welcome back</h1>
           <p className="text-muted-foreground font-body text-sm mb-8">Sign in to your Acapolite workspace</p>
 
+          <GoogleAuthButton disabled={loading} onLoadingChange={setLoading} />
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground/70">or</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <Label htmlFor="email" className="font-body">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1.5" placeholder="you@example.com" />
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                className="mt-1.5"
+                placeholder="you@example.com"
+              />
             </div>
+
             <div>
               <Label htmlFor="password" className="font-body">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="mt-1.5" placeholder="••••••••" />
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                className="mt-1.5"
+                placeholder="********"
+              />
+              <div className="mt-2 text-right">
+                <Link to="/reset-password" className="text-sm font-body text-primary font-semibold hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
             </div>
+
             <Button type="submit" disabled={loading} className="w-full py-5 text-base font-semibold rounded-xl">
               {loading ? "Signing in..." : "Sign In"}
             </Button>
