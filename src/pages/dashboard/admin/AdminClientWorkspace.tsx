@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import type { Enums, TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { getClientIdentityFieldLabel, getClientIdentityLabel, getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
@@ -231,7 +232,8 @@ function getSenderLabel(senderType: string) {
 
 export default function AdminClientWorkspace() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, role, hasStaffPermission, isConsultant } = useAuth();
+  const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedConversation, setSelectedConversation] = useState("");
   const [newMessage, setNewMessage] = useState("");
@@ -288,16 +290,30 @@ export default function AdminClientWorkspace() {
     status: "active" as Enums<"alert_status">,
   });
   const selectedClientId = searchParams.get("clientId") ?? "";
+  const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
+  const canManageClients = hasStaffPermission("can_manage_clients");
+  const canManageCases = hasStaffPermission("can_manage_cases");
+  const canManageInvoices = hasStaffPermission("can_manage_invoices");
+  const canReplyMessages = hasStaffPermission("can_reply_messages");
 
   const { data: clients } = useQuery({
-    queryKey: ["staff-client-workspace-options"],
+    queryKey: ["staff-client-workspace-options", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase
         .from("clients")
         .select("id, client_code, company_name, first_name, last_name, profiles!clients_profile_id_fkey(full_name, email)")
         .order("created_at", { ascending: false });
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("id", accessibleClientIds);
+      }
+      const { data } = await query;
       return (data ?? []) as ClientOption[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   useEffect(() => {
@@ -306,9 +322,19 @@ export default function AdminClientWorkspace() {
     }
   }, [clients, selectedClientId, setSearchParams]);
 
+  useEffect(() => {
+    if (!selectedClientId || !clients?.length) return;
+    if (!clients.some((client) => client.id === selectedClientId)) {
+      setSearchParams({ clientId: clients[0].id }, { replace: true });
+    }
+  }, [clients, selectedClientId, setSearchParams]);
+
   const { data: clientDetails, isLoading } = useQuery({
-    queryKey: ["staff-client-workspace-details", selectedClientId],
+    queryKey: ["staff-client-workspace-details", selectedClientId, accessibleClientIdsKey],
     queryFn: async () => {
+      if (hasRestrictedClientScope && !accessibleClientIds?.includes(selectedClientId)) {
+        return null;
+      }
       const { data } = await supabase
         .from("clients")
         .select(`
@@ -320,7 +346,7 @@ export default function AdminClientWorkspace() {
         .maybeSingle();
       return (data ?? null) as ClientDetails | null;
     },
-    enabled: !!selectedClientId,
+    enabled: !!selectedClientId && (!hasRestrictedClientScope || !isLoadingAccessibleClientIds),
   });
 
   const { data: clientCases } = useQuery({
@@ -593,6 +619,11 @@ export default function AdminClientWorkspace() {
   };
 
   const createCase = async () => {
+    if (!canManageCases) {
+      toast.error("This consultant profile cannot create cases.");
+      return;
+    }
+
     if (!selectedClientId || !caseForm.case_title.trim()) {
       toast.error("Enter a case title first.");
       return;
@@ -607,6 +638,7 @@ export default function AdminClientWorkspace() {
       description: caseForm.description.trim() || null,
       priority: Number(caseForm.priority),
       created_by: user?.id ?? null,
+      assigned_consultant_id: isConsultant ? user?.id ?? null : null,
       due_date: caseForm.due_date ? new Date(`${caseForm.due_date}T12:00:00`).toISOString() : null,
     };
 
@@ -626,6 +658,11 @@ export default function AdminClientWorkspace() {
   };
 
   const createInvoice = async () => {
+    if (!canManageInvoices) {
+      toast.error("This consultant profile cannot create invoices.");
+      return;
+    }
+
     if (!selectedClientId || !invoiceForm.total_amount.trim()) {
       toast.error("Enter the invoice amount first.");
       return;
@@ -703,6 +740,11 @@ export default function AdminClientWorkspace() {
   };
 
   const updateCaseStatus = async (caseId: string, status: Enums<"case_status">) => {
+    if (!canManageCases) {
+      toast.error("This consultant profile cannot update case statuses.");
+      return;
+    }
+
     const { error } = await supabase.from("cases").update({ status }).eq("id", caseId);
 
     if (error) {
@@ -715,6 +757,11 @@ export default function AdminClientWorkspace() {
   };
 
   const updateInvoiceStatus = async (invoiceId: string, status: Enums<"invoice_status">) => {
+    if (!canManageInvoices) {
+      toast.error("This consultant profile cannot update invoices.");
+      return;
+    }
+
     const { error } = await supabase.from("invoices").update({ status }).eq("id", invoiceId);
 
     if (error) {
@@ -740,11 +787,15 @@ export default function AdminClientWorkspace() {
 
   const sendMessage = async () => {
     if (!selectedConversation || !newMessage.trim() || !user) return;
+    if (!canReplyMessages) {
+      toast.error("This consultant profile cannot reply to client messages.");
+      return;
+    }
 
     const { error } = await supabase.from("messages").insert({
       conversation_id: selectedConversation,
       sender_profile_id: user.id,
-      sender_type: user.role === "consultant" ? "consultant" : "admin",
+      sender_type: role === "consultant" ? "consultant" : "admin",
       message_text: newMessage.trim(),
     });
 
@@ -765,6 +816,11 @@ export default function AdminClientWorkspace() {
   };
 
   const startConversation = async () => {
+    if (!canReplyMessages) {
+      toast.error("This consultant profile cannot start client conversations.");
+      return;
+    }
+
     if (!selectedClientId) return;
 
     setCreatingConversation(true);
@@ -830,7 +886,7 @@ export default function AdminClientWorkspace() {
         </div>
       </section>
 
-      {isLoading ? (
+      {isLoading || isLoadingAccessibleClientIds ? (
         <div className="text-muted-foreground font-body">Loading client workspace...</div>
       ) : !clientDetails ? (
         <div className="rounded-xl border border-border bg-card p-12 text-center">
@@ -877,9 +933,11 @@ export default function AdminClientWorkspace() {
                         </p>
                       </div>
                     </div>
-                    <Button type="button" className="rounded-xl" onClick={() => setIsEditClientOpen(true)}>
-                      Edit Client Profile
-                    </Button>
+                    {canManageClients ? (
+                      <Button type="button" className="rounded-xl" onClick={() => setIsEditClientOpen(true)}>
+                        Edit Client Profile
+                      </Button>
+                    ) : null}
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -994,11 +1052,13 @@ export default function AdminClientWorkspace() {
             </TabsContent>
 
             <TabsContent value="cases" className="space-y-4">
-              <div className="flex justify-end">
-                <Button type="button" className="rounded-xl" onClick={() => setIsCreateCaseOpen(true)}>
-                  Add Case
-                </Button>
-              </div>
+              {canManageCases ? (
+                <div className="flex justify-end">
+                  <Button type="button" className="rounded-xl" onClick={() => setIsCreateCaseOpen(true)}>
+                    Add Case
+                  </Button>
+                </div>
+              ) : null}
               {(clientCases ?? []).length > 0 ? (clientCases ?? []).map((caseItem) => (
                 <div key={caseItem.id} className="rounded-2xl border border-border bg-card p-5 shadow-card">
                   <div className="mb-4 flex items-start justify-between gap-4">
@@ -1024,16 +1084,20 @@ export default function AdminClientWorkspace() {
                   </div>
                   <div className="mt-4 flex items-center gap-3">
                     <span className="text-xs text-muted-foreground font-body">Update status:</span>
-                    <Select value={caseItem.status} onValueChange={(value) => updateCaseStatus(caseItem.id, value as Enums<"case_status">)}>
-                      <SelectTrigger className="w-64 rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {caseStatusOptions.map((status) => (
-                          <SelectItem key={status} value={status}>{formatLabel(status)}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {canManageCases ? (
+                      <Select value={caseItem.status} onValueChange={(value) => updateCaseStatus(caseItem.id, value as Enums<"case_status">)}>
+                        <SelectTrigger className="w-64 rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {caseStatusOptions.map((status) => (
+                            <SelectItem key={status} value={status}>{formatLabel(status)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground">View only</span>
+                    )}
                   </div>
                   {caseItem.description ? <p className="mt-4 text-sm text-muted-foreground font-body whitespace-pre-wrap">{caseItem.description}</p> : null}
                 </div>
@@ -1077,9 +1141,11 @@ export default function AdminClientWorkspace() {
                   <div className="border-b border-border px-5 py-4">
                     <div className="flex items-center justify-between gap-3">
                       <h2 className="font-display text-lg font-semibold text-foreground">Conversations</h2>
-                      <Button type="button" className="rounded-xl" onClick={startConversation} disabled={creatingConversation}>
-                        {creatingConversation ? "Starting..." : "Start Chat"}
-                      </Button>
+                      {canReplyMessages ? (
+                        <Button type="button" className="rounded-xl" onClick={startConversation} disabled={creatingConversation}>
+                          {creatingConversation ? "Starting..." : "Start Chat"}
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                   <div className="max-h-[540px] overflow-y-auto p-3 space-y-2">
@@ -1098,9 +1164,11 @@ export default function AdminClientWorkspace() {
                     )) : (
                       <div className="p-6 text-center">
                         <p className="text-sm text-muted-foreground font-body">No conversations found.</p>
-                        <Button type="button" variant="outline" className="mt-4 rounded-xl" onClick={startConversation} disabled={creatingConversation}>
-                          {creatingConversation ? "Starting..." : "Start First Chat"}
-                        </Button>
+                        {canReplyMessages ? (
+                          <Button type="button" variant="outline" className="mt-4 rounded-xl" onClick={startConversation} disabled={creatingConversation}>
+                            {creatingConversation ? "Starting..." : "Start First Chat"}
+                          </Button>
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -1136,8 +1204,9 @@ export default function AdminClientWorkspace() {
                           <Input
                             value={newMessage}
                             onChange={(event) => setNewMessage(event.target.value)}
-                            placeholder="Type a message to this client..."
+                            placeholder={canReplyMessages ? "Type a message to this client..." : "View-only messaging access"}
                             className="flex-1 rounded-xl"
+                            disabled={!canReplyMessages}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" && !event.shiftKey) {
                                 event.preventDefault();
@@ -1145,8 +1214,8 @@ export default function AdminClientWorkspace() {
                               }
                             }}
                           />
-                          <Button type="button" className="rounded-xl" onClick={sendMessage}>
-                            Send
+                          <Button type="button" className="rounded-xl" onClick={sendMessage} disabled={!canReplyMessages}>
+                            {canReplyMessages ? "Send" : "View Only"}
                           </Button>
                         </div>
                       </div>
@@ -1155,9 +1224,11 @@ export default function AdminClientWorkspace() {
                     <div className="flex min-h-[300px] items-center justify-center p-12">
                       <div className="text-center">
                         <p className="text-muted-foreground font-body">Select a conversation to view the client chat.</p>
-                        <Button type="button" variant="outline" className="mt-4 rounded-xl" onClick={startConversation} disabled={creatingConversation}>
-                          {creatingConversation ? "Starting..." : "Start Chat"}
-                        </Button>
+                        {canReplyMessages ? (
+                          <Button type="button" variant="outline" className="mt-4 rounded-xl" onClick={startConversation} disabled={creatingConversation}>
+                            {creatingConversation ? "Starting..." : "Start Chat"}
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                   )}
@@ -1166,11 +1237,13 @@ export default function AdminClientWorkspace() {
             </TabsContent>
 
             <TabsContent value="invoices" className="space-y-4">
-              <div className="flex justify-end">
-                <Button type="button" className="rounded-xl" onClick={() => setIsCreateInvoiceOpen(true)}>
-                  Add Invoice
-                </Button>
-              </div>
+              {canManageInvoices ? (
+                <div className="flex justify-end">
+                  <Button type="button" className="rounded-xl" onClick={() => setIsCreateInvoiceOpen(true)}>
+                    Add Invoice
+                  </Button>
+                </div>
+              ) : null}
               {(clientInvoices ?? []).length > 0 ? (clientInvoices ?? []).map((invoice) => (
                 <div key={invoice.id} className="rounded-2xl border border-border bg-card p-5 shadow-card">
                   <div className="mb-4 flex items-start justify-between gap-4">

@@ -10,6 +10,7 @@ import { Search } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 
 const invoiceStatuses: Enums<"invoice_status">[] = ["draft", "issued", "partially_paid", "paid", "overdue", "cancelled"];
 
@@ -54,7 +55,8 @@ function getStatusColor(status: string) {
 }
 
 export default function AdminInvoices() {
-  const { user } = useAuth();
+  const { user, hasStaffPermission } = useAuth();
+  const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
@@ -68,26 +70,51 @@ export default function AdminInvoices() {
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [clientsFormValue, setClientsFormValue] = useState("");
 
+  const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
+  const canManageInvoices = hasStaffPermission("can_manage_invoices");
+
   const { data: invoices, isLoading } = useQuery({
-    queryKey: ["staff-invoices"],
+    queryKey: ["staff-invoices", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase
         .from("invoices")
         .select("*, clients(company_name, first_name, last_name, client_code)")
         .order("created_at", { ascending: false });
+
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+
+      const { data } = await query;
       return (data ?? []) as StaffInvoice[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: clients } = useQuery({
-    queryKey: ["staff-invoice-clients"],
+    queryKey: ["staff-invoice-clients", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase
         .from("clients")
         .select("id, company_name, first_name, last_name, client_code")
         .order("created_at", { ascending: false });
+
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("id", accessibleClientIds);
+      }
+
+      const { data } = await query;
       return data ?? [];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const filteredInvoices = useMemo(() => {
@@ -137,6 +164,10 @@ export default function AdminInvoices() {
 
   const updateInvoice = async () => {
     if (!selectedInvoice) return;
+    if (!canManageInvoices) {
+      toast.error("This consultant profile cannot update invoices.");
+      return;
+    }
 
     setSavingStatus(true);
     const totalAmount = Number(invoiceTotalAmount);
@@ -162,6 +193,11 @@ export default function AdminInvoices() {
   };
 
   const createInvoice = async () => {
+    if (!canManageInvoices) {
+      toast.error("This consultant profile cannot create invoices.");
+      return;
+    }
+
     if (!clientsFormValue) {
       toast.error("Select a client first.");
       return;
@@ -216,16 +252,18 @@ export default function AdminInvoices() {
           <p className="text-muted-foreground font-body text-sm">Review client billing, open invoice details, and update payment status.</p>
         </div>
         <div className="flex items-center gap-3 text-sm font-body">
-          <Button
-            type="button"
-            className="rounded-xl"
-            onClick={() => {
-              resetCreateForm();
-              setIsCreateOpen(true);
-            }}
-          >
-            Create Invoice
-          </Button>
+          {canManageInvoices ? (
+            <Button
+              type="button"
+              className="rounded-xl"
+              onClick={() => {
+                resetCreateForm();
+                setIsCreateOpen(true);
+              }}
+            >
+              Create Invoice
+            </Button>
+          ) : null}
           <div className="rounded-xl border border-border bg-card px-4 py-3">
             <p className="text-muted-foreground">Unpaid</p>
             <p className="font-display text-xl text-foreground">{unpaidCount}</p>
@@ -247,7 +285,7 @@ export default function AdminInvoices() {
         />
       </div>
 
-      {isLoading ? (
+      {isLoading || isLoadingAccessibleClientIds ? (
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : filteredInvoices.length > 0 ? (
         <div className="space-y-3">
@@ -318,12 +356,16 @@ export default function AdminInvoices() {
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Invoice Title</p>
-                <Input
-                  value={invoiceTitle}
-                  onChange={(event) => setInvoiceTitle(event.target.value)}
-                  placeholder="Service invoice"
-                  className="rounded-xl"
-                />
+                {canManageInvoices ? (
+                  <Input
+                    value={invoiceTitle}
+                    onChange={(event) => setInvoiceTitle(event.target.value)}
+                    placeholder="Service invoice"
+                    className="rounded-xl"
+                  />
+                ) : (
+                  <p className="font-body text-foreground">{invoiceTitle || "Service invoice"}</p>
+                )}
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issue Date</p>
@@ -331,26 +373,34 @@ export default function AdminInvoices() {
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Due Date</p>
-                <Input
-                  type="date"
-                  value={invoiceDueDate}
-                  onChange={(event) => setInvoiceDueDate(event.target.value)}
-                  className="rounded-xl"
-                />
+                {canManageInvoices ? (
+                  <Input
+                    type="date"
+                    value={invoiceDueDate}
+                    onChange={(event) => setInvoiceDueDate(event.target.value)}
+                    className="rounded-xl"
+                  />
+                ) : (
+                  <p className="font-body text-foreground">{invoiceDueDate ? new Date(invoiceDueDate).toLocaleDateString() : "Not set"}</p>
+                )}
               </div>
             </div>
 
             <div className="grid sm:grid-cols-3 gap-4">
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Total Amount</p>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={invoiceTotalAmount}
-                  onChange={(event) => setInvoiceTotalAmount(event.target.value)}
-                  className="rounded-xl"
-                />
+                {canManageInvoices ? (
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={invoiceTotalAmount}
+                    onChange={(event) => setInvoiceTotalAmount(event.target.value)}
+                    className="rounded-xl"
+                  />
+                ) : (
+                  <p className="font-display text-2xl text-foreground">R {Number(invoiceTotalAmount || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
+                )}
               </div>
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Amount Paid</p>
@@ -364,12 +414,18 @@ export default function AdminInvoices() {
 
             <div>
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Description</label>
-              <Textarea
-                value={invoiceDescription}
-                onChange={(event) => setInvoiceDescription(event.target.value)}
-                placeholder="Optional billing description."
-                className="rounded-xl"
-              />
+              {canManageInvoices ? (
+                <Textarea
+                  value={invoiceDescription}
+                  onChange={(event) => setInvoiceDescription(event.target.value)}
+                  placeholder="Optional billing description."
+                  className="rounded-xl"
+                />
+              ) : (
+                <div className="rounded-2xl border border-border p-4">
+                  <p className="font-body text-foreground">{invoiceDescription || "No description added."}</p>
+                </div>
+              )}
             </div>
 
             {selectedInvoice.payment_reference ? (
@@ -383,21 +439,27 @@ export default function AdminInvoices() {
 
             <div>
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Invoice Status</label>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as Enums<"invoice_status">)}>
-                  <SelectTrigger className="w-full sm:w-64 rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {invoiceStatuses.map((status) => (
-                      <SelectItem key={status} value={status}>{status.replace(/_/g, " ")}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button type="button" className="rounded-xl" onClick={updateInvoice} disabled={savingStatus}>
-                  {savingStatus ? "Saving..." : "Save Invoice"}
-                </Button>
-              </div>
+              {canManageInvoices ? (
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as Enums<"invoice_status">)}>
+                    <SelectTrigger className="w-full sm:w-64 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {invoiceStatuses.map((status) => (
+                        <SelectItem key={status} value={status}>{status.replace(/_/g, " ")}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" className="rounded-xl" onClick={updateInvoice} disabled={savingStatus}>
+                    {savingStatus ? "Saving..." : "Save Invoice"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                  <p className="text-sm text-muted-foreground font-body">This consultant profile can view invoices but cannot change billing records.</p>
+                </div>
+              )}
             </div>
           </div>
         ) : null}

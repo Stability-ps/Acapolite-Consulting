@@ -4,8 +4,11 @@ import type { User, Session } from "@supabase/supabase-js";
 import type { Tables } from "@/integrations/supabase/types";
 import type { AppRole } from "@/lib/portal";
 import { getDashboardHome } from "@/lib/portal";
+import type { StaffPermissionKey, StaffPermissionValues } from "@/lib/staffPermissions";
+import { hasStaffPermission as checkStaffPermission, resolveStaffPermissions } from "@/lib/staffPermissions";
 
 type Profile = Tables<"profiles">;
+type StaffPermissions = Tables<"staff_permissions">;
 
 interface AuthContextType {
   user: User | null;
@@ -13,11 +16,13 @@ interface AuthContextType {
   loading: boolean;
   profile: Profile | null;
   role: AppRole | null;
+  staffPermissions: StaffPermissionValues | null;
   dashboardPath: string;
   isClient: boolean;
   isAdmin: boolean;
   isConsultant: boolean;
   isStaff: boolean;
+  hasStaffPermission: (permission: StaffPermissionKey) => boolean;
   signOut: () => Promise<{ error: Error | null }>;
 }
 
@@ -27,11 +32,13 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   profile: null,
   role: null,
+  staffPermissions: null,
   dashboardPath: "/dashboard",
   isClient: false,
   isAdmin: false,
   isConsultant: false,
   isStaff: false,
+  hasStaffPermission: () => false,
   signOut: async () => ({ error: null }),
 });
 
@@ -41,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [staffPermissions, setStaffPermissions] = useState<StaffPermissions | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -55,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!nextSession?.user) {
         setProfile(null);
         setRole(null);
+        setStaffPermissions(null);
         setLoading(false);
         return;
       }
@@ -63,13 +72,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const userId = nextSession.user.id;
       const { data: profileData } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+      const nextRole = (profileData?.role as AppRole | undefined) ?? "client";
+      let permissionsData: StaffPermissions | null = null;
+
+      if (nextRole === "admin" || nextRole === "consultant") {
+        const { data } = await supabase
+          .from("staff_permissions")
+          .select("*")
+          .eq("profile_id", userId)
+          .maybeSingle();
+
+        permissionsData = data ?? null;
+      }
 
       if (!isActive || currentRequest !== requestSequence) {
         return;
       }
 
       setProfile(profileData ?? null);
-      setRole((profileData?.role as AppRole | undefined) ?? "client");
+      setRole(nextRole);
+      setStaffPermissions(permissionsData);
       setLoading(false);
     };
 
@@ -101,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null);
       setProfile(null);
       setRole(null);
+      setStaffPermissions(null);
       setLoading(false);
 
       return { error: error ? new Error(error.message) : null };
@@ -115,7 +138,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isConsultant = role === "consultant";
   const isClient = role === "client";
   const isStaff = role === "admin" || role === "consultant";
-  const dashboardPath = getDashboardHome(role);
+  const resolvedStaffPermissions = resolveStaffPermissions(role, staffPermissions);
+  const dashboardPath = getDashboardHome(role, resolvedStaffPermissions);
+  const hasStaffPermission = (permission: StaffPermissionKey) => checkStaffPermission(role, resolvedStaffPermissions, permission);
 
   return (
     <AuthContext.Provider
@@ -125,11 +150,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         profile,
         role,
+        staffPermissions: resolvedStaffPermissions,
         dashboardPath,
         isAdmin,
         isConsultant,
         isStaff,
         isClient,
+        hasStaffPermission,
         signOut,
       }}
     >

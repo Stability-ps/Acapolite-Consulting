@@ -6,6 +6,7 @@ import { Search, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 
 function getConversationName(conversation: {
   subject: string | null;
@@ -26,22 +27,37 @@ function getConversationPreview(messageText?: string | null) {
 }
 
 export default function AdminMessages() {
-  const { user, role } = useAuth();
+  const { user, role, hasStaffPermission } = useAuth();
+  const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [selectedConversation, setSelectedConversation] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
+  const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
+  const canReplyMessages = hasStaffPermission("can_reply_messages");
+
   const { data: conversations } = useQuery({
-    queryKey: ["staff-conversations"],
+    queryKey: ["staff-conversations", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase
         .from("conversations")
         .select("*, clients(company_name, first_name, last_name, client_code)")
         .order("last_message_at", { ascending: false });
+
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+
+      const { data } = await query;
       return data ?? [];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   useEffect(() => {
@@ -155,6 +171,10 @@ export default function AdminMessages() {
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation || !user) return;
+    if (!canReplyMessages) {
+      toast.error("This consultant profile cannot reply to client messages.");
+      return;
+    }
 
     const { error } = await supabase.from("messages").insert({
       conversation_id: selectedConversation,
@@ -178,7 +198,9 @@ export default function AdminMessages() {
   return (
     <div>
       <h1 className="font-display text-2xl font-bold text-foreground mb-1">All Messages</h1>
-      <p className="text-muted-foreground font-body text-sm mb-8">Manage communication across all client conversations</p>
+      <p className="text-muted-foreground font-body text-sm mb-8">
+        {hasRestrictedClientScope ? "Manage communication for assigned client conversations only." : "Manage communication across all client conversations"}
+      </p>
 
       <div className="grid xl:grid-cols-[360px_1fr] gap-6 h-[72vh] min-h-0">
         <div className="bg-card rounded-2xl border border-border shadow-card flex min-h-0 flex-col overflow-hidden">
@@ -195,7 +217,7 @@ export default function AdminMessages() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-2">
-            {filteredConversations.length > 0 ? (
+            {isLoadingAccessibleClientIds ? null : filteredConversations.length > 0 ? (
               filteredConversations.map((conversation) => {
                 const isSelected = conversation.id === selectedConversation;
                 const lastMessage = conversation.last_message_at ? new Date(conversation.last_message_at).toLocaleString() : "";
@@ -295,13 +317,14 @@ export default function AdminMessages() {
                   <Input
                     value={newMessage}
                     onChange={(event) => setNewMessage(event.target.value)}
-                    placeholder="Type a reply..."
+                    placeholder={canReplyMessages ? "Type a reply..." : "View-only messaging access"}
                     className="flex-1 rounded-xl"
                     onKeyDown={(event) => event.key === "Enter" && !event.shiftKey && sendMessage()}
+                    disabled={!canReplyMessages}
                   />
-                  <Button onClick={sendMessage} className="rounded-xl shrink-0">
+                  <Button onClick={sendMessage} className="rounded-xl shrink-0" disabled={!canReplyMessages}>
                     <Send className="h-4 w-4 mr-2" />
-                    Send
+                    {canReplyMessages ? "Send" : "View Only"}
                   </Button>
                 </div>
               </div>

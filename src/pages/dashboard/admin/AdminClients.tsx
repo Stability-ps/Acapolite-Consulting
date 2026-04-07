@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { getClientIdentityFieldLabel, getClientIdentityLabel, getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
 
 type StaffClient = {
@@ -135,7 +136,8 @@ function formatCurrency(value: number) {
 }
 
 export default function AdminClients() {
-  const { user } = useAuth();
+  const { user, hasStaffPermission } = useAuth();
+  const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -143,10 +145,18 @@ export default function AdminClients() {
   const [isCreating, setIsCreating] = useState(false);
   const [formState, setFormState] = useState<NewClientFormState>(initialFormState);
 
+  const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
+  const canManageClients = hasStaffPermission("can_manage_clients");
+  const canViewClientWorkspace = hasStaffPermission("can_view_client_workspace");
+
   const { data: clients, isLoading } = useQuery({
-    queryKey: ["staff-clients"],
+    queryKey: ["staff-clients", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase
         .from("clients")
         .select(`
           *,
@@ -155,24 +165,49 @@ export default function AdminClients() {
           created_by_profile:profiles!clients_created_by_fkey(full_name, email)
         `)
         .order("created_at", { ascending: false });
+
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("id", accessibleClientIds);
+      }
+
+      const { data } = await query;
       return (data ?? []) as StaffClient[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: riskInvoices } = useQuery({
-    queryKey: ["staff-client-risk-invoices"],
+    queryKey: ["staff-client-risk-invoices", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase.from("invoices").select("client_id, status, balance_due");
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase.from("invoices").select("client_id, status, balance_due");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
       return data ?? [];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: riskRequests } = useQuery({
-    queryKey: ["staff-client-risk-document-requests"],
+    queryKey: ["staff-client-risk-document-requests", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
       return data ?? [];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const clientIssueMap = useMemo(() => {
@@ -245,6 +280,11 @@ export default function AdminClients() {
   };
 
   const createClient = async () => {
+    if (!canManageClients) {
+      toast.error("This consultant profile cannot create client records.");
+      return;
+    }
+
     const email = formState.email.trim().toLowerCase();
 
     if (!email) {
@@ -354,7 +394,11 @@ export default function AdminClients() {
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h1 className="mb-1 font-display text-2xl font-bold text-foreground">All Clients</h1>
-          <p className="text-sm text-muted-foreground font-body">Manage client profiles, open full records, and add new clients from existing portal accounts.</p>
+          <p className="text-sm text-muted-foreground font-body">
+            {hasRestrictedClientScope
+              ? "View and monitor only the client accounts assigned to this consultant profile."
+              : "Manage client profiles, open full records, and add new clients from existing portal accounts."}
+          </p>
         </div>
 
         <div className="flex w-full max-w-2xl items-center justify-end gap-3">
@@ -367,14 +411,16 @@ export default function AdminClients() {
               className="rounded-xl pl-9"
             />
           </div>
-          <Button type="button" className="rounded-xl shrink-0" onClick={() => setIsCreateOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add New Client
-          </Button>
+          {canManageClients ? (
+            <Button type="button" className="rounded-xl shrink-0" onClick={() => setIsCreateOpen(true)}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add New Client
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading || isLoadingAccessibleClientIds ? (
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : filteredClients.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
@@ -695,14 +741,16 @@ export default function AdminClients() {
               </div>
             </div>
 
-            <div className="flex justify-end">
-              <Button asChild className="rounded-xl">
-                <Link to={`/dashboard/staff/client-workspace?clientId=${selectedClient.id}`}>
-                  Open Client 360
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
+            {canViewClientWorkspace ? (
+              <div className="flex justify-end">
+                <Button asChild className="rounded-xl">
+                  <Link to={`/dashboard/staff/client-workspace?clientId=${selectedClient.id}`}>
+                    Open Client 360
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </DashboardItemDialog>

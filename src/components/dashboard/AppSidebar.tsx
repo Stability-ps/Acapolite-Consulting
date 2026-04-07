@@ -1,10 +1,11 @@
 import {
-  LayoutDashboard, FolderOpen, Upload, Receipt, MessageSquare, Bell, Settings, Users, Shield, LogOut, UserRound,
+  LayoutDashboard, FolderOpen, Upload, Receipt, MessageSquare, Bell, Settings, Users, Shield, LogOut, UserRound, UserPlus,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
+import type { StaffPermissionKey } from "@/lib/staffPermissions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -24,22 +25,27 @@ const clientItems = [
 ];
 
 const adminItems = [
-  { title: "Overview", url: "/dashboard/staff", icon: Shield },
-  { title: "Clients", url: "/dashboard/staff/clients", icon: Users },
-  { title: "Client 360", url: "/dashboard/staff/client-workspace", icon: UserRound },
-  { title: "Cases", url: "/dashboard/staff/cases", icon: FolderOpen },
-  { title: "Documents", url: "/dashboard/staff/documents", icon: Upload },
-  { title: "Invoices", url: "/dashboard/staff/invoices", icon: Receipt },
-  { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare },
+  { title: "Overview", url: "/dashboard/staff", icon: Shield, permission: "can_view_overview" as StaffPermissionKey },
+  { title: "Staff Users", url: "/dashboard/staff/users", icon: UserPlus },
+  { title: "Clients", url: "/dashboard/staff/clients", icon: Users, permission: "can_view_clients" as StaffPermissionKey },
+  { title: "Client 360", url: "/dashboard/staff/client-workspace", icon: UserRound, permission: "can_view_client_workspace" as StaffPermissionKey },
+  { title: "Cases", url: "/dashboard/staff/cases", icon: FolderOpen, permission: "can_view_cases" as StaffPermissionKey },
+  { title: "Documents", url: "/dashboard/staff/documents", icon: Upload, permission: "can_view_documents" as StaffPermissionKey },
+  { title: "Invoices", url: "/dashboard/staff/invoices", icon: Receipt, permission: "can_view_invoices" as StaffPermissionKey },
+  { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare, permission: "can_view_messages" as StaffPermissionKey },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const { role, signOut, user } = useAuth();
+  const { role, signOut, user, hasStaffPermission } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
 
-  const navigationItems = role === "client" ? clientItems : adminItems;
+  const navigationItems = role === "client"
+    ? clientItems
+    : role === "admin"
+      ? adminItems
+      : adminItems.filter((item) => item.title !== "Staff Users" && (!item.permission || hasStaffPermission(item.permission)));
 
   const groupLabel = role === "client" ? "Client Menu" : "Staff Tools";
 

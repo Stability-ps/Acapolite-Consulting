@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { RequireRole } from "@/components/auth/RequireRole";
+import { RequireStaffPermission } from "@/components/auth/RequireStaffPermission";
 import { DashboardIndexRedirect } from "@/components/auth/DashboardIndexRedirect";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -24,6 +25,7 @@ import AdminInvoices from "./pages/dashboard/admin/AdminInvoices";
 import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
 import AdminMessages from "./pages/dashboard/admin/AdminMessages";
 import AdminClientWorkspace from "./pages/dashboard/admin/AdminClientWorkspace";
+import AdminUsers from "./pages/dashboard/admin/AdminUsers";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -53,13 +55,31 @@ const App = () => (
               </Route>
 
               <Route element={<RequireRole allowedRoles={["admin", "consultant"]} />}>
-                <Route path="staff" element={<AdminOverview />} />
-                <Route path="staff/clients" element={<AdminClients />} />
-                <Route path="staff/client-workspace" element={<AdminClientWorkspace />} />
-                <Route path="staff/cases" element={<AdminCases />} />
-                <Route path="staff/documents" element={<AdminDocuments />} />
-                <Route path="staff/invoices" element={<AdminInvoices />} />
-                <Route path="staff/messages" element={<AdminMessages />} />
+                <Route element={<RequireStaffPermission permission="can_view_overview" />}>
+                  <Route path="staff" element={<AdminOverview />} />
+                </Route>
+                <Route element={<RequireStaffPermission permission="can_view_clients" />}>
+                  <Route path="staff/clients" element={<AdminClients />} />
+                </Route>
+                <Route element={<RequireStaffPermission permission="can_view_client_workspace" />}>
+                  <Route path="staff/client-workspace" element={<AdminClientWorkspace />} />
+                </Route>
+                <Route element={<RequireStaffPermission permission="can_view_cases" />}>
+                  <Route path="staff/cases" element={<AdminCases />} />
+                </Route>
+                <Route element={<RequireStaffPermission permission="can_view_documents" />}>
+                  <Route path="staff/documents" element={<AdminDocuments />} />
+                </Route>
+                <Route element={<RequireStaffPermission permission="can_view_invoices" />}>
+                  <Route path="staff/invoices" element={<AdminInvoices />} />
+                </Route>
+                <Route element={<RequireStaffPermission permission="can_view_messages" />}>
+                  <Route path="staff/messages" element={<AdminMessages />} />
+                </Route>
+              </Route>
+
+              <Route element={<RequireRole allowedRoles={["admin"]} />}>
+                <Route path="staff/users" element={<AdminUsers />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />

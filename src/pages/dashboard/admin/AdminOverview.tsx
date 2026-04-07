@@ -15,6 +15,8 @@ import {
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ElevenLabsWidget } from "@/components/dashboard/ElevenLabsWidget";
+import { useAuth } from "@/hooks/useAuth";
+import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
 
 type CaseStatusRow = {
@@ -101,92 +103,219 @@ function formatCurrency(value: number) {
 }
 
 export default function AdminOverview() {
+  const { isAdmin, hasStaffPermission } = useAuth();
+  const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
+  const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
+
   const { data: stats } = useQuery({
-    queryKey: ["staff-dashboard-summary"],
+    queryKey: ["staff-dashboard-summary", accessibleClientIdsKey],
     queryFn: async () => {
+      if (hasRestrictedClientScope) {
+        return null;
+      }
       const { data } = await supabase.from("admin_dashboard_summary").select("*").single();
       return data;
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: caseRows } = useQuery({
-    queryKey: ["staff-overview-case-statuses"],
+    queryKey: ["staff-overview-case-statuses", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase.from("cases").select("status");
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase.from("cases").select("status");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
       return (data ?? []) as CaseStatusRow[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: recentClients } = useQuery({
-    queryKey: ["staff-overview-recent-clients"],
+    queryKey: ["staff-overview-recent-clients", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase
         .from("clients")
         .select("id, client_code, client_type, company_name, sars_outstanding_debt, returns_filed, first_name, last_name, created_at, profiles!clients_profile_id_fkey(full_name, email)")
         .order("created_at", { ascending: false })
         .limit(5);
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("id", accessibleClientIds);
+      }
+      const { data } = await query;
       return (data ?? []) as RecentClient[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: recentDocuments } = useQuery({
-    queryKey: ["staff-overview-recent-documents"],
+    queryKey: ["staff-overview-recent-documents", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase
         .from("documents")
         .select("id, title, category, uploaded_at, status, clients(company_name, first_name, last_name, client_code)")
         .order("uploaded_at", { ascending: false })
         .limit(5);
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
       return (data ?? []) as RecentDocument[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
+  });
+
+  const { data: documentRows } = useQuery({
+    queryKey: ["staff-overview-document-statuses", accessibleClientIdsKey],
+    queryFn: async () => {
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase.from("documents").select("client_id, status");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
+      return data ?? [];
+    },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: invoiceRows } = useQuery({
-    queryKey: ["staff-overview-invoice-health"],
+    queryKey: ["staff-overview-invoice-health", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase.from("invoices").select("id, client_id, status, balance_due, total_amount");
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase.from("invoices").select("id, client_id, status, balance_due, total_amount");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
       return (data ?? []) as InvoiceSnapshot[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: riskClients } = useQuery({
-    queryKey: ["staff-overview-risk-clients"],
+    queryKey: ["staff-overview-risk-clients", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase
         .from("clients")
         .select("id, client_code, client_type, company_name, sars_outstanding_debt, returns_filed, first_name, last_name");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("id", accessibleClientIds);
+      }
+      const { data } = await query;
       return (data ?? []) as RecentClient[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: riskRequests } = useQuery({
-    queryKey: ["staff-overview-risk-document-requests"],
+    queryKey: ["staff-overview-risk-document-requests", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
       return (data ?? []) as RiskDocumentRequest[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: dueAlerts } = useQuery({
-    queryKey: ["staff-overview-due-alerts"],
+    queryKey: ["staff-overview-due-alerts", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase
         .from("alerts")
         .select("id, title, alert_at, alert_type, clients(company_name, first_name, last_name, client_code)")
         .eq("status", "active")
         .order("alert_at", { ascending: true })
         .limit(5);
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
       return (data ?? []) as DueAlert[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
+  });
+
+  const { data: reminderAlerts } = useQuery({
+    queryKey: ["staff-overview-reminder-count", accessibleClientIdsKey],
+    queryFn: async () => {
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase
+        .from("alerts")
+        .select("id")
+        .eq("status", "active")
+        .lte("alert_at", new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)).toISOString());
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
+      return data ?? [];
+    },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
+  });
+
+  const { data: unreadMessages } = useQuery({
+    queryKey: ["staff-overview-unread-messages", accessibleClientIdsKey],
+    queryFn: async () => {
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let conversationQuery = supabase.from("conversations").select("id");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        conversationQuery = conversationQuery.in("client_id", accessibleClientIds);
+      }
+      const { data: conversationRows } = await conversationQuery;
+      const conversationIds = (conversationRows ?? []).map((conversation) => conversation.id);
+      if (!conversationIds.length) {
+        return [];
+      }
+      const { data } = await supabase
+        .from("messages")
+        .select("id")
+        .in("conversation_id", conversationIds)
+        .eq("is_read", false)
+        .eq("sender_type", "client");
+      return data ?? [];
+    },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const cards = [
-    { label: "Total Clients", value: stats?.total_clients ?? 0, icon: Users, link: "/dashboard/staff/clients" },
-    { label: "Pending Reviews", value: stats?.pending_reviews ?? 0, icon: Upload, link: "/dashboard/staff/documents" },
-    { label: "Unpaid Invoices", value: stats?.unpaid_invoices ?? 0, icon: Receipt, link: "/dashboard/staff/invoices" },
-    { label: "Unread Messages", value: stats?.unread_messages ?? 0, icon: MessageSquare, link: "/dashboard/staff/messages" },
-    { label: "Reminders Due", value: stats?.reminders_due ?? 0, icon: Bell, link: "/dashboard/staff" },
-  ];
+    { label: "Total Clients", value: hasRestrictedClientScope ? (riskClients?.length ?? 0) : (stats?.total_clients ?? 0), icon: Users, link: "/dashboard/staff/clients", permission: "can_view_clients" as const },
+    { label: "Pending Reviews", value: hasRestrictedClientScope ? ((documentRows ?? []).filter((document) => ["uploaded", "pending_review"].includes(document.status)).length) : (stats?.pending_reviews ?? 0), icon: Upload, link: "/dashboard/staff/documents", permission: "can_view_documents" as const },
+    { label: "Unpaid Invoices", value: hasRestrictedClientScope ? ((invoiceRows ?? []).filter((invoice) => ["issued", "partially_paid", "overdue"].includes(invoice.status) && Number(invoice.balance_due || 0) > 0).length) : (stats?.unpaid_invoices ?? 0), icon: Receipt, link: "/dashboard/staff/invoices", permission: "can_view_invoices" as const },
+    { label: "Unread Messages", value: hasRestrictedClientScope ? (unreadMessages?.length ?? 0) : (stats?.unread_messages ?? 0), icon: MessageSquare, link: "/dashboard/staff/messages", permission: "can_view_messages" as const },
+    { label: "Reminders Due", value: hasRestrictedClientScope ? (reminderAlerts?.length ?? 0) : (stats?.reminders_due ?? 0), icon: Bell, link: "/dashboard/staff", permission: "can_view_overview" as const },
+  ].filter((card) => isAdmin || hasStaffPermission(card.permission));
 
   const casePipeline = useMemo(() => {
     const counts = (caseRows ?? []).reduce<Record<string, number>>((accumulator, row) => {
@@ -302,6 +431,7 @@ export default function AdminOverview() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        {(isAdmin || hasStaffPermission("can_view_cases")) ? (
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
           <div className="mb-5 flex items-center gap-3">
             <FolderKanban className="h-5 w-5 text-primary" />
@@ -330,7 +460,9 @@ export default function AdminOverview() {
             ))}
           </div>
         </div>
+        ) : null}
 
+        {(isAdmin || hasStaffPermission("can_view_invoices")) ? (
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
           <div className="mb-5 flex items-center gap-3">
             <Wallet className="h-5 w-5 text-primary" />
@@ -355,8 +487,10 @@ export default function AdminOverview() {
             </div>
           </div>
         </div>
+        ) : null}
       </section>
 
+      {(isAdmin || hasStaffPermission("can_view_clients") || hasStaffPermission("can_view_client_workspace")) ? (
       <section className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-card">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -406,10 +540,12 @@ export default function AdminOverview() {
           </div>
         )}
       </section>
+      ) : null}
 
       <ElevenLabsWidget />
 
       <section className="grid gap-6 xl:grid-cols-3">
+        {(isAdmin || hasStaffPermission("can_view_clients")) ? (
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -445,7 +581,9 @@ export default function AdminOverview() {
             )}
           </div>
         </div>
+        ) : null}
 
+        {(isAdmin || hasStaffPermission("can_view_documents")) ? (
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -478,6 +616,7 @@ export default function AdminOverview() {
             )}
           </div>
         </div>
+        ) : null}
 
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
           <div className="mb-5 flex items-center justify-between gap-4">

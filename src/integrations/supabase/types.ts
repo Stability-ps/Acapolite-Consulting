@@ -48,6 +48,63 @@ export type Database = {
         };
         Relationships: [];
       };
+      staff_permissions: {
+        Row: {
+          profile_id: string;
+          assigned_clients_only: boolean;
+          can_view_overview: boolean;
+          can_view_clients: boolean;
+          can_manage_clients: boolean;
+          can_view_client_workspace: boolean;
+          can_view_cases: boolean;
+          can_manage_cases: boolean;
+          can_view_documents: boolean;
+          can_review_documents: boolean;
+          can_view_invoices: boolean;
+          can_manage_invoices: boolean;
+          can_view_messages: boolean;
+          can_reply_messages: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          assigned_clients_only?: boolean;
+          can_view_overview?: boolean;
+          can_view_clients?: boolean;
+          can_manage_clients?: boolean;
+          can_view_client_workspace?: boolean;
+          can_view_cases?: boolean;
+          can_manage_cases?: boolean;
+          can_view_documents?: boolean;
+          can_review_documents?: boolean;
+          can_view_invoices?: boolean;
+          can_manage_invoices?: boolean;
+          can_view_messages?: boolean;
+          can_reply_messages?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          profile_id?: string;
+          assigned_clients_only?: boolean;
+          can_view_overview?: boolean;
+          can_view_clients?: boolean;
+          can_manage_clients?: boolean;
+          can_view_client_workspace?: boolean;
+          can_view_cases?: boolean;
+          can_manage_cases?: boolean;
+          can_view_documents?: boolean;
+          can_review_documents?: boolean;
+          can_view_invoices?: boolean;
+          can_manage_invoices?: boolean;
+          can_view_messages?: boolean;
+          can_reply_messages?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       clients: {
         Row: {
           id: string;

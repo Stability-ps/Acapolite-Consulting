@@ -1,3 +1,6 @@
+import type { StaffPermissionValues } from "@/lib/staffPermissions";
+import { getFirstStaffRoute } from "@/lib/staffPermissions";
+
 export type AppRole = "admin" | "consultant" | "client";
 
 export const dashboardHomeByRole: Record<AppRole, string> = {
@@ -18,6 +21,10 @@ export const dashboardDescriptionByRole: Record<AppRole, string> = {
   client: "Track your cases, invoices, messages, and documents in one place.",
 };
 
-export function getDashboardHome(role: AppRole | null | undefined) {
-  return role ? dashboardHomeByRole[role] : "/dashboard";
+export function getDashboardHome(role: AppRole | null | undefined, permissions?: StaffPermissionValues | null) {
+  if (!role) return "/dashboard";
+  if (role === "consultant") {
+    return getFirstStaffRoute(permissions);
+  }
+  return dashboardHomeByRole[role];
 }

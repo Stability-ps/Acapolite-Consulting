@@ -7,6 +7,7 @@ import { FileText, Image, File, Search, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import type { Enums, TablesUpdate } from "@/integrations/supabase/types";
 
@@ -40,7 +41,8 @@ function getClientName(document: StaffDocument) {
 }
 
 export default function AdminDocuments() {
-  const { user } = useAuth();
+  const { user, hasStaffPermission } = useAuth();
+  const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,15 +50,29 @@ export default function AdminDocuments() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [actionLoading, setActionLoading] = useState<"approve" | "reject" | "open" | null>(null);
 
+  const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
+  const canReviewDocuments = hasStaffPermission("can_review_documents");
+
   const { data: documents, isLoading } = useQuery({
-    queryKey: ["staff-documents"],
+    queryKey: ["staff-documents", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase
         .from("documents")
         .select("*, clients(company_name, first_name, last_name, client_code)")
         .order("uploaded_at", { ascending: false });
+
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+
+      const { data } = await query;
       return (data ?? []) as StaffDocument[];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const filteredDocuments = useMemo(() => {
@@ -114,6 +130,10 @@ export default function AdminDocuments() {
 
   const reviewDocument = async (nextStatus: "approved" | "rejected") => {
     if (!selectedDocument || !user) return;
+    if (!canReviewDocuments) {
+      toast.error("This consultant profile cannot review documents.");
+      return;
+    }
 
     if (nextStatus === "rejected" && !rejectionReason.trim()) {
       toast.error("Enter a rejection reason before rejecting the document.");
@@ -162,7 +182,7 @@ export default function AdminDocuments() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading || isLoadingAccessibleClientIds ? (
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : filteredDocuments.length > 0 ? (
         <div className="grid gap-3">
@@ -211,7 +231,7 @@ export default function AdminDocuments() {
           if (!open) setSelectedDocumentId(null);
         }}
         title={selectedDocument?.category || selectedDocument?.title || "Document Review"}
-        description="Open the file, review the upload details, and approve or reject it."
+        description={canReviewDocuments ? "Open the file, review the upload details, and approve or reject it." : "Open the file and review the upload details in view-only mode."}
       >
         {selectedDocument ? (
           <div className="space-y-6">
@@ -241,45 +261,53 @@ export default function AdminDocuments() {
               </Button>
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-foreground font-body mb-2">Review Notes</label>
-              <Textarea
-                value={reviewNotes}
-                onChange={(event) => setReviewNotes(event.target.value)}
-                placeholder="Add internal notes or a short review summary."
-                className="rounded-xl"
-              />
-            </div>
+            {canReviewDocuments ? (
+              <>
+                <div>
+                  <label className="block text-sm font-semibold text-foreground font-body mb-2">Review Notes</label>
+                  <Textarea
+                    value={reviewNotes}
+                    onChange={(event) => setReviewNotes(event.target.value)}
+                    placeholder="Add internal notes or a short review summary."
+                    className="rounded-xl"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-foreground font-body mb-2">Rejection Reason</label>
-              <Textarea
-                value={rejectionReason}
-                onChange={(event) => setRejectionReason(event.target.value)}
-                placeholder="Required only if you reject this document."
-                className="rounded-xl"
-              />
-            </div>
+                <div>
+                  <label className="block text-sm font-semibold text-foreground font-body mb-2">Rejection Reason</label>
+                  <Textarea
+                    value={rejectionReason}
+                    onChange={(event) => setRejectionReason(event.target.value)}
+                    placeholder="Required only if you reject this document."
+                    className="rounded-xl"
+                  />
+                </div>
 
-            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-              <Button
-                type="button"
-                variant="destructive"
-                className="rounded-xl"
-                onClick={() => reviewDocument("rejected")}
-                disabled={actionLoading !== null}
-              >
-                {actionLoading === "reject" ? "Rejecting..." : "Reject"}
-              </Button>
-              <Button
-                type="button"
-                className="rounded-xl"
-                onClick={() => reviewDocument("approved")}
-                disabled={actionLoading !== null}
-              >
-                {actionLoading === "approve" ? "Approving..." : "Approve"}
-              </Button>
-            </div>
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="rounded-xl"
+                    onClick={() => reviewDocument("rejected")}
+                    disabled={actionLoading !== null}
+                  >
+                    {actionLoading === "reject" ? "Rejecting..." : "Reject"}
+                  </Button>
+                  <Button
+                    type="button"
+                    className="rounded-xl"
+                    onClick={() => reviewDocument("approved")}
+                    disabled={actionLoading !== null}
+                  >
+                    {actionLoading === "approve" ? "Approving..." : "Approve"}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-sm text-muted-foreground font-body">This consultant profile has view-only access to document records.</p>
+              </div>
+            )}
           </div>
         ) : null}
       </DashboardItemDialog>

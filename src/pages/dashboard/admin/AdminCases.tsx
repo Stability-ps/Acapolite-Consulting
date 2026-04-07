@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import type { Enums, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { getClientWarningSummary } from "@/lib/clientRisk";
 
@@ -35,7 +36,8 @@ const caseTypeOptions: Enums<"case_type">[] = [
 
 export default function AdminCases() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, hasStaffPermission, isConsultant } = useAuth();
+  const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
@@ -47,50 +49,102 @@ export default function AdminCases() {
     priority: "2",
   });
 
+  const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
+  const canManageCases = hasStaffPermission("can_manage_cases");
+
   const { data: cases, isLoading } = useQuery({
-    queryKey: ["staff-cases"],
+    queryKey: ["staff-cases", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase
         .from("cases")
         .select("*, clients(company_name, first_name, last_name, client_code)")
         .order("last_activity_at", { ascending: false });
+
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+
+      const { data } = await query;
       return data ?? [];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: clients } = useQuery({
-    queryKey: ["staff-case-clients"],
+    queryKey: ["staff-case-clients", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase
         .from("clients")
         .select("id, company_name, first_name, last_name, client_code")
         .order("created_at", { ascending: false });
+
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("id", accessibleClientIds);
+      }
+
+      const { data } = await query;
       return data ?? [];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: riskClients } = useQuery({
-    queryKey: ["staff-case-risk-clients"],
+    queryKey: ["staff-case-risk-clients", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase.from("clients").select("id, sars_outstanding_debt, returns_filed");
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase.from("clients").select("id, sars_outstanding_debt, returns_filed");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("id", accessibleClientIds);
+      }
+      const { data } = await query;
       return data ?? [];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: riskInvoices } = useQuery({
-    queryKey: ["staff-case-risk-invoices"],
+    queryKey: ["staff-case-risk-invoices", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase.from("invoices").select("client_id, status, balance_due");
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase.from("invoices").select("client_id, status, balance_due");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
       return data ?? [];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const { data: riskRequests } = useQuery({
-    queryKey: ["staff-case-risk-document-requests"],
+    queryKey: ["staff-case-risk-document-requests", accessibleClientIdsKey],
     queryFn: async () => {
-      const { data } = await supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+      const { data } = await query;
       return data ?? [];
     },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
   const clientOptions = useMemo(
@@ -135,6 +189,11 @@ export default function AdminCases() {
   }, [riskClients, riskInvoices, riskRequests]);
 
   const updateStatus = async (caseId: string, status: Enums<"case_status">) => {
+    if (!canManageCases) {
+      toast.error("This consultant profile cannot update case statuses.");
+      return;
+    }
+
     const { error } = await supabase.from("cases").update({ status }).eq("id", caseId);
     if (error) {
       toast.error(error.message);
@@ -146,6 +205,11 @@ export default function AdminCases() {
   };
 
   const createCase = async () => {
+    if (!canManageCases) {
+      toast.error("This consultant profile cannot create cases.");
+      return;
+    }
+
     if (!form.client_id || !form.case_title.trim()) {
       toast.error("Select a client and enter a case title.");
       return;
@@ -160,6 +224,7 @@ export default function AdminCases() {
       description: form.description.trim() || null,
       priority: Number(form.priority),
       created_by: user?.id ?? null,
+      assigned_consultant_id: isConsultant ? user?.id ?? null : null,
       due_date: form.due_date ? new Date(`${form.due_date}T12:00:00`).toISOString() : null,
     };
 
@@ -202,14 +267,18 @@ export default function AdminCases() {
       <div className="flex items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">All Cases</h1>
-          <p className="text-muted-foreground font-body text-sm">Manage case progress across all clients</p>
+          <p className="text-muted-foreground font-body text-sm">
+            {hasRestrictedClientScope ? "Manage case progress for assigned client accounts only." : "Manage case progress across all clients"}
+          </p>
         </div>
-        <Button className="rounded-xl" onClick={() => setIsCreateModalOpen(true)}>
-          Create Case
-        </Button>
+        {canManageCases ? (
+          <Button className="rounded-xl" onClick={() => setIsCreateModalOpen(true)}>
+            Create Case
+          </Button>
+        ) : null}
       </div>
 
-      {isLoading ? (
+      {isLoading || isLoadingAccessibleClientIds ? (
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : (
         <div className="space-y-4">
@@ -239,16 +308,22 @@ export default function AdminCases() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground font-body">Update status:</span>
-                  <Select value={caseItem.status} onValueChange={(value) => updateStatus(caseItem.id, value as Enums<"case_status">)}>
-                    <SelectTrigger className="w-56 h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusOptions.map((status) => (
-                        <SelectItem key={status} value={status}>{status.replace(/_/g, " ")}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {canManageCases ? (
+                    <Select value={caseItem.status} onValueChange={(value) => updateStatus(caseItem.id, value as Enums<"case_status">)}>
+                      <SelectTrigger className="w-56 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((status) => (
+                          <SelectItem key={status} value={status}>{status.replace(/_/g, " ")}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground">
+                      View only
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
