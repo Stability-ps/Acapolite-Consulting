@@ -8,7 +8,7 @@ export function Footer() {
           <AcapoliteLogo className="h-12 brightness-0 invert" />
           <p className="text-sm text-background/50 font-body">Registered Tax Practitioners</p>
           <div className="text-center md:text-right">
-            <p className="text-sm text-background/50 font-body">© 2026 Acapolite Consulting. All rights reserved.</p>
+            <p className="text-sm text-background/50 font-body">Copyright 2026 Acapolite Consulting. All rights reserved.</p>
             <a
               href="mailto:info@acapoliteconsulting.co.za"
               className="text-sm text-primary font-body hover:underline"
