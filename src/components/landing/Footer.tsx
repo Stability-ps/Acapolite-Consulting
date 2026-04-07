@@ -9,8 +9,11 @@ export function Footer() {
           <p className="text-sm text-background/50 font-body">Registered Tax Practitioners</p>
           <div className="text-center md:text-right">
             <p className="text-sm text-background/50 font-body">© 2026 Acapolite Consulting. All rights reserved.</p>
-            <a href="mailto:info@acapolite.co.za" className="text-sm text-primary font-body hover:underline">
-              info@acapolite.co.za
+            <a
+              href="mailto:info@acapoliteconsulting.co.za"
+              className="text-sm text-primary font-body hover:underline"
+            >
+              info@acapoliteconsulting.co.za
             </a>
           </div>
         </div>
