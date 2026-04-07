@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -55,6 +56,14 @@ export default function Login() {
 
           <h1 className="font-display text-2xl font-bold text-foreground mb-2">Welcome back</h1>
           <p className="text-muted-foreground font-body text-sm mb-8">Sign in to your Acapolite workspace</p>
+
+          <GoogleAuthButton disabled={loading} onLoadingChange={setLoading} />
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground/70">or</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
