@@ -222,13 +222,33 @@ export default function AdminClientWorkspace() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedConversation, setSelectedConversation] = useState("");
   const [newMessage, setNewMessage] = useState("");
+  const [isEditClientOpen, setIsEditClientOpen] = useState(false);
   const [isCreateCaseOpen, setIsCreateCaseOpen] = useState(false);
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isCreateAlertOpen, setIsCreateAlertOpen] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
+  const [savingClient, setSavingClient] = useState(false);
   const [creatingCase, setCreatingCase] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [creatingAlert, setCreatingAlert] = useState(false);
+  const [clientForm, setClientForm] = useState({
+    full_name: "",
+    phone: "",
+    first_name: "",
+    last_name: "",
+    company_name: "",
+    tax_number: "",
+    sars_reference_number: "",
+    id_number: "",
+    client_code: "",
+    address_line_1: "",
+    address_line_2: "",
+    city: "",
+    province: "",
+    postal_code: "",
+    country: "South Africa",
+    notes: "",
+  });
   const [caseForm, setCaseForm] = useState({
     case_title: "",
     case_type: "individual_tax_return" as Enums<"case_type">,
@@ -370,6 +390,29 @@ export default function AdminClientWorkspace() {
     enabled: !!selectedConversation,
   });
 
+  useEffect(() => {
+    if (!clientDetails) return;
+
+    setClientForm({
+      full_name: clientDetails.profiles?.full_name || "",
+      phone: clientDetails.profiles?.phone || "",
+      first_name: clientDetails.first_name || "",
+      last_name: clientDetails.last_name || "",
+      company_name: clientDetails.company_name || "",
+      tax_number: clientDetails.tax_number || "",
+      sars_reference_number: clientDetails.sars_reference_number || "",
+      id_number: clientDetails.id_number || "",
+      client_code: clientDetails.client_code || "",
+      address_line_1: clientDetails.address_line_1 || "",
+      address_line_2: clientDetails.address_line_2 || "",
+      city: clientDetails.city || "",
+      province: clientDetails.province || "",
+      postal_code: clientDetails.postal_code || "",
+      country: clientDetails.country || "South Africa",
+      notes: clientDetails.notes || "",
+    });
+  }, [clientDetails]);
+
   const summary = useMemo(() => {
     const invoices = clientInvoices ?? [];
     const documents = clientDocuments ?? [];
@@ -399,6 +442,8 @@ export default function AdminClientWorkspace() {
 
   const refreshWorkspace = async () => {
     await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-clients"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-options"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-details", selectedClientId] }),
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-cases", selectedClientId] }),
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-documents", selectedClientId] }),
@@ -411,6 +456,57 @@ export default function AdminClientWorkspace() {
       queryClient.invalidateQueries({ queryKey: ["staff-overview-due-alerts"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-overview-recent-documents"] }),
     ]);
+  };
+
+  const updateClientProfile = async () => {
+    if (!clientDetails) return;
+
+    setSavingClient(true);
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: clientForm.full_name.trim() || null,
+        phone: clientForm.phone.trim() || null,
+      })
+      .eq("id", clientDetails.profile_id);
+
+    if (profileError) {
+      toast.error(profileError.message);
+      setSavingClient(false);
+      return;
+    }
+
+    const { error: clientError } = await supabase
+      .from("clients")
+      .update({
+        first_name: clientForm.first_name.trim() || null,
+        last_name: clientForm.last_name.trim() || null,
+        company_name: clientForm.company_name.trim() || null,
+        tax_number: clientForm.tax_number.trim() || null,
+        sars_reference_number: clientForm.sars_reference_number.trim() || null,
+        id_number: clientForm.id_number.trim() || null,
+        client_code: clientForm.client_code.trim() || null,
+        address_line_1: clientForm.address_line_1.trim() || null,
+        address_line_2: clientForm.address_line_2.trim() || null,
+        city: clientForm.city.trim() || null,
+        province: clientForm.province.trim() || null,
+        postal_code: clientForm.postal_code.trim() || null,
+        country: clientForm.country.trim() || "South Africa",
+        notes: clientForm.notes.trim() || null,
+      })
+      .eq("id", clientDetails.id);
+
+    if (clientError) {
+      toast.error(clientError.message);
+      setSavingClient(false);
+      return;
+    }
+
+    toast.success("Client profile updated.");
+    setSavingClient(false);
+    setIsEditClientOpen(false);
+    await refreshWorkspace();
   };
 
   const resetCaseForm = () => {
@@ -718,14 +814,19 @@ export default function AdminClientWorkspace() {
             <TabsContent value="overview" className="space-y-6">
               <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-                  <div className="mb-5 flex items-center gap-3">
-                    <User className="h-5 w-5 text-primary" />
-                    <div>
-                      <h2 className="font-display text-xl font-semibold text-foreground">{getClientName(clientDetails)}</h2>
-                      <p className="text-sm text-muted-foreground font-body">
-                        {clientDetails.client_code || "No client code"} • {clientDetails.profiles?.email || "No email"}
-                      </p>
+                  <div className="mb-5 flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <User className="h-5 w-5 text-primary" />
+                      <div>
+                        <h2 className="font-display text-xl font-semibold text-foreground">{getClientName(clientDetails)}</h2>
+                        <p className="text-sm text-muted-foreground font-body">
+                          {clientDetails.client_code || "No client code"} • {clientDetails.profiles?.email || "No email"}
+                        </p>
+                      </div>
                     </div>
+                    <Button type="button" className="rounded-xl" onClick={() => setIsEditClientOpen(true)}>
+                      Edit Client Profile
+                    </Button>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -1062,6 +1163,202 @@ export default function AdminClientWorkspace() {
               )}
             </TabsContent>
           </Tabs>
+
+          <DashboardItemDialog
+            open={isEditClientOpen}
+            onOpenChange={setIsEditClientOpen}
+            title="Edit Client Profile"
+            description="Update this client's profile, tax details, contact information, and address from the admin workspace."
+          >
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Full Name</label>
+                  <Input
+                    value={clientForm.full_name}
+                    onChange={(event) => setClientForm((current) => ({ ...current, full_name: event.target.value }))}
+                    placeholder="Client full name"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Email</label>
+                  <Input
+                    value={clientDetails?.profiles?.email || ""}
+                    readOnly
+                    disabled
+                    className="rounded-xl bg-accent/40 text-muted-foreground"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Phone</label>
+                  <Input
+                    value={clientForm.phone}
+                    onChange={(event) => setClientForm((current) => ({ ...current, phone: event.target.value }))}
+                    placeholder="Client phone number"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Code</label>
+                  <Input
+                    value={clientForm.client_code}
+                    onChange={(event) => setClientForm((current) => ({ ...current, client_code: event.target.value }))}
+                    placeholder="Client code"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">First Name</label>
+                  <Input
+                    value={clientForm.first_name}
+                    onChange={(event) => setClientForm((current) => ({ ...current, first_name: event.target.value }))}
+                    placeholder="First name"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Last Name</label>
+                  <Input
+                    value={clientForm.last_name}
+                    onChange={(event) => setClientForm((current) => ({ ...current, last_name: event.target.value }))}
+                    placeholder="Last name"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Name</label>
+                  <Input
+                    value={clientForm.company_name}
+                    onChange={(event) => setClientForm((current) => ({ ...current, company_name: event.target.value }))}
+                    placeholder="Company name"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Tax Number</label>
+                  <Input
+                    value={clientForm.tax_number}
+                    onChange={(event) => setClientForm((current) => ({ ...current, tax_number: event.target.value }))}
+                    placeholder="Tax number"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Reference</label>
+                  <Input
+                    value={clientForm.sars_reference_number}
+                    onChange={(event) => setClientForm((current) => ({ ...current, sars_reference_number: event.target.value }))}
+                    placeholder="SARS reference number"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
+                  <Input
+                    value={clientForm.id_number}
+                    onChange={(event) => setClientForm((current) => ({ ...current, id_number: event.target.value }))}
+                    placeholder="ID or registration number"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Address Line 1</label>
+                  <Input
+                    value={clientForm.address_line_1}
+                    onChange={(event) => setClientForm((current) => ({ ...current, address_line_1: event.target.value }))}
+                    placeholder="Street address"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Address Line 2</label>
+                  <Input
+                    value={clientForm.address_line_2}
+                    onChange={(event) => setClientForm((current) => ({ ...current, address_line_2: event.target.value }))}
+                    placeholder="Building, suite, or area"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">City</label>
+                  <Input
+                    value={clientForm.city}
+                    onChange={(event) => setClientForm((current) => ({ ...current, city: event.target.value }))}
+                    placeholder="City"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Province</label>
+                  <Input
+                    value={clientForm.province}
+                    onChange={(event) => setClientForm((current) => ({ ...current, province: event.target.value }))}
+                    placeholder="Province"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Postal Code</label>
+                  <Input
+                    value={clientForm.postal_code}
+                    onChange={(event) => setClientForm((current) => ({ ...current, postal_code: event.target.value }))}
+                    placeholder="Postal code"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Country</label>
+                  <Input
+                    value={clientForm.country}
+                    onChange={(event) => setClientForm((current) => ({ ...current, country: event.target.value }))}
+                    placeholder="Country"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Internal Notes</label>
+                <Textarea
+                  value={clientForm.notes}
+                  onChange={(event) => setClientForm((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Add client notes for the Acapolite team."
+                  className="min-h-[120px] rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsEditClientOpen(false)} disabled={savingClient}>
+                  Cancel
+                </Button>
+                <Button type="button" className="rounded-xl" onClick={updateClientProfile} disabled={savingClient}>
+                  {savingClient ? "Saving..." : "Save Profile"}
+                </Button>
+              </div>
+            </div>
+          </DashboardItemDialog>
 
           <DashboardItemDialog
             open={isCreateCaseOpen}
