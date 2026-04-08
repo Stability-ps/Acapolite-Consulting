@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Mail, MessageCircleMore, PhoneCall } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const contactEmail = "info@acapoliteconsulting.co.za";
 const whatsappNumber = "+27 67 5775506";
@@ -16,21 +18,41 @@ export function CTA() {
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-
-  const mailtoHref = useMemo(() => {
-    const body = [
-      `Name: ${name || "-"}`,
-      `Email: ${email || "-"}`,
-      "",
-      message || "",
-    ].join("\n");
-
-    return `mailto:${contactEmail}?subject=${encodeURIComponent(subject || "Acapolite Contact Request")}&body=${encodeURIComponent(body)}`;
-  }, [email, message, name, subject]);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    window.location.href = mailtoHref;
+
+    setSubmitting(true);
+
+    void supabase.functions
+      .invoke("send-portal-email", {
+        body: {
+          type: "contact_form",
+          name,
+          email,
+          subject,
+          message,
+        },
+      })
+      .then(({ error }) => {
+        if (error) {
+          toast.error(error.message || "Unable to send your message right now.");
+          return;
+        }
+
+        toast.success("Your message has been sent to Acapolite Consulting.");
+        setName("");
+        setEmail("");
+        setSubject("");
+        setMessage("");
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Unable to send your message right now.");
+      })
+      .finally(() => {
+        setSubmitting(false);
+      });
   };
 
   return (
@@ -229,8 +251,8 @@ export function CTA() {
                   {" "}
                   <span className="font-semibold text-foreground">{contactEmail}</span>
                 </p>
-                <Button type="submit" size="lg" className="rounded-xl px-7">
-                  Open Email Draft
+                <Button type="submit" size="lg" className="rounded-xl px-7" disabled={submitting}>
+                  {submitting ? "Sending..." : "Send Message"}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
