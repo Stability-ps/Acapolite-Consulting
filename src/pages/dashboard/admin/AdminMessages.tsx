@@ -7,13 +7,22 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
+import { sendClientMessageNotification } from "@/lib/clientMessageNotifications";
+import { formatCaseReference } from "@/lib/practitionerAssignments";
 
 function getConversationName(conversation: {
   subject: string | null;
-  clients?: { company_name?: string | null; first_name?: string | null; last_name?: string | null; client_code?: string | null } | null;
+  clients?: {
+    company_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    client_code?: string | null;
+    profiles?: { full_name?: string | null; email?: string | null } | null;
+  } | null;
 }) {
   return (
     conversation.clients?.company_name ||
+    conversation.clients?.profiles?.full_name ||
     [conversation.clients?.first_name, conversation.clients?.last_name].filter(Boolean).join(" ") ||
     conversation.subject ||
     conversation.clients?.client_code ||
@@ -27,7 +36,7 @@ function getConversationPreview(messageText?: string | null) {
 }
 
 export default function AdminMessages() {
-  const { user, role, hasStaffPermission } = useAuth();
+  const { user, role, profile, hasStaffPermission } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -47,7 +56,7 @@ export default function AdminMessages() {
 
       let query = supabase
         .from("conversations")
-        .select("*, clients(company_name, first_name, last_name, client_code)")
+        .select("*, clients(company_name, first_name, last_name, client_code, profile_id, profiles!clients_profile_id_fkey(full_name, email))")
         .order("last_message_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -176,12 +185,14 @@ export default function AdminMessages() {
       return;
     }
 
-    const { error } = await supabase.from("messages").insert({
+    const outgoingMessage = newMessage.trim();
+
+    const { data, error } = await supabase.from("messages").insert({
       conversation_id: selectedConversation,
       sender_profile_id: user.id,
       sender_type: role === "consultant" ? "consultant" : "admin",
-      message_text: newMessage.trim(),
-    });
+      message_text: outgoingMessage,
+    }).select("id, created_at").single();
 
     if (error) {
       toast.error(error.message);
@@ -189,7 +200,31 @@ export default function AdminMessages() {
     }
 
     setNewMessage("");
-    toast.success("Message sent");
+    if (selectedConversationRecord?.clients?.profile_id) {
+      const senderName = profile?.full_name?.trim()
+        || (role === "consultant" ? "Your Consultant" : "Acapolite Consulting");
+      const notification = await sendClientMessageNotification({
+        messageId: data.id,
+        clientProfileId: selectedConversationRecord.clients.profile_id,
+        clientEmail: selectedConversationRecord.clients.profiles?.email,
+        clientName: getConversationName(selectedConversationRecord),
+        senderName,
+        messageText: outgoingMessage,
+        sentAt: data.created_at,
+        caseId: selectedConversationRecord.case_id,
+        conversationSubject: selectedConversationRecord.subject,
+      });
+
+      if (notification.error) {
+        console.error("Client message email failed:", notification.error);
+        toast.error("Message sent, but the client email notification could not be delivered.");
+      } else {
+        toast.success("Message sent");
+      }
+    } else {
+      toast.success("Message sent");
+    }
+
     queryClient.invalidateQueries({ queryKey: ["staff-messages", selectedConversation] });
     queryClient.invalidateQueries({ queryKey: ["staff-conversations"] });
     queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] });
@@ -280,6 +315,11 @@ export default function AdminMessages() {
                     <p className="text-sm text-muted-foreground font-body mt-1">
                       {unreadCounts[selectedConversationRecord.id] ? `${unreadCounts[selectedConversationRecord.id]} unread client message(s)` : selectedConversationRecord.subject || "General conversation"}
                     </p>
+                    {selectedConversationRecord.case_id ? (
+                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                        {formatCaseReference(selectedConversationRecord.case_id)}
+                      </p>
+                    ) : null}
                   </div>
                   {selectedConversationRecord.clients?.client_code ? (
                     <span className="text-xs font-semibold px-3 py-1 rounded-full bg-accent text-accent-foreground font-body">

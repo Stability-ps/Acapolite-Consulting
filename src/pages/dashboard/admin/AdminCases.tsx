@@ -13,6 +13,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { getClientWarningSummary } from "@/lib/clientRisk";
+import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
+import { sendCaseStatusChangedNotification } from "@/lib/caseStatusNotifications";
 
 const statusOptions: Enums<"case_status">[] = [
   "new",
@@ -34,6 +36,36 @@ const caseTypeOptions: Enums<"case_type">[] = [
   "other",
 ];
 
+const UNASSIGNED_CONSULTANT = "unassigned";
+
+type ConsultantOption = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+};
+
+type CaseRecord = {
+  id: string;
+  client_id: string;
+  case_title: string;
+  case_type: string;
+  status: Enums<"case_status">;
+  description: string | null;
+  due_date: string | null;
+  priority: number;
+  assigned_consultant_id: string | null;
+  clients?: {
+    company_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    client_code?: string | null;
+  } | null;
+  assigned_consultant?: {
+    full_name?: string | null;
+    email?: string | null;
+  } | null;
+};
+
 export default function AdminCases() {
   const queryClient = useQueryClient();
   const { user, hasStaffPermission, isConsultant } = useAuth();
@@ -47,10 +79,12 @@ export default function AdminCases() {
     description: "",
     due_date: "",
     priority: "2",
+    assigned_consultant_id: UNASSIGNED_CONSULTANT,
   });
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageCases = hasStaffPermission("can_manage_cases");
+  const canAssignConsultants = canManageCases && !isConsultant;
 
   const { data: cases, isLoading } = useQuery({
     queryKey: ["staff-cases", accessibleClientIdsKey],
@@ -61,7 +95,7 @@ export default function AdminCases() {
 
       let query = supabase
         .from("cases")
-        .select("*, clients(company_name, first_name, last_name, client_code)")
+        .select("*, clients(company_name, first_name, last_name, client_code), assigned_consultant:profiles!cases_assigned_consultant_id_fkey(full_name, email)")
         .order("last_activity_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -69,7 +103,7 @@ export default function AdminCases() {
       }
 
       const { data } = await query;
-      return data ?? [];
+      return (data ?? []) as CaseRecord[];
     },
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
@@ -83,7 +117,7 @@ export default function AdminCases() {
 
       let query = supabase
         .from("clients")
-        .select("id, company_name, first_name, last_name, client_code")
+        .select("id, profile_id, company_name, first_name, last_name, client_code, profiles!clients_profile_id_fkey(full_name, email)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -94,6 +128,25 @@ export default function AdminCases() {
       return data ?? [];
     },
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
+  });
+
+  const { data: consultants } = useQuery({
+    queryKey: ["staff-case-consultants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("role", "consultant")
+        .eq("is_active", true)
+        .order("full_name", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as ConsultantOption[];
+    },
+    enabled: canAssignConsultants,
   });
 
   const { data: riskClients } = useQuery({
@@ -157,6 +210,26 @@ export default function AdminCases() {
     [clients],
   );
 
+  const clientOptionMap = useMemo(
+    () => new Map(clientOptions.map((client) => [client.id, client])),
+    [clientOptions],
+  );
+
+  const consultantOptions = useMemo(
+    () =>
+      (consultants ?? []).map((consultant) => ({
+        id: consultant.id,
+        label: consultant.full_name || consultant.email || "Consultant",
+        email: consultant.email,
+      })),
+    [consultants],
+  );
+
+  const consultantOptionMap = useMemo(
+    () => new Map(consultantOptions.map((consultant) => [consultant.id, consultant])),
+    [consultantOptions],
+  );
+
   const clientIssueMap = useMemo(() => {
     const riskClientsById = new Map((riskClients ?? []).map((client) => [client.id, client]));
     const outstandingInvoicesByClient = new Map<string, number>();
@@ -188,19 +261,146 @@ export default function AdminCases() {
     return map;
   }, [riskClients, riskInvoices, riskRequests]);
 
+  const notifyAssignedConsultant = async (params: {
+    caseId: string;
+    consultantId: string;
+    clientName: string;
+    caseType: string;
+    priority: number;
+  }) => {
+    const consultant = consultantOptionMap.get(params.consultantId);
+
+    if (!consultant) {
+      toast.error("The selected consultant profile could not be loaded for email notification.");
+      return false;
+    }
+
+    const result = await sendPractitionerAssignmentNotification({
+      caseId: params.caseId,
+      practitionerProfileId: params.consultantId,
+      practitionerEmail: consultant.email,
+      practitionerName: consultant.label,
+      clientName: params.clientName,
+      caseType: params.caseType,
+      priority: params.priority,
+    });
+
+    if (result.error) {
+      console.error("Practitioner assignment email failed:", result.error);
+      toast.error("The case was assigned, but the practitioner email could not be sent.");
+      return false;
+    }
+
+    return !result.skipped;
+  };
+
   const updateStatus = async (caseId: string, status: Enums<"case_status">) => {
     if (!canManageCases) {
       toast.error("This consultant profile cannot update case statuses.");
       return;
     }
 
-    const { error } = await supabase.from("cases").update({ status }).eq("id", caseId);
+    const currentCase = cases?.find((caseItem) => caseItem.id === caseId);
+
+    if (!currentCase || currentCase.status === status) {
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("cases")
+      .update({ status })
+      .eq("id", caseId)
+      .select("updated_at")
+      .single();
     if (error) {
       toast.error(error.message);
       return;
     }
 
-    toast.success("Status updated");
+    const matchingClient = (clients ?? []).find((client) => client.id === currentCase.client_id) as {
+      id: string;
+      profile_id?: string | null;
+      company_name?: string | null;
+      first_name?: string | null;
+      last_name?: string | null;
+      client_code?: string | null;
+      profiles?: { full_name?: string | null; email?: string | null } | null;
+    } | undefined;
+
+    let notified = false;
+
+    if (matchingClient?.profile_id) {
+      const notification = await sendCaseStatusChangedNotification({
+        caseId,
+        clientProfileId: matchingClient.profile_id,
+        clientEmail: matchingClient.profiles?.email,
+        clientName:
+          matchingClient.company_name
+          || matchingClient.profiles?.full_name
+          || [matchingClient.first_name, matchingClient.last_name].filter(Boolean).join(" ")
+          || matchingClient.client_code
+          || "Client",
+        serviceType: currentCase.case_type,
+        previousStatus: currentCase.status,
+        newStatus: status,
+        updatedAt: data?.updated_at,
+      });
+
+      if (notification.error) {
+        console.error("Case status email failed:", notification.error);
+        toast.error("Case status updated, but the client email notification could not be delivered.");
+      } else {
+        notified = !notification.skipped;
+      }
+    }
+
+    toast.success(notified ? "Status updated and client notified." : "Status updated");
+    queryClient.invalidateQueries({ queryKey: ["staff-cases"] });
+  };
+
+  const updateAssignedConsultant = async (caseItem: CaseRecord, consultantId: string | null) => {
+    if (!canAssignConsultants) {
+      return;
+    }
+
+    if (caseItem.assigned_consultant_id === consultantId) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("cases")
+      .update({ assigned_consultant_id: consultantId })
+      .eq("id", caseItem.id);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    const clientName = caseItem.clients?.company_name
+      || [caseItem.clients?.first_name, caseItem.clients?.last_name].filter(Boolean).join(" ")
+      || caseItem.clients?.client_code
+      || "Client";
+
+    let notified = false;
+
+    if (consultantId) {
+      notified = await notifyAssignedConsultant({
+        caseId: caseItem.id,
+        consultantId,
+        clientName,
+        caseType: caseItem.case_type,
+        priority: caseItem.priority,
+      });
+    }
+
+    toast.success(
+      consultantId
+        ? notified
+          ? "Consultant assigned and notified."
+          : "Consultant assigned."
+        : "Consultant removed from this case.",
+    );
     queryClient.invalidateQueries({ queryKey: ["staff-cases"] });
   };
 
@@ -224,11 +424,11 @@ export default function AdminCases() {
       description: form.description.trim() || null,
       priority: Number(form.priority),
       created_by: user?.id ?? null,
-      assigned_consultant_id: isConsultant ? user?.id ?? null : null,
+      assigned_consultant_id: isConsultant ? user?.id ?? null : form.assigned_consultant_id === UNASSIGNED_CONSULTANT ? null : form.assigned_consultant_id,
       due_date: form.due_date ? new Date(`${form.due_date}T12:00:00`).toISOString() : null,
     };
 
-    const { error } = await supabase.from("cases").insert(payload);
+    const { data, error } = await supabase.from("cases").insert(payload).select("id").single();
 
     if (error) {
       toast.error(error.message);
@@ -236,7 +436,21 @@ export default function AdminCases() {
       return;
     }
 
-    toast.success("Case created");
+    const assignedConsultantId = payload.assigned_consultant_id;
+    let notified = false;
+
+    if (assignedConsultantId && data?.id) {
+      const selectedClient = clientOptionMap.get(form.client_id);
+      notified = await notifyAssignedConsultant({
+        caseId: data.id,
+        consultantId: assignedConsultantId,
+        clientName: selectedClient?.label || "Client",
+        caseType: form.case_type,
+        priority: Number(form.priority),
+      });
+    }
+
+    toast.success(assignedConsultantId && notified ? "Case created and practitioner notified." : "Case created");
     setForm({
       client_id: "",
       case_title: "",
@@ -244,6 +458,7 @@ export default function AdminCases() {
       description: "",
       due_date: "",
       priority: "2",
+      assigned_consultant_id: UNASSIGNED_CONSULTANT,
     });
     setCreating(false);
     setIsCreateModalOpen(false);
@@ -282,7 +497,7 @@ export default function AdminCases() {
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : (
         <div className="space-y-4">
-          {cases?.map((caseItem: { id: string; client_id: string; case_title: string; case_type: string; status: Enums<"case_status">; description: string | null; due_date: string | null; clients?: { company_name?: string | null; first_name?: string | null; last_name?: string | null; client_code?: string | null } | null }) => (
+          {cases?.map((caseItem) => (
             <div key={caseItem.id} className="bg-card rounded-xl border border-border shadow-card p-6">
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -306,24 +521,52 @@ export default function AdminCases() {
                 <div className="text-xs text-muted-foreground font-body">
                   {caseItem.clients?.client_code ? `Client code: ${caseItem.clients.client_code}` : "No client code"}{caseItem.due_date ? ` | Due: ${new Date(caseItem.due_date).toLocaleDateString()}` : ""}
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground font-body">Update status:</span>
-                  {canManageCases ? (
-                    <Select value={caseItem.status} onValueChange={(value) => updateStatus(caseItem.id, value as Enums<"case_status">)}>
-                      <SelectTrigger className="w-56 h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {statusOptions.map((status) => (
-                          <SelectItem key={status} value={status}>{status.replace(/_/g, " ")}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
+                <div className="flex items-center gap-3 flex-wrap justify-end">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground font-body">Update status:</span>
+                    {canManageCases ? (
+                      <Select value={caseItem.status} onValueChange={(value) => updateStatus(caseItem.id, value as Enums<"case_status">)}>
+                        <SelectTrigger className="w-56 h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusOptions.map((status) => (
+                            <SelectItem key={status} value={status}>{status.replace(/_/g, " ")}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground">
+                        View only
+                      </span>
+                    )}
+                  </div>
+
+                  {canAssignConsultants ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground font-body">Consultant:</span>
+                      <Select
+                        value={caseItem.assigned_consultant_id ?? UNASSIGNED_CONSULTANT}
+                        onValueChange={(value) => updateAssignedConsultant(caseItem, value === UNASSIGNED_CONSULTANT ? null : value)}
+                      >
+                        <SelectTrigger className="w-60 h-8 text-xs">
+                          <SelectValue placeholder="Assign consultant" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={UNASSIGNED_CONSULTANT}>Unassigned</SelectItem>
+                          {consultantOptions.map((consultant) => (
+                            <SelectItem key={consultant.id} value={consultant.id}>
+                              {consultant.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : caseItem.assigned_consultant ? (
                     <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground">
-                      View only
+                      {caseItem.assigned_consultant.full_name || caseItem.assigned_consultant.email}
                     </span>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -363,6 +606,28 @@ export default function AdminCases() {
               className="rounded-xl"
             />
           </div>
+
+          {canAssignConsultants ? (
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">Assigned Consultant</label>
+              <Select
+                value={form.assigned_consultant_id}
+                onValueChange={(value) => setForm((current) => ({ ...current, assigned_consultant_id: value }))}
+              >
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue placeholder="Assign consultant" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED_CONSULTANT}>Unassigned</SelectItem>
+                  {consultantOptions.map((consultant) => (
+                    <SelectItem key={consultant.id} value={consultant.id}>
+                      {consultant.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div>

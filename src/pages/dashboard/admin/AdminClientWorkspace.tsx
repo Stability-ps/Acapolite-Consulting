@@ -15,6 +15,11 @@ import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import type { Enums, TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { getClientIdentityFieldLabel, getClientIdentityLabel, getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
+import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
+import { sendClientMessageNotification } from "@/lib/clientMessageNotifications";
+import { sendInvoiceCreatedNotification } from "@/lib/invoiceNotifications";
+import { sendCaseStatusChangedNotification } from "@/lib/caseStatusNotifications";
+import { sendDocumentRequestNotification } from "@/lib/documentRequestNotifications";
 import {
   AlertTriangle,
   User,
@@ -71,6 +76,8 @@ const alertTypeOptions: Enums<"alert_type">[] = [
   "other",
 ];
 
+const UNASSIGNED_CONSULTANT = "unassigned";
+
 type ClientOption = {
   id: string;
   client_code: string | null;
@@ -125,6 +132,11 @@ type ClientCase = {
   last_activity_at: string;
   priority: number;
   description: string | null;
+  assigned_consultant_id: string | null;
+  assigned_consultant?: {
+    full_name?: string | null;
+    email?: string | null;
+  } | null;
 };
 
 type ClientDocument = {
@@ -160,6 +172,10 @@ type ClientAlert = {
 
 type ClientDocumentRequest = {
   id: string;
+  title?: string | null;
+  description?: string | null;
+  required_document_type?: string | null;
+  due_date?: string | null;
   is_required: boolean;
   is_fulfilled: boolean;
 };
@@ -167,6 +183,7 @@ type ClientDocumentRequest = {
 type ClientConversation = {
   id: string;
   subject: string | null;
+  case_id: string | null;
   last_message_at: string;
   is_closed: boolean;
 };
@@ -176,6 +193,12 @@ type ClientMessage = {
   sender_type: string;
   message_text: string;
   created_at: string;
+};
+
+type ConsultantOption = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
 };
 
 function getClientName(client?: Partial<ClientOption> | null) {
@@ -232,7 +255,7 @@ function getSenderLabel(senderType: string) {
 
 export default function AdminClientWorkspace() {
   const queryClient = useQueryClient();
-  const { user, role, hasStaffPermission, isConsultant } = useAuth();
+  const { user, role, profile, hasStaffPermission, isConsultant } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedConversation, setSelectedConversation] = useState("");
@@ -241,11 +264,13 @@ export default function AdminClientWorkspace() {
   const [isCreateCaseOpen, setIsCreateCaseOpen] = useState(false);
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isCreateAlertOpen, setIsCreateAlertOpen] = useState(false);
+  const [isCreateDocumentRequestOpen, setIsCreateDocumentRequestOpen] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [savingClient, setSavingClient] = useState(false);
   const [creatingCase, setCreatingCase] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [creatingAlert, setCreatingAlert] = useState(false);
+  const [creatingDocumentRequest, setCreatingDocumentRequest] = useState(false);
   const [clientForm, setClientForm] = useState({
     full_name: "",
     phone: "",
@@ -274,6 +299,7 @@ export default function AdminClientWorkspace() {
     description: "",
     due_date: "",
     priority: "2",
+    assigned_consultant_id: UNASSIGNED_CONSULTANT,
   });
   const [invoiceForm, setInvoiceForm] = useState({
     title: "",
@@ -289,12 +315,20 @@ export default function AdminClientWorkspace() {
     alert_at: "",
     status: "active" as Enums<"alert_status">,
   });
+  const [documentRequestForm, setDocumentRequestForm] = useState({
+    case_id: "",
+    title: "",
+    description: "",
+    required_document_type: "",
+    due_date: "",
+  });
   const selectedClientId = searchParams.get("clientId") ?? "";
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageClients = hasStaffPermission("can_manage_clients");
   const canManageCases = hasStaffPermission("can_manage_cases");
   const canManageInvoices = hasStaffPermission("can_manage_invoices");
   const canReplyMessages = hasStaffPermission("can_reply_messages");
+  const canAssignConsultants = canManageCases && !isConsultant;
 
   const { data: clients } = useQuery({
     queryKey: ["staff-client-workspace-options", accessibleClientIdsKey],
@@ -314,6 +348,25 @@ export default function AdminClientWorkspace() {
       return (data ?? []) as ClientOption[];
     },
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
+  });
+
+  const { data: consultants } = useQuery({
+    queryKey: ["staff-client-workspace-consultants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("role", "consultant")
+        .eq("is_active", true)
+        .order("full_name", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as ConsultantOption[];
+    },
+    enabled: canAssignConsultants,
   });
 
   useEffect(() => {
@@ -354,7 +407,7 @@ export default function AdminClientWorkspace() {
     queryFn: async () => {
       const { data } = await supabase
         .from("cases")
-        .select("id, case_title, case_type, status, due_date, last_activity_at, priority, description")
+        .select("id, case_title, case_type, status, due_date, last_activity_at, priority, description, assigned_consultant_id, assigned_consultant:profiles!cases_assigned_consultant_id_fkey(full_name, email)")
         .eq("client_id", selectedClientId)
         .order("last_activity_at", { ascending: false });
       return (data ?? []) as ClientCase[];
@@ -393,7 +446,7 @@ export default function AdminClientWorkspace() {
     queryFn: async () => {
       const { data } = await supabase
         .from("document_requests")
-        .select("id, is_required, is_fulfilled")
+        .select("id, title, description, required_document_type, due_date, is_required, is_fulfilled")
         .eq("client_id", selectedClientId);
       return (data ?? []) as ClientDocumentRequest[];
     },
@@ -418,7 +471,7 @@ export default function AdminClientWorkspace() {
     queryFn: async () => {
       const { data } = await supabase
         .from("conversations")
-        .select("id, subject, last_message_at, is_closed")
+        .select("id, subject, case_id, last_message_at, is_closed")
         .eq("client_id", selectedClientId)
         .order("last_message_at", { ascending: false });
       return (data ?? []) as ClientConversation[];
@@ -471,6 +524,21 @@ export default function AdminClientWorkspace() {
       notes: clientDetails.notes || "",
     });
   }, [clientDetails]);
+
+  const consultantOptions = useMemo(
+    () =>
+      (consultants ?? []).map((consultant) => ({
+        id: consultant.id,
+        label: consultant.full_name || consultant.email || "Consultant",
+        email: consultant.email,
+      })),
+    [consultants],
+  );
+
+  const consultantOptionMap = useMemo(
+    () => new Map(consultantOptions.map((consultant) => [consultant.id, consultant])),
+    [consultantOptions],
+  );
 
   const summary = useMemo(() => {
     const invoices = clientInvoices ?? [];
@@ -531,6 +599,39 @@ export default function AdminClientWorkspace() {
       queryClient.invalidateQueries({ queryKey: ["staff-overview-due-alerts"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-overview-recent-documents"] }),
     ]);
+  };
+
+  const notifyAssignedConsultant = async (params: {
+    caseId: string;
+    consultantId: string;
+    clientName: string;
+    caseType: string;
+    priority: number;
+  }) => {
+    const consultant = consultantOptionMap.get(params.consultantId);
+
+    if (!consultant) {
+      toast.error("The selected consultant profile could not be loaded for email notification.");
+      return false;
+    }
+
+    const result = await sendPractitionerAssignmentNotification({
+      caseId: params.caseId,
+      practitionerProfileId: params.consultantId,
+      practitionerEmail: consultant.email,
+      practitionerName: consultant.label,
+      clientName: params.clientName,
+      caseType: params.caseType,
+      priority: params.priority,
+    });
+
+    if (result.error) {
+      console.error("Practitioner assignment email failed:", result.error);
+      toast.error("The case was assigned, but the practitioner email could not be sent.");
+      return false;
+    }
+
+    return !result.skipped;
   };
 
   const updateClientProfile = async () => {
@@ -595,6 +696,7 @@ export default function AdminClientWorkspace() {
       description: "",
       due_date: "",
       priority: "2",
+      assigned_consultant_id: UNASSIGNED_CONSULTANT,
     });
   };
 
@@ -618,6 +720,16 @@ export default function AdminClientWorkspace() {
     });
   };
 
+  const resetDocumentRequestForm = () => {
+    setDocumentRequestForm({
+      case_id: "",
+      title: "",
+      description: "",
+      required_document_type: "",
+      due_date: "",
+    });
+  };
+
   const createCase = async () => {
     if (!canManageCases) {
       toast.error("This consultant profile cannot create cases.");
@@ -638,11 +750,11 @@ export default function AdminClientWorkspace() {
       description: caseForm.description.trim() || null,
       priority: Number(caseForm.priority),
       created_by: user?.id ?? null,
-      assigned_consultant_id: isConsultant ? user?.id ?? null : null,
+      assigned_consultant_id: isConsultant ? user?.id ?? null : caseForm.assigned_consultant_id === UNASSIGNED_CONSULTANT ? null : caseForm.assigned_consultant_id,
       due_date: caseForm.due_date ? new Date(`${caseForm.due_date}T12:00:00`).toISOString() : null,
     };
 
-    const { error } = await supabase.from("cases").insert(payload);
+    const { data, error } = await supabase.from("cases").insert(payload).select("id").single();
 
     if (error) {
       toast.error(error.message);
@@ -650,7 +762,20 @@ export default function AdminClientWorkspace() {
       return;
     }
 
-    toast.success("Case created.");
+    const assignedConsultantId = payload.assigned_consultant_id;
+    let notified = false;
+
+    if (assignedConsultantId && data?.id) {
+      notified = await notifyAssignedConsultant({
+        caseId: data.id,
+        consultantId: assignedConsultantId,
+        clientName: getClientName(clientDetails),
+        caseType: caseForm.case_type,
+        priority: Number(caseForm.priority),
+      });
+    }
+
+    toast.success(assignedConsultantId && notified ? "Case created and practitioner notified." : "Case created.");
     setCreatingCase(false);
     setIsCreateCaseOpen(false);
     resetCaseForm();
@@ -691,7 +816,7 @@ export default function AdminClientWorkspace() {
       created_by: user?.id ?? null,
     };
 
-    const { error } = await supabase.from("invoices").insert(payload);
+    const { data, error } = await supabase.from("invoices").insert(payload).select("id, invoice_number, due_date, status").single();
 
     if (error) {
       toast.error(error.message);
@@ -699,7 +824,30 @@ export default function AdminClientWorkspace() {
       return;
     }
 
-    toast.success("Invoice created.");
+    let notified = false;
+
+    if (clientDetails?.profile_id && data?.id) {
+      const notification = await sendInvoiceCreatedNotification({
+        invoiceId: data.id,
+        invoiceNumber: data.invoice_number,
+        clientProfileId: clientDetails.profile_id,
+        clientEmail: clientDetails.profiles?.email,
+        clientName: getClientName(clientDetails),
+        serviceDescription: invoiceForm.title.trim() || invoiceForm.description.trim() || "Professional tax services",
+        amount: totalAmount,
+        dueDate: data.due_date,
+        status: data.status,
+      });
+
+      if (notification.error) {
+        console.error("Invoice email failed:", notification.error);
+        toast.error("Invoice created, but the client email notification could not be delivered.");
+      } else {
+        notified = !notification.skipped;
+      }
+    }
+
+    toast.success(notified ? "Invoice created and client notified." : "Invoice created.");
     setCreatingInvoice(false);
     setIsCreateInvoiceOpen(false);
     resetInvoiceForm();
@@ -745,14 +893,151 @@ export default function AdminClientWorkspace() {
       return;
     }
 
-    const { error } = await supabase.from("cases").update({ status }).eq("id", caseId);
+    const currentCase = (clientCases ?? []).find((caseItem) => caseItem.id === caseId);
+
+    if (!currentCase || currentCase.status === status) {
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("cases")
+      .update({ status })
+      .eq("id", caseId)
+      .select("updated_at")
+      .single();
 
     if (error) {
       toast.error(error.message);
       return;
     }
 
-    toast.success("Case updated.");
+    let notified = false;
+
+    if (clientDetails?.profile_id) {
+      const notification = await sendCaseStatusChangedNotification({
+        caseId,
+        clientProfileId: clientDetails.profile_id,
+        clientEmail: clientDetails.profiles?.email,
+        clientName: getClientName(clientDetails),
+        serviceType: currentCase.case_type,
+        previousStatus: currentCase.status,
+        newStatus: status,
+        updatedAt: data?.updated_at,
+      });
+
+      if (notification.error) {
+        console.error("Case status email failed:", notification.error);
+        toast.error("Case updated, but the client email notification could not be delivered.");
+      } else {
+        notified = !notification.skipped;
+      }
+    }
+
+    toast.success(notified ? "Case updated and client notified." : "Case updated.");
+    await refreshWorkspace();
+  };
+
+  const createDocumentRequest = async () => {
+    if (!selectedClientId || !documentRequestForm.title.trim()) {
+      toast.error("Enter the requested document title first.");
+      return;
+    }
+
+    setCreatingDocumentRequest(true);
+
+    const payload: TablesInsert<"document_requests"> = {
+      client_id: selectedClientId,
+      case_id: documentRequestForm.case_id || null,
+      title: documentRequestForm.title.trim(),
+      description: documentRequestForm.description.trim() || null,
+      required_document_type: documentRequestForm.required_document_type.trim() || null,
+      due_date: documentRequestForm.due_date ? new Date(`${documentRequestForm.due_date}T12:00:00`).toISOString() : null,
+      is_required: true,
+      requested_by: user?.id ?? null,
+    };
+
+    const { data, error } = await supabase.from("document_requests").insert(payload).select("id").single();
+
+    if (error) {
+      toast.error(error.message);
+      setCreatingDocumentRequest(false);
+      return;
+    }
+
+    let notified = false;
+
+    if (clientDetails?.profile_id && data?.id) {
+      const requesterName = profile?.full_name?.trim()
+        || (role === "consultant" ? "Your Consultant" : "Acapolite Consulting");
+      const documentList = [
+        documentRequestForm.title.trim(),
+        documentRequestForm.required_document_type.trim(),
+      ].filter(Boolean).join(" | ");
+
+      const notification = await sendDocumentRequestNotification({
+        requestId: data.id,
+        clientProfileId: clientDetails.profile_id,
+        clientEmail: clientDetails.profiles?.email,
+        clientName: getClientName(clientDetails),
+        practitionerName: requesterName,
+        caseId: documentRequestForm.case_id || null,
+        documentList,
+        deadlineDate: payload.due_date,
+      });
+
+      if (notification.error) {
+        console.error("Document request email failed:", notification.error);
+        toast.error("Document request created, but the client email notification could not be delivered.");
+      } else {
+        notified = !notification.skipped;
+      }
+    }
+
+    toast.success(notified ? "Document request created and client notified." : "Document request created.");
+    setCreatingDocumentRequest(false);
+    setIsCreateDocumentRequestOpen(false);
+    resetDocumentRequestForm();
+    await refreshWorkspace();
+  };
+
+  const updateAssignedConsultant = async (caseItem: ClientCase, consultantId: string | null) => {
+    if (!canAssignConsultants) {
+      return;
+    }
+
+    if (caseItem.assigned_consultant_id === consultantId) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("cases")
+      .update({ assigned_consultant_id: consultantId })
+      .eq("id", caseItem.id);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    let notified = false;
+
+    if (consultantId) {
+      notified = await notifyAssignedConsultant({
+        caseId: caseItem.id,
+        consultantId,
+        clientName: getClientName(clientDetails),
+        caseType: caseItem.case_type,
+        priority: caseItem.priority,
+      });
+    }
+
+    toast.success(
+      consultantId
+        ? notified
+          ? "Consultant assigned and notified."
+          : "Consultant assigned."
+        : "Consultant removed from this case.",
+    );
     await refreshWorkspace();
   };
 
@@ -792,12 +1077,14 @@ export default function AdminClientWorkspace() {
       return;
     }
 
-    const { error } = await supabase.from("messages").insert({
+    const outgoingMessage = newMessage.trim();
+
+    const { data, error } = await supabase.from("messages").insert({
       conversation_id: selectedConversation,
       sender_profile_id: user.id,
       sender_type: role === "consultant" ? "consultant" : "admin",
-      message_text: newMessage.trim(),
-    });
+      message_text: outgoingMessage,
+    }).select("id, created_at").single();
 
     if (error) {
       toast.error(error.message);
@@ -805,7 +1092,30 @@ export default function AdminClientWorkspace() {
     }
 
     setNewMessage("");
-    toast.success("Message sent.");
+    if (clientDetails?.profile_id) {
+      const senderName = profile?.full_name?.trim()
+        || (role === "consultant" ? "Your Consultant" : "Acapolite Consulting");
+      const notification = await sendClientMessageNotification({
+        messageId: data.id,
+        clientProfileId: clientDetails.profile_id,
+        clientEmail: clientDetails.profiles?.email,
+        clientName: getClientName(clientDetails),
+        senderName,
+        messageText: outgoingMessage,
+        sentAt: data.created_at,
+        caseId: selectedConversationRecord?.case_id,
+        conversationSubject: selectedConversationRecord?.subject,
+      });
+
+      if (notification.error) {
+        console.error("Client message email failed:", notification.error);
+        toast.error("Message sent, but the client email notification could not be delivered.");
+      } else {
+        toast.success("Message sent.");
+      }
+    } else {
+      toast.success("Message sent.");
+    }
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-messages", selectedConversation] }),
       queryClient.invalidateQueries({ queryKey: ["staff-client-workspace-conversations", selectedClientId] }),
@@ -1082,7 +1392,7 @@ export default function AdminClientWorkspace() {
                       <p className="font-body text-foreground">{new Date(caseItem.last_activity_at).toLocaleString()}</p>
                     </div>
                   </div>
-                  <div className="mt-4 flex items-center gap-3">
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
                     <span className="text-xs text-muted-foreground font-body">Update status:</span>
                     {canManageCases ? (
                       <Select value={caseItem.status} onValueChange={(value) => updateCaseStatus(caseItem.id, value as Enums<"case_status">)}>
@@ -1098,6 +1408,29 @@ export default function AdminClientWorkspace() {
                     ) : (
                       <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground">View only</span>
                     )}
+                    {canAssignConsultants ? (
+                      <>
+                        <span className="ml-2 text-xs text-muted-foreground font-body">Consultant:</span>
+                        <Select
+                          value={caseItem.assigned_consultant_id ?? UNASSIGNED_CONSULTANT}
+                          onValueChange={(value) => updateAssignedConsultant(caseItem, value === UNASSIGNED_CONSULTANT ? null : value)}
+                        >
+                          <SelectTrigger className="w-64 rounded-xl">
+                            <SelectValue placeholder="Assign consultant" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={UNASSIGNED_CONSULTANT}>Unassigned</SelectItem>
+                            {consultantOptions.map((consultant) => (
+                              <SelectItem key={consultant.id} value={consultant.id}>{consultant.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    ) : caseItem.assigned_consultant ? (
+                      <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground">
+                        {caseItem.assigned_consultant.full_name || caseItem.assigned_consultant.email}
+                      </span>
+                    ) : null}
                   </div>
                   {caseItem.description ? <p className="mt-4 text-sm text-muted-foreground font-body whitespace-pre-wrap">{caseItem.description}</p> : null}
                 </div>
@@ -1109,6 +1442,49 @@ export default function AdminClientWorkspace() {
             </TabsContent>
 
             <TabsContent value="documents" className="space-y-4">
+              {canManageCases ? (
+                <div className="flex justify-end">
+                  <Button type="button" className="rounded-xl" onClick={() => setIsCreateDocumentRequestOpen(true)}>
+                    Request Documents
+                  </Button>
+                </div>
+              ) : null}
+
+              {(clientDocumentRequests ?? []).length > 0 ? (
+                <div className="space-y-3">
+                  {(clientDocumentRequests ?? []).map((request) => (
+                    <div key={request.id} className="rounded-2xl border border-border bg-card p-5 shadow-card">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <h2 className="font-display text-lg font-semibold text-foreground">
+                            {request.title || request.required_document_type || "Document Request"}
+                          </h2>
+                          {request.description ? (
+                            <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground font-body">{request.description}</p>
+                          ) : null}
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={request.is_fulfilled ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}
+                        >
+                          {request.is_fulfilled ? "fulfilled" : "outstanding"}
+                        </Badge>
+                      </div>
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Requested Type</p>
+                          <p className="font-body text-foreground">{request.required_document_type || "General supporting documents"}</p>
+                        </div>
+                        <div>
+                          <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Deadline</p>
+                          <p className="font-body text-foreground">{request.due_date ? new Date(request.due_date).toLocaleDateString() : "As soon as possible"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
               {(clientDocuments ?? []).length > 0 ? (clientDocuments ?? []).map((document) => (
                 <div key={document.id} className="rounded-2xl border border-border bg-card p-5 shadow-card">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1625,6 +2001,25 @@ export default function AdminClientWorkspace() {
                   </Select>
                 </div>
               </div>
+              {canAssignConsultants ? (
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Assigned Consultant</label>
+                  <Select
+                    value={caseForm.assigned_consultant_id}
+                    onValueChange={(value) => setCaseForm((current) => ({ ...current, assigned_consultant_id: value }))}
+                  >
+                    <SelectTrigger className="w-full rounded-xl">
+                      <SelectValue placeholder="Assign consultant" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={UNASSIGNED_CONSULTANT}>Unassigned</SelectItem>
+                      {consultantOptions.map((consultant) => (
+                        <SelectItem key={consultant.id} value={consultant.id}>{consultant.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">Due Date</label>
                 <Input
@@ -1794,6 +2189,86 @@ export default function AdminClientWorkspace() {
                 </Button>
                 <Button type="button" className="rounded-xl" onClick={createAlert} disabled={creatingAlert}>
                   {creatingAlert ? "Creating..." : "Create Alert"}
+                </Button>
+              </div>
+            </div>
+          </DashboardItemDialog>
+
+          <DashboardItemDialog
+            open={isCreateDocumentRequestOpen}
+            onOpenChange={(open) => {
+              setIsCreateDocumentRequestOpen(open);
+              if (!open) resetDocumentRequestForm();
+            }}
+            title="Request Documents"
+            description="Ask this client to upload the exact documents needed to keep the case moving."
+          >
+            <div className="space-y-5">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Request Title</label>
+                <Input
+                  value={documentRequestForm.title}
+                  onChange={(event) => setDocumentRequestForm((current) => ({ ...current, title: event.target.value }))}
+                  placeholder="Example: Upload latest IRP5 and SARS letter"
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Related Case</label>
+                  <Select
+                    value={documentRequestForm.case_id || "general"}
+                    onValueChange={(value) => setDocumentRequestForm((current) => ({ ...current, case_id: value === "general" ? "" : value }))}
+                  >
+                    <SelectTrigger className="w-full rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="general">General account request</SelectItem>
+                      {(clientCases ?? []).map((caseItem) => (
+                        <SelectItem key={caseItem.id} value={caseItem.id}>{caseItem.case_title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Deadline</label>
+                  <Input
+                    type="date"
+                    value={documentRequestForm.due_date}
+                    onChange={(event) => setDocumentRequestForm((current) => ({ ...current, due_date: event.target.value }))}
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Document Type</label>
+                <Input
+                  value={documentRequestForm.required_document_type}
+                  onChange={(event) => setDocumentRequestForm((current) => ({ ...current, required_document_type: event.target.value }))}
+                  placeholder="Example: IRP5, bank statement, proof of address"
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Instructions</label>
+                <Textarea
+                  value={documentRequestForm.description}
+                  onChange={(event) => setDocumentRequestForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Add any notes or guidance for the client."
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsCreateDocumentRequestOpen(false)} disabled={creatingDocumentRequest}>
+                  Cancel
+                </Button>
+                <Button type="button" className="rounded-xl" onClick={createDocumentRequest} disabled={creatingDocumentRequest}>
+                  {creatingDocumentRequest ? "Creating..." : "Send Request"}
                 </Button>
               </div>
             </div>

@@ -116,20 +116,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!user || !profile || !role) {
+    if (!user || !profile || role !== "client") {
       return;
     }
 
-    void supabase.functions.invoke("send-portal-email", {
-      body: {
-        type: "signup_notification",
-        profileId: profile.id,
-        email: profile.email ?? user.email ?? "",
-        fullName: profile.full_name ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? "",
-        role,
-        provider: user.app_metadata?.provider ?? "email",
-      },
-    });
+    const email = profile.email ?? user.email ?? "";
+    const fullName = profile.full_name ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? "";
+    const provider = user.app_metadata?.provider ?? "email";
+
+    void Promise.allSettled([
+      supabase.functions.invoke("send-portal-email", {
+        body: {
+          type: "signup_notification",
+          profileId: profile.id,
+          email,
+          fullName,
+          role,
+          provider,
+        },
+      }),
+      supabase.functions.invoke("send-portal-email", {
+        body: {
+          type: "welcome_email",
+          profileId: profile.id,
+          email,
+          fullName,
+        },
+      }),
+    ]);
   }, [profile, role, user]);
 
   const signOut = async () => {

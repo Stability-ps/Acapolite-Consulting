@@ -1,12 +1,52 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Upload, X } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
-import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { sendProofOfPaymentUploadedNotification } from "@/lib/paymentNotifications";
+import { formatCaseReference } from "@/lib/practitionerAssignments";
+
+function sanitizeFileName(fileName: string) {
+  return fileName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
+}
+
+async function uploadProofOfPaymentFile(file: File, userId: string, clientId: string) {
+  const safeFileName = sanitizeFileName(file.name);
+  const uniqueFileName = `${Date.now()}-${safeFileName}`;
+  const candidatePaths = [
+    `${userId}/${clientId}/payments/${uniqueFileName}`,
+    `${clientId}/payments/${uniqueFileName}`,
+  ];
+
+  let lastError: string | null = null;
+
+  for (const filePath of candidatePaths) {
+    const { error } = await supabase.storage.from("documents").upload(filePath, file, {
+      upsert: false,
+    });
+
+    if (!error) {
+      return filePath;
+    }
+
+    lastError = error.message;
+  }
+
+  throw new Error(lastError ?? "Unable to upload proof of payment.");
+}
 
 export default function Invoices() {
+  const queryClient = useQueryClient();
+  const { user, profile } = useAuth();
   const { data: client } = useClientRecord();
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [proofReference, setProofReference] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["invoices", client?.id],
@@ -19,6 +59,11 @@ export default function Invoices() {
 
   const selectedInvoice = invoices?.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
 
+  useEffect(() => {
+    setProofReference(selectedInvoice?.payment_reference || "");
+    setProofFile(null);
+  }, [selectedInvoice?.id, selectedInvoice?.payment_reference]);
+
   const statusColor = (status: string) => {
     switch (status) {
       case "issued": return "bg-yellow-100 text-yellow-700";
@@ -27,6 +72,91 @@ export default function Invoices() {
       case "overdue": return "bg-red-100 text-red-700";
       case "draft": return "bg-slate-100 text-slate-700";
       default: return "bg-muted text-muted-foreground";
+    }
+  };
+
+  const handleProofUpload = async () => {
+    if (!selectedInvoice || !client || !user || !proofFile) {
+      toast.error("Choose a proof of payment file first.");
+      return;
+    }
+
+    setUploadingProof(true);
+    let filePath = "";
+
+    try {
+      filePath = await uploadProofOfPaymentFile(proofFile, user.id, client.id);
+
+      const title = `Proof of Payment - ${selectedInvoice.invoice_number}`;
+      const { data: documentRow, error: documentError } = await supabase
+        .from("documents")
+        .insert({
+          client_id: client.id,
+          case_id: selectedInvoice.case_id,
+          uploaded_by: user.id,
+          title,
+          file_name: proofFile.name,
+          file_path: filePath,
+          file_size: proofFile.size,
+          mime_type: proofFile.type,
+          category: "Proof of Payment",
+          status: "uploaded",
+        })
+        .select("id, uploaded_at")
+        .single();
+
+      if (documentError || !documentRow) {
+        await supabase.storage.from("documents").remove([filePath]);
+        throw new Error(documentError?.message || "Unable to save the uploaded proof of payment.");
+      }
+
+      const { error: invoiceError } = await supabase
+        .from("invoices")
+        .update({
+          proof_of_payment_document_id: documentRow.id,
+          payment_reference: proofReference.trim() || null,
+        })
+        .eq("id", selectedInvoice.id);
+
+      if (invoiceError) {
+        throw new Error(invoiceError.message);
+      }
+
+      const notification = await sendProofOfPaymentUploadedNotification({
+        invoiceId: selectedInvoice.id,
+        invoiceNumber: selectedInvoice.invoice_number,
+        clientProfileId: client.profile_id,
+        clientName:
+          client.company_name
+          || profile?.full_name
+          || [client.first_name, client.last_name].filter(Boolean).join(" ")
+          || client.client_code
+          || "Client",
+        caseNumber: selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support",
+        amount: Number(selectedInvoice.total_amount || 0),
+        uploadedAt: documentRow.uploaded_at,
+      });
+
+      if (notification.error) {
+        console.error("Proof of payment email failed:", notification.error);
+        toast.error("Proof uploaded, but the admin email notification could not be delivered.");
+      } else {
+        toast.success("Proof of payment uploaded successfully.");
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoices", client.id] }),
+        queryClient.invalidateQueries({ queryKey: ["documents", client.id] }),
+      ]);
+      setProofFile(null);
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : "Proof of payment upload failed.";
+      const message = rawMessage.toLowerCase().includes("bucket not found")
+        ? "The Supabase storage bucket 'documents' has not been created yet."
+        : rawMessage;
+      toast.error(message);
+    } finally {
+      setUploadingProof(false);
     }
   };
 
@@ -83,16 +213,27 @@ export default function Invoices() {
         </div>
       )}
 
-      <DashboardItemDialog
-        open={!!selectedInvoice}
-        onOpenChange={(open) => {
-          if (!open) setSelectedInvoiceId(null);
-        }}
-        title={selectedInvoice?.invoice_number ?? "Invoice Details"}
-        description="Review invoice amounts, due date, and current payment status."
-      >
-        {selectedInvoice ? (
-          <div className="space-y-6">
+      {selectedInvoice ? (
+        <section className="mt-8 overflow-hidden rounded-[28px] border border-border bg-card shadow-elevated">
+          <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5 sm:px-7">
+            <div>
+              <h2 className="font-display text-2xl text-foreground">{selectedInvoice.invoice_number}</h2>
+              <p className="mt-2 text-sm text-muted-foreground font-body">
+                Review invoice amounts, due date, current payment status, and upload your proof of payment.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0 rounded-xl"
+              onClick={() => setSelectedInvoiceId(null)}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Close
+            </Button>
+          </div>
+
+          <div className="space-y-6 px-6 py-5 sm:px-7">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Title</p>
@@ -135,9 +276,57 @@ export default function Invoices() {
                 </div>
               </div>
             ) : null}
+
+            <div className="space-y-5 rounded-[24px] border border-border bg-accent/20 p-5">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Proof of Payment</p>
+                <p className="text-sm text-muted-foreground font-body">
+                  Upload your receipt directly here. There is no second popup anymore, so the file selector should open normally.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Payment Reference</label>
+                <Input
+                  value={proofReference}
+                  onChange={(event) => setProofReference(event.target.value)}
+                  placeholder="Optional payment reference"
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Proof File</label>
+                <input
+                  key={selectedInvoice.id}
+                  type="file"
+                  className="block w-full rounded-xl border border-input/90 bg-white/92 px-3.5 py-2.5 text-sm text-foreground shadow-[0_6px_24px_-22px_rgba(15,23,42,0.28)] ring-offset-background transition-all duration-200 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:opacity-90 focus-visible:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2"
+                  onChange={(event) => setProofFile(event.target.files?.[0] ?? null)}
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                />
+                <p className="mt-2 text-xs text-muted-foreground font-body">
+                  Accepted: PDF, JPG, PNG, DOC, DOCX
+                </p>
+                {proofFile ? (
+                  <p className="mt-2 text-sm text-foreground font-body">Selected: {proofFile.name}</p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  className="rounded-xl"
+                  onClick={handleProofUpload}
+                  disabled={uploadingProof || !proofFile}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  {uploadingProof ? "Uploading..." : selectedInvoice.proof_of_payment_document_id ? "Replace Proof of Payment" : "Upload Proof of Payment"}
+                </Button>
+              </div>
+            </div>
           </div>
-        ) : null}
-      </DashboardItemDialog>
+        </section>
+      ) : null}
     </div>
   );
 }

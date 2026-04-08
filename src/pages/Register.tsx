@@ -46,6 +46,42 @@ export default function Register() {
         return;
       }
 
+      if (data.user?.id) {
+        const profilePayload = {
+          profileId: data.user.id,
+          email,
+          fullName,
+        };
+
+        const emailResults = await Promise.allSettled([
+          supabase.functions.invoke("send-portal-email", {
+            body: {
+              type: "signup_notification",
+              ...profilePayload,
+              role: "client",
+              provider: "email",
+            },
+          }),
+          supabase.functions.invoke("send-portal-email", {
+            body: {
+              type: "welcome_email",
+              ...profilePayload,
+            },
+          }),
+        ]);
+
+        emailResults.forEach((result) => {
+          if (result.status === "rejected") {
+            console.error("Signup email request failed:", result.reason);
+            return;
+          }
+
+          if (result.value.error) {
+            console.error("Signup email function error:", result.value.error);
+          }
+        });
+      }
+
       toast.success("Account created successfully.");
 
       if (data.session) {

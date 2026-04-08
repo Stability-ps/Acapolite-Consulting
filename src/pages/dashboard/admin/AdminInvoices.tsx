@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
+import { sendInvoiceCreatedNotification } from "@/lib/invoiceNotifications";
 
 const invoiceStatuses: Enums<"invoice_status">[] = ["draft", "issued", "partially_paid", "paid", "overdue", "cancelled"];
 
@@ -27,16 +28,22 @@ type StaffInvoice = {
   status: Enums<"invoice_status">;
   payment_reference: string | null;
   clients?: {
+    profile_id?: string | null;
     company_name?: string | null;
     first_name?: string | null;
     last_name?: string | null;
     client_code?: string | null;
+    profiles?: {
+      full_name?: string | null;
+      email?: string | null;
+    } | null;
   } | null;
 };
 
 function getClientName(invoice: StaffInvoice) {
   return (
     invoice.clients?.company_name ||
+    invoice.clients?.profiles?.full_name ||
     [invoice.clients?.first_name, invoice.clients?.last_name].filter(Boolean).join(" ") ||
     invoice.clients?.client_code ||
     "Client"
@@ -82,7 +89,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("invoices")
-        .select("*, clients(company_name, first_name, last_name, client_code)")
+        .select("*, clients(profile_id, company_name, first_name, last_name, client_code, profiles!clients_profile_id_fkey(full_name, email))")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -104,7 +111,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("clients")
-        .select("id, company_name, first_name, last_name, client_code")
+        .select("id, profile_id, company_name, first_name, last_name, client_code, profiles!clients_profile_id_fkey(full_name, email)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -226,7 +233,7 @@ export default function AdminInvoices() {
       created_by: user?.id ?? null,
     };
 
-    const { error } = await supabase.from("invoices").insert(payload);
+    const { data, error } = await supabase.from("invoices").insert(payload).select("id, invoice_number, due_date, status").single();
 
     if (error) {
       toast.error(error.message);
@@ -234,7 +241,51 @@ export default function AdminInvoices() {
       return;
     }
 
-    toast.success("Invoice created");
+    const selectedClient = (clients ?? []).find((client: { id: string }) => client.id === clientsFormValue) as {
+      id: string;
+      profile_id: string | null;
+      company_name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+      client_code: string | null;
+      profiles?: { full_name?: string | null; email?: string | null } | null;
+    } | undefined;
+
+    let notified = false;
+
+    if (selectedClient?.profile_id && data?.id) {
+      const notification = await sendInvoiceCreatedNotification({
+        invoiceId: data.id,
+        invoiceNumber: data.invoice_number,
+        clientProfileId: selectedClient.profile_id,
+        clientEmail: selectedClient.profiles?.email,
+        clientName:
+          selectedClient.company_name
+          || selectedClient.profiles?.full_name
+          || [selectedClient.first_name, selectedClient.last_name].filter(Boolean).join(" ")
+          || selectedClient.client_code
+          || "Client",
+        serviceDescription: invoiceTitle.trim() || invoiceDescription.trim() || "Professional tax services",
+        amount: totalAmount,
+        dueDate: data.due_date,
+        status: data.status,
+      });
+
+      if (notification.error) {
+        console.error("Invoice email failed:", notification.error);
+        toast.error("Invoice created, but the client email notification could not be delivered.");
+      } else {
+        notified = !notification.skipped;
+      }
+    }
+
+    if (!selectedClient?.profile_id) {
+      toast.success("Invoice created");
+    } else if (notified) {
+      toast.success("Invoice created and client notified");
+    } else {
+      toast.success("Invoice created");
+    }
     setCreatingInvoice(false);
     setIsCreateOpen(false);
     resetCreateForm();

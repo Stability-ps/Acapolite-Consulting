@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { sendClientDocumentUploadNotification } from "@/lib/documentUploadNotifications";
 
 const documentTypeOptions = [
   "IRP5",
@@ -51,7 +52,7 @@ async function uploadDocumentFile(file: File, userId: string, clientId: string) 
 }
 
 export default function Documents() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -119,7 +120,7 @@ export default function Documents() {
     try {
       filePath = await uploadDocumentFile(selectedFile, user.id, client.id);
 
-      const { error: dbError } = await supabase.from("documents").insert({
+      const { data: documentRow, error: dbError } = await supabase.from("documents").insert({
         client_id: client.id,
         uploaded_by: user.id,
         title: documentType,
@@ -129,14 +130,33 @@ export default function Documents() {
         mime_type: selectedFile.type,
         category: documentType,
         status: "uploaded",
-      });
+      }).select("id, uploaded_at").single();
 
-      if (dbError) {
+      if (dbError || !documentRow) {
         await supabase.storage.from("documents").remove([filePath]);
-        throw new Error(dbError.message);
+        throw new Error(dbError?.message || "Unable to save the uploaded document.");
       }
 
-      toast.success("Document uploaded successfully.");
+      const notification = await sendClientDocumentUploadNotification({
+        documentId: documentRow.id,
+        clientProfileId: client.profile_id,
+        clientName:
+          client.company_name
+          || profile?.full_name
+          || [client.first_name, client.last_name].filter(Boolean).join(" ")
+          || client.client_code
+          || "Client",
+        documentList: `${documentType} | ${selectedFile.name}`,
+        uploadedAt: documentRow.uploaded_at,
+      });
+
+      if (notification.error) {
+        console.error("Document upload email failed:", notification.error);
+        toast.error("Document uploaded, but the admin email notification could not be delivered.");
+      } else {
+        toast.success("Document uploaded successfully.");
+      }
+
       await queryClient.invalidateQueries({ queryKey: ["documents", client.id] });
       closeUploadModal();
     } catch (error) {
