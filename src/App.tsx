@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { RequireRole } from "@/components/auth/RequireRole";
 import { RequireStaffPermission } from "@/components/auth/RequireStaffPermission";
 import { DashboardIndexRedirect } from "@/components/auth/DashboardIndexRedirect";
+import { StaffOverviewRouter } from "@/components/auth/StaffOverviewRouter";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -14,13 +15,13 @@ import ResetPassword from "./pages/ResetPassword";
 import RequestTaxAssistance from "./pages/RequestTaxAssistance";
 import Dashboard from "./pages/Dashboard";
 import DashboardOverview from "./pages/dashboard/Overview";
+import ServiceRequests from "./pages/dashboard/ServiceRequests";
 import Cases from "./pages/dashboard/Cases";
 import Documents from "./pages/dashboard/Documents";
 import Invoices from "./pages/dashboard/Invoices";
 import Messages from "./pages/dashboard/Messages";
 import Deadlines from "./pages/dashboard/Deadlines";
 import SettingsPage from "./pages/dashboard/Settings";
-import AdminOverview from "./pages/dashboard/admin/AdminOverview";
 import AdminClients from "./pages/dashboard/admin/AdminClients";
 import AdminCases from "./pages/dashboard/admin/AdminCases";
 import AdminInvoices from "./pages/dashboard/admin/AdminInvoices";
@@ -51,6 +52,7 @@ const App = () => (
 
               <Route element={<RequireRole allowedRoles={["client"]} />}>
                 <Route path="client" element={<DashboardOverview />} />
+                <Route path="client/requests" element={<ServiceRequests />} />
                 <Route path="client/cases" element={<Cases />} />
                 <Route path="client/documents" element={<Documents />} />
                 <Route path="client/invoices" element={<Invoices />} />
@@ -61,7 +63,7 @@ const App = () => (
 
               <Route element={<RequireRole allowedRoles={["admin", "consultant"]} />}>
                 <Route element={<RequireStaffPermission permission="can_view_overview" />}>
-                  <Route path="staff" element={<AdminOverview />} />
+                  <Route path="staff" element={<StaffOverviewRouter />} />
                 </Route>
                 <Route element={<RequireStaffPermission permission="can_view_clients" />}>
                   <Route path="staff/clients" element={<AdminClients />} />

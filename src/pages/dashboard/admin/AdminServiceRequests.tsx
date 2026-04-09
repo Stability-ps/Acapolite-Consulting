@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ExternalLink, File, FileText, Image, Search } from "lucide-react";
+import { AlertTriangle, BadgeCheck, ExternalLink, File, FileText, Image, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
@@ -9,23 +9,39 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Tables, Enums } from "@/integrations/supabase/types";
+import { useAuth } from "@/hooks/useAuth";
+import PractitionerLeads from "./PractitionerLeads";
 import {
   formatServiceRequestLabel,
   getServiceRequestIssueFlags,
   getServiceRequestRiskClass,
   getServiceRequestStatusClass,
   serviceRequestStatusOptions,
+  serviceNeededOptions,
 } from "@/lib/serviceRequests";
+import { formatAvailabilityLabel, getAvailabilityBadgeClass, getAssignmentTypeLabel, getResponseStatusClass } from "@/lib/practitionerMarketplace";
 
 type ServiceRequestRecord = Tables<"service_requests">;
 type ServiceRequestDocument = Tables<"service_request_documents">;
+type ServiceRequestResponse = Tables<"service_request_responses">;
+type ServiceRequestAssignmentHistory = Tables<"service_request_assignment_history">;
+type PractitionerProfile = Tables<"practitioner_profiles">;
+type PractitionerUser = Tables<"profiles">;
 
 export default function AdminServiceRequests() {
+  const { role } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [assigningRequestId, setAssigningRequestId] = useState<string | null>(null);
+  const [selectedPractitionerId, setSelectedPractitionerId] = useState<string>("");
+  const [convertingRequestId, setConvertingRequestId] = useState<string | null>(null);
+
+  if (role === "consultant") {
+    return <PractitionerLeads />;
+  }
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["staff-service-requests"],
@@ -53,6 +69,63 @@ export default function AdminServiceRequests() {
     },
   });
 
+  const { data: responses } = useQuery({
+    queryKey: ["staff-service-request-responses"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_request_responses")
+        .select("*")
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as ServiceRequestResponse[];
+    },
+  });
+
+  const { data: assignmentHistory } = useQuery({
+    queryKey: ["staff-service-request-assignment-history"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_request_assignment_history")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as ServiceRequestAssignmentHistory[];
+    },
+  });
+
+  const { data: practitioners } = useQuery({
+    queryKey: ["staff-practitioner-directory"],
+    queryFn: async () => {
+      const [{ data: profiles, error: profileError }, { data: practitionerProfiles, error: practitionerError }, { data: cases, error: caseError }] = await Promise.all([
+        supabase.from("profiles").select("id, full_name, email, phone, role, avatar_url, is_active, created_at, updated_at").eq("role", "consultant").eq("is_active", true),
+        supabase.from("practitioner_profiles").select("*"),
+        supabase.from("cases").select("assigned_consultant_id, status"),
+      ]);
+
+      if (profileError) throw profileError;
+      if (practitionerError) throw practitionerError;
+      if (caseError) throw caseError;
+
+      const activeCaseCountByPractitioner = new Map<string, number>();
+      for (const caseItem of cases ?? []) {
+        if (!caseItem.assigned_consultant_id) continue;
+        if (["resolved", "closed"].includes(caseItem.status)) continue;
+        activeCaseCountByPractitioner.set(
+          caseItem.assigned_consultant_id,
+          (activeCaseCountByPractitioner.get(caseItem.assigned_consultant_id) ?? 0) + 1,
+        );
+      }
+
+      return (profiles ?? []).map((profile) => ({
+        user: profile as PractitionerUser,
+        profile: (practitionerProfiles ?? []).find((item) => item.profile_id === profile.id) as PractitionerProfile | undefined,
+        activeCaseCount: activeCaseCountByPractitioner.get(profile.id) ?? 0,
+      }));
+    },
+  });
+
   const documentMap = useMemo(() => {
     const map = new Map<string, ServiceRequestDocument[]>();
 
@@ -64,6 +137,35 @@ export default function AdminServiceRequests() {
 
     return map;
   }, [documents]);
+
+  const responsesByRequest = useMemo(() => {
+    const map = new Map<string, ServiceRequestResponse[]>();
+
+    for (const response of responses ?? []) {
+      const current = map.get(response.service_request_id) ?? [];
+      current.push(response);
+      map.set(response.service_request_id, current);
+    }
+
+    return map;
+  }, [responses]);
+
+  const assignmentHistoryByRequest = useMemo(() => {
+    const map = new Map<string, ServiceRequestAssignmentHistory[]>();
+
+    for (const item of assignmentHistory ?? []) {
+      const current = map.get(item.service_request_id) ?? [];
+      current.push(item);
+      map.set(item.service_request_id, current);
+    }
+
+    return map;
+  }, [assignmentHistory]);
+
+  const practitionerMap = useMemo(
+    () => new Map((practitioners ?? []).map((practitioner) => [practitioner.user.id, practitioner])),
+    [practitioners],
+  );
 
   const filteredRequests = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -85,6 +187,12 @@ export default function AdminServiceRequests() {
 
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
+  const selectedResponses = selectedRequest ? responsesByRequest.get(selectedRequest.id) ?? [] : [];
+  const selectedAssignments = selectedRequest ? assignmentHistoryByRequest.get(selectedRequest.id) ?? [] : [];
+
+  useEffect(() => {
+    setSelectedPractitionerId(selectedRequest?.assigned_practitioner_id ?? "");
+  }, [selectedRequest?.assigned_practitioner_id]);
 
   const requestMetrics = useMemo(() => {
     const rows = requests ?? [];
@@ -146,6 +254,51 @@ export default function AdminServiceRequests() {
 
     toast.success("Service request updated.");
     setUpdatingStatus(null);
+    await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
+  };
+
+  const assignPractitioner = async (requestId: string, practitionerId: string, automatic = false) => {
+    if (!practitionerId && !automatic) {
+      toast.error("Choose a practitioner first.");
+      return;
+    }
+
+    setAssigningRequestId(requestId);
+
+    const response = automatic
+      ? await supabase.rpc("auto_assign_service_request", { p_request_id: requestId })
+      : await supabase.rpc("assign_service_request", {
+        p_request_id: requestId,
+        p_practitioner_id: practitionerId,
+        p_assignment_type: "manual",
+        p_note: "Assigned from the lead management dashboard.",
+      });
+
+    setAssigningRequestId(null);
+
+    if (response.error) {
+      toast.error(response.error.message);
+      return;
+    }
+
+    toast.success(automatic ? "Lead assigned automatically." : "Lead assigned successfully.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-request-assignment-history"] }),
+    ]);
+  };
+
+  const convertToCase = async (requestId: string) => {
+    setConvertingRequestId(requestId);
+    const { error } = await supabase.rpc("convert_service_request_to_case", { p_request_id: requestId });
+    setConvertingRequestId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Lead converted into a case.");
     await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
   };
 
@@ -212,7 +365,11 @@ export default function AdminServiceRequests() {
       ) : filteredRequests.length > 0 ? (
         <div className="space-y-4">
           {filteredRequests.map((request) => {
-            const issueFlags = getServiceRequestIssueFlags(request);
+            const issueFlags = getServiceRequestIssueFlags({
+              hasDebtFlag: request.has_debt_flag,
+              missingReturnsFlag: request.missing_returns_flag,
+              missingDocumentsFlag: request.missing_documents_flag,
+            });
             return (
               <button
                 key={request.id}
@@ -251,6 +408,9 @@ export default function AdminServiceRequests() {
                           No issue flags
                         </span>
                       )}
+                      <span className="inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                        {responsesByRequest.get(request.id)?.length ?? 0} response{(responsesByRequest.get(request.id)?.length ?? 0) === 1 ? "" : "s"}
+                      </span>
                     </div>
                   </div>
 
@@ -260,6 +420,11 @@ export default function AdminServiceRequests() {
                     </span>
                     <span className="text-xs text-muted-foreground font-body">
                       Documents: {documentMap.get(request.id)?.length ?? 0}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-body">
+                      {request.assigned_practitioner_id
+                        ? `Assigned to ${practitionerMap.get(request.assigned_practitioner_id)?.user.full_name || "practitioner"}`
+                        : "Not assigned yet"}
                     </span>
                   </div>
                 </div>
@@ -321,7 +486,11 @@ export default function AdminServiceRequests() {
                   <Badge variant="outline" className={getServiceRequestRiskClass(selectedRequest.risk_indicator)}>
                     {formatServiceRequestLabel(selectedRequest.risk_indicator)} Risk
                   </Badge>
-                  {getServiceRequestIssueFlags(selectedRequest).map((flag) => (
+                  {getServiceRequestIssueFlags({
+                    hasDebtFlag: selectedRequest.has_debt_flag,
+                    missingReturnsFlag: selectedRequest.missing_returns_flag,
+                    missingDocumentsFlag: selectedRequest.missing_documents_flag,
+                  }).map((flag) => (
                     <span key={flag} className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">{flag}</span>
                   ))}
                 </div>
@@ -354,6 +523,132 @@ export default function AdminServiceRequests() {
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issue Description</p>
               <div className="rounded-2xl border border-border p-4">
                 <p className="whitespace-pre-wrap font-body text-foreground">{selectedRequest.description}</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-3">Assignment Controls</p>
+                <div className="space-y-3">
+                  <Select value={selectedPractitionerId || "unassigned"} onValueChange={(value) => setSelectedPractitionerId(value === "unassigned" ? "" : value)}>
+                    <SelectTrigger className="w-full rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Choose practitioner</SelectItem>
+                      {(practitioners ?? []).map((practitioner) => (
+                        <SelectItem key={practitioner.user.id} value={practitioner.user.id}>
+                          {(practitioner.user.full_name || practitioner.user.email || "Practitioner")} · {practitioner.activeCaseCount} active case{practitioner.activeCaseCount === 1 ? "" : "s"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      className="rounded-xl"
+                      onClick={() => void assignPractitioner(selectedRequest.id, selectedPractitionerId)}
+                      disabled={assigningRequestId === selectedRequest.id}
+                    >
+                      {assigningRequestId === selectedRequest.id ? "Assigning..." : selectedRequest.assigned_practitioner_id ? "Reassign Lead" : "Assign Lead"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => void assignPractitioner(selectedRequest.id, "", true)}
+                      disabled={assigningRequestId === selectedRequest.id}
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Auto Assign
+                    </Button>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full rounded-xl"
+                    onClick={() => void convertToCase(selectedRequest.id)}
+                    disabled={!selectedRequest.assigned_practitioner_id || convertingRequestId === selectedRequest.id}
+                  >
+                    {convertingRequestId === selectedRequest.id ? "Converting..." : selectedRequest.converted_case_id ? "Case Already Created" : "Convert Request to Case"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-3">Assignment History</p>
+                <div className="space-y-3">
+                  {selectedAssignments.length ? selectedAssignments.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-border bg-accent/20 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                          {getAssignmentTypeLabel(item.assignment_type)}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground font-body">{new Date(item.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="mt-2 text-sm text-foreground font-body">
+                        {item.practitioner_profile_id ? practitionerMap.get(item.practitioner_profile_id)?.user.full_name || "Practitioner" : "No practitioner"}
+                      </p>
+                      {item.note ? <p className="mt-1 text-sm text-muted-foreground font-body">{item.note}</p> : null}
+                    </div>
+                  )) : (
+                    <p className="text-sm text-muted-foreground font-body">No assignments have been logged yet.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-3">Practitioner Responses</p>
+              <div className="space-y-3">
+                {selectedResponses.length ? selectedResponses.map((response) => {
+                  const practitioner = practitionerMap.get(response.practitioner_profile_id);
+                  return (
+                    <div key={response.id} className="rounded-2xl border border-border bg-accent/20 p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-foreground font-body">
+                              {practitioner?.user.full_name || practitioner?.user.email || "Practitioner"}
+                            </p>
+                            {practitioner?.profile?.is_verified ? (
+                              <Badge className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                                <BadgeCheck className="mr-1 h-3.5 w-3.5" />
+                                Verified
+                              </Badge>
+                            ) : null}
+                            <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getAvailabilityBadgeClass(practitioner?.profile?.availability_status)}`}>
+                              {formatAvailabilityLabel(practitioner?.profile?.availability_status)}
+                            </Badge>
+                            <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getResponseStatusClass(response.response_status)}`}>
+                              {formatServiceRequestLabel(response.response_status)}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground font-body">
+                            {practitioner?.activeCaseCount ?? 0} active case{(practitioner?.activeCaseCount ?? 0) === 1 ? "" : "s"} · {practitioner?.profile?.years_of_experience ?? 0} years experience
+                          </p>
+                          <p className="whitespace-pre-wrap text-sm leading-6 text-foreground font-body">{response.introduction_message}</p>
+                          {response.service_pitch ? (
+                            <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground font-body">{response.service_pitch}</p>
+                          ) : null}
+                          {(practitioner?.profile?.services_offered ?? []).length ? (
+                            <div className="flex flex-wrap gap-2">
+                              {(practitioner?.profile?.services_offered ?? []).map((service) => (
+                                <Badge key={service} className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                                  {serviceNeededOptions.find((option) => option.value === service)?.label || service}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }) : (
+                  <p className="text-sm text-muted-foreground font-body">No practitioner responses have been submitted yet.</p>
+                )}
               </div>
             </div>
 

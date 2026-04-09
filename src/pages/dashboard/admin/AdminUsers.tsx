@@ -11,6 +11,11 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import type { Enums, Tables } from "@/integrations/supabase/types";
 import {
+  PractitionerProfileFields,
+  type PractitionerProfileFormState,
+} from "@/components/dashboard/PractitionerProfileFields";
+import { normalizeServicesOffered } from "@/lib/practitionerMarketplace";
+import {
   consultantPermissionFields,
   defaultConsultantPermissions,
   fullStaffPermissions,
@@ -23,6 +28,7 @@ import {
 type StaffRole = Extract<Enums<"app_role">, "admin" | "consultant">;
 type StaffProfile = Tables<"profiles">;
 type StaffPermissionRow = Tables<"staff_permissions">;
+type PractitionerProfile = Tables<"practitioner_profiles">;
 
 type CreateStaffFormState = {
   fullName: string;
@@ -54,14 +60,24 @@ const initialEditForm: EditStaffFormState = {
   isActive: true,
 };
 
+const initialPractitionerProfileForm: PractitionerProfileFormState = {
+  businessName: "",
+  registrationNumber: "",
+  yearsOfExperience: "0",
+  availabilityStatus: "available",
+  isVerified: false,
+  internalNotes: "",
+  servicesOffered: [],
+};
+
 function getRoleLabel(role: StaffRole) {
-  return role === "admin" ? "Admin" : "Consultant";
+  return role === "admin" ? "Admin" : "Practitioner";
 }
 
 function getRoleDescription(role: StaffRole) {
   return role === "admin"
     ? "Full Acapolite management access."
-    : "Operational staff access for cases, documents, client billing, and communication based on the limits you set.";
+    : "Marketplace practitioner access for leads, assigned clients, case work, and communication based on the limits you set.";
 }
 
 function getRoleBadgeClass(role: StaffRole) {
@@ -91,7 +107,7 @@ function PermissionEditor({
           <div>
             <p className="text-sm font-semibold text-foreground font-body">Admins always have full access</p>
             <p className="mt-1 text-sm text-muted-foreground font-body">
-              Admin accounts ignore consultant restrictions and can access every staff screen and action automatically.
+              Admin accounts ignore practitioner restrictions and can access every staff screen and action automatically.
             </p>
           </div>
         </div>
@@ -102,9 +118,9 @@ function PermissionEditor({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-accent/30 p-4">
-        <p className="text-sm font-semibold text-foreground font-body">Consultant visibility and action limits</p>
+        <p className="text-sm font-semibold text-foreground font-body">Practitioner visibility and action limits</p>
         <p className="mt-1 text-sm text-muted-foreground font-body">
-          Choose exactly what this consultant can open and what actions they can perform.
+          Choose exactly what this practitioner can open and what actions they can perform.
         </p>
       </div>
 
@@ -145,6 +161,8 @@ export default function AdminUsers() {
   const [editForm, setEditForm] = useState<EditStaffFormState>(initialEditForm);
   const [createPermissions, setCreatePermissions] = useState<StaffPermissionValues>(defaultConsultantPermissions);
   const [editPermissions, setEditPermissions] = useState<StaffPermissionValues>(defaultConsultantPermissions);
+  const [createPractitionerProfile, setCreatePractitionerProfile] = useState<PractitionerProfileFormState>(initialPractitionerProfileForm);
+  const [editPractitionerProfile, setEditPractitionerProfile] = useState<PractitionerProfileFormState>(initialPractitionerProfileForm);
 
   const { data: staffUsers, isLoading } = useQuery({
     queryKey: ["staff-users"],
@@ -201,10 +219,26 @@ export default function AdminUsers() {
     enabled: !!selectedStaffId,
   });
 
+  const { data: selectedPractitionerProfile } = useQuery({
+    queryKey: ["staff-user-practitioner-profile", selectedStaffId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_profiles")
+        .select("*")
+        .eq("profile_id", selectedStaffId!)
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data ?? null) as PractitionerProfile | null;
+    },
+    enabled: !!selectedStaffId,
+  });
+
   useEffect(() => {
     if (!selectedStaffUser) {
       setEditForm(initialEditForm);
       setEditPermissions(defaultConsultantPermissions);
+      setEditPractitionerProfile(initialPractitionerProfileForm);
       return;
     }
 
@@ -221,6 +255,23 @@ export default function AdminUsers() {
     setEditPermissions(getPermissionPreset(selectedStaffUser.role as StaffRole, selectedPermissionRow));
   }, [selectedPermissionRow, selectedStaffUser]);
 
+  useEffect(() => {
+    if (!selectedStaffUser || selectedStaffUser.role !== "consultant") {
+      setEditPractitionerProfile(initialPractitionerProfileForm);
+      return;
+    }
+
+    setEditPractitionerProfile({
+      businessName: selectedPractitionerProfile?.business_name || "",
+      registrationNumber: selectedPractitionerProfile?.registration_number || "",
+      yearsOfExperience: String(selectedPractitionerProfile?.years_of_experience ?? 0),
+      availabilityStatus: selectedPractitionerProfile?.availability_status ?? "available",
+      isVerified: selectedPractitionerProfile?.is_verified ?? false,
+      internalNotes: selectedPractitionerProfile?.internal_notes || "",
+      servicesOffered: selectedPractitionerProfile?.services_offered ?? [],
+    });
+  }, [selectedPractitionerProfile, selectedStaffUser]);
+
   const adminCount = (staffUsers ?? []).filter((staffUser) => staffUser.role === "admin").length;
   const consultantCount = (staffUsers ?? []).filter((staffUser) => staffUser.role === "consultant").length;
   const activeCount = (staffUsers ?? []).filter((staffUser) => staffUser.is_active).length;
@@ -228,6 +279,7 @@ export default function AdminUsers() {
   const resetCreateForm = () => {
     setCreateForm(initialCreateForm);
     setCreatePermissions(defaultConsultantPermissions);
+    setCreatePractitionerProfile(initialPractitionerProfileForm);
     setIsCreating(false);
   };
 
@@ -237,6 +289,25 @@ export default function AdminUsers() {
 
   const handleEditPermissionToggle = (key: keyof StaffPermissionValues, value: boolean) => {
     setEditPermissions((current) => sanitizeStaffPermissions({ ...current, [key]: value }));
+  };
+
+  const upsertPractitionerProfile = async (profileId: string, values: PractitionerProfileFormState) => {
+    const yearsOfExperience = Number(values.yearsOfExperience || 0);
+
+    const { error } = await supabase
+      .from("practitioner_profiles")
+      .upsert({
+        profile_id: profileId,
+        business_name: values.businessName.trim() || null,
+        registration_number: values.registrationNumber.trim() || null,
+        years_of_experience: Number.isNaN(yearsOfExperience) ? 0 : Math.max(0, yearsOfExperience),
+        availability_status: values.availabilityStatus,
+        is_verified: values.isVerified,
+        internal_notes: values.internalNotes.trim() || null,
+        services_offered: normalizeServicesOffered(values.servicesOffered),
+      });
+
+    return error;
   };
 
   const createStaffUser = async () => {
@@ -269,6 +340,16 @@ export default function AdminUsers() {
       toast.error(data?.error || error?.message || "Unable to create the staff user.");
       setIsCreating(false);
       return;
+    }
+
+    if (createForm.role === "consultant" && data?.user?.id) {
+      const practitionerError = await upsertPractitionerProfile(data.user.id, createPractitionerProfile);
+
+      if (practitionerError) {
+        toast.error(practitionerError.message);
+        setIsCreating(false);
+        return;
+      }
     }
 
     toast.success(`${getRoleLabel(createForm.role)} account created successfully.`);
@@ -331,11 +412,22 @@ export default function AdminUsers() {
       return;
     }
 
+    if (editForm.role === "consultant") {
+      const practitionerError = await upsertPractitionerProfile(selectedStaffUser.id, editPractitionerProfile);
+
+      if (practitionerError) {
+        toast.error(practitionerError.message);
+        setIsSaving(false);
+        return;
+      }
+    }
+
     toast.success("Staff profile updated.");
     setIsSaving(false);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["staff-users"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-user-permissions", selectedStaffUser.id] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-practitioner-profile", selectedStaffUser.id] }),
     ]);
   };
 
@@ -345,7 +437,7 @@ export default function AdminUsers() {
         <div>
           <h1 className="mb-1 font-display text-2xl font-bold text-foreground">Staff Users</h1>
           <p className="text-sm text-muted-foreground font-body">
-            Create Acapolite admin and consultant accounts, then control exactly what each consultant can see or do.
+            Create Acapolite admin and practitioner accounts, then control exactly what each practitioner can see or do.
           </p>
         </div>
 
@@ -362,7 +454,7 @@ export default function AdminUsers() {
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Access Control</p>
           <h2 className="mt-3 font-display text-lg font-semibold text-foreground">Staff account management</h2>
           <p className="mt-2 text-sm text-muted-foreground font-body">
-            Admins can create login-ready staff accounts, assign roles, and set consultant visibility, actions, and assigned-client scope.
+            Admins can create login-ready staff accounts, assign roles, and set practitioner visibility, actions, and assigned-client scope.
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
@@ -371,7 +463,7 @@ export default function AdminUsers() {
           <p className="mt-1 text-sm text-muted-foreground font-body">Full platform managers</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Consultants</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioners</p>
           <p className="mt-3 font-display text-3xl text-foreground">{consultantCount}</p>
           <p className="mt-1 text-sm text-muted-foreground font-body">Permission-controlled staff</p>
         </div>
@@ -456,7 +548,7 @@ export default function AdminUsers() {
       ) : (
         <div className="rounded-2xl border border-border bg-card p-12 text-center shadow-card">
           <p className="text-muted-foreground font-body">
-            {searchQuery.trim() ? "No staff users matched your search." : "No admin or consultant users found yet."}
+            {searchQuery.trim() ? "No staff users matched your search." : "No admin or practitioner users found yet."}
           </p>
         </div>
       )}
@@ -468,7 +560,7 @@ export default function AdminUsers() {
           if (!open) resetCreateForm();
         }}
         title="Add Staff User"
-        description="Create a real login account for a new admin or consultant, then define consultant restrictions before they sign in."
+        description="Create a real login account for a new admin or practitioner, then define practitioner restrictions before they sign in."
       >
         <div className="space-y-6">
           <div className="rounded-2xl border border-border bg-accent/30 p-4">
@@ -477,7 +569,7 @@ export default function AdminUsers() {
               <div>
                 <p className="text-sm font-semibold text-foreground font-body">Secure staff account creation</p>
                 <p className="mt-1 text-sm text-muted-foreground font-body">
-                  This creates the auth user, stores the chosen role in the profile, and saves consultant permissions at the same time.
+                  This creates the auth user, stores the chosen role in the profile, and saves practitioner permissions at the same time.
                 </p>
               </div>
             </div>
@@ -532,7 +624,7 @@ export default function AdminUsers() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="consultant">Consultant</SelectItem>
+                  <SelectItem value="consultant">Practitioner</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
@@ -550,6 +642,21 @@ export default function AdminUsers() {
             permissions={createForm.role === "admin" ? fullStaffPermissions : createPermissions}
             onToggle={handleCreatePermissionToggle}
           />
+
+          {createForm.role === "consultant" ? (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioner Profile Setup</p>
+                <p className="mt-2 text-sm text-muted-foreground font-body">
+                  Set up the practitioner profile that clients will see when this practitioner responds to marketplace leads.
+                </p>
+              </div>
+              <PractitionerProfileFields
+                value={createPractitionerProfile}
+                onChange={setCreatePractitionerProfile}
+              />
+            </div>
+          ) : null}
 
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Button
@@ -576,7 +683,7 @@ export default function AdminUsers() {
           if (!open) setSelectedStaffId(null);
         }}
         title={selectedStaffUser?.full_name || selectedStaffUser?.email || "Staff Member"}
-        description="Review and update this staff profile. Consultant page access, action rights, and client scope are controlled here."
+        description="Review and update this staff profile. Practitioner page access, action rights, and client scope are controlled here."
       >
         {selectedStaffUser ? (
           <div className="space-y-6">
@@ -623,7 +730,7 @@ export default function AdminUsers() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="consultant">Consultant</SelectItem>
+                    <SelectItem value="consultant">Practitioner</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
@@ -656,6 +763,21 @@ export default function AdminUsers() {
               permissions={editForm.role === "admin" ? fullStaffPermissions : editPermissions}
               onToggle={handleEditPermissionToggle}
             />
+
+            {editForm.role === "consultant" ? (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-border p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioner Profile</p>
+                  <p className="mt-2 text-sm text-muted-foreground font-body">
+                    Update public practitioner details, verification status, availability, services, and internal notes.
+                  </p>
+                </div>
+                <PractitionerProfileFields
+                  value={editPractitionerProfile}
+                  onChange={setEditPractitionerProfile}
+                />
+              </div>
+            ) : null}
 
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" className="rounded-xl" onClick={() => setSelectedStaffId(null)} disabled={isSaving}>

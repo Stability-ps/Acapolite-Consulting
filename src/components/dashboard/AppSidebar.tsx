@@ -16,6 +16,7 @@ import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
 const clientItems = [
   { title: "Overview", url: "/dashboard/client", icon: LayoutDashboard },
+  { title: "Requests", url: "/dashboard/client/requests", icon: ClipboardList },
   { title: "My Cases", url: "/dashboard/client/cases", icon: FolderOpen },
   { title: "Documents", url: "/dashboard/client/documents", icon: Upload },
   { title: "Invoices", url: "/dashboard/client/invoices", icon: Receipt },

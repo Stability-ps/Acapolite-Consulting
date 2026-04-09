@@ -11,13 +11,13 @@ export const dashboardHomeByRole: Record<AppRole, string> = {
 
 export const dashboardTitleByRole: Record<AppRole, string> = {
   admin: "Acapolite Staff",
-  consultant: "Consultant Workspace",
+  consultant: "Practitioner Workspace",
   client: "Client Portal",
 };
 
 export const dashboardDescriptionByRole: Record<AppRole, string> = {
   admin: "Manage Acapolite operations across every client account.",
-  consultant: "Manage assigned clients, cases, messages, and billing activities.",
+  consultant: "Manage practitioner profile setup, lead responses, assigned clients, and workload from one place.",
   client: "Track your cases, invoices, messages, and documents in one place.",
 };
 

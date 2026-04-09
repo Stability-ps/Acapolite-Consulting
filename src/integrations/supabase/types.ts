@@ -105,6 +105,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      practitioner_profiles: {
+        Row: {
+          profile_id: string;
+          business_name: string | null;
+          registration_number: string | null;
+          services_offered: string[];
+          years_of_experience: number;
+          availability_status: Database["public"]["Enums"]["practitioner_availability_status"];
+          is_verified: boolean;
+          internal_notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          business_name?: string | null;
+          registration_number?: string | null;
+          services_offered?: string[];
+          years_of_experience?: number;
+          availability_status?: Database["public"]["Enums"]["practitioner_availability_status"];
+          is_verified?: boolean;
+          internal_notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          profile_id?: string;
+          business_name?: string | null;
+          registration_number?: string | null;
+          services_offered?: string[];
+          years_of_experience?: number;
+          availability_status?: Database["public"]["Enums"]["practitioner_availability_status"];
+          is_verified?: boolean;
+          internal_notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       clients: {
         Row: {
           id: string;
@@ -524,6 +563,9 @@ export type Database = {
           viewed_at: string | null;
           responded_at: string | null;
           assigned_at: string | null;
+          assigned_practitioner_id: string | null;
+          selected_response_id: string | null;
+          converted_case_id: string | null;
           closed_at: string | null;
           created_at: string;
           updated_at: string;
@@ -549,6 +591,9 @@ export type Database = {
           viewed_at?: string | null;
           responded_at?: string | null;
           assigned_at?: string | null;
+          assigned_practitioner_id?: string | null;
+          selected_response_id?: string | null;
+          converted_case_id?: string | null;
           closed_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -574,9 +619,84 @@ export type Database = {
           viewed_at?: string | null;
           responded_at?: string | null;
           assigned_at?: string | null;
+          assigned_practitioner_id?: string | null;
+          selected_response_id?: string | null;
+          converted_case_id?: string | null;
           closed_at?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      service_request_responses: {
+        Row: {
+          id: string;
+          service_request_id: string;
+          practitioner_profile_id: string;
+          introduction_message: string;
+          service_pitch: string | null;
+          response_status: Database["public"]["Enums"]["service_request_response_status"];
+          created_at: string;
+          updated_at: string;
+          selected_at: string | null;
+          declined_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          service_request_id: string;
+          practitioner_profile_id: string;
+          introduction_message: string;
+          service_pitch?: string | null;
+          response_status?: Database["public"]["Enums"]["service_request_response_status"];
+          created_at?: string;
+          updated_at?: string;
+          selected_at?: string | null;
+          declined_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          service_request_id?: string;
+          practitioner_profile_id?: string;
+          introduction_message?: string;
+          service_pitch?: string | null;
+          response_status?: Database["public"]["Enums"]["service_request_response_status"];
+          created_at?: string;
+          updated_at?: string;
+          selected_at?: string | null;
+          declined_at?: string | null;
+        };
+        Relationships: [];
+      };
+      service_request_assignment_history: {
+        Row: {
+          id: string;
+          service_request_id: string;
+          practitioner_profile_id: string | null;
+          previous_practitioner_id: string | null;
+          assignment_type: Database["public"]["Enums"]["service_request_assignment_type"];
+          note: string | null;
+          assigned_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          service_request_id: string;
+          practitioner_profile_id?: string | null;
+          previous_practitioner_id?: string | null;
+          assignment_type: Database["public"]["Enums"]["service_request_assignment_type"];
+          note?: string | null;
+          assigned_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          service_request_id?: string;
+          practitioner_profile_id?: string | null;
+          previous_practitioner_id?: string | null;
+          assignment_type?: Database["public"]["Enums"]["service_request_assignment_type"];
+          note?: string | null;
+          assigned_by?: string | null;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -639,6 +759,33 @@ export type Database = {
       };
     };
     Functions: {
+      accept_service_request_response: {
+        Args: {
+          p_response_id: string;
+        };
+        Returns: string;
+      };
+      assign_service_request: {
+        Args: {
+          p_request_id: string;
+          p_practitioner_id: string;
+          p_assignment_type?: Database["public"]["Enums"]["service_request_assignment_type"];
+          p_note?: string;
+        };
+        Returns: string;
+      };
+      auto_assign_service_request: {
+        Args: {
+          p_request_id: string;
+        };
+        Returns: string;
+      };
+      convert_service_request_to_case: {
+        Args: {
+          p_request_id: string;
+        };
+        Returns: string;
+      };
       get_my_role: {
         Args: Record<PropertyKey, never>;
         Returns: Database["public"]["Enums"]["app_role"];
@@ -646,6 +793,12 @@ export type Database = {
       is_admin_or_consultant: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;
+      };
+      map_service_request_to_case_type: {
+        Args: {
+          p_service_needed: Database["public"]["Enums"]["service_request_service_needed"];
+        };
+        Returns: Database["public"]["Enums"]["case_type"];
       };
     };
     Enums: {
@@ -692,6 +845,9 @@ export type Database = {
         | "other";
       service_request_priority: "low" | "medium" | "high" | "urgent";
       service_request_risk_indicator: "low" | "medium" | "high";
+      practitioner_availability_status: "available" | "limited" | "not_available";
+      service_request_response_status: "submitted" | "selected" | "declined" | "withdrawn";
+      service_request_assignment_type: "manual" | "automatic" | "client_selected" | "reassigned";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -820,6 +976,9 @@ export const Constants = {
       ],
       service_request_priority: ["low", "medium", "high", "urgent"],
       service_request_risk_indicator: ["low", "medium", "high"],
+      practitioner_availability_status: ["available", "limited", "not_available"],
+      service_request_response_status: ["submitted", "selected", "declined", "withdrawn"],
+      service_request_assignment_type: ["manual", "automatic", "client_selected", "reassigned"],
     },
   },
 } as const;

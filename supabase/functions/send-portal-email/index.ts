@@ -278,7 +278,74 @@ async function getAuthenticatedUser(
   return { user, error: null };
 }
 
-async function authorizeSignupEmailRequest(params: {
+async function validateProfileEmail(params: {
+  adminClient: ReturnType<typeof createClient>;
+  profileId: string;
+  email?: string;
+}) {
+  const { adminClient, profileId, email } = params;
+
+  const { data: profile, error } = await adminClient
+    .from("profiles")
+    .select("id, email, role, created_at")
+    .eq("id", profileId)
+    .maybeSingle();
+
+  if (error || !profile) {
+    return { profile: null };
+  }
+
+  if (email && normalizeEmail(profile.email) !== normalizeEmail(email)) {
+    return { profile: null };
+  }
+
+  return { profile };
+}
+
+async function validateClientForCase(params: {
+  adminClient: ReturnType<typeof createClient>;
+  caseId: string;
+  clientProfileId: string;
+  clientEmail?: string;
+}) {
+  const { adminClient, caseId, clientProfileId, clientEmail } = params;
+
+  const { data: caseRow, error: caseError } = await adminClient
+    .from("cases")
+    .select("id, client_id, assigned_consultant_id")
+    .eq("id", caseId)
+    .maybeSingle();
+
+  if (caseError || !caseRow?.client_id) {
+    return false;
+  }
+
+  const { data: clientRow, error: clientError } = await adminClient
+    .from("clients")
+    .select("id, profile_id")
+    .eq("id", caseRow.client_id)
+    .maybeSingle();
+
+  if (clientError || !clientRow || clientRow.profile_id !== clientProfileId) {
+    return false;
+  }
+
+  if (clientEmail) {
+    const { profile } = await validateProfileEmail({
+      adminClient,
+      profileId: clientProfileId,
+      email: clientEmail,
+    });
+
+    if (!profile) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function authorizeEmailRequest(params: {
   request: Request;
   supabaseUrl: string;
   supabaseAnonKey: string;
@@ -293,43 +360,287 @@ async function authorizeSignupEmailRequest(params: {
     return { error };
   }
 
-  if (payload.type !== "signup_notification" && payload.type !== "welcome_email") {
-    return {
-      error: jsonResponse(request, { error: "Missing authorization header." }, 401),
-    };
+  switch (payload.type) {
+    case "signup_notification":
+    case "welcome_email": {
+      const profileId = trimString(payload.profileId);
+      const email = normalizeEmail(payload.email);
+
+      if (!profileId || !email) {
+        return {
+          error: jsonResponse(request, { error: "Profile ID and email are required." }, 400),
+        };
+      }
+
+      const { profile } = await validateProfileEmail({
+        adminClient,
+        profileId,
+        email,
+      });
+
+      if (!profile) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate the signup email request." }, 403),
+        };
+      }
+
+      const createdAt = profile.created_at ? Date.parse(profile.created_at) : Number.NaN;
+      const isRecentSignup = Number.isFinite(createdAt) && Date.now() - createdAt <= 1000 * 60 * 30;
+
+      if (profile.role !== "client" || !isRecentSignup) {
+        return {
+          error: jsonResponse(request, { error: "This signup email request is no longer valid." }, 403),
+        };
+      }
+
+      return { error: null };
+    }
+
+    case "case_created":
+    case "case_status_changed": {
+      const isValid = await validateClientForCase({
+        adminClient,
+        caseId: trimString(payload.caseId),
+        clientProfileId: trimString(payload.clientProfileId),
+        clientEmail: normalizeEmail(payload.clientEmail),
+      });
+
+      return isValid
+        ? { error: null }
+        : { error: jsonResponse(request, { error: "Unable to validate this case notification request." }, 403) };
+    }
+
+    case "practitioner_assigned": {
+      const caseId = trimString(payload.caseId);
+      const practitionerProfileId = trimString(payload.practitionerProfileId);
+      const practitionerEmail = normalizeEmail(payload.practitionerEmail);
+
+      if (!caseId || !practitionerProfileId || !practitionerEmail) {
+        return {
+          error: jsonResponse(request, { error: "Case ID, practitioner profile ID, and email are required." }, 400),
+        };
+      }
+
+      const { data: caseRow, error: caseError } = await adminClient
+        .from("cases")
+        .select("id, assigned_consultant_id")
+        .eq("id", caseId)
+        .maybeSingle();
+
+      const { profile } = await validateProfileEmail({
+        adminClient,
+        profileId: practitionerProfileId,
+        email: practitionerEmail,
+      });
+
+      if (caseError || !caseRow || caseRow.assigned_consultant_id !== practitionerProfileId || !profile) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this practitioner assignment request." }, 403),
+        };
+      }
+
+      return { error: null };
+    }
+
+    case "practitioner_message": {
+      const messageId = trimString(payload.messageId);
+      const clientProfileId = trimString(payload.clientProfileId);
+      const clientEmail = normalizeEmail(payload.clientEmail);
+
+      if (!messageId || !clientProfileId || !clientEmail) {
+        return {
+          error: jsonResponse(request, { error: "Message ID, client profile ID, and email are required." }, 400),
+        };
+      }
+
+      const { data: messageRow, error: messageError } = await adminClient
+        .from("messages")
+        .select("id, conversation_id, sender_type")
+        .eq("id", messageId)
+        .maybeSingle();
+
+      if (messageError || !messageRow?.conversation_id || messageRow.sender_type === "client") {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this message notification request." }, 403),
+        };
+      }
+
+      const { data: conversationRow, error: conversationError } = await adminClient
+        .from("conversations")
+        .select("id, client_id")
+        .eq("id", messageRow.conversation_id)
+        .maybeSingle();
+
+      if (conversationError || !conversationRow?.client_id) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this message notification request." }, 403),
+        };
+      }
+
+      const { data: clientRow, error: clientError } = await adminClient
+        .from("clients")
+        .select("id, profile_id")
+        .eq("id", conversationRow.client_id)
+        .maybeSingle();
+
+      const { profile } = await validateProfileEmail({
+        adminClient,
+        profileId: clientProfileId,
+        email: clientEmail,
+      });
+
+      if (clientError || !clientRow || clientRow.profile_id !== clientProfileId || !profile) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this message notification request." }, 403),
+        };
+      }
+
+      return { error: null };
+    }
+
+    case "invoice_created":
+    case "proof_of_payment_uploaded": {
+      const invoiceId = trimString(payload.invoiceId);
+      const clientProfileId = trimString(payload.clientProfileId);
+
+      if (!invoiceId || !clientProfileId) {
+        return {
+          error: jsonResponse(request, { error: "Invoice ID and client profile ID are required." }, 400),
+        };
+      }
+
+      const { data: invoiceRow, error: invoiceError } = await adminClient
+        .from("invoices")
+        .select("id, client_id")
+        .eq("id", invoiceId)
+        .maybeSingle();
+
+      if (invoiceError || !invoiceRow?.client_id) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this invoice notification request." }, 403),
+        };
+      }
+
+      const { data: clientRow, error: clientError } = await adminClient
+        .from("clients")
+        .select("id, profile_id")
+        .eq("id", invoiceRow.client_id)
+        .maybeSingle();
+
+      if (clientError || !clientRow || clientRow.profile_id !== clientProfileId) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this invoice notification request." }, 403),
+        };
+      }
+
+      if (payload.type === "invoice_created") {
+        const { profile } = await validateProfileEmail({
+          adminClient,
+          profileId: clientProfileId,
+          email: normalizeEmail(payload.clientEmail),
+        });
+
+        if (!profile) {
+          return {
+            error: jsonResponse(request, { error: "Unable to validate this invoice notification request." }, 403),
+          };
+        }
+      }
+
+      return { error: null };
+    }
+
+    case "documents_requested": {
+      const requestId = trimString(payload.requestId);
+      const clientProfileId = trimString(payload.clientProfileId);
+      const clientEmail = normalizeEmail(payload.clientEmail);
+
+      if (!requestId || !clientProfileId || !clientEmail) {
+        return {
+          error: jsonResponse(request, { error: "Request ID, client profile ID, and email are required." }, 400),
+        };
+      }
+
+      const { data: requestRow, error: requestError } = await adminClient
+        .from("document_requests")
+        .select("id, client_id")
+        .eq("id", requestId)
+        .maybeSingle();
+
+      if (requestError || !requestRow?.client_id) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this document request notification." }, 403),
+        };
+      }
+
+      const { data: clientRow, error: clientError } = await adminClient
+        .from("clients")
+        .select("id, profile_id")
+        .eq("id", requestRow.client_id)
+        .maybeSingle();
+
+      const { profile } = await validateProfileEmail({
+        adminClient,
+        profileId: clientProfileId,
+        email: clientEmail,
+      });
+
+      if (clientError || !clientRow || clientRow.profile_id !== clientProfileId || !profile) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this document request notification." }, 403),
+        };
+      }
+
+      return { error: null };
+    }
+
+    case "documents_uploaded_admin": {
+      const documentId = trimString(payload.documentId);
+      const clientProfileId = trimString(payload.clientProfileId);
+
+      if (!documentId || !clientProfileId) {
+        return {
+          error: jsonResponse(request, { error: "Document ID and client profile ID are required." }, 400),
+        };
+      }
+
+      const { data: documentRow, error: documentError } = await adminClient
+        .from("documents")
+        .select("id, client_id, uploaded_by")
+        .eq("id", documentId)
+        .maybeSingle();
+
+      if (documentError || !documentRow?.client_id) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this document upload notification." }, 403),
+        };
+      }
+
+      const { data: clientRow, error: clientError } = await adminClient
+        .from("clients")
+        .select("id, profile_id")
+        .eq("id", documentRow.client_id)
+        .maybeSingle();
+
+      if (
+        clientError
+        || !clientRow
+        || clientRow.profile_id !== clientProfileId
+        || documentRow.uploaded_by !== clientProfileId
+      ) {
+        return {
+          error: jsonResponse(request, { error: "Unable to validate this document upload notification." }, 403),
+        };
+      }
+
+      return { error: null };
+    }
+
+    default:
+      return {
+        error: jsonResponse(request, { error: "You must be signed in to send this notification." }, 401),
+      };
   }
-
-  const profileId = trimString(payload.profileId);
-  const email = normalizeEmail(payload.email);
-
-  if (!profileId || !email) {
-    return {
-      error: jsonResponse(request, { error: "Profile ID and email are required." }, 400),
-    };
-  }
-
-  const { data: profile, error: profileError } = await adminClient
-    .from("profiles")
-    .select("id, email, role, created_at")
-    .eq("id", profileId)
-    .maybeSingle();
-
-  if (profileError || !profile) {
-    return {
-      error: jsonResponse(request, { error: "Unable to validate the signup email request." }, 403),
-    };
-  }
-
-  const createdAt = profile.created_at ? Date.parse(profile.created_at) : Number.NaN;
-  const isRecentSignup = Number.isFinite(createdAt) && Date.now() - createdAt <= 1000 * 60 * 30;
-
-  if (profile.role !== "client" || normalizeEmail(profile.email) !== email || !isRecentSignup) {
-    return {
-      error: jsonResponse(request, { error: "This signup email request is no longer valid." }, 403),
-    };
-  }
-
-  return { error: null };
 }
 
 function buildEmailContent(params: {
@@ -1808,7 +2119,7 @@ Deno.serve(async (request) => {
     });
 
     if (emailContent.requiresAuth) {
-      const { error } = await authorizeSignupEmailRequest({
+      const { error } = await authorizeEmailRequest({
         request,
         supabaseUrl,
         supabaseAnonKey,

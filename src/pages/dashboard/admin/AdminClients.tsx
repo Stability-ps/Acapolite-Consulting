@@ -52,6 +52,7 @@ type StaffClient = {
 
 type NewClientFormState = {
   email: string;
+  password: string;
   fullName: string;
   phone: string;
   clientType: "individual" | "company";
@@ -76,6 +77,7 @@ type NewClientFormState = {
 
 const initialFormState: NewClientFormState = {
   email: "",
+  password: "",
   fullName: "",
   phone: "",
   clientType: "individual",
@@ -288,13 +290,18 @@ export default function AdminClients() {
     const email = formState.email.trim().toLowerCase();
 
     if (!email) {
-      toast.error("Enter the existing portal account email first.");
+      toast.error("Enter the client email first.");
       return;
     }
 
     setIsCreating(true);
 
-    const { data: profile, error: profileError } = await supabase
+    const requestedFullName = formState.fullName.trim()
+      || [formState.firstName.trim(), formState.lastName.trim()].filter(Boolean).join(" ")
+      || formState.companyName.trim()
+      || email.split("@")[0];
+
+    const { data: existingProfile, error: profileError } = await supabase
       .from("profiles")
       .select("id, full_name, phone")
       .eq("email", email)
@@ -306,10 +313,38 @@ export default function AdminClients() {
       return;
     }
 
+    let profile = existingProfile;
+    const createdPortalAccount = !existingProfile;
+
     if (!profile) {
-      toast.error("No portal profile was found for this email. Create the auth account first, then add the client here.");
-      setIsCreating(false);
-      return;
+      const password = formState.password.trim();
+
+      if (password.length < 8) {
+        toast.error("Enter a portal password with at least 8 characters for a brand-new client account.");
+        setIsCreating(false);
+        return;
+      }
+
+      const { data: createUserData, error: createUserError } = await supabase.functions.invoke("create-client-user", {
+        body: {
+          email,
+          password,
+          fullName: requestedFullName,
+          phone: formState.phone.trim(),
+        },
+      });
+
+      if (createUserError || createUserData?.error) {
+        toast.error(createUserData?.error || createUserError?.message || "Unable to create the portal account for this client.");
+        setIsCreating(false);
+        return;
+      }
+
+      profile = {
+        id: createUserData.user.id,
+        full_name: createUserData.user.full_name,
+        phone: createUserData.user.phone,
+      };
     }
 
     const { data: existingClient, error: existingClientError } = await supabase
@@ -324,13 +359,13 @@ export default function AdminClients() {
       return;
     }
 
-    if (existingClient) {
+    if (existingClient && !createdPortalAccount) {
       toast.error("This portal account already has a client record.");
       setIsCreating(false);
       return;
     }
 
-    const resolvedFullName = formState.fullName.trim() || profile.full_name || "";
+    const resolvedFullName = requestedFullName || profile.full_name || "";
     const nameParts = splitFullName(resolvedFullName);
     const firstName = formState.firstName.trim() || nameParts.firstName;
     const lastName = formState.lastName.trim() || nameParts.lastName;
@@ -349,7 +384,7 @@ export default function AdminClients() {
       return;
     }
 
-    const { error: insertError } = await supabase.from("clients").insert({
+    const clientPayload = {
       profile_id: profile.id,
       client_type: formState.clientType,
       company_registration_number: formState.clientType === "company" ? formState.companyRegistrationNumber.trim() || null : null,
@@ -370,15 +405,24 @@ export default function AdminClients() {
       country: formState.country.trim() || "South Africa",
       notes: formState.notes.trim() || null,
       created_by: user?.id ?? null,
-    });
+    };
 
-    if (insertError) {
-      toast.error(insertError.message);
+    const { error: clientWriteError } = existingClient
+      ? await supabase
+        .from("clients")
+        .update(clientPayload)
+        .eq("id", existingClient.id)
+      : await supabase
+        .from("clients")
+        .insert(clientPayload);
+
+    if (clientWriteError) {
+      toast.error(clientWriteError.message);
       setIsCreating(false);
       return;
     }
 
-    toast.success("Client added successfully.");
+    toast.success(existingProfile ? "Client added successfully." : "Client account and profile created successfully.");
     setIsCreateOpen(false);
     resetCreateForm();
     await Promise.all([
@@ -485,12 +529,12 @@ export default function AdminClients() {
           if (!open) resetCreateForm();
         }}
         title="Add New Client"
-        description="Create a client record for an existing portal account. The email must already exist in auth/profiles."
+        description="Create a client record for an existing portal account, or create a brand-new portal client account from this same screen."
       >
         <div className="space-y-6">
           <div className="rounded-2xl border border-border bg-accent/30 p-4">
             <p className="text-sm text-foreground font-body">
-              Use the email of a user who already has a portal account. This screen creates the `clients` row and saves the client details.
+              If the email already exists, this screen links the client details to that portal account. If the email is brand new, it will create the portal login first and then save the client record.
             </p>
           </div>
 
@@ -498,6 +542,19 @@ export default function AdminClients() {
             <div className="sm:col-span-2">
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">Portal Account Email</label>
               <Input value={formState.email} onChange={(event) => updateForm("email", event.target.value)} placeholder="client@example.com" className="rounded-xl" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Portal Password</label>
+              <Input
+                type="password"
+                value={formState.password}
+                onChange={(event) => updateForm("password", event.target.value)}
+                placeholder="Required only when this email is brand new"
+                className="rounded-xl"
+              />
+              <p className="mt-2 text-xs text-muted-foreground font-body">
+                Leave this blank for an existing portal user. For a brand-new client account, enter the initial portal password here.
+              </p>
             </div>
             <div>
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Type</label>
