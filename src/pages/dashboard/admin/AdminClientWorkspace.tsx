@@ -20,6 +20,7 @@ import { sendClientMessageNotification } from "@/lib/clientMessageNotifications"
 import { sendInvoiceCreatedNotification } from "@/lib/invoiceNotifications";
 import { sendCaseStatusChangedNotification } from "@/lib/caseStatusNotifications";
 import { sendDocumentRequestNotification } from "@/lib/documentRequestNotifications";
+import { sendCaseCreatedNotification } from "@/lib/caseCreatedNotifications";
 import {
   AlertTriangle,
   User,
@@ -300,6 +301,7 @@ export default function AdminClientWorkspace() {
     due_date: "",
     priority: "2",
     assigned_consultant_id: UNASSIGNED_CONSULTANT,
+    notify_client: true,
   });
   const [invoiceForm, setInvoiceForm] = useState({
     title: "",
@@ -697,6 +699,7 @@ export default function AdminClientWorkspace() {
       due_date: "",
       priority: "2",
       assigned_consultant_id: UNASSIGNED_CONSULTANT,
+      notify_client: true,
     });
   };
 
@@ -754,7 +757,7 @@ export default function AdminClientWorkspace() {
       due_date: caseForm.due_date ? new Date(`${caseForm.due_date}T12:00:00`).toISOString() : null,
     };
 
-    const { data, error } = await supabase.from("cases").insert(payload).select("id").single();
+    const { data, error } = await supabase.from("cases").insert(payload).select("id, created_at").single();
 
     if (error) {
       toast.error(error.message);
@@ -764,6 +767,7 @@ export default function AdminClientWorkspace() {
 
     const assignedConsultantId = payload.assigned_consultant_id;
     let notified = false;
+    let clientNotified = false;
 
     if (assignedConsultantId && data?.id) {
       notified = await notifyAssignedConsultant({
@@ -775,7 +779,32 @@ export default function AdminClientWorkspace() {
       });
     }
 
-    toast.success(assignedConsultantId && notified ? "Case created and practitioner notified." : "Case created.");
+    if (caseForm.notify_client && clientDetails?.profile_id && data?.id) {
+      const clientNotification = await sendCaseCreatedNotification({
+        caseId: data.id,
+        clientProfileId: clientDetails.profile_id,
+        clientEmail: clientDetails.profiles?.email,
+        clientName: getClientName(clientDetails),
+        createdAt: data.created_at,
+      });
+
+      if (clientNotification.error) {
+        console.error("Case created email failed:", clientNotification.error);
+        toast.error("Case created, but the client email notification could not be delivered.");
+      } else {
+        clientNotified = !clientNotification.skipped;
+      }
+    }
+
+    toast.success(
+      assignedConsultantId && notified
+        ? clientNotified
+          ? "Case created. Practitioner and client notified."
+          : "Case created and practitioner notified."
+        : clientNotified
+          ? "Case created and client notified."
+          : "Case created.",
+    );
     setCreatingCase(false);
     setIsCreateCaseOpen(false);
     resetCaseForm();
@@ -2037,6 +2066,21 @@ export default function AdminClientWorkspace() {
                   placeholder="Add case details, SARS issue, or service scope."
                   className="rounded-xl"
                 />
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <label className="flex items-start gap-3">
+                  <Checkbox
+                    checked={caseForm.notify_client}
+                    onCheckedChange={(checked) => setCaseForm((current) => ({ ...current, notify_client: checked === true }))}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-foreground font-body">Notify client by email</span>
+                    <span className="block text-xs text-muted-foreground font-body mt-1">
+                      Send the case-created email to the client for this specific case.
+                    </span>
+                  </span>
+                </label>
               </div>
               <div className="flex justify-end gap-3">
                 <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsCreateCaseOpen(false)} disabled={creatingCase}>

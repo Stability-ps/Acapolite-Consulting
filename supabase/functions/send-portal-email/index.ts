@@ -24,6 +24,16 @@ type WelcomeEmailPayload = {
   fullName?: string;
 };
 
+type CaseCreatedPayload = {
+  type: "case_created";
+  caseId?: string;
+  caseNumber?: string;
+  clientProfileId?: string;
+  clientEmail?: string;
+  clientName?: string;
+  createdDate?: string;
+};
+
 type PractitionerAssignedPayload = {
   type: "practitioner_assigned";
   caseId?: string;
@@ -113,6 +123,7 @@ type PortalEmailPayload =
   | ContactFormPayload
   | SignupNotificationPayload
   | WelcomeEmailPayload
+  | CaseCreatedPayload
   | PractitionerAssignedPayload
   | PractitionerMessagePayload
   | InvoiceCreatedPayload
@@ -566,6 +577,155 @@ function buildEmailContent(params: {
         contactEmail: email,
         metadata: {
           full_name: fullName,
+        },
+      } satisfies NotificationLogEntry,
+    };
+  }
+
+  if (payload.type === "case_created") {
+    const caseId = trimString(payload.caseId);
+    const caseNumber = trimString(payload.caseNumber) || caseId;
+    const clientProfileId = trimString(payload.clientProfileId);
+    const clientEmail = normalizeEmail(payload.clientEmail);
+    const clientName = trimString(payload.clientName) || "Client";
+    const createdDate = trimString(payload.createdDate) || new Date().toLocaleDateString("en-ZA");
+
+    if (!caseId || !clientProfileId || !clientEmail) {
+      throw new Error("Case ID, client profile ID, and client email are required.");
+    }
+
+    const safeCaseNumber = escapeHtml(caseNumber);
+    const safeClientName = escapeHtml(clientName);
+    const safeCreatedDate = escapeHtml(createdDate);
+    const safeSupportEmail = escapeHtml(supportEmail);
+    const safeSupportWhatsapp = escapeHtml(supportWhatsapp);
+    const siteLabel = portalUrl.replace(/^https?:\/\//, "");
+    const notificationKey = `case_created:${caseId}`;
+
+    return {
+      requiresAuth: true,
+      mail: {
+        toEmail: clientEmail,
+        subject: `Your Case Has Been Created - Case #${caseNumber}`,
+        text: [
+          `Dear ${clientName},`,
+          "",
+          "We would like to let you know that your case has been successfully created in our system.",
+          "",
+          `Case Number: #${caseNumber}`,
+          `Created Date: ${createdDate}`,
+          "Status: Created",
+          "",
+          "To view the progress of your case, please log in to your portal. If you do not yet have an account, please sign up using your email address to access your case updates.",
+          "",
+          `Log In / Sign Up: ${portalUrl}`,
+          "",
+          `If you need assistance, please contact us at ${supportEmail} or WhatsApp us on ${supportWhatsapp}.`,
+          "",
+          "The Acapolite Consulting Team",
+          "Registered Tax Practitioners",
+          `${supportEmail} | ${supportWhatsapp}`,
+          portalUrl,
+        ].join("\n"),
+        html: `<!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width,initial-scale=1" />
+            </head>
+            <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:32px 16px">
+                    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+                      <tr>
+                        <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td>
+                                <table cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="background:#c8a84b;border-radius:8px;width:40px;height:40px;text-align:center;vertical-align:middle;font-family:Georgia,serif;font-size:20px;color:#fff;font-weight:bold">A</td>
+                                    <td style="padding-left:12px">
+                                      <div style="font-size:15px;font-weight:bold;color:#fff;letter-spacing:0.05em">ACAPOLITE CONSULTING</div>
+                                      <div style="font-size:11px;color:rgba(255,255,255,0.55);margin-top:2px">Registered Tax Practitioners | South Africa</div>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                              <td align="right">
+                                <span style="background:#c8a84b;color:#fff;font-size:11px;font-weight:bold;padding:4px 12px;border-radius:20px">Case Created</span>
+                              </td>
+                            </tr>
+                          </table>
+                          <h1 style="color:#fff;font-size:22px;margin:24px 0 6px;font-family:Georgia,serif;font-weight:normal">Your Case Has Been Created</h1>
+                          <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Case #${safeCaseNumber}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#ffffff;padding:32px 36px">
+                          <p style="font-size:15px;font-weight:bold;color:#1a3a5c;margin:0 0 12px">Dear ${safeClientName},</p>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 20px">We would like to let you know that your case has been successfully created in our system.</p>
+                          <table width="100%" cellpadding="0" cellspacing="0" style="background:#fdf8ef;border-left:4px solid #c8a84b;border-radius:0 8px 8px 0;margin-bottom:20px">
+                            <tr>
+                              <td style="padding:16px">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;width:120px;padding:4px 0">Case Number</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">#${safeCaseNumber}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Created Date</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${safeCreatedDate}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Status</td>
+                                    <td style="padding:4px 0"><span style="background:#dbeafe;color:#1e40af;font-size:11px;font-weight:bold;padding:3px 10px;border-radius:20px">Created</span></td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 20px">To view the progress of your case, please log in to your portal. If you do not yet have an account, please sign up using your email address to access your case updates.</p>
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="background:#c8a84b;border-radius:6px">
+                                <a href="${portalUrl}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:14px;font-weight:bold;text-decoration:none">Log In / Sign Up</a>
+                              </td>
+                            </tr>
+                          </table>
+                          <p style="font-size:13px;color:#666;margin:20px 0 0">If you need assistance, please contact us at <strong>${safeSupportEmail}</strong> or WhatsApp us on <strong>${safeSupportWhatsapp}</strong>.</p>
+                          <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+                          <p style="font-size:13px;color:#555;line-height:1.7;margin:0">
+                            <strong style="color:#1a3a5c">The Acapolite Consulting Team</strong><br />
+                            Registered Tax Practitioners<br />
+                            ${safeSupportEmail} | ${safeSupportWhatsapp}<br />
+                            <a href="${portalUrl}" style="color:#1a3a5c">${siteLabel}</a>
+                          </p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#f0f2f5;border-radius:0 0 10px 10px;padding:16px 36px;text-align:center">
+                          <p style="font-size:11px;color:#999;margin:0">Copyright 2026 Acapolite Consulting. All rights reserved.<br />This is an automated notification. Please do not reply to this email.</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>`,
+        category: "Case Created",
+      } satisfies MailtrapMessage,
+      log: {
+        notificationType: "case_created",
+        recipientEmail: clientEmail,
+        profileId: clientProfileId,
+        contactEmail: clientEmail,
+        metadata: {
+          case_id: caseId,
+          case_number: caseNumber,
+          notification_key: notificationKey,
         },
       } satisfies NotificationLogEntry,
     };

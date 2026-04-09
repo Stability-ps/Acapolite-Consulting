@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -15,6 +16,7 @@ import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog"
 import { getClientWarningSummary } from "@/lib/clientRisk";
 import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
 import { sendCaseStatusChangedNotification } from "@/lib/caseStatusNotifications";
+import { sendCaseCreatedNotification } from "@/lib/caseCreatedNotifications";
 
 const statusOptions: Enums<"case_status">[] = [
   "new",
@@ -80,6 +82,7 @@ export default function AdminCases() {
     due_date: "",
     priority: "2",
     assigned_consultant_id: UNASSIGNED_CONSULTANT,
+    notify_client: true,
   });
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
@@ -428,7 +431,7 @@ export default function AdminCases() {
       due_date: form.due_date ? new Date(`${form.due_date}T12:00:00`).toISOString() : null,
     };
 
-    const { data, error } = await supabase.from("cases").insert(payload).select("id").single();
+    const { data, error } = await supabase.from("cases").insert(payload).select("id, created_at").single();
 
     if (error) {
       toast.error(error.message);
@@ -438,19 +441,45 @@ export default function AdminCases() {
 
     const assignedConsultantId = payload.assigned_consultant_id;
     let notified = false;
+    let clientNotified = false;
+    const selectedClient = (clients ?? []).find((client) => client.id === form.client_id);
 
     if (assignedConsultantId && data?.id) {
-      const selectedClient = clientOptionMap.get(form.client_id);
       notified = await notifyAssignedConsultant({
         caseId: data.id,
         consultantId: assignedConsultantId,
-        clientName: selectedClient?.label || "Client",
+        clientName: clientOptionMap.get(form.client_id)?.label || "Client",
         caseType: form.case_type,
         priority: Number(form.priority),
       });
     }
 
-    toast.success(assignedConsultantId && notified ? "Case created and practitioner notified." : "Case created");
+    if (form.notify_client && selectedClient?.profile_id && data?.id) {
+      const clientNotification = await sendCaseCreatedNotification({
+        caseId: data.id,
+        clientProfileId: selectedClient.profile_id,
+        clientEmail: selectedClient.profiles?.email,
+        clientName: clientOptionMap.get(form.client_id)?.label || "Client",
+        createdAt: data.created_at,
+      });
+
+      if (clientNotification.error) {
+        console.error("Case created email failed:", clientNotification.error);
+        toast.error("Case created, but the client email notification could not be delivered.");
+      } else {
+        clientNotified = !clientNotification.skipped;
+      }
+    }
+
+    toast.success(
+      assignedConsultantId && notified
+        ? clientNotified
+          ? "Case created. Practitioner and client notified."
+          : "Case created and practitioner notified."
+        : clientNotified
+          ? "Case created and client notified."
+          : "Case created",
+    );
     setForm({
       client_id: "",
       case_title: "",
@@ -459,6 +488,7 @@ export default function AdminCases() {
       due_date: "",
       priority: "2",
       assigned_consultant_id: UNASSIGNED_CONSULTANT,
+      notify_client: true,
     });
     setCreating(false);
     setIsCreateModalOpen(false);
@@ -679,6 +709,22 @@ export default function AdminCases() {
               placeholder="Add the client need, SARS issue, or service details."
               className="rounded-xl"
             />
+          </div>
+
+          <div className="rounded-2xl border border-border bg-accent/20 p-4">
+            <label className="flex items-start gap-3">
+              <Checkbox
+                checked={form.notify_client}
+                onCheckedChange={(checked) => setForm((current) => ({ ...current, notify_client: checked === true }))}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-foreground font-body">Notify client by email</span>
+                <span className="block text-xs text-muted-foreground font-body mt-1">
+                  Send the case-created email to the client for this specific case.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div className="flex justify-end gap-3">
