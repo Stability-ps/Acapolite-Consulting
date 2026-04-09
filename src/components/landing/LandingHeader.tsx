@@ -57,6 +57,13 @@ export function LandingHeader() {
               <Button
                 asChild
                 variant="ghost"
+                className="hidden rounded-full border border-sky-300/16 bg-sky-100/12 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-sky-100/18 hover:text-white hover:shadow-[0_8px_24px_rgba(125,211,252,0.16)] lg:inline-flex"
+              >
+                <Link to="/request-tax-assistance">Request Tax Assistance</Link>
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
                 className="hidden rounded-full border border-sky-300/16 bg-sky-100/12 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-sky-100/18 hover:text-white hover:shadow-[0_8px_24px_rgba(125,211,252,0.16)] sm:inline-flex"
               >
                 <a href="#contact">Request Demo</a>

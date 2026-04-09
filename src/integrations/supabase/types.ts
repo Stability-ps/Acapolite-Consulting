@@ -502,6 +502,120 @@ export type Database = {
         };
         Relationships: [];
       };
+      service_requests: {
+        Row: {
+          id: string;
+          full_name: string;
+          email: string;
+          phone: string;
+          client_type: Database["public"]["Enums"]["service_request_client_type"];
+          id_number: string | null;
+          company_registration_number: string | null;
+          service_needed: Database["public"]["Enums"]["service_request_service_needed"];
+          priority_level: Database["public"]["Enums"]["service_request_priority"];
+          description: string;
+          sars_debt_amount: number;
+          returns_filed: boolean;
+          status: Database["public"]["Enums"]["service_request_status"];
+          has_debt_flag: boolean;
+          missing_returns_flag: boolean;
+          missing_documents_flag: boolean;
+          risk_indicator: Database["public"]["Enums"]["service_request_risk_indicator"];
+          viewed_at: string | null;
+          responded_at: string | null;
+          assigned_at: string | null;
+          closed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          full_name: string;
+          email: string;
+          phone: string;
+          client_type: Database["public"]["Enums"]["service_request_client_type"];
+          id_number?: string | null;
+          company_registration_number?: string | null;
+          service_needed: Database["public"]["Enums"]["service_request_service_needed"];
+          priority_level?: Database["public"]["Enums"]["service_request_priority"];
+          description: string;
+          sars_debt_amount?: number;
+          returns_filed?: boolean;
+          status?: Database["public"]["Enums"]["service_request_status"];
+          has_debt_flag?: boolean;
+          missing_returns_flag?: boolean;
+          missing_documents_flag?: boolean;
+          risk_indicator?: Database["public"]["Enums"]["service_request_risk_indicator"];
+          viewed_at?: string | null;
+          responded_at?: string | null;
+          assigned_at?: string | null;
+          closed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          full_name?: string;
+          email?: string;
+          phone?: string;
+          client_type?: Database["public"]["Enums"]["service_request_client_type"];
+          id_number?: string | null;
+          company_registration_number?: string | null;
+          service_needed?: Database["public"]["Enums"]["service_request_service_needed"];
+          priority_level?: Database["public"]["Enums"]["service_request_priority"];
+          description?: string;
+          sars_debt_amount?: number;
+          returns_filed?: boolean;
+          status?: Database["public"]["Enums"]["service_request_status"];
+          has_debt_flag?: boolean;
+          missing_returns_flag?: boolean;
+          missing_documents_flag?: boolean;
+          risk_indicator?: Database["public"]["Enums"]["service_request_risk_indicator"];
+          viewed_at?: string | null;
+          responded_at?: string | null;
+          assigned_at?: string | null;
+          closed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      service_request_documents: {
+        Row: {
+          id: string;
+          service_request_id: string;
+          title: string;
+          file_name: string;
+          file_path: string;
+          file_size: number | null;
+          mime_type: string | null;
+          uploaded_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          service_request_id: string;
+          title: string;
+          file_name: string;
+          file_path: string;
+          file_size?: number | null;
+          mime_type?: string | null;
+          uploaded_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          service_request_id?: string;
+          title?: string;
+          file_name?: string;
+          file_path?: string;
+          file_size?: number | null;
+          mime_type?: string | null;
+          uploaded_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       admin_dashboard_summary: {
@@ -565,6 +679,19 @@ export type Database = {
       alert_status: "active" | "acknowledged" | "resolved" | "dismissed";
       invoice_status: "draft" | "issued" | "partially_paid" | "paid" | "overdue" | "cancelled";
       payment_status: "pending" | "paid" | "failed" | "cancelled";
+      service_request_status: "new" | "viewed" | "responded" | "assigned" | "closed";
+      service_request_client_type: "individual" | "company";
+      service_request_service_needed:
+        | "tax_return"
+        | "sars_debt_assistance"
+        | "vat_registration"
+        | "company_tax"
+        | "paye_issues"
+        | "objection_dispute"
+        | "bookkeeping"
+        | "other";
+      service_request_priority: "low" | "medium" | "high" | "urgent";
+      service_request_risk_indicator: "low" | "medium" | "high";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -679,6 +806,20 @@ export const Constants = {
       alert_status: ["active", "acknowledged", "resolved", "dismissed"],
       invoice_status: ["draft", "issued", "partially_paid", "paid", "overdue", "cancelled"],
       payment_status: ["pending", "paid", "failed", "cancelled"],
+      service_request_status: ["new", "viewed", "responded", "assigned", "closed"],
+      service_request_client_type: ["individual", "company"],
+      service_request_service_needed: [
+        "tax_return",
+        "sars_debt_assistance",
+        "vat_registration",
+        "company_tax",
+        "paye_issues",
+        "objection_dispute",
+        "bookkeeping",
+        "other",
+      ],
+      service_request_priority: ["low", "medium", "high", "urgent"],
+      service_request_risk_indicator: ["low", "medium", "high"],
     },
   },
 } as const;

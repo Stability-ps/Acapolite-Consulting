@@ -42,9 +42,12 @@ export function Hero() {
 
           <div className="flex flex-col gap-4 sm:flex-row">
             <Button asChild size="lg" className="rounded-xl bg-primary px-8 py-6 text-base font-semibold text-primary-foreground shadow-elevated hover:bg-primary/90">
-              <Link to="/login">Log In to Portal</Link>
+              <Link to="/request-tax-assistance">Request Tax Assistance</Link>
             </Button>
             <Button asChild size="lg" className="rounded-xl border border-white/70 bg-white/95 px-8 py-6 text-base font-semibold !text-foreground hover:bg-white">
+              <Link to="/login">Log In to Portal</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="rounded-xl border border-white/18 bg-transparent px-8 py-6 text-base font-semibold text-primary-foreground hover:bg-white/10 hover:text-primary-foreground">
               <Link to="/register">
                 Create Account <ArrowRight className="ml-2 h-5 w-5" />
               </Link>

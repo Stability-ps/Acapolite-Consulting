@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
+import RequestTaxAssistance from "./pages/RequestTaxAssistance";
 import Dashboard from "./pages/Dashboard";
 import DashboardOverview from "./pages/dashboard/Overview";
 import Cases from "./pages/dashboard/Cases";
@@ -27,6 +28,7 @@ import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
 import AdminMessages from "./pages/dashboard/admin/AdminMessages";
 import AdminClientWorkspace from "./pages/dashboard/admin/AdminClientWorkspace";
 import AdminUsers from "./pages/dashboard/admin/AdminUsers";
+import AdminServiceRequests from "./pages/dashboard/admin/AdminServiceRequests";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +45,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/request-tax-assistance" element={<RequestTaxAssistance />} />
             <Route path="/dashboard" element={<Dashboard />}>
               <Route index element={<DashboardIndexRedirect />} />
 
@@ -62,6 +65,9 @@ const App = () => (
                 </Route>
                 <Route element={<RequireStaffPermission permission="can_view_clients" />}>
                   <Route path="staff/clients" element={<AdminClients />} />
+                </Route>
+                <Route element={<RequireStaffPermission permission="can_view_clients" />}>
+                  <Route path="staff/service-requests" element={<AdminServiceRequests />} />
                 </Route>
                 <Route element={<RequireStaffPermission permission="can_view_client_workspace" />}>
                   <Route path="staff/client-workspace" element={<AdminClientWorkspace />} />
