@@ -18,6 +18,7 @@ const invoiceStatuses: Enums<"invoice_status">[] = ["draft", "issued", "partiall
 type StaffInvoice = {
   id: string;
   invoice_number: string;
+  case_id?: string | null;
   title: string | null;
   description: string | null;
   total_amount: number;
@@ -74,6 +75,7 @@ export default function AdminInvoices() {
   const [invoiceDueDate, setInvoiceDueDate] = useState("");
   const [invoiceTotalAmount, setInvoiceTotalAmount] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
+  const [resendingInvoice, setResendingInvoice] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [clientsFormValue, setClientsFormValue] = useState("");
 
@@ -197,6 +199,47 @@ export default function AdminInvoices() {
     toast.success("Invoice updated");
     setSavingStatus(false);
     await queryClient.invalidateQueries({ queryKey: ["staff-invoices"] });
+  };
+
+  const resendInvoice = async () => {
+    if (!selectedInvoice) return;
+    if (!canManageInvoices) {
+      toast.error("This consultant profile cannot resend invoices.");
+      return;
+    }
+
+    const clientProfileId = selectedInvoice.clients?.profile_id;
+    const clientEmail = selectedInvoice.clients?.profiles?.email;
+
+    if (!clientProfileId || !clientEmail) {
+      toast.error("This invoice cannot be emailed because the client does not have a valid portal profile and email.");
+      return;
+    }
+
+    setResendingInvoice(true);
+
+    const notification = await sendInvoiceCreatedNotification({
+      invoiceId: selectedInvoice.id,
+      invoiceNumber: selectedInvoice.invoice_number,
+      clientProfileId,
+      clientEmail,
+      clientName: getClientName(selectedInvoice),
+      serviceDescription: invoiceTitle.trim() || invoiceDescription.trim() || selectedInvoice.title || selectedInvoice.description || "Professional tax services",
+      amount: Number(invoiceTotalAmount || selectedInvoice.total_amount || 0),
+      dueDate: invoiceDueDate || selectedInvoice.due_date,
+      caseNumber: selectedInvoice.case_id?.trim() || undefined,
+      status: selectedStatus || selectedInvoice.status,
+    });
+
+    setResendingInvoice(false);
+
+    if (notification.error) {
+      console.error("Resend invoice email failed:", notification.error);
+      toast.error(notification.error.message || "Unable to resend the invoice email.");
+      return;
+    }
+
+    toast.success(notification.skipped ? "Invoice email was already logged for this invoice." : "Invoice email sent to the client.");
   };
 
   const createInvoice = async () => {
@@ -504,6 +547,9 @@ export default function AdminInvoices() {
                   </Select>
                   <Button type="button" className="rounded-xl" onClick={updateInvoice} disabled={savingStatus}>
                     {savingStatus ? "Saving..." : "Save Invoice"}
+                  </Button>
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={resendInvoice} disabled={resendingInvoice}>
+                    {resendingInvoice ? "Sending..." : "Resend Invoice"}
                   </Button>
                 </div>
               ) : (
