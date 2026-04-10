@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Search, SendHorizonal } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
@@ -26,11 +27,14 @@ type ServiceRequestResponse = Tables<"service_request_responses">;
 export default function PractitionerLeads() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [introductionMessage, setIntroductionMessage] = useState("");
   const [servicePitch, setServicePitch] = useState("");
   const [savingResponse, setSavingResponse] = useState(false);
+  const leadIdFromQuery = searchParams.get("leadId");
+  const leadAction = searchParams.get("action");
 
   const { data: practitionerProfile } = useQuery({
     queryKey: ["practitioner-profile", user?.id],
@@ -140,6 +144,14 @@ export default function PractitionerLeads() {
     || null;
   const selectedResponse = selectedRequest ? responseMap.get(selectedRequest.id) ?? null : null;
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
+
+  useEffect(() => {
+    if (!leadIdFromQuery || !(requests ?? []).some((request) => request.id === leadIdFromQuery)) {
+      return;
+    }
+
+    setSelectedRequestId(leadIdFromQuery);
+  }, [leadIdFromQuery, requests]);
 
   useEffect(() => {
     if (!selectedResponse) {
@@ -303,7 +315,17 @@ export default function PractitionerLeads() {
 
       <DashboardItemDialog
         open={!!selectedRequest}
-        onOpenChange={(open) => setSelectedRequestId(open ? selectedRequestId : null)}
+        onOpenChange={(open) => {
+          if (open) return;
+
+          setSelectedRequestId(null);
+          if (leadIdFromQuery || leadAction) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("leadId");
+            next.delete("action");
+            setSearchParams(next, { replace: true });
+          }
+        }}
         title={selectedRequest ? selectedRequest.full_name : "Lead"}
         description={selectedRequest ? "Review this lead and send your practitioner introduction." : undefined}
       >
@@ -354,7 +376,9 @@ export default function PractitionerLeads() {
                 <Textarea
                   value={introductionMessage}
                   onChange={(event) => setIntroductionMessage(event.target.value)}
-                  placeholder="Introduce yourself, explain how you can help, and set expectations for the client."
+                  placeholder={leadAction === "respond"
+                    ? "You came here to respond to this lead. Introduce yourself, explain how you can help, and set expectations for the client."
+                    : "Introduce yourself, explain how you can help, and set expectations for the client."}
                   className="min-h-[140px] rounded-xl"
                 />
               </div>

@@ -30,6 +30,7 @@ import AdminMessages from "./pages/dashboard/admin/AdminMessages";
 import AdminClientWorkspace from "./pages/dashboard/admin/AdminClientWorkspace";
 import AdminUsers from "./pages/dashboard/admin/AdminUsers";
 import AdminServiceRequests from "./pages/dashboard/admin/AdminServiceRequests";
+import PractitionerProfile from "./pages/dashboard/admin/PractitionerProfile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,6 +67,9 @@ const App = () => (
               <Route element={<RequireRole allowedRoles={["admin", "consultant"]} />}>
                 <Route element={<RequireStaffPermission permission="can_view_overview" />}>
                   <Route path="staff" element={<StaffOverviewRouter />} />
+                </Route>
+                <Route element={<RequireRole allowedRoles={["consultant"]} />}>
+                  <Route path="staff/profile" element={<PractitionerProfile />} />
                 </Route>
                 <Route element={<RequireStaffPermission permission="can_view_clients" />}>
                   <Route path="staff/clients" element={<AdminClients />} />

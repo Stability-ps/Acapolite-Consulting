@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, FolderOpen, Upload, Receipt, MessageSquare, Bell, Settings, Users, Shield, LogOut, UserRound, UserPlus, ClipboardList,
+  LayoutDashboard, FolderOpen, Upload, Receipt, MessageSquare, Bell, Settings, Users, Shield, LogOut, UserRound, UserPlus, ClipboardList, BriefcaseBusiness,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -37,6 +37,18 @@ const adminItems = [
   { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare, permission: "can_view_messages" as StaffPermissionKey },
 ];
 
+const consultantItems = [
+  { title: "Overview", url: "/dashboard/staff", icon: Shield, permission: "can_view_overview" as StaffPermissionKey },
+  { title: "My Profile", url: "/dashboard/staff/profile", icon: BriefcaseBusiness },
+  { title: "Clients", url: "/dashboard/staff/clients", icon: Users, permission: "can_view_clients" as StaffPermissionKey },
+  { title: "Service Requests", url: "/dashboard/staff/service-requests", icon: ClipboardList, permission: "can_view_clients" as StaffPermissionKey },
+  { title: "Client 360", url: "/dashboard/staff/client-workspace", icon: UserRound, permission: "can_view_client_workspace" as StaffPermissionKey },
+  { title: "Cases", url: "/dashboard/staff/cases", icon: FolderOpen, permission: "can_view_cases" as StaffPermissionKey },
+  { title: "Documents", url: "/dashboard/staff/documents", icon: Upload, permission: "can_view_documents" as StaffPermissionKey },
+  { title: "Invoices", url: "/dashboard/staff/invoices", icon: Receipt, permission: "can_view_invoices" as StaffPermissionKey },
+  { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare, permission: "can_view_messages" as StaffPermissionKey },
+];
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -47,9 +59,9 @@ export function AppSidebar() {
     ? clientItems
     : role === "admin"
       ? adminItems
-      : adminItems.filter((item) => item.title !== "Staff Users" && (!item.permission || hasStaffPermission(item.permission)));
+      : consultantItems.filter((item) => !item.permission || hasStaffPermission(item.permission));
 
-  const groupLabel = role === "client" ? "Client Menu" : "Staff Tools";
+  const groupLabel = role === "client" ? "Client Menu" : role === "consultant" ? "Practitioner Tools" : "Staff Tools";
 
   const { data: unreadMessageCount } = useQuery({
     queryKey: ["sidebar-unread-messages", role, user?.id],
