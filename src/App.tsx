@@ -46,7 +46,9 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/request-tax-assistance" element={<RequestTaxAssistance />} />
+            <Route element={<RequireRole allowedRoles={["client"]} />}>
+              <Route path="/request-tax-assistance" element={<RequestTaxAssistance />} />
+            </Route>
             <Route path="/dashboard" element={<Dashboard />}>
               <Route index element={<DashboardIndexRedirect />} />
 

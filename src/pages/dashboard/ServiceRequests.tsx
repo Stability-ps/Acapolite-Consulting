@@ -153,11 +153,22 @@ export default function ClientServiceRequests() {
   return (
     <div className="space-y-8">
       <section className="rounded-[28px] border border-border bg-card p-6 shadow-card sm:p-8">
-        <p className="text-sm uppercase tracking-[0.2em] text-primary/70 font-body">Marketplace Requests</p>
-        <h1 className="mt-2 font-display text-3xl text-foreground">My Service Requests</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground font-body">
-          Track tax assistance requests you submitted, review practitioner responses, and select the practitioner you want to work with.
-        </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.2em] text-primary/70 font-body">Marketplace Requests</p>
+            <h1 className="mt-2 font-display text-3xl text-foreground">My Service Requests</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground font-body">
+              Track tax assistance requests you submitted, review practitioner responses, and select the practitioner you want to work with.
+            </p>
+          </div>
+
+          <Button asChild className="rounded-xl">
+            <Link to="/request-tax-assistance" state={{ fromPortal: true, fromPath: "/dashboard/client/requests" }}>
+              New Service Request
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
       </section>
 
       {!client ? (
@@ -214,7 +225,7 @@ export default function ClientServiceRequests() {
             No service requests are linked to this email yet.
           </p>
           <Button asChild className="mt-4 rounded-xl">
-            <Link to="/request-tax-assistance">
+            <Link to="/request-tax-assistance" state={{ fromPortal: true, fromPath: "/dashboard/client/requests" }}>
               Submit a Request
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

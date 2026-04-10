@@ -429,6 +429,7 @@ export default function AdminUsers() {
       queryClient.invalidateQueries({ queryKey: ["staff-user-permissions", selectedStaffUser.id] }),
       queryClient.invalidateQueries({ queryKey: ["staff-user-practitioner-profile", selectedStaffUser.id] }),
     ]);
+    setSelectedStaffId(null);
   };
 
   return (

@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, Upload } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { supabase } from "@/integrations/supabase/client";
 import type { Enums } from "@/integrations/supabase/types";
+import { useAuth } from "@/hooks/useAuth";
 import {
   formatServiceRequestLabel,
   serviceNeededOptions,
@@ -20,6 +21,9 @@ import {
 type ClientType = Enums<"service_request_client_type">;
 
 export default function RequestTaxAssistance() {
+  const { user, profile, dashboardPath } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [submitting, setSubmitting] = useState(false);
   const [completedRequestId, setCompletedRequestId] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -36,16 +40,66 @@ export default function RequestTaxAssistance() {
     sars_debt_amount: "",
     returns_filed: true,
   });
+  const portalFallbackPath = "/dashboard/client";
+  const resolvedAccountFullName = profile?.full_name
+    || user?.user_metadata?.full_name
+    || user?.user_metadata?.name
+    || "";
+
+  const resetFormToAccount = () => {
+    setForm({
+      full_name: resolvedAccountFullName,
+      email: user?.email || "",
+      phone: profile?.phone || "",
+      client_type: "individual",
+      id_number: "",
+      company_registration_number: "",
+      service_needed: "tax_return",
+      priority_level: "medium",
+      description: "",
+      sars_debt_amount: "",
+      returns_filed: true,
+    });
+  };
+
+  useEffect(() => {
+    if (!user) return;
+
+    setForm((current) => ({
+      ...current,
+      full_name: current.full_name || resolvedAccountFullName,
+      email: user.email || current.email,
+      phone: current.phone || profile?.phone || "",
+    }));
+  }, [profile?.phone, resolvedAccountFullName, user]);
 
   const selectedService = useMemo(
     () => serviceNeededOptions.find((option) => option.value === form.service_needed),
     [form.service_needed],
   );
 
+  const goBackInsidePortal = () => {
+    const state = location.state as { fromPortal?: boolean; fromPath?: string } | null;
+    const fallbackPath = state?.fromPath || dashboardPath || portalFallbackPath;
+
+    if (state?.fromPortal && window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate(fallbackPath, { replace: true });
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!form.full_name.trim() || !form.email.trim() || !form.phone.trim() || !form.description.trim()) {
+    if (!user?.email) {
+      toast.error("You must be signed in to submit a service request.");
+      navigate("/login", { replace: true });
+      return;
+    }
+
+    if (!form.full_name.trim() || !form.phone.trim() || !form.description.trim()) {
       toast.error("Please complete all required fields.");
       return;
     }
@@ -73,7 +127,7 @@ export default function RequestTaxAssistance() {
         .from("service_requests")
         .insert({
           full_name: form.full_name.trim(),
-          email: form.email.trim(),
+          email: user.email.trim().toLowerCase(),
           phone: form.phone.trim(),
           client_type: form.client_type,
           id_number: form.client_type === "individual" ? form.id_number.trim() : null,
@@ -137,10 +191,14 @@ export default function RequestTaxAssistance() {
     return (
       <div className="min-h-screen bg-surface-gradient px-4 py-16">
         <div className="mx-auto w-full max-w-3xl">
-          <Link to="/" className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground font-body">
+          <button
+            type="button"
+            onClick={goBackInsidePortal}
+            className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground font-body"
+          >
             <ArrowLeft className="h-4 w-4" />
-            Back to home
-          </Link>
+            Back to portal
+          </button>
 
           <div className="rounded-[32px] border border-border bg-card p-8 shadow-elevated sm:p-10">
             <AcapoliteLogo className="mb-8 h-14" />
@@ -159,8 +217,8 @@ export default function RequestTaxAssistance() {
             </div>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild className="rounded-xl">
-                <Link to="/">Return to Website</Link>
+              <Button type="button" className="rounded-xl" onClick={goBackInsidePortal}>
+                Return to Portal
               </Button>
               <Button
                 type="button"
@@ -168,19 +226,7 @@ export default function RequestTaxAssistance() {
                 className="rounded-xl"
                 onClick={() => {
                   setCompletedRequestId(null);
-                  setForm({
-                    full_name: "",
-                    email: "",
-                    phone: "",
-                    client_type: "individual",
-                    id_number: "",
-                    company_registration_number: "",
-                    service_needed: "tax_return",
-                    priority_level: "medium",
-                    description: "",
-                    sars_debt_amount: "",
-                    returns_filed: true,
-                  });
+                  resetFormToAccount();
                 }}
               >
                 Submit Another Request
@@ -195,21 +241,24 @@ export default function RequestTaxAssistance() {
   return (
     <div className="min-h-screen bg-surface-gradient px-4 py-12 sm:py-16">
       <div className="mx-auto w-full max-w-4xl">
-        <Link to="/" className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground font-body">
+        <button
+          type="button"
+          onClick={goBackInsidePortal}
+          className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground font-body"
+        >
           <ArrowLeft className="h-4 w-4" />
-          Back to home
-        </Link>
+          Back to portal
+        </button>
 
         <div className="rounded-[32px] border border-border bg-card p-6 shadow-elevated sm:p-10">
           <AcapoliteLogo className="mb-8 h-14" />
           <div className="max-w-3xl">
             <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-border bg-accent/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Public Lead Form
+              Client Service Form
             </p>
             <h1 className="font-display text-3xl text-foreground sm:text-4xl">Request Tax Assistance</h1>
             <p className="mt-3 text-sm leading-6 text-muted-foreground font-body sm:text-base">
-              Tell Acapolite what you need help with, attach any supporting documents, and the admin team will receive
-              your service request as a structured lead with risk and issue flags.
+              Tell Acapolite what you need help with, attach any supporting documents, and submit the request from your logged-in client account so it stays linked to your portal profile.
             </p>
           </div>
 
@@ -230,11 +279,13 @@ export default function RequestTaxAssistance() {
                 <Input
                   type="email"
                   value={form.email}
-                  onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                  placeholder="you@example.com"
+                  readOnly
+                  placeholder="Linked to your portal account"
                   className="rounded-xl"
-                  required
                 />
+                <p className="mt-2 text-xs text-muted-foreground font-body">
+                  This request will be submitted using your logged-in portal email.
+                </p>
               </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">Phone Number</label>
@@ -401,27 +452,9 @@ export default function RequestTaxAssistance() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border bg-slate-50/80 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">What the system will record</p>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-foreground shadow-sm">
-                  Status: New
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-foreground shadow-sm">
-                  Risk: calculated automatically
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-foreground shadow-sm">
-                  Flags: Debt / Returns / Documents
-                </span>
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground font-body">
-                The admin dashboard will show this request with issue flags and a low / medium / high risk indicator.
-              </p>
-            </div>
-
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button type="button" variant="outline" className="rounded-xl" asChild>
-                <Link to="/">Cancel</Link>
+              <Button type="button" variant="outline" className="rounded-xl" onClick={goBackInsidePortal}>
+                Cancel
               </Button>
               <Button type="submit" className="rounded-xl" disabled={submitting}>
                 {submitting ? "Submitting..." : "Submit Tax Assistance Request"}
