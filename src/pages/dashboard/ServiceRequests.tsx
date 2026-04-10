@@ -8,15 +8,18 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { RatingStars } from "@/components/dashboard/RatingStars";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { serviceNeededOptions, formatServiceRequestLabel, getServiceRequestRiskClass, getServiceRequestStatusClass } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, getResponseStatusClass } from "@/lib/practitionerMarketplace";
+import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
 
 type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type Profile = Tables<"profiles">;
+type PractitionerReview = Tables<"practitioner_reviews">;
 
 export default function ClientServiceRequests() {
   const { user } = useAuth();
@@ -63,6 +66,7 @@ export default function ClientServiceRequests() {
     () => Array.from(new Set((responses ?? []).map((response) => response.practitioner_profile_id))),
     [responses],
   );
+  const practitionerIdsKey = practitionerIds.join(",");
 
   const { data: practitionerProfiles } = useQuery({
     queryKey: ["client-practitioner-profiles", practitionerIds],
@@ -96,6 +100,22 @@ export default function ClientServiceRequests() {
     enabled: practitionerIds.length > 0,
   });
 
+  const { data: practitionerReviews } = useQuery({
+    queryKey: ["client-practitioner-reviews", practitionerIdsKey],
+    queryFn: async () => {
+      if (!practitionerIds.length) return [] as PractitionerReview[];
+
+      const { data, error } = await supabase
+        .from("practitioner_reviews")
+        .select("practitioner_profile_id, rating")
+        .in("practitioner_profile_id", practitionerIds);
+
+      if (error) throw error;
+      return (data ?? []) as PractitionerReview[];
+    },
+    enabled: practitionerIds.length > 0,
+  });
+
   const responsesByRequest = useMemo(() => {
     const map = new Map<string, ServiceRequestResponse[]>();
 
@@ -117,6 +137,26 @@ export default function ClientServiceRequests() {
     () => new Map((practitionerUsers ?? []).map((profile) => [profile.id, profile])),
     [practitionerUsers],
   );
+  const practitionerRatingSummaryMap = useMemo(() => {
+    const accumulator = new Map<string, { total: number; count: number }>();
+
+    for (const review of practitionerReviews ?? []) {
+      const current = accumulator.get(review.practitioner_profile_id) ?? { total: 0, count: 0 };
+      current.total += review.rating;
+      current.count += 1;
+      accumulator.set(review.practitioner_profile_id, current);
+    }
+
+    return new Map(
+      Array.from(accumulator.entries()).map(([practitionerId, summary]) => [
+        practitionerId,
+        {
+          average: summary.count ? summary.total / summary.count : 0,
+          count: summary.count,
+        },
+      ]),
+    );
+  }, [practitionerReviews]);
 
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
   const selectedResponses = selectedRequest ? responsesByRequest.get(selectedRequest.id) ?? [] : [];
@@ -126,6 +166,9 @@ export default function ClientServiceRequests() {
       toast.error("You need an active client portal profile before selecting a practitioner.");
       return;
     }
+
+    const selectedResponse = (responses ?? []).find((response) => response.id === responseId);
+    const selectedRequest = (requests ?? []).find((request) => request.id === selectedResponse?.service_request_id);
 
     setSelectingResponseId(responseId);
     const { data, error } = await supabase.rpc("accept_service_request_response", {
@@ -144,6 +187,29 @@ export default function ClientServiceRequests() {
       queryClient.invalidateQueries({ queryKey: ["client-service-request-responses", requestIds] }),
       queryClient.invalidateQueries({ queryKey: ["overview-active-cases", client.id] }),
     ]);
+
+    if (data && selectedResponse && selectedRequest) {
+      const practitionerUser = practitionerUserMap.get(selectedResponse.practitioner_profile_id);
+      const practitionerProfile = practitionerProfileMap.get(selectedResponse.practitioner_profile_id);
+
+      const notificationResult = await sendPractitionerAssignmentNotification({
+        caseId: data,
+        practitionerProfileId: selectedResponse.practitioner_profile_id,
+        practitionerEmail: practitionerUser?.email,
+        practitionerName: practitionerUser?.full_name || practitionerProfile?.business_name || "Practitioner",
+        clientName: client.company_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || selectedRequest.full_name,
+        caseType: serviceNeededOptions.find((item) => item.value === selectedRequest.service_needed)?.label || selectedRequest.service_needed,
+        priority: selectedRequest.priority_level === "urgent" || selectedRequest.priority_level === "high"
+          ? 1
+          : selectedRequest.priority_level === "low"
+            ? 3
+            : 2,
+      });
+
+      if (notificationResult.error) {
+        console.error("Practitioner assignment notification failed.", notificationResult.error);
+      }
+    }
 
     if (data) {
       window.location.assign("/dashboard/client/cases");
@@ -250,6 +316,7 @@ export default function ClientServiceRequests() {
               {selectedResponses.length ? selectedResponses.map((response) => {
                 const practitionerProfile = practitionerProfileMap.get(response.practitioner_profile_id);
                 const practitionerUser = practitionerUserMap.get(response.practitioner_profile_id);
+                const ratingSummary = practitionerRatingSummaryMap.get(response.practitioner_profile_id);
                 const isSelected = selectedRequest.selected_response_id === response.id;
 
                 return (
@@ -285,6 +352,12 @@ export default function ClientServiceRequests() {
                             {practitionerProfile?.business_name || "Independent Practitioner"}
                           </span>
                           <span>{practitionerProfile?.years_of_experience ?? 0} years experience</span>
+                          <span className="inline-flex items-center gap-2">
+                            <RatingStars value={ratingSummary?.average ?? 0} readOnly className="gap-0.5" />
+                            {ratingSummary?.count
+                              ? `${ratingSummary.average.toFixed(1)} (${ratingSummary.count} review${ratingSummary.count === 1 ? "" : "s"})`
+                              : "No reviews yet"}
+                          </span>
                         </div>
 
                         <p className="whitespace-pre-wrap text-sm leading-6 text-foreground font-body">

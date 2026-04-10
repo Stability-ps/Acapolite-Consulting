@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Paperclip } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { RatingStars } from "@/components/dashboard/RatingStars";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -21,6 +23,12 @@ const caseTypeOptions = [
   "sars_dispute_objection",
   "other",
 ] as const;
+
+type CaseRecord = Tables<"cases"> & {
+  assigned_consultant: Pick<Tables<"profiles">, "full_name" | "email"> | null;
+};
+
+type PractitionerReview = Tables<"practitioner_reviews">;
 
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
@@ -76,6 +84,9 @@ export default function Cases() {
   const [isRequestCaseOpen, setIsRequestCaseOpen] = useState(false);
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
   const [requestForm, setRequestForm] = useState({
     case_title: "",
     case_type: "individual_tax_return",
@@ -85,8 +96,14 @@ export default function Cases() {
   const { data: cases, isLoading } = useQuery({
     queryKey: ["cases", client?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("cases").select("*").eq("client_id", client!.id).order("last_activity_at", { ascending: false });
-      return data ?? [];
+      const { data, error } = await supabase
+        .from("cases")
+        .select("*, assigned_consultant:profiles!cases_assigned_consultant_id_fkey(full_name, email)")
+        .eq("client_id", client!.id)
+        .order("last_activity_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as CaseRecord[];
     },
     enabled: !!client,
   });
@@ -118,9 +135,39 @@ export default function Cases() {
     enabled: !!selectedRequestId,
   });
 
+  const { data: selectedReview } = useQuery({
+    queryKey: ["case-practitioner-review", client?.id, selectedCaseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_reviews")
+        .select("*")
+        .eq("client_id", client!.id)
+        .eq("case_id", selectedCaseId!)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as PractitionerReview | null;
+    },
+    enabled: !!client && !!selectedCaseId,
+  });
+
   const selectedCase = cases?.find((caseItem) => caseItem.id === selectedCaseId) ?? null;
   const selectedRequest = requestConversations?.find((request) => request.id === selectedRequestId) ?? null;
   const requestSummary = parseRequestMessage(selectedRequestMessages?.[0]?.message_text);
+  const canReviewSelectedCase = Boolean(
+    selectedCase?.assigned_consultant_id && selectedCase && ["resolved", "closed"].includes(selectedCase.status),
+  );
+
+  useEffect(() => {
+    if (!selectedReview) {
+      setReviewRating(5);
+      setReviewText("");
+      return;
+    }
+
+    setReviewRating(selectedReview.rating);
+    setReviewText(selectedReview.review_text || "");
+  }, [selectedReview, selectedCaseId]);
 
   const resetRequestForm = () => {
     setRequestForm({
@@ -242,6 +289,42 @@ export default function Cases() {
       toast.error(message);
       setSubmittingRequest(false);
     }
+  };
+
+  const savePractitionerReview = async () => {
+    if (!client || !selectedCase?.assigned_consultant_id || !canReviewSelectedCase) {
+      toast.error("This case is not ready for a practitioner review yet.");
+      return;
+    }
+
+    if (reviewRating < 1 || reviewRating > 5) {
+      toast.error("Please choose a rating between 1 and 5 stars.");
+      return;
+    }
+
+    setSavingReview(true);
+
+    const { error } = await supabase.from("practitioner_reviews").upsert(
+      {
+        id: selectedReview?.id,
+        practitioner_profile_id: selectedCase.assigned_consultant_id,
+        client_id: client.id,
+        case_id: selectedCase.id,
+        rating: reviewRating,
+        review_text: reviewText.trim() || null,
+      },
+      { onConflict: "case_id" },
+    );
+
+    setSavingReview(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success(selectedReview ? "Practitioner review updated." : "Practitioner review submitted.");
+    await queryClient.invalidateQueries({ queryKey: ["case-practitioner-review", client.id, selectedCase.id] });
   };
 
   return (
@@ -388,6 +471,45 @@ export default function Cases() {
                 <p className="font-body text-foreground">{selectedCase.description || "No additional case description yet."}</p>
               </div>
             </div>
+
+            {selectedCase.assigned_consultant_id ? (
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Practitioner Review</p>
+                <div className="rounded-2xl border border-border p-4 space-y-4">
+                  {canReviewSelectedCase ? (
+                    <>
+                      <div>
+                        <p className="font-body text-foreground">
+                          Rate {selectedCase.assigned_consultant?.full_name || "your practitioner"} for this completed case.
+                        </p>
+                        <p className="text-sm text-muted-foreground font-body mt-1">
+                          Your rating helps improve practitioner quality and marketplace trust.
+                        </p>
+                      </div>
+
+                      <RatingStars value={reviewRating} onChange={setReviewRating} />
+
+                      <Textarea
+                        value={reviewText}
+                        onChange={(event) => setReviewText(event.target.value)}
+                        placeholder="Optional: share what went well or what could have been better."
+                        className="rounded-xl"
+                      />
+
+                      <div className="flex justify-end">
+                        <Button type="button" className="rounded-xl" onClick={savePractitionerReview} disabled={savingReview}>
+                          {savingReview ? "Saving..." : selectedReview ? "Update Review" : "Submit Review"}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground font-body">
+                      Ratings open once the case has been resolved or closed.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </DashboardItemDialog>

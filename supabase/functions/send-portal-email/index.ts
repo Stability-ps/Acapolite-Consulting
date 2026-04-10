@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import webpush from "npm:web-push@3.6.7";
 
 type ContactFormPayload = {
   type: "contact_form";
@@ -151,6 +152,19 @@ type NotificationLogEntry = {
   metadata?: Record<string, unknown>;
 };
 
+type WebPushVapidConfig = {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
+};
+
+type WebPushMessage = {
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
+};
+
 const MAILTRAP_API_URL = "https://send.api.mailtrap.io/api/send";
 const DEFAULT_FROM_EMAIL = "info@acapoliteconsulting.co.za";
 const DEFAULT_FROM_NAME = "Acapolite Consulting";
@@ -203,6 +217,172 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function trimNotificationText(value: string, maxLength = 140) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+}
+
+function getWebPushVapidConfig() {
+  const packedConfig = trimString(Deno.env.get("WEB_PUSH_VAPID"));
+
+  if (packedConfig) {
+    try {
+      const parsed = JSON.parse(packedConfig) as Partial<WebPushVapidConfig>;
+      const publicKey = trimString(parsed.publicKey);
+      const privateKey = trimString(parsed.privateKey);
+      const subject = trimString(parsed.subject);
+
+      if (publicKey && privateKey && subject) {
+        return { publicKey, privateKey, subject } satisfies WebPushVapidConfig;
+      }
+    } catch (error) {
+      console.error("Unable to parse WEB_PUSH_VAPID.", error);
+    }
+  }
+
+  const publicKey = trimString(Deno.env.get("WEB_PUSH_VAPID_PUBLIC_KEY"));
+  const privateKey = trimString(Deno.env.get("WEB_PUSH_VAPID_PRIVATE_KEY"));
+  const subject = trimString(Deno.env.get("WEB_PUSH_VAPID_SUBJECT"));
+
+  if (publicKey && privateKey && subject) {
+    return { publicKey, privateKey, subject } satisfies WebPushVapidConfig;
+  }
+
+  return null;
+}
+
+function buildPortalLink(portalUrl: string, pathname: string) {
+  const base = portalUrl.endsWith("/") ? portalUrl.slice(0, -1) : portalUrl;
+  return `${base}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+}
+
+function buildWebPushContent(params: {
+  payload: PortalEmailPayload;
+  portalUrl: string;
+}) {
+  const { payload, portalUrl } = params;
+
+  switch (payload.type) {
+    case "case_created":
+      return {
+        title: "New case opened",
+        body: trimNotificationText(`Case ${trimString(payload.caseNumber) || "update"} is now available in your client portal.`),
+        url: buildPortalLink(portalUrl, "/dashboard/client/cases"),
+        tag: `case-created:${trimString(payload.caseId)}`,
+      } satisfies WebPushMessage;
+
+    case "practitioner_assigned":
+      return {
+        title: "New case assignment",
+        body: trimNotificationText(`${trimString(payload.clientName) || "A client"} has been assigned to you for ${trimString(payload.serviceType) || "a new matter"}.`),
+        url: buildPortalLink(portalUrl, "/dashboard/staff/cases"),
+        tag: `practitioner-assigned:${trimString(payload.caseId)}`,
+      } satisfies WebPushMessage;
+
+    case "practitioner_message":
+      return {
+        title: "New practitioner message",
+        body: trimNotificationText(trimString(payload.messagePreview) || `${trimString(payload.practitionerName) || "Your practitioner"} sent you a new portal message.`),
+        url: buildPortalLink(portalUrl, "/dashboard/client/messages"),
+        tag: `practitioner-message:${trimString(payload.messageId)}`,
+      } satisfies WebPushMessage;
+
+    case "invoice_created":
+      return {
+        title: "New invoice available",
+        body: trimNotificationText(`Invoice ${trimString(payload.invoiceNumber) || ""} is ready${trimString(payload.amount) ? ` for ${trimString(payload.amount)}` : ""}.`.trim()),
+        url: buildPortalLink(portalUrl, "/dashboard/client/invoices"),
+        tag: `invoice-created:${trimString(payload.invoiceId)}`,
+      } satisfies WebPushMessage;
+
+    case "case_status_changed":
+      return {
+        title: "Case status updated",
+        body: trimNotificationText(`Case ${trimString(payload.caseNumber) || ""} moved to ${trimString(payload.newStatus) || "a new status"}.`.trim()),
+        url: buildPortalLink(portalUrl, "/dashboard/client/cases"),
+        tag: `case-status:${trimString(payload.caseId)}`,
+      } satisfies WebPushMessage;
+
+    case "documents_requested":
+      return {
+        title: "Documents requested",
+        body: trimNotificationText(`${trimString(payload.practitionerName) || "Acapolite Consulting"} requested ${trimString(payload.documentList) || "additional documents"} for your case.`),
+        url: buildPortalLink(portalUrl, "/dashboard/client/documents"),
+        tag: `documents-requested:${trimString(payload.requestId)}`,
+      } satisfies WebPushMessage;
+
+    default:
+      return null;
+  }
+}
+
+async function sendWebPushNotifications(params: {
+  adminClient: ReturnType<typeof createClient>;
+  profileId: string;
+  vapidConfig: WebPushVapidConfig;
+  notification: WebPushMessage;
+}) {
+  const { adminClient, profileId, vapidConfig, notification } = params;
+
+  const { data: subscriptions, error } = await adminClient
+    .from("push_subscriptions")
+    .select("id, subscription")
+    .eq("profile_id", profileId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!subscriptions?.length) {
+    return;
+  }
+
+  webpush.setVapidDetails(vapidConfig.subject, vapidConfig.publicKey, vapidConfig.privateKey);
+
+  const expiredSubscriptionIds: string[] = [];
+
+  for (const row of subscriptions) {
+    const subscription = row.subscription;
+
+    if (!subscription || typeof subscription !== "object") {
+      continue;
+    }
+
+    try {
+      await webpush.sendNotification(
+        subscription as Parameters<typeof webpush.sendNotification>[0],
+        JSON.stringify(notification),
+      );
+    } catch (error) {
+      const statusCode =
+        typeof error === "object" && error !== null && "statusCode" in error && typeof error.statusCode === "number"
+          ? error.statusCode
+          : null;
+
+      if (statusCode === 404 || statusCode === 410) {
+        expiredSubscriptionIds.push(row.id);
+        continue;
+      }
+
+      console.error("Web push send failed.", {
+        profileId,
+        subscriptionId: row.id,
+        statusCode,
+        error,
+      });
+    }
+  }
+
+  if (expiredSubscriptionIds.length) {
+    await adminClient.from("push_subscriptions").delete().in("id", expiredSubscriptionIds);
+  }
 }
 
 async function sendMailtrapEmail(params: {
@@ -2106,6 +2286,7 @@ Deno.serve(async (request) => {
     const portalUrl = requireEnv("PORTAL_URL", DEFAULT_PORTAL_URL);
     const supportEmail = requireEnv("PORTAL_SUPPORT_EMAIL", DEFAULT_SUPPORT_EMAIL);
     const supportWhatsapp = requireEnv("PORTAL_SUPPORT_WHATSAPP", DEFAULT_SUPPORT_WHATSAPP);
+    const webPushVapidConfig = getWebPushVapidConfig();
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -2175,6 +2356,23 @@ Deno.serve(async (request) => {
       contact_email: emailContent.log.contactEmail ?? null,
       metadata: emailContent.log.metadata ?? null,
     });
+
+    if (emailContent.log.profileId && webPushVapidConfig) {
+      const webPushContent = buildWebPushContent({ payload, portalUrl });
+
+      if (webPushContent) {
+        try {
+          await sendWebPushNotifications({
+            adminClient,
+            profileId: emailContent.log.profileId,
+            vapidConfig: webPushVapidConfig,
+            notification: webPushContent,
+          });
+        } catch (error) {
+          console.error("Web push notification flow failed.", error);
+        }
+      }
+    }
 
     return jsonResponse(request, { success: true }, 200);
   } catch (error) {

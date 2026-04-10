@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { ElevenLabsWidget } from "@/components/dashboard/ElevenLabsWidget";
+import { WebPushPrompt } from "@/components/dashboard/WebPushPrompt";
 
 function getFirstName(fullName?: string | null, fallback?: string | null) {
   if (fallback?.trim()) return fallback.trim();
@@ -211,6 +212,8 @@ export default function DashboardOverview() {
         </div>
 
         <div className="space-y-6">
+          <WebPushPrompt />
+
           <ElevenLabsWidget />
 
           <div className="bg-card rounded-2xl border border-border shadow-card p-6">

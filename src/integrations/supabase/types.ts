@@ -144,6 +144,72 @@ export type Database = {
         };
         Relationships: [];
       };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          profile_id: string;
+          endpoint: string;
+          subscription: Json;
+          user_agent: string | null;
+          created_at: string;
+          updated_at: string;
+          last_seen_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          endpoint: string;
+          subscription: Json;
+          user_agent?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          last_seen_at?: string;
+        };
+        Update: {
+          id?: string;
+          profile_id?: string;
+          endpoint?: string;
+          subscription?: Json;
+          user_agent?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          last_seen_at?: string;
+        };
+        Relationships: [];
+      };
+      practitioner_reviews: {
+        Row: {
+          id: string;
+          practitioner_profile_id: string;
+          client_id: string;
+          case_id: string;
+          rating: number;
+          review_text: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          practitioner_profile_id: string;
+          client_id: string;
+          case_id: string;
+          rating: number;
+          review_text?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          practitioner_profile_id?: string;
+          client_id?: string;
+          case_id?: string;
+          rating?: number;
+          review_text?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       clients: {
         Row: {
           id: string;

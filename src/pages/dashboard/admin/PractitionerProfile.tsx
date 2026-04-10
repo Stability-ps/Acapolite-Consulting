@@ -4,10 +4,12 @@ import { BadgeCheck, BriefcaseBusiness, ClipboardList, Save } from "lucide-react
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { PractitionerProfileFields, type PractitionerProfileFormState } from "@/components/dashboard/PractitionerProfileFields";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { RatingStars } from "@/components/dashboard/RatingStars";
 import { serviceNeededOptions } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, normalizeServicesOffered } from "@/lib/practitionerMarketplace";
 
@@ -20,6 +22,8 @@ const initialPractitionerForm: PractitionerProfileFormState = {
   internalNotes: "",
   servicesOffered: [],
 };
+
+type PractitionerReview = Tables<"practitioner_reviews">;
 
 function getProfileCompletion(form: PractitionerProfileFormState) {
   const checks = [
@@ -59,6 +63,21 @@ export default function PractitionerProfile() {
     enabled: !!user,
   });
 
+  const { data: practitionerReviews } = useQuery({
+    queryKey: ["practitioner-reviews", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_reviews")
+        .select("*")
+        .eq("practitioner_profile_id", user!.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as PractitionerReview[];
+    },
+    enabled: !!user,
+  });
+
   useEffect(() => {
     if (!practitionerProfile) {
       setForm(initialPractitionerForm);
@@ -81,6 +100,15 @@ export default function PractitionerProfile() {
     const labelMap = new Map(serviceNeededOptions.map((service) => [service.value, service.label]));
     return form.servicesOffered.map((service) => labelMap.get(service) ?? service);
   }, [form.servicesOffered]);
+  const reviewSummary = useMemo(() => {
+    const reviews = practitionerReviews ?? [];
+    const count = reviews.length;
+    const average = count
+      ? reviews.reduce((total, review) => total + review.rating, 0) / count
+      : 0;
+
+    return { average, count, latest: reviews.slice(0, 3) };
+  }, [practitionerReviews]);
 
   const saveProfile = async () => {
     if (!user) return;
@@ -230,6 +258,52 @@ export default function PractitionerProfile() {
               <Button asChild variant="outline" className="rounded-xl">
                 <Link to="/dashboard/staff/service-requests">Open lead inbox</Link>
               </Button>
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-2xl text-foreground">Client Feedback</h2>
+                <p className="mt-2 text-sm text-muted-foreground font-body">
+                  Ratings from completed client matters help you measure trust and service quality.
+                </p>
+              </div>
+              <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                {reviewSummary.count} review{reviewSummary.count === 1 ? "" : "s"}
+              </Badge>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-border bg-accent/20 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Average Rating</p>
+              <div className="mt-3 flex items-center gap-3">
+                <p className="font-display text-3xl text-foreground">
+                  {reviewSummary.count ? reviewSummary.average.toFixed(1) : "N/A"}
+                </p>
+                <RatingStars value={reviewSummary.average} readOnly />
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {reviewSummary.latest.length ? (
+                reviewSummary.latest.map((review) => (
+                  <div key={review.id} className="rounded-2xl border border-border p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <RatingStars value={review.rating} readOnly />
+                      <p className="text-xs text-muted-foreground font-body">
+                        {new Date(review.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <p className="mt-3 text-sm text-foreground font-body">
+                      {review.review_text || "Client left a rating without a written review."}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground font-body">
+                  No client reviews yet. Ratings will appear once completed cases are reviewed by clients.
+                </p>
+              )}
             </div>
           </section>
         </div>

@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Enums, Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { WebPushPrompt } from "@/components/dashboard/WebPushPrompt";
 import { getClientWarningSummary } from "@/lib/clientRisk";
 import {
   formatServiceRequestLabel,
@@ -560,6 +561,8 @@ export default function PractitionerOverview() {
         </section>
 
         <div className="space-y-6">
+          <WebPushPrompt profileLink="/dashboard/staff/profile" />
+
           <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
             <h2 className="font-display text-2xl text-foreground">Workload Summary</h2>
             <p className="mt-2 text-sm text-muted-foreground font-body">A quick view of what is on your plate.</p>
