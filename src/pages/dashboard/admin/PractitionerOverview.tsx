@@ -60,13 +60,35 @@ export default function PractitionerOverview() {
   const { data: assignedClientCount } = useQuery({
     queryKey: ["practitioner-assigned-client-count", user?.id],
     queryFn: async () => {
-      const { count, error } = await supabase
+      const { data: assignedClients, error: assignedClientsError } = await supabase
         .from("clients")
-        .select("id", { count: "exact", head: true })
+        .select("id")
         .eq("assigned_consultant_id", user!.id);
 
-      if (error) throw error;
-      return count ?? 0;
+      if (assignedClientsError) throw assignedClientsError;
+
+      const { data: assignedCases, error: assignedCasesError } = await supabase
+        .from("cases")
+        .select("client_id")
+        .eq("assigned_consultant_id", user!.id);
+
+      if (assignedCasesError) throw assignedCasesError;
+
+      const clientIds = new Set<string>();
+
+      for (const client of assignedClients ?? []) {
+        if (client.id) {
+          clientIds.add(client.id);
+        }
+      }
+
+      for (const caseItem of assignedCases ?? []) {
+        if (caseItem.client_id) {
+          clientIds.add(caseItem.client_id);
+        }
+      }
+
+      return clientIds.size;
     },
     enabled: !!user,
   });

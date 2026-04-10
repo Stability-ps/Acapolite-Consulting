@@ -13,16 +13,39 @@ export function useAccessibleClientIds() {
         return null;
       }
 
-      const { data, error } = await supabase
+      const { data: assignedClients, error: assignedClientsError } = await supabase
         .from("clients")
         .select("id")
         .eq("assigned_consultant_id", user.id);
 
-      if (error) {
-        throw error;
+      if (assignedClientsError) {
+        throw assignedClientsError;
       }
 
-      return (data ?? []).map((client) => client.id);
+      const { data: assignedCases, error: assignedCasesError } = await supabase
+        .from("cases")
+        .select("client_id")
+        .eq("assigned_consultant_id", user.id);
+
+      if (assignedCasesError) {
+        throw assignedCasesError;
+      }
+
+      const clientIds = new Set<string>();
+
+      for (const client of assignedClients ?? []) {
+        if (client.id) {
+          clientIds.add(client.id);
+        }
+      }
+
+      for (const caseItem of assignedCases ?? []) {
+        if (caseItem.client_id) {
+          clientIds.add(caseItem.client_id);
+        }
+      }
+
+      return Array.from(clientIds);
     },
     enabled: hasRestrictedScope && !!user?.id,
   });

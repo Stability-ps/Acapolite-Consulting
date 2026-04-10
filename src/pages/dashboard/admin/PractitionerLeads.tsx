@@ -210,6 +210,7 @@ export default function PractitionerLeads() {
       queryClient.invalidateQueries({ queryKey: ["practitioner-own-lead-responses", user.id] }),
       queryClient.invalidateQueries({ queryKey: ["practitioner-visible-leads", user.id] }),
     ]);
+    setSelectedRequestId(null);
   };
 
   return (
