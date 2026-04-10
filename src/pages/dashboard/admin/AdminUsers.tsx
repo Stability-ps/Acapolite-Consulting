@@ -1,6 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Shield, UserPlus, Search, UserCog, LockKeyhole } from "lucide-react";
+import { Link } from "react-router-dom";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  CheckCircle2,
+  Clock3,
+  Eye,
+  FileWarning,
+  LockKeyhole,
+  Search,
+  Shield,
+  UserCheck,
+  UserCog,
+  UserPlus,
+  UserX,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
@@ -14,7 +30,7 @@ import {
   PractitionerProfileFields,
   type PractitionerProfileFormState,
 } from "@/components/dashboard/PractitionerProfileFields";
-import { normalizeServicesOffered } from "@/lib/practitionerMarketplace";
+import { formatAvailabilityLabel, getAvailabilityBadgeClass, getWorkloadLabel, normalizeServicesOffered } from "@/lib/practitionerMarketplace";
 import {
   consultantPermissionFields,
   defaultConsultantPermissions,
@@ -26,9 +42,29 @@ import {
 } from "@/lib/staffPermissions";
 
 type StaffRole = Extract<Enums<"app_role">, "admin" | "consultant">;
+type PractitionerAvailability = Enums<"practitioner_availability_status">;
 type StaffProfile = Tables<"profiles">;
 type StaffPermissionRow = Tables<"staff_permissions">;
 type PractitionerProfile = Tables<"practitioner_profiles">;
+type ClientAssignmentRow = Pick<Tables<"clients">, "id" | "assigned_consultant_id">;
+type CaseAssignmentRow = Pick<Tables<"cases">, "id" | "client_id" | "assigned_consultant_id" | "status">;
+type DocumentAttentionRow = Pick<Tables<"documents">, "id" | "client_id" | "case_id" | "status">;
+type StaffCardRecord = {
+  staffUser: StaffProfile;
+  role: StaffRole;
+  practitionerProfile: PractitionerProfile | null;
+  isVerified: boolean;
+  isIncompleteProfile: boolean;
+  outstandingDocumentsCount: number;
+  rejectedDocumentsCount: number;
+  activeCaseCount: number;
+  assignedClientCount: number;
+  availabilityStatus: PractitionerAvailability | null;
+  registrationNumber: string;
+  businessName: string;
+  needsAttention: boolean;
+  isReadyForWork: boolean;
+};
 
 type CreateStaffFormState = {
   fullName: string;
@@ -84,6 +120,26 @@ function getRoleBadgeClass(role: StaffRole) {
   return role === "admin"
     ? "border-blue-200 bg-blue-50 text-blue-700"
     : "border-slate-200 bg-slate-100 text-slate-700";
+}
+
+function getActivityBadgeClass(isActive: boolean) {
+  return isActive
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border-red-200 bg-red-50 text-red-700";
+}
+
+function getVerificationBadgeClass(isVerified: boolean) {
+  return isVerified
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function isPractitionerProfileIncomplete(profile?: PractitionerProfile | null) {
+  if (!profile) return true;
+
+  return !profile.business_name?.trim()
+    || !profile.registration_number?.trim()
+    || !(profile.services_offered?.length);
 }
 
 function getPermissionPreset(role: StaffRole, permissions?: Partial<StaffPermissionValues> | null) {
@@ -153,10 +209,23 @@ export default function AdminUsers() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | StaffRole>("all");
+  const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "not_verified">("all");
+  const [documentFilter, setDocumentFilter] = useState<"all" | "outstanding" | "rejected" | "attention" | "clean">("all");
+  const [activityFilter, setActivityFilter] = useState<"all" | "active" | "inactive">("all");
+  const [availabilityFilter, setAvailabilityFilter] = useState<"all" | PractitionerAvailability>("all");
+  const [sortOption, setSortOption] = useState<"newest" | "oldest" | "workload_high" | "workload_low">("newest");
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [quickAction, setQuickAction] = useState<{
+    id: string | null;
+    type: "verify" | "toggle-active" | null;
+  }>({
+    id: null,
+    type: null,
+  });
   const [createForm, setCreateForm] = useState<CreateStaffFormState>(initialCreateForm);
   const [editForm, setEditForm] = useState<EditStaffFormState>(initialEditForm);
   const [createPermissions, setCreatePermissions] = useState<StaffPermissionValues>(defaultConsultantPermissions);
@@ -178,31 +247,269 @@ export default function AdminUsers() {
     },
   });
 
-  const filteredStaffUsers = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
+  const consultantIds = useMemo(
+    () => (staffUsers ?? [])
+      .filter((staffUser) => staffUser.role === "consultant")
+      .map((staffUser) => staffUser.id),
+    [staffUsers],
+  );
 
-    if (!normalizedSearch) {
-      return staffUsers ?? [];
+  const { data: practitionerProfileRows } = useQuery({
+    queryKey: ["staff-user-practitioner-profiles", consultantIds],
+    queryFn: async () => {
+      if (!consultantIds.length) {
+        return [] as PractitionerProfile[];
+      }
+
+      const { data, error } = await supabase
+        .from("practitioner_profiles")
+        .select("*")
+        .in("profile_id", consultantIds);
+
+      if (error) throw error;
+      return (data ?? []) as PractitionerProfile[];
+    },
+    enabled: consultantIds.length > 0,
+  });
+
+  const { data: clientAssignmentRows } = useQuery({
+    queryKey: ["staff-user-client-assignments", consultantIds],
+    queryFn: async () => {
+      if (!consultantIds.length) {
+        return [] as ClientAssignmentRow[];
+      }
+
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, assigned_consultant_id")
+        .in("assigned_consultant_id", consultantIds);
+
+      if (error) throw error;
+      return (data ?? []) as ClientAssignmentRow[];
+    },
+    enabled: consultantIds.length > 0,
+  });
+
+  const { data: caseAssignmentRows } = useQuery({
+    queryKey: ["staff-user-case-assignments", consultantIds],
+    queryFn: async () => {
+      if (!consultantIds.length) {
+        return [] as CaseAssignmentRow[];
+      }
+
+      const { data, error } = await supabase
+        .from("cases")
+        .select("id, client_id, assigned_consultant_id, status")
+        .in("assigned_consultant_id", consultantIds);
+
+      if (error) throw error;
+      return (data ?? []) as CaseAssignmentRow[];
+    },
+    enabled: consultantIds.length > 0,
+  });
+
+  const { data: documentAttentionRows } = useQuery({
+    queryKey: ["staff-user-document-attention"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, client_id, case_id, status")
+        .in("status", ["uploaded", "pending_review", "rejected"]);
+
+      if (error) throw error;
+      return (data ?? []) as DocumentAttentionRow[];
+    },
+  });
+
+  const practitionerProfileMap = useMemo(
+    () => new Map((practitionerProfileRows ?? []).map((profile) => [profile.profile_id, profile])),
+    [practitionerProfileRows],
+  );
+
+  const practitionerStatsMap = useMemo(() => {
+    const assignedClientIdsByPractitioner = new Map<string, Set<string>>();
+    const activeCaseCountByPractitioner = new Map<string, number>();
+    const outstandingDocumentsByPractitioner = new Map<string, number>();
+    const rejectedDocumentsByPractitioner = new Map<string, number>();
+    const caseToPractitioner = new Map<string, string>();
+    const clientToPractitioner = new Map<string, string>();
+
+    for (const clientRow of clientAssignmentRows ?? []) {
+      if (!clientRow.assigned_consultant_id) continue;
+
+      clientToPractitioner.set(clientRow.id, clientRow.assigned_consultant_id);
+      const current = assignedClientIdsByPractitioner.get(clientRow.assigned_consultant_id) ?? new Set<string>();
+      current.add(clientRow.id);
+      assignedClientIdsByPractitioner.set(clientRow.assigned_consultant_id, current);
     }
 
-    return (staffUsers ?? []).filter((staffUser) => {
-      const fullName = (staffUser.full_name || "").toLowerCase();
-      const email = (staffUser.email || "").toLowerCase();
-      const phone = (staffUser.phone || "").toLowerCase();
-      const role = (staffUser.role || "").toLowerCase();
+    for (const caseRow of caseAssignmentRows ?? []) {
+      if (!caseRow.assigned_consultant_id) continue;
 
-      return (
-        fullName.includes(normalizedSearch)
-        || email.includes(normalizedSearch)
-        || phone.includes(normalizedSearch)
-        || role.includes(normalizedSearch)
+      caseToPractitioner.set(caseRow.id, caseRow.assigned_consultant_id);
+
+      if (!["resolved", "closed"].includes(caseRow.status)) {
+        activeCaseCountByPractitioner.set(
+          caseRow.assigned_consultant_id,
+          (activeCaseCountByPractitioner.get(caseRow.assigned_consultant_id) ?? 0) + 1,
+        );
+      }
+    }
+
+    for (const documentRow of documentAttentionRows ?? []) {
+      const practitionerId = (documentRow.case_id ? caseToPractitioner.get(documentRow.case_id) : null)
+        || (documentRow.client_id ? clientToPractitioner.get(documentRow.client_id) : null);
+
+      if (!practitionerId) continue;
+
+      if (documentRow.status === "rejected") {
+        rejectedDocumentsByPractitioner.set(
+          practitionerId,
+          (rejectedDocumentsByPractitioner.get(practitionerId) ?? 0) + 1,
+        );
+        continue;
+      }
+
+      if (["uploaded", "pending_review"].includes(documentRow.status)) {
+        outstandingDocumentsByPractitioner.set(
+          practitionerId,
+          (outstandingDocumentsByPractitioner.get(practitionerId) ?? 0) + 1,
+        );
+      }
+    }
+
+    return new Map(consultantIds.map((consultantId) => [
+      consultantId,
+      {
+        assignedClientCount: assignedClientIdsByPractitioner.get(consultantId)?.size ?? 0,
+        activeCaseCount: activeCaseCountByPractitioner.get(consultantId) ?? 0,
+        outstandingDocumentsCount: outstandingDocumentsByPractitioner.get(consultantId) ?? 0,
+        rejectedDocumentsCount: rejectedDocumentsByPractitioner.get(consultantId) ?? 0,
+      },
+    ]));
+  }, [caseAssignmentRows, clientAssignmentRows, consultantIds, documentAttentionRows]);
+
+  const staffCards = useMemo(() => {
+    return (staffUsers ?? []).map((staffUser) => {
+      const role = staffUser.role as StaffRole;
+      const practitionerProfile = role === "consultant" ? practitionerProfileMap.get(staffUser.id) ?? null : null;
+      const practitionerStats = practitionerStatsMap.get(staffUser.id);
+      const isVerified = role === "consultant" && Boolean(practitionerProfile?.is_verified);
+      const isIncompleteProfile = role === "consultant" && isPractitionerProfileIncomplete(practitionerProfile);
+      const availabilityStatus = role === "consultant" ? (practitionerProfile?.availability_status ?? "not_available") : null;
+      const outstandingDocumentsCount = practitionerStats?.outstandingDocumentsCount ?? 0;
+      const rejectedDocumentsCount = practitionerStats?.rejectedDocumentsCount ?? 0;
+      const activeCaseCount = practitionerStats?.activeCaseCount ?? 0;
+      const assignedClientCount = practitionerStats?.assignedClientCount ?? 0;
+      const needsAttention = role === "consultant" && (
+        !staffUser.is_active
+        || !isVerified
+        || isIncompleteProfile
+        || outstandingDocumentsCount > 0
+        || rejectedDocumentsCount > 0
       );
-    });
-  }, [searchQuery, staffUsers]);
+      const isReadyForWork = role === "consultant"
+        && staffUser.is_active
+        && isVerified
+        && !isIncompleteProfile
+        && availabilityStatus === "available";
 
-  const selectedStaffUser = filteredStaffUsers.find((staffUser) => staffUser.id === selectedStaffId)
-    || staffUsers?.find((staffUser) => staffUser.id === selectedStaffId)
+      return {
+        staffUser,
+        role,
+        practitionerProfile,
+        isVerified,
+        isIncompleteProfile,
+        outstandingDocumentsCount,
+        rejectedDocumentsCount,
+        activeCaseCount,
+        assignedClientCount,
+        availabilityStatus,
+        registrationNumber: practitionerProfile?.registration_number || "",
+        businessName: practitionerProfile?.business_name || "",
+        needsAttention,
+        isReadyForWork,
+      } satisfies StaffCardRecord;
+    });
+  }, [practitionerProfileMap, practitionerStatsMap, staffUsers]);
+
+  const hasActiveFilters = [
+    searchQuery.trim(),
+    roleFilter,
+    verificationFilter,
+    documentFilter,
+    activityFilter,
+    availabilityFilter,
+    sortOption,
+  ].some((value) => value && value !== "all" && value !== "newest");
+
+  const filteredStaffCards = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+
+    const rows = staffCards.filter((card) => {
+      const matchesSearch = !normalizedSearch || [
+        card.staffUser.full_name || "",
+        card.staffUser.email || "",
+        card.staffUser.phone || "",
+        card.role,
+        getRoleLabel(card.role),
+        card.registrationNumber,
+        card.businessName,
+        card.isVerified ? "verified verified practitioner" : "not verified unverified missing verification",
+        card.availabilityStatus ? formatAvailabilityLabel(card.availabilityStatus) : "",
+      ].some((value) => value.toLowerCase().includes(normalizedSearch));
+
+      const matchesRole = roleFilter === "all" || card.role === roleFilter;
+      const matchesActivity = activityFilter === "all"
+        || (activityFilter === "active" ? card.staffUser.is_active : !card.staffUser.is_active);
+      const matchesVerification = verificationFilter === "all"
+        || (card.role === "consultant" && (
+          (verificationFilter === "verified" && card.isVerified)
+          || (verificationFilter === "not_verified" && !card.isVerified)
+        ));
+      const matchesAvailability = availabilityFilter === "all"
+        || (card.role === "consultant" && card.availabilityStatus === availabilityFilter);
+      const matchesDocuments = documentFilter === "all"
+        || (card.role === "consultant" && (
+          (documentFilter === "outstanding" && card.outstandingDocumentsCount > 0)
+          || (documentFilter === "rejected" && card.rejectedDocumentsCount > 0)
+          || (documentFilter === "attention" && (card.outstandingDocumentsCount > 0 || card.rejectedDocumentsCount > 0))
+          || (documentFilter === "clean" && card.outstandingDocumentsCount === 0 && card.rejectedDocumentsCount === 0)
+        ));
+
+      return matchesSearch
+        && matchesRole
+        && matchesActivity
+        && matchesVerification
+        && matchesAvailability
+        && matchesDocuments;
+    });
+
+    rows.sort((left, right) => {
+      switch (sortOption) {
+        case "oldest":
+          return new Date(left.staffUser.created_at).getTime() - new Date(right.staffUser.created_at).getTime();
+        case "workload_high":
+          return right.activeCaseCount - left.activeCaseCount
+            || right.assignedClientCount - left.assignedClientCount
+            || (left.staffUser.full_name || "").localeCompare(right.staffUser.full_name || "");
+        case "workload_low":
+          return left.activeCaseCount - right.activeCaseCount
+            || left.assignedClientCount - right.assignedClientCount
+            || (left.staffUser.full_name || "").localeCompare(right.staffUser.full_name || "");
+        default:
+          return new Date(right.staffUser.created_at).getTime() - new Date(left.staffUser.created_at).getTime();
+      }
+    });
+
+    return rows;
+  }, [activityFilter, availabilityFilter, documentFilter, roleFilter, searchQuery, sortOption, staffCards, verificationFilter]);
+
+  const selectedStaffCard = filteredStaffCards.find((card) => card.staffUser.id === selectedStaffId)
+    || staffCards.find((card) => card.staffUser.id === selectedStaffId)
     || null;
+
+  const selectedStaffUser = selectedStaffCard?.staffUser ?? null;
 
   const { data: selectedPermissionRow } = useQuery({
     queryKey: ["staff-user-permissions", selectedStaffId],
@@ -272,9 +579,13 @@ export default function AdminUsers() {
     });
   }, [selectedPractitionerProfile, selectedStaffUser]);
 
-  const adminCount = (staffUsers ?? []).filter((staffUser) => staffUser.role === "admin").length;
-  const consultantCount = (staffUsers ?? []).filter((staffUser) => staffUser.role === "consultant").length;
-  const activeCount = (staffUsers ?? []).filter((staffUser) => staffUser.is_active).length;
+  const adminCount = staffCards.filter((card) => card.role === "admin").length;
+  const practitionerCards = staffCards.filter((card) => card.role === "consultant");
+  const consultantCount = practitionerCards.length;
+  const activeCount = staffCards.filter((card) => card.staffUser.is_active).length;
+  const verifiedPractitionerCount = practitionerCards.filter((card) => card.isVerified).length;
+  const readyPractitionerCount = practitionerCards.filter((card) => card.isReadyForWork).length;
+  const attentionPractitionerCount = practitionerCards.filter((card) => card.needsAttention).length;
 
   const resetCreateForm = () => {
     setCreateForm(initialCreateForm);
@@ -358,6 +669,10 @@ export default function AdminUsers() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["staff-users"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-user-permissions"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-practitioner-profiles"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-client-assignments"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-case-assignments"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-document-attention"] }),
     ]);
   };
 
@@ -428,8 +743,93 @@ export default function AdminUsers() {
       queryClient.invalidateQueries({ queryKey: ["staff-users"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-user-permissions", selectedStaffUser.id] }),
       queryClient.invalidateQueries({ queryKey: ["staff-user-practitioner-profile", selectedStaffUser.id] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-practitioner-profiles"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-client-assignments"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-case-assignments"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-document-attention"] }),
     ]);
     setSelectedStaffId(null);
+  };
+
+  const quickRefreshStaffBoard = async (profileId?: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-users"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-practitioner-profiles"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-client-assignments"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-case-assignments"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-user-document-attention"] }),
+      ...(profileId
+        ? [
+          queryClient.invalidateQueries({ queryKey: ["staff-user-practitioner-profile", profileId] }),
+          queryClient.invalidateQueries({ queryKey: ["staff-user-permissions", profileId] }),
+        ]
+        : []),
+    ]);
+  };
+
+  const verifyPractitioner = async (card: StaffCardRecord) => {
+    if (card.role !== "consultant") {
+      return;
+    }
+
+    setQuickAction({ id: card.staffUser.id, type: "verify" });
+
+    const { error } = await supabase
+      .from("practitioner_profiles")
+      .upsert({
+        profile_id: card.staffUser.id,
+        business_name: card.practitionerProfile?.business_name ?? null,
+        registration_number: card.practitionerProfile?.registration_number ?? null,
+        years_of_experience: card.practitionerProfile?.years_of_experience ?? 0,
+        availability_status: card.practitionerProfile?.availability_status ?? "available",
+        is_verified: true,
+        internal_notes: card.practitionerProfile?.internal_notes ?? null,
+        services_offered: card.practitionerProfile?.services_offered ?? [],
+      });
+
+    if (error) {
+      toast.error(error.message);
+      setQuickAction({ id: null, type: null });
+      return;
+    }
+
+    toast.success("Practitioner verified.");
+    setQuickAction({ id: null, type: null });
+    await quickRefreshStaffBoard(card.staffUser.id);
+  };
+
+  const toggleStaffActiveState = async (card: StaffCardRecord) => {
+    if (card.staffUser.id === user?.id && card.staffUser.is_active) {
+      toast.error("You cannot suspend your own account from this page.");
+      return;
+    }
+
+    setQuickAction({ id: card.staffUser.id, type: "toggle-active" });
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_active: !card.staffUser.is_active })
+      .eq("id", card.staffUser.id);
+
+    if (error) {
+      toast.error(error.message);
+      setQuickAction({ id: null, type: null });
+      return;
+    }
+
+    toast.success(card.staffUser.is_active ? "Staff account suspended." : "Staff account activated.");
+    setQuickAction({ id: null, type: null });
+    await quickRefreshStaffBoard(card.staffUser.id);
+  };
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setRoleFilter("all");
+    setVerificationFilter("all");
+    setDocumentFilter("all");
+    setActivityFilter("all");
+    setAvailabilityFilter("all");
+    setSortOption("newest");
   };
 
   return (
@@ -438,7 +838,7 @@ export default function AdminUsers() {
         <div>
           <h1 className="mb-1 font-display text-2xl font-bold text-foreground">Staff Users</h1>
           <p className="text-sm text-muted-foreground font-body">
-            Create Acapolite admin and practitioner accounts, then control exactly what each practitioner can see or do.
+            Manage Acapolite admins and practitioners from one control view, including verification, workload, document pressure, and readiness for new work.
           </p>
         </div>
 
@@ -450,12 +850,12 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-[1.5fr_repeat(3,minmax(0,180px))]">
+      <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-[1.5fr_repeat(5,minmax(0,180px))]">
         <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Access Control</p>
-          <h2 className="mt-3 font-display text-lg font-semibold text-foreground">Staff account management</h2>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioner Control</p>
+          <h2 className="mt-3 font-display text-lg font-semibold text-foreground">One view for verification, workload, and risk</h2>
           <p className="mt-2 text-sm text-muted-foreground font-body">
-            Admins can create login-ready staff accounts, assign roles, and set practitioner visibility, actions, and assigned-client scope.
+            Quickly see which practitioners are verified, which ones still have document issues, and who is ready to take on more work.
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
@@ -466,90 +866,314 @@ export default function AdminUsers() {
         <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioners</p>
           <p className="mt-3 font-display text-3xl text-foreground">{consultantCount}</p>
-          <p className="mt-1 text-sm text-muted-foreground font-body">Permission-controlled staff</p>
+          <p className="mt-1 text-sm text-muted-foreground font-body">Marketplace practitioner accounts</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Active Staff</p>
-          <p className="mt-3 font-display text-3xl text-foreground">{activeCount}</p>
-          <p className="mt-1 text-sm text-muted-foreground font-body">Profiles currently marked active</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Verified</p>
+          <p className="mt-3 font-display text-3xl text-foreground">{verifiedPractitionerCount}</p>
+          <p className="mt-1 text-sm text-muted-foreground font-body">Practitioners ready for trust checks</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Needs Attention</p>
+          <p className="mt-3 font-display text-3xl text-red-700">{attentionPractitionerCount}</p>
+          <p className="mt-1 text-sm text-muted-foreground font-body">Verification, profile, or document issues</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Ready For Work</p>
+          <p className="mt-3 font-display text-3xl text-emerald-700">{readyPractitionerCount}</p>
+          <p className="mt-1 text-sm text-muted-foreground font-body">Active, verified, complete, available</p>
         </div>
       </div>
 
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search name, email, phone, or role..."
-            className="rounded-xl pl-9"
-          />
+      <div className="mb-8 rounded-2xl border border-border bg-card p-4 shadow-card">
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+          <div className="relative xl:col-span-2">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search name, email, phone, registration number, role, or verification..."
+              className="rounded-xl pl-9"
+            />
+          </div>
+          <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as "all" | StaffRole)}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All roles</SelectItem>
+              <SelectItem value="consultant">Practitioners</SelectItem>
+              <SelectItem value="admin">Admins</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={verificationFilter} onValueChange={(value) => setVerificationFilter(value as "all" | "verified" | "not_verified")}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All verification" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All verification states</SelectItem>
+              <SelectItem value="verified">Verified</SelectItem>
+              <SelectItem value="not_verified">Not verified</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={documentFilter} onValueChange={(value) => setDocumentFilter(value as "all" | "outstanding" | "rejected" | "attention" | "clean")}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All document states" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All document states</SelectItem>
+              <SelectItem value="outstanding">Outstanding documents</SelectItem>
+              <SelectItem value="rejected">Rejected documents</SelectItem>
+              <SelectItem value="attention">Any document issue</SelectItem>
+              <SelectItem value="clean">No document issues</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={activityFilter} onValueChange={(value) => setActivityFilter(value as "all" | "active" | "inactive")}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All activity states" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Active and inactive</SelectItem>
+              <SelectItem value="active">Active only</SelectItem>
+              <SelectItem value="inactive">Inactive only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={availabilityFilter} onValueChange={(value) => setAvailabilityFilter(value as "all" | PractitionerAvailability)}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All availability" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All availability states</SelectItem>
+              <SelectItem value="available">Available</SelectItem>
+              <SelectItem value="limited">Limited</SelectItem>
+              <SelectItem value="not_available">Not Available</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sortOption} onValueChange={(value) => setSortOption(value as "newest" | "oldest" | "workload_high" | "workload_low")}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="Newest first" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest first</SelectItem>
+              <SelectItem value="oldest">Oldest first</SelectItem>
+              <SelectItem value="workload_high">Highest workload</SelectItem>
+              <SelectItem value="workload_low">Lowest workload</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground font-body">
+            Showing <span className="font-semibold text-foreground">{filteredStaffCards.length}</span> of <span className="font-semibold text-foreground">{staffCards.length}</span> staff users
+            <span className="mx-2 text-border">|</span>
+            <span className="font-semibold text-foreground">{activeCount}</span> active
+          </p>
+          <Button type="button" variant="outline" className="rounded-xl" onClick={resetFilters} disabled={!hasActiveFilters}>
+            Clear Filters
+          </Button>
         </div>
       </div>
 
       {isLoading ? (
         <div className="text-muted-foreground font-body">Loading...</div>
-      ) : filteredStaffUsers.length > 0 ? (
+      ) : filteredStaffCards.length > 0 ? (
         <div className="grid gap-4 xl:grid-cols-2">
-          {filteredStaffUsers.map((staffUser) => {
-            const role = staffUser.role as StaffRole;
+          {filteredStaffCards.map((card) => {
+            const { staffUser, role } = card;
             const isCurrentUser = staffUser.id === user?.id;
+            const isPractitioner = role === "consultant";
+            const isQuickVerifying = quickAction.id === staffUser.id && quickAction.type === "verify";
+            const isQuickToggling = quickAction.id === staffUser.id && quickAction.type === "toggle-active";
 
             return (
-              <button
+              <div
                 key={staffUser.id}
-                type="button"
-                onClick={() => setSelectedStaffId(staffUser.id)}
-                className="rounded-2xl border border-border bg-card p-5 text-left shadow-card transition-all hover:border-primary/25 hover:shadow-elevated"
+                className={`rounded-2xl border bg-card p-5 shadow-card transition-all hover:shadow-elevated ${
+                  card.needsAttention ? "border-amber-200" : "border-border hover:border-primary/25"
+                }`}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="truncate font-display text-lg font-semibold text-foreground">
-                        {staffUser.full_name || staffUser.email || "Staff user"}
-                      </h2>
-                      {isCurrentUser ? (
-                        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                          You
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="truncate font-display text-lg font-semibold text-foreground">
+                          {staffUser.full_name || staffUser.email || "Staff user"}
+                        </h2>
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getRoleBadgeClass(role)}`}>
+                          {getRoleLabel(role)}
                         </span>
+                        {isPractitioner ? (
+                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getVerificationBadgeClass(card.isVerified)}`}>
+                            {card.isVerified ? "Verified Practitioner" : "Not Verified"}
+                          </span>
+                        ) : null}
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getActivityBadgeClass(staffUser.is_active)}`}>
+                          {staffUser.is_active ? "Active" : "Inactive"}
+                        </span>
+                        {isCurrentUser ? (
+                          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                            You
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 truncate text-sm text-muted-foreground font-body">{staffUser.email || "No email"}</p>
+                      <p className="mt-1 text-sm text-muted-foreground font-body">{staffUser.phone || "No phone number added"}</p>
+                      {isPractitioner ? (
+                        <p className="mt-1 text-sm text-muted-foreground font-body">
+                          {card.businessName || "No business name"}{card.registrationNumber ? ` | ${card.registrationNumber}` : " | No registration number"}
+                        </p>
                       ) : null}
                     </div>
-                    <p className="mt-1 truncate text-sm text-muted-foreground font-body">{staffUser.email || "No email"}</p>
+
+                    {isPractitioner && card.availabilityStatus ? (
+                      <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getAvailabilityBadgeClass(card.availabilityStatus)}`}>
+                        {formatAvailabilityLabel(card.availabilityStatus)}
+                      </span>
+                    ) : null}
                   </div>
 
-                  <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getRoleBadgeClass(role)}`}>
-                    {getRoleLabel(role)}
-                  </span>
-                </div>
+                  {isPractitioner ? (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Active Cases</p>
+                          <p className="mt-2 text-lg font-semibold text-foreground font-body">{card.activeCaseCount}</p>
+                          <p className="mt-1 text-xs text-muted-foreground font-body">{getWorkloadLabel(card.activeCaseCount)} workload</p>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Assigned Clients</p>
+                          <p className="mt-2 text-lg font-semibold text-foreground font-body">{card.assignedClientCount}</p>
+                          <p className="mt-1 text-xs text-muted-foreground font-body">Linked client accounts</p>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Outstanding Docs</p>
+                          <p className={`mt-2 text-lg font-semibold font-body ${card.outstandingDocumentsCount > 0 ? "text-amber-700" : "text-foreground"}`}>{card.outstandingDocumentsCount}</p>
+                          <p className="mt-1 text-xs text-muted-foreground font-body">Uploaded or pending review</p>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Rejected Docs</p>
+                          <p className={`mt-2 text-lg font-semibold font-body ${card.rejectedDocumentsCount > 0 ? "text-red-700" : "text-foreground"}`}>{card.rejectedDocumentsCount}</p>
+                          <p className="mt-1 text-xs text-muted-foreground font-body">Need attention or rework</p>
+                        </div>
+                      </div>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Phone</p>
-                    <p className="mt-2 text-sm text-foreground font-body">{staffUser.phone || "Not provided"}</p>
-                  </div>
-                  <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Status</p>
-                    <p className="mt-2 text-sm font-semibold text-foreground font-body">
-                      {staffUser.is_active ? "Active" : "Inactive"}
-                    </p>
-                  </div>
-                </div>
+                      <div className="flex flex-wrap gap-2">
+                        {card.isReadyForWork ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Ready to receive work
+                          </span>
+                        ) : null}
+                        {!card.isVerified ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                            <BadgeCheck className="h-3.5 w-3.5" />
+                            Missing verification
+                          </span>
+                        ) : null}
+                        {card.isIncompleteProfile ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+                            <Clock3 className="h-3.5 w-3.5" />
+                            Incomplete profile
+                          </span>
+                        ) : null}
+                        {!staffUser.is_active ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                            <UserX className="h-3.5 w-3.5" />
+                            Suspended / inactive
+                          </span>
+                        ) : null}
+                        {card.outstandingDocumentsCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                            <FileWarning className="h-3.5 w-3.5" />
+                            Outstanding documents
+                          </span>
+                        ) : null}
+                        {card.rejectedDocumentsCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            Rejected documents
+                          </span>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                      <p className="text-sm text-muted-foreground font-body">
+                        {getRoleDescription(role)}
+                      </p>
+                    </div>
+                  )}
 
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground font-body">{getRoleDescription(role)}</p>
-                  <div className="inline-flex items-center gap-2 text-sm font-semibold text-primary">
-                    <UserCog className="h-4 w-4" />
-                    Manage
+                  <div className="flex flex-wrap gap-3 border-t border-border pt-4">
+                    {isPractitioner && !card.isVerified ? (
+                      <Button
+                        type="button"
+                        className="rounded-xl"
+                        onClick={() => void verifyPractitioner(card)}
+                        disabled={isQuickVerifying}
+                      >
+                        <UserCheck className="mr-2 h-4 w-4" />
+                        {isQuickVerifying ? "Verifying..." : "Verify Practitioner"}
+                      </Button>
+                    ) : null}
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => void toggleStaffActiveState(card)}
+                      disabled={isQuickToggling}
+                    >
+                      {staffUser.is_active ? <UserX className="mr-2 h-4 w-4" /> : <UserCheck className="mr-2 h-4 w-4" />}
+                      {isQuickToggling ? "Saving..." : staffUser.is_active ? "Suspend" : "Activate"}
+                    </Button>
+
+                    {isPractitioner ? (
+                      card.outstandingDocumentsCount > 0 || card.rejectedDocumentsCount > 0 ? (
+                        <Button asChild variant="outline" className="rounded-xl">
+                          <Link to={`/dashboard/staff/documents?practitionerId=${staffUser.id}&documentState=attention`}>
+                            <FileWarning className="mr-2 h-4 w-4" />
+                            View Outstanding Docs
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button type="button" variant="outline" className="rounded-xl" disabled>
+                          <FileWarning className="mr-2 h-4 w-4" />
+                          View Outstanding Docs
+                        </Button>
+                      )
+                    ) : null}
+
+                    {isPractitioner ? (
+                      card.assignedClientCount > 0 ? (
+                        <Button asChild variant="outline" className="rounded-xl">
+                          <Link to={`/dashboard/staff/clients?practitionerId=${staffUser.id}`}>
+                            <Users className="mr-2 h-4 w-4" />
+                            Open Assigned Clients
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button type="button" variant="outline" className="rounded-xl" disabled>
+                          <Users className="mr-2 h-4 w-4" />
+                          Open Assigned Clients
+                        </Button>
+                      )
+                    ) : null}
+
+                    <Button type="button" variant="secondary" className="rounded-xl" onClick={() => setSelectedStaffId(staffUser.id)}>
+                      <Eye className="mr-2 h-4 w-4" />
+                      Open Profile
+                    </Button>
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
       ) : (
         <div className="rounded-2xl border border-border bg-card p-12 text-center shadow-card">
           <p className="text-muted-foreground font-body">
-            {searchQuery.trim() ? "No staff users matched your search." : "No admin or practitioner users found yet."}
+            {hasActiveFilters ? "No staff users matched the current filters." : "No admin or practitioner users found yet."}
           </p>
         </div>
       )}

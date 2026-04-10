@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -11,10 +12,13 @@ import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 import { getAppBaseUrl } from "@/lib/siteUrl";
 
+type AccountType = "client" | "practitioner";
+
 export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [accountType, setAccountType] = useState<AccountType>("client");
   const [loading, setLoading] = useState(false);
   const { dashboardPath, loading: authLoading, user } = useAuth();
 
@@ -29,13 +33,17 @@ export default function Register() {
 
     setLoading(true);
     try {
+      const signupRole = accountType === "practitioner" ? "consultant" : "client";
+      const signupRoleLabel = accountType === "practitioner" ? "practitioner" : "client";
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: fullName,
-            role: "client",
+            role: signupRole,
+            account_type: signupRoleLabel,
           },
           emailRedirectTo: `${getAppBaseUrl()}/login`,
         },
@@ -58,16 +66,18 @@ export default function Register() {
             body: {
               type: "signup_notification",
               ...profilePayload,
-              role: "client",
+              role: signupRoleLabel,
               provider: "email",
             },
           }),
-          supabase.functions.invoke("send-portal-email", {
-            body: {
-              type: "welcome_email",
-              ...profilePayload,
-            },
-          }),
+          ...(accountType === "client"
+            ? [supabase.functions.invoke("send-portal-email", {
+              body: {
+                type: "welcome_email",
+                ...profilePayload,
+              },
+            })]
+            : []),
         ]);
 
         emailResults.forEach((result) => {
@@ -82,7 +92,7 @@ export default function Register() {
         });
       }
 
-      toast.success("Account created successfully.");
+      toast.success(accountType === "practitioner" ? "Practitioner account created successfully." : "Account created successfully.");
 
       if (data.session) {
         window.location.replace("/dashboard");
@@ -110,15 +120,45 @@ export default function Register() {
           <AcapoliteLogo className="mb-6 h-14" />
 
           <h1 className="font-display text-2xl font-bold text-foreground mb-2">Create your account</h1>
-          <p className="text-muted-foreground font-body text-sm mb-8">Create your secure client portal account</p>
+          <p className="text-muted-foreground font-body text-sm mb-6">
+            {accountType === "practitioner"
+              ? "Create your practitioner account to respond to client requests and manage assigned work."
+              : "Create your secure client portal account."}
+          </p>
 
-          <GoogleAuthButton disabled={loading} onLoadingChange={setLoading} />
-
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground/70">or</span>
-            <div className="h-px flex-1 bg-border" />
+          <div className="mb-6">
+            <Label htmlFor="account-type" className="font-body">Account Type</Label>
+            <Select value={accountType} onValueChange={(value) => setAccountType(value as AccountType)}>
+              <SelectTrigger id="account-type" className="mt-1.5">
+                <SelectValue placeholder="Select account type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="client">Client</SelectItem>
+                <SelectItem value="practitioner">Practitioner</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="mt-2 text-xs text-muted-foreground font-body">
+              {accountType === "practitioner"
+                ? "Practitioner accounts are created with staff access and can complete their public profile after sign-up."
+                : "Client accounts can upload documents, track cases, view invoices, and message Acapolite Consulting."}
+            </p>
           </div>
+
+          {accountType === "client" ? (
+            <>
+              <GoogleAuthButton disabled={loading} onLoadingChange={setLoading} />
+
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground/70">or</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+            </>
+          ) : (
+            <div className="mb-6 rounded-2xl border border-border/70 bg-muted/35 px-4 py-3 text-sm font-body text-muted-foreground">
+              Practitioner sign-up uses email and password so your portal role is created correctly from the start.
+            </div>
+          )}
 
           <form onSubmit={handleRegister} className="space-y-5">
             <div>

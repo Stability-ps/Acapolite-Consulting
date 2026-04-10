@@ -14,6 +14,7 @@ import PractitionerLeads from "./PractitionerLeads";
 import {
   formatServiceRequestLabel,
   getServiceRequestIssueFlags,
+  serviceRequestPriorityOptions,
   getServiceRequestRiskClass,
   getServiceRequestStatusClass,
   serviceRequestStatusOptions,
@@ -32,6 +33,13 @@ export default function AdminServiceRequests() {
   const { role } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [serviceFilter, setServiceFilter] = useState<string>("all");
+  const [riskFilter, setRiskFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [clientTypeFilter, setClientTypeFilter] = useState<string>("all");
+  const [assignmentFilter, setAssignmentFilter] = useState<string>("all");
+  const [issueFilter, setIssueFilter] = useState<string>("all");
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
@@ -167,23 +175,84 @@ export default function AdminServiceRequests() {
     [practitioners],
   );
 
+  const hasActiveFilters = [
+    searchQuery.trim(),
+    statusFilter,
+    serviceFilter,
+    riskFilter,
+    priorityFilter,
+    clientTypeFilter,
+    assignmentFilter,
+    issueFilter,
+  ].some((value) => value && value !== "all");
+
   const filteredRequests = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
-    if (!normalizedSearch) {
-      return requests ?? [];
-    }
-
     return (requests ?? []).filter((request) => {
-      return (
-        request.full_name.toLowerCase().includes(normalizedSearch)
-        || request.email.toLowerCase().includes(normalizedSearch)
-        || request.phone.toLowerCase().includes(normalizedSearch)
-        || formatServiceRequestLabel(request.service_needed).toLowerCase().includes(normalizedSearch)
-        || formatServiceRequestLabel(request.status).toLowerCase().includes(normalizedSearch)
-      );
+      const issueFlags = getServiceRequestIssueFlags({
+        hasDebtFlag: request.has_debt_flag,
+        missingReturnsFlag: request.missing_returns_flag,
+        missingDocumentsFlag: request.missing_documents_flag,
+      });
+      const assignedPractitionerName = request.assigned_practitioner_id
+        ? (practitionerMap.get(request.assigned_practitioner_id)?.user.full_name
+          || practitionerMap.get(request.assigned_practitioner_id)?.user.email
+          || "")
+        : "";
+      const responseCount = responsesByRequest.get(request.id)?.length ?? 0;
+      const matchesSearch = !normalizedSearch || [
+        request.full_name,
+        request.email,
+        request.phone,
+        request.id_number || "",
+        formatServiceRequestLabel(request.identity_document_type),
+        assignedPractitionerName,
+        formatServiceRequestLabel(request.service_needed),
+        formatServiceRequestLabel(request.status),
+        formatServiceRequestLabel(request.priority_level),
+        formatServiceRequestLabel(request.client_type),
+        formatServiceRequestLabel(request.risk_indicator),
+      ].some((value) => value.toLowerCase().includes(normalizedSearch));
+      const matchesStatus = statusFilter === "all" || request.status === statusFilter;
+      const matchesService = serviceFilter === "all" || request.service_needed === serviceFilter;
+      const matchesRisk = riskFilter === "all" || request.risk_indicator === riskFilter;
+      const matchesPriority = priorityFilter === "all" || request.priority_level === priorityFilter;
+      const matchesClientType = clientTypeFilter === "all" || request.client_type === clientTypeFilter;
+      const matchesAssignment = assignmentFilter === "all"
+        || (assignmentFilter === "assigned" && Boolean(request.assigned_practitioner_id))
+        || (assignmentFilter === "unassigned" && !request.assigned_practitioner_id)
+        || (assignmentFilter === "responded" && responseCount > 0)
+        || (assignmentFilter === "no_responses" && responseCount === 0)
+        || (assignmentFilter === "converted" && Boolean(request.converted_case_id));
+      const matchesIssue = issueFilter === "all"
+        || (issueFilter === "debt" && request.has_debt_flag)
+        || (issueFilter === "returns" && request.missing_returns_flag)
+        || (issueFilter === "documents" && request.missing_documents_flag)
+        || (issueFilter === "clean" && issueFlags.length === 0);
+
+      return matchesSearch
+        && matchesStatus
+        && matchesService
+        && matchesRisk
+        && matchesPriority
+        && matchesClientType
+        && matchesAssignment
+        && matchesIssue;
     });
-  }, [requests, searchQuery]);
+  }, [
+    assignmentFilter,
+    clientTypeFilter,
+    issueFilter,
+    practitionerMap,
+    priorityFilter,
+    requests,
+    responsesByRequest,
+    riskFilter,
+    searchQuery,
+    serviceFilter,
+    statusFilter,
+  ]);
 
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
@@ -323,21 +392,138 @@ export default function AdminServiceRequests() {
     return File;
   };
 
+  const resetFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setServiceFilter("all");
+    setRiskFilter("all");
+    setPriorityFilter("all");
+    setClientTypeFilter("all");
+    setAssignmentFilter("all");
+    setIssueFilter("all");
+  };
+
   return (
     <div>
-      <div className="flex items-center justify-between gap-4 mb-8">
+      <div className="flex items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">Service Requests</h1>
           <p className="text-muted-foreground font-body text-sm">Manage public tax-assistance requests and assess their risk before assignment.</p>
         </div>
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search requests..."
-            className="rounded-xl pl-9"
-          />
+      </div>
+
+      <div className="mb-8 rounded-2xl border border-border bg-card p-4 shadow-card">
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+          <div className="relative xl:col-span-2">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search name, email, phone, practitioner, service, or status..."
+              className="rounded-xl pl-9"
+            />
+          </div>
+
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {serviceRequestStatusOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={serviceFilter} onValueChange={setServiceFilter}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All services" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All services</SelectItem>
+              {serviceNeededOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={riskFilter} onValueChange={setRiskFilter}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All risk levels" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All risk levels</SelectItem>
+              <SelectItem value="high">High risk</SelectItem>
+              <SelectItem value="medium">Medium risk</SelectItem>
+              <SelectItem value="low">Low risk</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All priorities" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All priorities</SelectItem>
+              {serviceRequestPriorityOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={clientTypeFilter} onValueChange={setClientTypeFilter}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All client types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All client types</SelectItem>
+              <SelectItem value="individual">Individual</SelectItem>
+              <SelectItem value="company">Company</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All assignments" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All assignments</SelectItem>
+              <SelectItem value="assigned">Assigned</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              <SelectItem value="responded">Has responses</SelectItem>
+              <SelectItem value="no_responses">No responses</SelectItem>
+              <SelectItem value="converted">Converted to case</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={issueFilter} onValueChange={setIssueFilter}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder="All issue flags" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All issue flags</SelectItem>
+              <SelectItem value="debt">Debt flagged</SelectItem>
+              <SelectItem value="returns">Returns flagged</SelectItem>
+              <SelectItem value="documents">Documents flagged</SelectItem>
+              <SelectItem value="clean">No issue flags</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground font-body">
+            Showing <span className="font-semibold text-foreground">{filteredRequests.length}</span> of <span className="font-semibold text-foreground">{requests?.length ?? 0}</span> requests
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-xl"
+            onClick={resetFilters}
+            disabled={!hasActiveFilters}
+          >
+            Clear Filters
+          </Button>
         </div>
       </div>
 
@@ -435,7 +621,7 @@ export default function AdminServiceRequests() {
       ) : (
         <div className="rounded-2xl border border-border bg-card p-12 text-center">
           <p className="text-muted-foreground font-body">
-            {searchQuery.trim() ? "No service requests matched your search." : "No service requests submitted yet."}
+            {hasActiveFilters ? "No service requests matched the current filters." : "No service requests submitted yet."}
           </p>
         </div>
       )}
@@ -500,7 +686,9 @@ export default function AdminServiceRequests() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
-                  {selectedRequest.client_type === "individual" ? "ID Number" : "Company Registration Number"}
+                  {selectedRequest.client_type === "individual"
+                    ? formatServiceRequestLabel(selectedRequest.identity_document_type || "id_number")
+                    : "Company Registration Number"}
                 </p>
                 <p className="font-body text-foreground">
                   {selectedRequest.client_type === "individual"

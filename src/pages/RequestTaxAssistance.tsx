@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, Upload } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Upload, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/serviceRequests";
 
 type ClientType = Enums<"service_request_client_type">;
+type IdentityDocumentType = Enums<"service_request_identity_document_type">;
 
 export default function RequestTaxAssistance() {
   const { user, profile, dashboardPath } = useAuth();
@@ -32,6 +33,7 @@ export default function RequestTaxAssistance() {
     email: "",
     phone: "",
     client_type: "individual" as ClientType,
+    identity_document_type: "id_number" as IdentityDocumentType,
     id_number: "",
     company_registration_number: "",
     service_needed: "tax_return" as Enums<"service_request_service_needed">,
@@ -52,6 +54,7 @@ export default function RequestTaxAssistance() {
       email: user?.email || "",
       phone: profile?.phone || "",
       client_type: "individual",
+      identity_document_type: "id_number",
       id_number: "",
       company_registration_number: "",
       service_needed: "tax_return",
@@ -77,6 +80,32 @@ export default function RequestTaxAssistance() {
     () => serviceNeededOptions.find((option) => option.value === form.service_needed),
     [form.service_needed],
   );
+
+  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextFiles = Array.from(event.target.files ?? []);
+
+    if (!nextFiles.length) {
+      return;
+    }
+
+    setFiles((current) => {
+      const existingKeys = new Set(current.map((file) => `${file.name}-${file.size}-${file.lastModified}`));
+      const dedupedIncoming = nextFiles.filter((file) => !existingKeys.has(`${file.name}-${file.size}-${file.lastModified}`));
+      return [...current, ...dedupedIncoming];
+    });
+
+    event.target.value = "";
+  };
+
+  const removeSelectedFile = (fileToRemove: File) => {
+    setFiles((current) => current.filter((file) => (
+      `${file.name}-${file.size}-${file.lastModified}` !== `${fileToRemove.name}-${fileToRemove.size}-${fileToRemove.lastModified}`
+    )));
+  };
+
+  const clearSelectedFiles = () => {
+    setFiles([]);
+  };
 
   const goBackInsidePortal = () => {
     const state = location.state as { fromPortal?: boolean; fromPath?: string } | null;
@@ -105,7 +134,12 @@ export default function RequestTaxAssistance() {
     }
 
     if (form.client_type === "individual" && !form.id_number.trim()) {
-      toast.error("Please enter the ID number for the individual request.");
+      toast.error(`Please enter the ${form.identity_document_type === "passport_number" ? "passport number" : "ID number"} for the individual request.`);
+      return;
+    }
+
+    if (form.client_type === "individual" && form.identity_document_type === "id_number" && form.id_number.trim().length !== 13) {
+      toast.error("ID number must be exactly 13 digits.");
       return;
     }
 
@@ -130,6 +164,7 @@ export default function RequestTaxAssistance() {
           email: user.email.trim().toLowerCase(),
           phone: form.phone.trim(),
           client_type: form.client_type,
+          identity_document_type: form.client_type === "individual" ? form.identity_document_type : null,
           id_number: form.client_type === "individual" ? form.id_number.trim() : null,
           company_registration_number: form.client_type === "company" ? form.company_registration_number.trim() : null,
           service_needed: form.service_needed,
@@ -305,6 +340,7 @@ export default function RequestTaxAssistance() {
                     setForm((current) => ({
                       ...current,
                       client_type: value as ClientType,
+                      identity_document_type: value === "individual" ? current.identity_document_type : "id_number",
                       id_number: value === "individual" ? current.id_number : "",
                       company_registration_number: value === "company" ? current.company_registration_number : "",
                     }))
@@ -321,16 +357,54 @@ export default function RequestTaxAssistance() {
               </div>
 
               {form.client_type === "individual" ? (
-                <div className="sm:col-span-2">
-                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
-                  <Input
-                    value={form.id_number}
-                    onChange={(event) => setForm((current) => ({ ...current, id_number: event.target.value }))}
-                    placeholder="South African ID Number"
-                    className="rounded-xl"
-                    required
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">Identity Document Type</label>
+                    <Select
+                      value={form.identity_document_type}
+                      onValueChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          identity_document_type: value as IdentityDocumentType,
+                          id_number: "",
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-full rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="id_number">ID Number</SelectItem>
+                        <SelectItem value="passport_number">Passport Number</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+                      {form.identity_document_type === "passport_number" ? "Passport Number" : "ID Number"}
+                    </label>
+                    <Input
+                      value={form.id_number}
+                      onChange={(event) => {
+                        const nextValue = form.identity_document_type === "id_number"
+                          ? event.target.value.replace(/\D/g, "").slice(0, 13)
+                          : event.target.value.toUpperCase();
+
+                        setForm((current) => ({ ...current, id_number: nextValue }));
+                      }}
+                      placeholder={form.identity_document_type === "passport_number" ? "Passport number" : "13-digit South African ID number"}
+                      className="rounded-xl"
+                      inputMode={form.identity_document_type === "id_number" ? "numeric" : "text"}
+                      maxLength={form.identity_document_type === "id_number" ? 13 : 20}
+                      required
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground font-body">
+                      {form.identity_document_type === "id_number"
+                        ? `${form.id_number.length}/13 digits`
+                        : "Enter the passport number exactly as it appears on the document."}
+                    </p>
+                  </div>
+                </>
               ) : (
                 <div className="sm:col-span-2">
                   <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Registration Number</label>
@@ -430,22 +504,47 @@ export default function RequestTaxAssistance() {
                 <div className="w-full">
                   <p className="text-sm font-semibold text-foreground font-body">Upload Supporting Documents</p>
                   <p className="mt-1 text-xs text-muted-foreground font-body">
-                    Attach any SARS letters, statements, IDs, or supporting files that help explain the request.
+                    Attach any SARS letters, statements, IDs, or supporting files that help explain the request. You can add multiple files before submitting.
                   </p>
                   <input
                     type="file"
                     multiple
                     className="mt-4 block w-full rounded-xl border border-input/90 bg-white/92 px-3.5 py-2.5 text-sm text-foreground shadow-[0_6px_24px_-22px_rgba(15,23,42,0.28)] ring-offset-background transition-all duration-200 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:opacity-90 focus-visible:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2"
-                    onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+                    onChange={handleFileSelection}
                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
                   />
                   {files.length > 0 ? (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {files.map((file) => (
-                        <span key={`${file.name}-${file.size}`} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-foreground shadow-sm">
-                          {file.name}
-                        </span>
-                      ))}
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">
+                          {files.length} file{files.length === 1 ? "" : "s"} selected
+                        </p>
+                        <button
+                          type="button"
+                          onClick={clearSelectedFiles}
+                          className="text-xs font-semibold text-primary hover:underline"
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {files.map((file) => (
+                          <span
+                            key={`${file.name}-${file.size}-${file.lastModified}`}
+                            className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-medium text-foreground shadow-sm"
+                          >
+                            <span className="max-w-[220px] truncate">{file.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeSelectedFile(file)}
+                              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                              aria-label={`Remove ${file.name}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   ) : null}
                 </div>

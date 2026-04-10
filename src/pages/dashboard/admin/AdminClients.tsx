@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, Search, UserPlus } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ type StaffClient = {
     phone?: string | null;
   } | null;
   assigned_consultant?: {
+    id?: string | null;
     full_name?: string | null;
     email?: string | null;
   } | null;
@@ -141,6 +142,7 @@ export default function AdminClients() {
   const { user, hasStaffPermission } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -150,6 +152,7 @@ export default function AdminClients() {
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageClients = hasStaffPermission("can_manage_clients");
   const canViewClientWorkspace = hasStaffPermission("can_view_client_workspace");
+  const practitionerFilterId = searchParams.get("practitionerId") ?? "";
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["staff-clients", accessibleClientIdsKey],
@@ -163,7 +166,7 @@ export default function AdminClients() {
         .select(`
           *,
           profiles!clients_profile_id_fkey(full_name, email, phone),
-          assigned_consultant:profiles!clients_assigned_consultant_id_fkey(full_name, email),
+          assigned_consultant:profiles!clients_assigned_consultant_id_fkey(id, full_name, email),
           created_by_profile:profiles!clients_created_by_fkey(full_name, email)
         `)
         .order("created_at", { ascending: false });
@@ -246,7 +249,7 @@ export default function AdminClients() {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
     if (!normalizedSearch) {
-      return clients ?? [];
+      return (clients ?? []).filter((client) => !practitionerFilterId || client.assigned_consultant?.id === practitionerFilterId);
     }
 
     return (clients ?? []).filter((client) => {
@@ -256,21 +259,37 @@ export default function AdminClients() {
       const taxNumber = (client.tax_number || "").toLowerCase();
       const clientCode = (client.client_code || "").toLowerCase();
       const clientType = (client.client_type || "").toLowerCase();
+      const matchesPractitioner = !practitionerFilterId || client.assigned_consultant?.id === practitionerFilterId;
 
       return (
-        name.includes(normalizedSearch) ||
-        email.includes(normalizedSearch) ||
-        phone.includes(normalizedSearch) ||
-        taxNumber.includes(normalizedSearch) ||
-        clientCode.includes(normalizedSearch) ||
-        clientType.includes(normalizedSearch)
+        matchesPractitioner && (
+          name.includes(normalizedSearch) ||
+          email.includes(normalizedSearch) ||
+          phone.includes(normalizedSearch) ||
+          taxNumber.includes(normalizedSearch) ||
+          clientCode.includes(normalizedSearch) ||
+          clientType.includes(normalizedSearch)
+        )
       );
     });
-  }, [clients, searchQuery]);
+  }, [clients, practitionerFilterId, searchQuery]);
 
   const selectedClient = filteredClients.find((client) => client.id === selectedClientId)
     || clients?.find((client) => client.id === selectedClientId)
     || null;
+
+  const filteredPractitionerLabel = useMemo(
+    () => clients?.find((client) => client.assigned_consultant?.id === practitionerFilterId)?.assigned_consultant?.full_name
+      || clients?.find((client) => client.assigned_consultant?.id === practitionerFilterId)?.assigned_consultant?.email
+      || "",
+    [clients, practitionerFilterId],
+  );
+
+  const clearPractitionerFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("practitionerId");
+    setSearchParams(next, { replace: true });
+  };
 
   const updateForm = <K extends keyof NewClientFormState>(key: K, value: NewClientFormState[K]) => {
     setFormState((current) => ({ ...current, [key]: value }));
@@ -441,7 +460,9 @@ export default function AdminClients() {
           <p className="text-sm text-muted-foreground font-body">
             {hasRestrictedClientScope
               ? "View and monitor only the client accounts assigned to this consultant profile."
-              : "Manage client profiles, open full records, and add new clients from existing portal accounts."}
+              : practitionerFilterId
+                ? "Review the client accounts assigned to this practitioner."
+                : "Manage client profiles, open full records, and add new clients from existing portal accounts."}
           </p>
         </div>
 
@@ -463,6 +484,17 @@ export default function AdminClients() {
           ) : null}
         </div>
       </div>
+
+      {practitionerFilterId ? (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground font-body">
+            Filtering clients for <span className="font-semibold text-foreground">{filteredPractitionerLabel || "selected practitioner"}</span>.
+          </p>
+          <Button type="button" variant="outline" className="rounded-xl" onClick={clearPractitionerFilter}>
+            Clear Practitioner Filter
+          </Button>
+        </div>
+      ) : null}
 
       {isLoading || isLoadingAccessibleClientIds ? (
         <div className="text-muted-foreground font-body">Loading...</div>

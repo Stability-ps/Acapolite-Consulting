@@ -548,6 +548,7 @@ export type Database = {
           email: string;
           phone: string;
           client_type: Database["public"]["Enums"]["service_request_client_type"];
+          identity_document_type: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number: string | null;
           company_registration_number: string | null;
           service_needed: Database["public"]["Enums"]["service_request_service_needed"];
@@ -576,6 +577,7 @@ export type Database = {
           email: string;
           phone: string;
           client_type: Database["public"]["Enums"]["service_request_client_type"];
+          identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
           company_registration_number?: string | null;
           service_needed: Database["public"]["Enums"]["service_request_service_needed"];
@@ -604,6 +606,7 @@ export type Database = {
           email?: string;
           phone?: string;
           client_type?: Database["public"]["Enums"]["service_request_client_type"];
+          identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
           company_registration_number?: string | null;
           service_needed?: Database["public"]["Enums"]["service_request_service_needed"];
@@ -834,6 +837,7 @@ export type Database = {
       payment_status: "pending" | "paid" | "failed" | "cancelled";
       service_request_status: "new" | "viewed" | "responded" | "assigned" | "closed";
       service_request_client_type: "individual" | "company";
+      service_request_identity_document_type: "id_number" | "passport_number";
       service_request_service_needed:
         | "tax_return"
         | "sars_debt_assistance"
@@ -964,6 +968,7 @@ export const Constants = {
       payment_status: ["pending", "paid", "failed", "cancelled"],
       service_request_status: ["new", "viewed", "responded", "assigned", "closed"],
       service_request_client_type: ["individual", "company"],
+      service_request_identity_document_type: ["id_number", "passport_number"],
       service_request_service_needed: [
         "tax_return",
         "sars_debt_assistance",

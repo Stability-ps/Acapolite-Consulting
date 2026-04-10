@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FileText, Image, File, Search, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
@@ -18,6 +19,8 @@ type StaffDocument = {
   file_path: string;
   mime_type: string | null;
   file_size: number | null;
+  client_id: string;
+  case_id: string | null;
   uploaded_at: string;
   status: Enums<"document_status">;
   category: string | null;
@@ -28,6 +31,10 @@ type StaffDocument = {
     first_name?: string | null;
     last_name?: string | null;
     client_code?: string | null;
+    assigned_consultant_id?: string | null;
+  } | null;
+  linked_case?: {
+    assigned_consultant_id?: string | null;
   } | null;
 };
 
@@ -44,6 +51,7 @@ export default function AdminDocuments() {
   const { user, hasStaffPermission } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [reviewNotes, setReviewNotes] = useState("");
@@ -52,6 +60,8 @@ export default function AdminDocuments() {
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canReviewDocuments = hasStaffPermission("can_review_documents");
+  const practitionerFilterId = searchParams.get("practitionerId") ?? "";
+  const documentStateFilter = searchParams.get("documentState") ?? "";
 
   const { data: documents, isLoading } = useQuery({
     queryKey: ["staff-documents", accessibleClientIdsKey],
@@ -62,7 +72,7 @@ export default function AdminDocuments() {
 
       let query = supabase
         .from("documents")
-        .select("*, clients(company_name, first_name, last_name, client_code)")
+        .select("*, clients(company_name, first_name, last_name, client_code, assigned_consultant_id), linked_case:cases!documents_case_id_fkey(assigned_consultant_id)")
         .order("uploaded_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -79,7 +89,16 @@ export default function AdminDocuments() {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
     if (!normalizedSearch) {
-      return documents ?? [];
+      return (documents ?? []).filter((document) => {
+        const assignedPractitionerId = document.linked_case?.assigned_consultant_id || document.clients?.assigned_consultant_id || "";
+        const matchesPractitioner = !practitionerFilterId || assignedPractitionerId === practitionerFilterId;
+        const matchesState = !documentStateFilter
+          || (documentStateFilter === "outstanding" && ["uploaded", "pending_review"].includes(document.status))
+          || (documentStateFilter === "rejected" && document.status === "rejected")
+          || (documentStateFilter === "attention" && ["uploaded", "pending_review", "rejected"].includes(document.status));
+
+        return matchesPractitioner && matchesState;
+      });
     }
 
     return (documents ?? []).filter((document) => {
@@ -87,19 +106,36 @@ export default function AdminDocuments() {
       const fileName = document.file_name.toLowerCase();
       const clientName = getClientName(document).toLowerCase();
       const clientCode = (document.clients?.client_code || "").toLowerCase();
+      const assignedPractitionerId = document.linked_case?.assigned_consultant_id || document.clients?.assigned_consultant_id || "";
+      const matchesPractitioner = !practitionerFilterId || assignedPractitionerId === practitionerFilterId;
+      const matchesState = !documentStateFilter
+        || (documentStateFilter === "outstanding" && ["uploaded", "pending_review"].includes(document.status))
+        || (documentStateFilter === "rejected" && document.status === "rejected")
+        || (documentStateFilter === "attention" && ["uploaded", "pending_review", "rejected"].includes(document.status));
 
       return (
-        title.includes(normalizedSearch) ||
-        fileName.includes(normalizedSearch) ||
-        clientName.includes(normalizedSearch) ||
-        clientCode.includes(normalizedSearch)
+        matchesPractitioner
+        && matchesState
+        && (
+          title.includes(normalizedSearch) ||
+          fileName.includes(normalizedSearch) ||
+          clientName.includes(normalizedSearch) ||
+          clientCode.includes(normalizedSearch)
+        )
       );
     });
-  }, [documents, searchQuery]);
+  }, [documentStateFilter, documents, practitionerFilterId, searchQuery]);
 
   const selectedDocument = filteredDocuments.find((document) => document.id === selectedDocumentId)
     || documents?.find((document) => document.id === selectedDocumentId)
     || null;
+
+  const clearQuickFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("practitionerId");
+    next.delete("documentState");
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     setReviewNotes(selectedDocument?.notes || "");
@@ -181,6 +217,17 @@ export default function AdminDocuments() {
           />
         </div>
       </div>
+
+      {practitionerFilterId || documentStateFilter ? (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground font-body">
+            Showing the practitioner document queue{documentStateFilter ? ` | ${documentStateFilter.replace(/_/g, " ")}` : ""}.
+          </p>
+          <Button type="button" variant="outline" className="rounded-xl" onClick={clearQuickFilters}>
+            Clear Document Filter
+          </Button>
+        </div>
+      ) : null}
 
       {isLoading || isLoadingAccessibleClientIds ? (
         <div className="text-muted-foreground font-body">Loading...</div>
