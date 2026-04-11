@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, BriefcaseBusiness, ClipboardList, Save } from "lucide-react";
+import { BadgeCheck, BriefcaseBusiness, ClipboardList, Coins, CreditCard, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { PractitionerProfileFields, type PractitionerProfileFormState } from "@/components/dashboard/PractitionerProfileFields";
+import { WebPushPrompt } from "@/components/dashboard/WebPushPrompt";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RatingStars } from "@/components/dashboard/RatingStars";
+import { formatZarCurrency, practitionerCreditPackages, purchasePractitionerCredits, submitHostedPayment } from "@/lib/practitionerCredits";
 import { serviceNeededOptions } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, normalizeServicesOffered } from "@/lib/practitionerMarketplace";
 
@@ -24,6 +26,9 @@ const initialPractitionerForm: PractitionerProfileFormState = {
 };
 
 type PractitionerReview = Tables<"practitioner_reviews">;
+type PractitionerCreditAccount = Tables<"practitioner_credit_accounts">;
+type PractitionerCreditTransaction = Tables<"practitioner_credit_transactions">;
+type PractitionerCreditPurchase = Tables<"practitioner_credit_purchases">;
 
 function getProfileCompletion(form: PractitionerProfileFormState) {
   const checks = [
@@ -47,6 +52,7 @@ export default function PractitionerProfile() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<PractitionerProfileFormState>(initialPractitionerForm);
   const [saving, setSaving] = useState(false);
+  const [buyingPackageCode, setBuyingPackageCode] = useState<string | null>(null);
 
   const { data: practitionerProfile } = useQuery({
     queryKey: ["practitioner-profile", user?.id],
@@ -74,6 +80,53 @@ export default function PractitionerProfile() {
 
       if (error) throw error;
       return (data ?? []) as PractitionerReview[];
+    },
+    enabled: !!user,
+  });
+
+  const { data: creditAccount } = useQuery({
+    queryKey: ["practitioner-credit-account", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_credit_accounts")
+        .select("*")
+        .eq("profile_id", user!.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as PractitionerCreditAccount | null;
+    },
+    enabled: !!user,
+  });
+
+  const { data: creditTransactions } = useQuery({
+    queryKey: ["practitioner-credit-transactions", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_credit_transactions")
+        .select("*")
+        .eq("practitioner_profile_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(8);
+
+      if (error) throw error;
+      return (data ?? []) as PractitionerCreditTransaction[];
+    },
+    enabled: !!user,
+  });
+
+  const { data: creditPurchases } = useQuery({
+    queryKey: ["practitioner-credit-purchases", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_credit_purchases")
+        .select("*")
+        .eq("practitioner_profile_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      return (data ?? []) as PractitionerCreditPurchase[];
     },
     enabled: !!user,
   });
@@ -109,6 +162,36 @@ export default function PractitionerProfile() {
 
     return { average, count, latest: reviews.slice(0, 3) };
   }, [practitionerReviews]);
+  const creditBalance = creditAccount?.balance ?? 0;
+
+  const buyCredits = async (packageCode: string) => {
+    setBuyingPackageCode(packageCode);
+
+    try {
+      const result = await purchasePractitionerCredits(packageCode);
+
+      if (result.mode === "fake") {
+        toast.success(`Added ${result.credits ?? 0} credits. New balance: ${result.balance ?? creditBalance}.`);
+      } else if (result.paymentUrl && result.fields) {
+        submitHostedPayment(result.paymentUrl, result.fields);
+        return;
+      } else {
+        toast.error("Unable to start the credit checkout.");
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["practitioner-credit-transactions", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["practitioner-credit-purchases", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["practitioner-visible-leads", user?.id] }),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to purchase credits.";
+      toast.error(message);
+    } finally {
+      setBuyingPackageCode(null);
+    }
+  };
 
   const saveProfile = async () => {
     if (!user) return;
@@ -231,6 +314,106 @@ export default function PractitionerProfile() {
                 </p>
               </div>
             </div>
+          </section>
+
+          <WebPushPrompt buttonLabel="Allow Notifications" />
+
+          <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-2xl text-foreground">Marketplace Credits</h2>
+                <p className="mt-2 text-sm text-muted-foreground font-body">
+                  New practitioners receive 3 free credits. One credit is deducted each time you send a first response to a lead.
+                </p>
+              </div>
+              <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                ZAR pricing
+              </Badge>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <Coins className="h-5 w-5 text-primary" />
+                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Available Credits</p>
+                <p className="mt-2 font-display text-3xl text-foreground">{creditBalance}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <CreditCard className="h-5 w-5 text-primary" />
+                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Purchased Credits</p>
+                <p className="mt-2 font-display text-3xl text-foreground">{creditAccount?.total_purchased_credits ?? 0}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <ClipboardList className="h-5 w-5 text-primary" />
+                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Credits Used</p>
+                <p className="mt-2 font-display text-3xl text-foreground">{creditAccount?.total_used_credits ?? 0}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-3">
+              {practitionerCreditPackages.map((pkg) => (
+                <div key={pkg.code} className="rounded-2xl border border-border p-5">
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">{pkg.name}</p>
+                  <p className="mt-3 font-display text-3xl text-foreground">{pkg.credits} credits</p>
+                  <p className="mt-2 text-sm font-semibold text-primary font-body">{formatZarCurrency(pkg.amountZar)}</p>
+                  <p className="mt-3 text-sm text-muted-foreground font-body">{pkg.description}</p>
+                  <Button
+                    type="button"
+                    className="mt-5 w-full rounded-xl"
+                    onClick={() => void buyCredits(pkg.code)}
+                    disabled={buyingPackageCode === pkg.code}
+                  >
+                    {buyingPackageCode === pkg.code ? "Processing..." : "Buy Package"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-border p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Recent Credit Activity</p>
+              <div className="mt-3 space-y-3">
+                {creditTransactions?.length ? (
+                  creditTransactions.map((transaction) => (
+                    <div key={transaction.id} className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-background/60 p-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground font-body">{transaction.description || transaction.transaction_type}</p>
+                        <p className="mt-1 text-xs text-muted-foreground font-body">
+                          {new Date(transaction.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-semibold font-body ${transaction.credits_delta >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                          {transaction.credits_delta >= 0 ? "+" : ""}{transaction.credits_delta} credits
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground font-body">Balance {transaction.balance_after}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground font-body">No credit activity yet.</p>
+                )}
+              </div>
+            </div>
+
+            {creditPurchases?.length ? (
+              <div className="mt-5 rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Recent Purchases</p>
+                <div className="mt-3 space-y-3">
+                  {creditPurchases.map((purchase) => (
+                    <div key={purchase.id} className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-background/60 p-4">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground font-body">{purchase.package_name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground font-body">
+                          {formatZarCurrency(Number(purchase.amount_zar))} • {purchase.credits} credits
+                        </p>
+                      </div>
+                      <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                        {purchase.payment_status}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">

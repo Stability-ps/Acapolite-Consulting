@@ -210,6 +210,129 @@ export type Database = {
         };
         Relationships: [];
       };
+      practitioner_credit_accounts: {
+        Row: {
+          profile_id: string;
+          balance: number;
+          total_bonus_credits: number;
+          total_purchased_credits: number;
+          total_used_credits: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          balance?: number;
+          total_bonus_credits?: number;
+          total_purchased_credits?: number;
+          total_used_credits?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          profile_id?: string;
+          balance?: number;
+          total_bonus_credits?: number;
+          total_purchased_credits?: number;
+          total_used_credits?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      practitioner_credit_purchases: {
+        Row: {
+          id: string;
+          practitioner_profile_id: string;
+          package_code: string;
+          package_name: string;
+          credits: number;
+          amount_zar: number;
+          currency: string;
+          payment_provider: string;
+          payment_status: string;
+          provider_payment_id: string | null;
+          metadata: Json | null;
+          created_at: string;
+          updated_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          practitioner_profile_id: string;
+          package_code: string;
+          package_name: string;
+          credits: number;
+          amount_zar: number;
+          currency?: string;
+          payment_provider?: string;
+          payment_status?: string;
+          provider_payment_id?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          practitioner_profile_id?: string;
+          package_code?: string;
+          package_name?: string;
+          credits?: number;
+          amount_zar?: number;
+          currency?: string;
+          payment_provider?: string;
+          payment_status?: string;
+          provider_payment_id?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      practitioner_credit_transactions: {
+        Row: {
+          id: string;
+          practitioner_profile_id: string;
+          purchase_id: string | null;
+          service_request_id: string | null;
+          response_id: string | null;
+          transaction_type: string;
+          credits_delta: number;
+          balance_after: number;
+          description: string | null;
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          practitioner_profile_id: string;
+          purchase_id?: string | null;
+          service_request_id?: string | null;
+          response_id?: string | null;
+          transaction_type: string;
+          credits_delta: number;
+          balance_after: number;
+          description?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          practitioner_profile_id?: string;
+          purchase_id?: string | null;
+          service_request_id?: string | null;
+          response_id?: string | null;
+          transaction_type?: string;
+          credits_delta?: number;
+          balance_after?: number;
+          description?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       clients: {
         Row: {
           id: string;

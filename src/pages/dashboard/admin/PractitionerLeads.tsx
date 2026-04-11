@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Search, SendHorizonal } from "lucide-react";
+import { Coins, ExternalLink, Search, SendHorizonal } from "lucide-react";
 import { toast } from "sonner";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
@@ -19,10 +19,12 @@ import {
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
 import { getResponseStatusClass } from "@/lib/practitionerMarketplace";
+import { purchasePractitionerCredits } from "@/lib/practitionerCredits";
 
 type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestDocument = Tables<"service_request_documents">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
+type PractitionerCreditAccount = Tables<"practitioner_credit_accounts">;
 
 export default function PractitionerLeads() {
   const { user } = useAuth();
@@ -33,6 +35,7 @@ export default function PractitionerLeads() {
   const [introductionMessage, setIntroductionMessage] = useState("");
   const [servicePitch, setServicePitch] = useState("");
   const [savingResponse, setSavingResponse] = useState(false);
+  const [startingQuickPurchase, setStartingQuickPurchase] = useState(false);
   const leadIdFromQuery = searchParams.get("leadId");
   const leadAction = searchParams.get("action");
 
@@ -95,6 +98,21 @@ export default function PractitionerLeads() {
     enabled: !!user,
   });
 
+  const { data: creditAccount } = useQuery({
+    queryKey: ["practitioner-credit-account", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_credit_accounts")
+        .select("*")
+        .eq("profile_id", user!.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as PractitionerCreditAccount | null;
+    },
+    enabled: !!user,
+  });
+
   const documentMap = useMemo(() => {
     const map = new Map<string, ServiceRequestDocument[]>();
 
@@ -144,6 +162,8 @@ export default function PractitionerLeads() {
     || null;
   const selectedResponse = selectedRequest ? responseMap.get(selectedRequest.id) ?? null : null;
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
+  const availableCredits = creditAccount?.balance ?? 0;
+  const canSendNewResponse = Boolean(selectedResponse || availableCredits > 0);
 
   useEffect(() => {
     if (!leadIdFromQuery || !(requests ?? []).some((request) => request.id === leadIdFromQuery)) {
@@ -183,6 +203,11 @@ export default function PractitionerLeads() {
       return;
     }
 
+    if (!selectedResponse && availableCredits < 1) {
+      toast.error("You need at least 1 credit to respond to a new lead.");
+      return;
+    }
+
     setSavingResponse(true);
 
     const payload = {
@@ -219,10 +244,32 @@ export default function PractitionerLeads() {
 
     toast.success(selectedResponse ? "Lead response updated." : "Lead response sent.");
     await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", user.id] }),
       queryClient.invalidateQueries({ queryKey: ["practitioner-own-lead-responses", user.id] }),
       queryClient.invalidateQueries({ queryKey: ["practitioner-visible-leads", user.id] }),
     ]);
     setSelectedRequestId(null);
+  };
+
+  const quickBuyStarterCredits = async () => {
+    setStartingQuickPurchase(true);
+
+    try {
+      const result = await purchasePractitionerCredits("starter");
+
+      if (result.mode !== "fake") {
+        toast.error("Quick purchase is only available while credit checkout is in test mode.");
+        return;
+      }
+
+      toast.success(`Starter package added. Balance: ${result.balance ?? availableCredits}.`);
+      await queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", user?.id] });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to add starter credits.";
+      toast.error(message);
+    } finally {
+      setStartingQuickPurchase(false);
+    }
   };
 
   return (
@@ -244,6 +291,32 @@ export default function PractitionerLeads() {
           className="rounded-xl pl-10"
         />
       </div>
+
+      <section className="rounded-[24px] border border-border bg-card p-5 shadow-card">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Lead Credits</p>
+            <div className="mt-2 flex items-center gap-3">
+              <Coins className="h-5 w-5 text-primary" />
+              <p className="font-display text-3xl text-foreground">{availableCredits}</p>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground font-body">
+              1 credit is deducted when you submit a first response to a lead. Updating an existing response does not use another credit.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button asChild type="button" variant="outline" className="rounded-xl">
+              <Link to="/dashboard/staff/profile">Manage Packages</Link>
+            </Button>
+            {availableCredits < 1 ? (
+              <Button type="button" className="rounded-xl" disabled={startingQuickPurchase} onClick={() => void quickBuyStarterCredits()}>
+                {startingQuickPurchase ? "Adding..." : "Quick Buy Starter"}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </section>
 
       {isLoading ? (
         <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground font-body">
@@ -371,6 +444,15 @@ export default function PractitionerLeads() {
             </div>
 
             <div className="space-y-4 rounded-2xl border border-border bg-card p-4">
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Credit Status</p>
+                <p className="mt-2 text-sm text-foreground font-body">
+                  {selectedResponse
+                    ? "Updating this existing response will not deduct another credit."
+                    : `You have ${availableCredits} credit${availableCredits === 1 ? "" : "s"} available for new lead responses.`}
+                </p>
+              </div>
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">Introduction Message</label>
                 <Textarea
@@ -392,9 +474,15 @@ export default function PractitionerLeads() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button type="button" className="rounded-xl" onClick={saveResponse} disabled={savingResponse}>
+                <Button type="button" className="rounded-xl" onClick={saveResponse} disabled={savingResponse || !canSendNewResponse}>
                   <SendHorizonal className="mr-2 h-4 w-4" />
-                  {savingResponse ? "Saving..." : selectedResponse ? "Update Response" : "Respond to Lead"}
+                  {savingResponse
+                    ? "Saving..."
+                    : selectedResponse
+                      ? "Update Response"
+                      : canSendNewResponse
+                        ? "Respond to Lead"
+                        : "No Credits Available"}
                 </Button>
               </div>
             </div>

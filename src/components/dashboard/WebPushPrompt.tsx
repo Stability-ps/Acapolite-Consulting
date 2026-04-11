@@ -5,9 +5,10 @@ import { useWebPushNotifications } from "@/hooks/useWebPushNotifications";
 
 type WebPushPromptProps = {
   profileLink?: string;
+  buttonLabel?: string;
 };
 
-export function WebPushPrompt({ profileLink }: WebPushPromptProps) {
+export function WebPushPrompt({ profileLink, buttonLabel = "Enable Notifications" }: WebPushPromptProps) {
   const { enableNotifications, isConfigured, isSubscribed, isSupported, loading, permission } = useWebPushNotifications();
 
   if (!isSupported) {
@@ -43,7 +44,7 @@ export function WebPushPrompt({ profileLink }: WebPushPromptProps) {
       <div className="mt-5 flex flex-wrap gap-3">
         {!isSubscribed && isConfigured && permission !== "denied" ? (
           <Button type="button" className="rounded-xl" disabled={loading} onClick={() => void enableNotifications()}>
-            {loading ? "Enabling..." : "Enable Notifications"}
+            {loading ? "Enabling..." : buttonLabel}
           </Button>
         ) : null}
 
