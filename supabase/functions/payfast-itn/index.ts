@@ -68,13 +68,40 @@ Deno.serve(async (request) => {
       },
     });
 
+    const paymentStatus = trimString(data.payment_status).toUpperCase();
+
+    const isSubscription = trimString(data.custom_str3) === "subscription";
+
+    if (isSubscription) {
+      if (paymentStatus === "COMPLETE") {
+        const profileId = trimString(data.custom_str1);
+        const planCode = trimString(data.custom_str2);
+
+        if (!profileId || !planCode) {
+          return new Response("Missing subscription metadata", { status: 400 });
+        }
+
+        const { error } = await adminClient.rpc("activate_practitioner_subscription", {
+          p_profile_id: profileId,
+          p_plan_code: planCode,
+          p_payment_provider: "payfast",
+          p_provider_subscription_id: trimString(data.pf_payment_id) || null,
+        });
+
+        if (error) {
+          console.error("Unable to activate practitioner subscription.", error);
+          return new Response("DB error", { status: 500 });
+        }
+      }
+
+      return new Response("OK", { status: 200, headers: corsHeaders });
+    }
+
     const purchaseId = trimString(data.m_payment_id);
 
     if (!purchaseId) {
       return new Response("Missing purchase id", { status: 400 });
     }
-
-    const paymentStatus = trimString(data.payment_status).toUpperCase();
 
     if (paymentStatus === "COMPLETE") {
       const { error } = await adminClient.rpc("complete_practitioner_credit_purchase", {

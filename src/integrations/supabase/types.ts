@@ -298,6 +298,7 @@ export type Database = {
           purchase_id: string | null;
           service_request_id: string | null;
           response_id: string | null;
+          subscription_id: string | null;
           transaction_type: string;
           credits_delta: number;
           balance_after: number;
@@ -311,6 +312,7 @@ export type Database = {
           purchase_id?: string | null;
           service_request_id?: string | null;
           response_id?: string | null;
+          subscription_id?: string | null;
           transaction_type: string;
           credits_delta: number;
           balance_after: number;
@@ -324,12 +326,109 @@ export type Database = {
           purchase_id?: string | null;
           service_request_id?: string | null;
           response_id?: string | null;
+          subscription_id?: string | null;
           transaction_type?: string;
           credits_delta?: number;
           balance_after?: number;
           description?: string | null;
           metadata?: Json | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      practitioner_subscription_plans: {
+        Row: {
+          code: string;
+          name: string;
+          price_zar: number;
+          credits_per_month: number;
+          includes_verified_badge: boolean;
+          includes_standard_listing: boolean;
+          includes_priority_listing: boolean;
+          includes_featured_profile: boolean;
+          includes_highlighted_profile: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          code: string;
+          name: string;
+          price_zar: number;
+          credits_per_month: number;
+          includes_verified_badge?: boolean;
+          includes_standard_listing?: boolean;
+          includes_priority_listing?: boolean;
+          includes_featured_profile?: boolean;
+          includes_highlighted_profile?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          code?: string;
+          name?: string;
+          price_zar?: number;
+          credits_per_month?: number;
+          includes_verified_badge?: boolean;
+          includes_standard_listing?: boolean;
+          includes_priority_listing?: boolean;
+          includes_featured_profile?: boolean;
+          includes_highlighted_profile?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      practitioner_subscriptions: {
+        Row: {
+          id: string;
+          practitioner_profile_id: string;
+          plan_code: string;
+          status: string;
+          payment_provider: string;
+          provider_subscription_id: string | null;
+          started_at: string;
+          current_period_start: string;
+          current_period_end: string;
+          next_renewal_at: string;
+          last_credited_at: string | null;
+          cancelled_at: string | null;
+          metadata: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          practitioner_profile_id: string;
+          plan_code: string;
+          status?: string;
+          payment_provider?: string;
+          provider_subscription_id?: string | null;
+          started_at?: string;
+          current_period_start?: string;
+          current_period_end?: string;
+          next_renewal_at?: string;
+          last_credited_at?: string | null;
+          cancelled_at?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          practitioner_profile_id?: string;
+          plan_code?: string;
+          status?: string;
+          payment_provider?: string;
+          provider_subscription_id?: string | null;
+          started_at?: string;
+          current_period_start?: string;
+          current_period_end?: string;
+          next_renewal_at?: string;
+          last_credited_at?: string | null;
+          cancelled_at?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -740,6 +839,7 @@ export type Database = {
           identity_document_type: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number: string | null;
           company_registration_number: string | null;
+          service_category: Database["public"]["Enums"]["service_request_category"];
           service_needed: Database["public"]["Enums"]["service_request_service_needed"];
           priority_level: Database["public"]["Enums"]["service_request_priority"];
           description: string;
@@ -769,6 +869,7 @@ export type Database = {
           identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
           company_registration_number?: string | null;
+          service_category: Database["public"]["Enums"]["service_request_category"];
           service_needed: Database["public"]["Enums"]["service_request_service_needed"];
           priority_level?: Database["public"]["Enums"]["service_request_priority"];
           description: string;
@@ -798,6 +899,7 @@ export type Database = {
           identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
           company_registration_number?: string | null;
+          service_category?: Database["public"]["Enums"]["service_request_category"];
           service_needed?: Database["public"]["Enums"]["service_request_service_needed"];
           priority_level?: Database["public"]["Enums"]["service_request_priority"];
           description?: string;
@@ -1027,6 +1129,7 @@ export type Database = {
       service_request_status: "new" | "viewed" | "responded" | "assigned" | "closed";
       service_request_client_type: "individual" | "company";
       service_request_identity_document_type: "id_number" | "passport_number";
+      service_request_category: "individual_tax" | "business_tax" | "accounting" | "business_support";
       service_request_service_needed:
         | "tax_return"
         | "sars_debt_assistance"
@@ -1035,7 +1138,34 @@ export type Database = {
         | "paye_issues"
         | "objection_dispute"
         | "bookkeeping"
-        | "other";
+        | "other"
+        | "individual_personal_income_tax_returns"
+        | "individual_sars_debt_assistance"
+        | "individual_tax_compliance_issues"
+        | "individual_tax_clearance_certificates"
+        | "individual_objections_and_disputes"
+        | "individual_late_return_submissions"
+        | "individual_tax_number_registration"
+        | "individual_tax_status_corrections"
+        | "business_company_income_tax"
+        | "business_vat_registration"
+        | "business_vat_returns"
+        | "business_paye_registration"
+        | "business_paye_compliance"
+        | "business_sars_debt_arrangements"
+        | "business_tax_clearance_certificates"
+        | "business_sars_audits_support"
+        | "accounting_bookkeeping"
+        | "accounting_financial_statements"
+        | "accounting_management_accounts"
+        | "accounting_payroll_services"
+        | "accounting_monthly_accounting_services"
+        | "accounting_annual_financial_reporting"
+        | "support_company_registration"
+        | "support_business_compliance"
+        | "support_cipc_services"
+        | "support_business_advisory"
+        | "support_financial_compliance";
       service_request_priority: "low" | "medium" | "high" | "urgent";
       service_request_risk_indicator: "low" | "medium" | "high";
       practitioner_availability_status: "available" | "limited" | "not_available";
@@ -1158,6 +1288,7 @@ export const Constants = {
       service_request_status: ["new", "viewed", "responded", "assigned", "closed"],
       service_request_client_type: ["individual", "company"],
       service_request_identity_document_type: ["id_number", "passport_number"],
+      service_request_category: ["individual_tax", "business_tax", "accounting", "business_support"],
       service_request_service_needed: [
         "tax_return",
         "sars_debt_assistance",
@@ -1167,6 +1298,33 @@ export const Constants = {
         "objection_dispute",
         "bookkeeping",
         "other",
+        "individual_personal_income_tax_returns",
+        "individual_sars_debt_assistance",
+        "individual_tax_compliance_issues",
+        "individual_tax_clearance_certificates",
+        "individual_objections_and_disputes",
+        "individual_late_return_submissions",
+        "individual_tax_number_registration",
+        "individual_tax_status_corrections",
+        "business_company_income_tax",
+        "business_vat_registration",
+        "business_vat_returns",
+        "business_paye_registration",
+        "business_paye_compliance",
+        "business_sars_debt_arrangements",
+        "business_tax_clearance_certificates",
+        "business_sars_audits_support",
+        "accounting_bookkeeping",
+        "accounting_financial_statements",
+        "accounting_management_accounts",
+        "accounting_payroll_services",
+        "accounting_monthly_accounting_services",
+        "accounting_annual_financial_reporting",
+        "support_company_registration",
+        "support_business_compliance",
+        "support_cipc_services",
+        "support_business_advisory",
+        "support_financial_compliance",
       ],
       service_request_priority: ["low", "medium", "high", "urgent"],
       service_request_risk_indicator: ["low", "medium", "high"],

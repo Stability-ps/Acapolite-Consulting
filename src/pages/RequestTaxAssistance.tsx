@@ -13,6 +13,8 @@ import type { Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import {
   formatServiceRequestLabel,
+  getServicesForCategory,
+  serviceCategoryOptions,
   serviceNeededOptions,
   serviceRequestPriorityOptions,
   uploadServiceRequestFile,
@@ -36,7 +38,8 @@ export default function RequestTaxAssistance() {
     identity_document_type: "id_number" as IdentityDocumentType,
     id_number: "",
     company_registration_number: "",
-    service_needed: "tax_return" as Enums<"service_request_service_needed">,
+    service_category: "individual_tax" as Enums<"service_request_category">,
+    service_needed: "individual_personal_income_tax_returns" as Enums<"service_request_service_needed">,
     priority_level: "medium" as Enums<"service_request_priority">,
     description: "",
     sars_debt_amount: "",
@@ -57,7 +60,8 @@ export default function RequestTaxAssistance() {
       identity_document_type: "id_number",
       id_number: "",
       company_registration_number: "",
-      service_needed: "tax_return",
+      service_category: "individual_tax",
+      service_needed: "individual_personal_income_tax_returns",
       priority_level: "medium",
       description: "",
       sars_debt_amount: "",
@@ -80,6 +84,12 @@ export default function RequestTaxAssistance() {
     () => serviceNeededOptions.find((option) => option.value === form.service_needed),
     [form.service_needed],
   );
+
+  const availableServices = useMemo(() => {
+    const services = getServicesForCategory(form.service_category);
+    const labelMap = new Map(serviceNeededOptions.map((option) => [option.value, option.label]));
+    return services.map((service) => ({ value: service, label: labelMap.get(service) || formatServiceRequestLabel(service) }));
+  }, [form.service_category]);
 
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const nextFiles = Array.from(event.target.files ?? []);
@@ -167,6 +177,7 @@ export default function RequestTaxAssistance() {
           identity_document_type: form.client_type === "individual" ? form.identity_document_type : null,
           id_number: form.client_type === "individual" ? form.id_number.trim() : null,
           company_registration_number: form.client_type === "company" ? form.company_registration_number.trim() : null,
+          service_category: form.service_category,
           service_needed: form.service_needed,
           priority_level: form.priority_level,
           description: form.description.trim(),
@@ -421,6 +432,33 @@ export default function RequestTaxAssistance() {
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Service Category</label>
+                <Select
+                  value={form.service_category}
+                  onValueChange={(value) => {
+                    const nextCategory = value as Enums<"service_request_category">;
+                    const nextServices = getServicesForCategory(nextCategory);
+                    const nextService = nextServices[0] || form.service_needed;
+
+                    setForm((current) => ({
+                      ...current,
+                      service_category: nextCategory,
+                      service_needed: nextService,
+                    }));
+                  }}
+                >
+                  <SelectTrigger className="w-full rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {serviceCategoryOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">Service Needed</label>
                 <Select
                   value={form.service_needed}
@@ -430,7 +468,7 @@ export default function RequestTaxAssistance() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {serviceNeededOptions.map((option) => (
+                    {availableServices.map((option) => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                     ))}
                   </SelectContent>

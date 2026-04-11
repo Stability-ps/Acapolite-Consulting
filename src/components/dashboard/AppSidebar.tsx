@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, FolderOpen, Upload, Receipt, MessageSquare, Bell, Settings, Users, Shield, LogOut, UserRound, UserPlus, ClipboardList, BriefcaseBusiness,
+  LayoutDashboard, FolderOpen, Upload, Receipt, MessageSquare, Bell, Settings, Users, Shield, LogOut, UserRound, UserPlus, ClipboardList, BriefcaseBusiness, Coins,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -40,6 +40,7 @@ const adminItems = [
 const consultantItems = [
   { title: "Overview", url: "/dashboard/staff", icon: Shield, permission: "can_view_overview" as StaffPermissionKey },
   { title: "My Profile", url: "/dashboard/staff/profile", icon: BriefcaseBusiness },
+  { title: "Credits", url: "/dashboard/staff/credits", icon: Coins },
   { title: "Clients", url: "/dashboard/staff/clients", icon: Users, permission: "can_view_clients" as StaffPermissionKey },
   { title: "Service Requests", url: "/dashboard/staff/service-requests", icon: ClipboardList, permission: "can_view_clients" as StaffPermissionKey },
   { title: "Client 360", url: "/dashboard/staff/client-workspace", icon: UserRound, permission: "can_view_client_workspace" as StaffPermissionKey },

@@ -4,23 +4,9 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 type CheckoutMode = "fake" | "payfast_sandbox" | "payfast_live";
 
-type CreditPackage = {
-  code: string;
-  name: string;
-  credits: number;
-  amountZar: number;
-};
-
 type CheckoutPayload = {
-  packageCode?: string;
+  planCode?: string;
 };
-
-const CREDIT_PACKAGES: CreditPackage[] = [
-  { code: "starter", name: "Starter Pack", credits: 10, amountZar: 250 },
-  { code: "professional", name: "Professional Pack", credits: 25, amountZar: 600 },
-  { code: "business", name: "Business Pack", credits: 50, amountZar: 1100 },
-  { code: "enterprise", name: "Enterprise Pack", credits: 100, amountZar: 2000 },
-];
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -44,7 +30,7 @@ function requireEnv(name: string, fallback?: string) {
 }
 
 function getCheckoutMode() {
-  const raw = trimString(Deno.env.get("PRACTITIONER_CREDIT_CHECKOUT_MODE")).toLowerCase();
+  const raw = trimString(Deno.env.get("PRACTITIONER_SUBSCRIPTION_CHECKOUT_MODE")).toLowerCase();
 
   if (raw === "payfast_sandbox" || raw === "payfast_live") {
     return raw satisfies CheckoutMode;
@@ -106,7 +92,7 @@ Deno.serve(async (request) => {
     } = await callerClient.auth.getUser();
 
     if (authError || !user) {
-      return jsonResponse({ error: "You must be signed in to purchase credits." }, 401);
+      return jsonResponse({ error: "You must be signed in to start a subscription." }, 401);
     }
 
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
@@ -123,62 +109,40 @@ Deno.serve(async (request) => {
       .maybeSingle();
 
     if (profileError || !profile || profile.role !== "consultant") {
-      return jsonResponse({ error: "Only practitioners can purchase marketplace credits." }, 403);
+      return jsonResponse({ error: "Only practitioners can subscribe to monthly plans." }, 403);
     }
 
     const payload = (await request.json()) as CheckoutPayload;
-    const selectedPackage = CREDIT_PACKAGES.find((item) => item.code === trimString(payload.packageCode).toLowerCase());
+    const planCode = trimString(payload.planCode).toLowerCase();
 
-    if (!selectedPackage) {
-      return jsonResponse({ error: "Invalid credit package selected." }, 400);
+    const { data: plan, error: planError } = await adminClient
+      .from("practitioner_subscription_plans")
+      .select("*")
+      .eq("code", planCode)
+      .maybeSingle();
+
+    if (planError || !plan) {
+      return jsonResponse({ error: "Invalid subscription plan selected." }, 400);
     }
 
     const checkoutMode = getCheckoutMode();
-    const paymentProvider = checkoutMode === "fake" ? "test" : "payfast";
-
-    const { data: purchase, error: purchaseError } = await adminClient
-      .from("practitioner_credit_purchases")
-      .insert({
-        practitioner_profile_id: user.id,
-        package_code: selectedPackage.code,
-        package_name: selectedPackage.name,
-        credits: selectedPackage.credits,
-        amount_zar: selectedPackage.amountZar,
-        currency: "ZAR",
-        payment_provider: paymentProvider,
-        payment_status: checkoutMode === "fake" ? "completed" : "pending",
-        metadata: {
-          checkout_mode: checkoutMode,
-        },
-      })
-      .select("*")
-      .single();
-
-    if (purchaseError || !purchase) {
-      return jsonResponse({ error: purchaseError?.message || "Unable to create the credit purchase." }, 400);
-    }
 
     if (checkoutMode === "fake") {
-      const { data: balance, error: completeError } = await adminClient.rpc("complete_practitioner_credit_purchase", {
-        p_purchase_id: purchase.id,
-        p_provider_payment_id: `FAKE-${purchase.id}`,
-        p_payment_status: "completed",
-        p_metadata: {
-          checkout_mode: checkoutMode,
-          completed_via: "fake_checkout",
-        },
+      const { data: subscriptionId, error: subscriptionError } = await adminClient.rpc("activate_practitioner_subscription", {
+        p_profile_id: user.id,
+        p_plan_code: plan.code,
+        p_payment_provider: "test",
+        p_provider_subscription_id: `FAKE-${user.id}-${plan.code}`,
       });
 
-      if (completeError) {
-        return jsonResponse({ error: completeError.message }, 400);
+      if (subscriptionError) {
+        return jsonResponse({ error: subscriptionError.message }, 400);
       }
 
       return jsonResponse({
         success: true,
         mode: checkoutMode,
-        purchaseId: purchase.id,
-        credits: selectedPackage.credits,
-        balance,
+        subscriptionId,
       });
     }
 
@@ -190,8 +154,8 @@ Deno.serve(async (request) => {
       : "https://www.payfast.co.za/eng/process";
     const projectRef = new URL(supabaseUrl).host.split(".")[0];
     const notifyUrl = `https://${projectRef}.supabase.co/functions/v1/payfast-itn`;
-    const returnUrl = `${portalUrl.replace(/\/$/, "")}/dashboard/staff/profile?credits=success`;
-    const cancelUrl = `${portalUrl.replace(/\/$/, "")}/dashboard/staff/profile?credits=cancelled`;
+    const returnUrl = `${portalUrl.replace(/\/$/, "")}/dashboard/staff/credits?subscription=success`;
+    const cancelUrl = `${portalUrl.replace(/\/$/, "")}/dashboard/staff/credits?subscription=cancelled`;
 
     const payFastFields: Record<string, string> = {
       merchant_id: merchantId,
@@ -201,13 +165,17 @@ Deno.serve(async (request) => {
       notify_url: notifyUrl,
       name_first: trimString(profile.full_name).split(/\s+/)[0] || "Practitioner",
       email_address: trimString(profile.email) || trimString(user.email),
-      m_payment_id: purchase.id,
-      amount: selectedPackage.amountZar.toFixed(2),
-      item_name: selectedPackage.name,
-      item_description: `${selectedPackage.credits} marketplace credits`,
+      m_payment_id: `SUB-${user.id}-${plan.code}-${Date.now()}`,
+      amount: Number(plan.price_zar).toFixed(2),
+      item_name: plan.name,
+      item_description: `${plan.credits_per_month} credits per month`,
       custom_str1: user.id,
-      custom_str2: selectedPackage.code,
+      custom_str2: plan.code,
+      custom_str3: "subscription",
       currency: "ZAR",
+      subscription_type: "1",
+      frequency: "3",
+      cycles: "0",
     };
 
     payFastFields.signature = buildPayFastSignature(payFastFields, passphrase || undefined);
@@ -215,12 +183,11 @@ Deno.serve(async (request) => {
     return jsonResponse({
       success: true,
       mode: checkoutMode,
-      purchaseId: purchase.id,
       paymentUrl,
       fields: payFastFields,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected error while creating the credit checkout.";
+    const message = error instanceof Error ? error.message : "Unexpected error while starting the subscription.";
     return jsonResponse({ error: message }, 500);
   }
 });

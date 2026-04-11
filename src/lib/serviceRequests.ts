@@ -1,16 +1,84 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Enums } from "@/integrations/supabase/types";
 
-export const serviceNeededOptions: { value: Enums<"service_request_service_needed">; label: string }[] = [
-  { value: "tax_return", label: "Tax Return" },
-  { value: "sars_debt_assistance", label: "SARS Debt Assistance" },
-  { value: "vat_registration", label: "VAT Registration" },
-  { value: "company_tax", label: "Company Tax" },
-  { value: "paye_issues", label: "PAYE Issues" },
-  { value: "objection_dispute", label: "Objection / Dispute" },
-  { value: "bookkeeping", label: "Bookkeeping" },
-  { value: "other", label: "Other" },
+export const serviceCategoryOptions: { value: Enums<"service_request_category">; label: string }[] = [
+  { value: "individual_tax", label: "Individual Tax Services" },
+  { value: "business_tax", label: "Business Tax Services" },
+  { value: "accounting", label: "Accounting Services" },
+  { value: "business_support", label: "Business Support Services" },
 ];
+
+export const serviceNeededOptions: { value: Enums<"service_request_service_needed">; label: string }[] = [
+  { value: "individual_personal_income_tax_returns", label: "Personal Income Tax Returns" },
+  { value: "individual_sars_debt_assistance", label: "SARS Debt Assistance" },
+  { value: "individual_tax_compliance_issues", label: "Tax Compliance Issues" },
+  { value: "individual_tax_clearance_certificates", label: "Tax Clearance Certificates" },
+  { value: "individual_objections_and_disputes", label: "Objections and Disputes" },
+  { value: "individual_late_return_submissions", label: "Late Return Submissions" },
+  { value: "individual_tax_number_registration", label: "Tax Number Registration" },
+  { value: "individual_tax_status_corrections", label: "Tax Status Corrections" },
+  { value: "business_company_income_tax", label: "Company Income Tax" },
+  { value: "business_vat_registration", label: "VAT Registration" },
+  { value: "business_vat_returns", label: "VAT Returns" },
+  { value: "business_paye_registration", label: "PAYE Registration" },
+  { value: "business_paye_compliance", label: "PAYE Compliance" },
+  { value: "business_sars_debt_arrangements", label: "SARS Debt Arrangements" },
+  { value: "business_tax_clearance_certificates", label: "Tax Clearance Certificates" },
+  { value: "business_sars_audits_support", label: "SARS Audits Support" },
+  { value: "accounting_bookkeeping", label: "Bookkeeping" },
+  { value: "accounting_financial_statements", label: "Financial Statements" },
+  { value: "accounting_management_accounts", label: "Management Accounts" },
+  { value: "accounting_payroll_services", label: "Payroll Services" },
+  { value: "accounting_monthly_accounting_services", label: "Monthly Accounting Services" },
+  { value: "accounting_annual_financial_reporting", label: "Annual Financial Reporting" },
+  { value: "support_company_registration", label: "Company Registration" },
+  { value: "support_business_compliance", label: "Business Compliance" },
+  { value: "support_cipc_services", label: "CIPC Services" },
+  { value: "support_business_advisory", label: "Business Advisory" },
+  { value: "support_financial_compliance", label: "Financial Compliance" },
+];
+
+export const serviceCategoryMap: Record<Enums<"service_request_category">, Enums<"service_request_service_needed">[]> = {
+  individual_tax: [
+    "individual_personal_income_tax_returns",
+    "individual_sars_debt_assistance",
+    "individual_tax_compliance_issues",
+    "individual_tax_clearance_certificates",
+    "individual_objections_and_disputes",
+    "individual_late_return_submissions",
+    "individual_tax_number_registration",
+    "individual_tax_status_corrections",
+  ],
+  business_tax: [
+    "business_company_income_tax",
+    "business_vat_registration",
+    "business_vat_returns",
+    "business_paye_registration",
+    "business_paye_compliance",
+    "business_sars_debt_arrangements",
+    "business_tax_clearance_certificates",
+    "business_sars_audits_support",
+  ],
+  accounting: [
+    "accounting_bookkeeping",
+    "accounting_financial_statements",
+    "accounting_management_accounts",
+    "accounting_payroll_services",
+    "accounting_monthly_accounting_services",
+    "accounting_annual_financial_reporting",
+  ],
+  business_support: [
+    "support_company_registration",
+    "support_business_compliance",
+    "support_cipc_services",
+    "support_business_advisory",
+    "support_financial_compliance",
+  ],
+};
+
+export function getServicesForCategory(category: Enums<"service_request_category">) {
+  return serviceCategoryMap[category] || [];
+}
 
 export const serviceRequestStatusOptions: { value: Enums<"service_request_status">; label: string }[] = [
   { value: "new", label: "New" },

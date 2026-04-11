@@ -19,7 +19,7 @@ import {
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
 import { getResponseStatusClass } from "@/lib/practitionerMarketplace";
-import { purchasePractitionerCredits } from "@/lib/practitionerCredits";
+import { getServiceRequestCreditCost, purchasePractitionerCredits } from "@/lib/practitionerCredits";
 
 type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestDocument = Tables<"service_request_documents">;
@@ -331,6 +331,7 @@ export default function PractitionerLeads() {
               missingReturnsFlag: request.missing_returns_flag,
               missingDocumentsFlag: request.missing_documents_flag,
             });
+            const creditCost = getServiceRequestCreditCost(request.service_needed);
 
             return (
               <button
@@ -357,6 +358,9 @@ export default function PractitionerLeads() {
                     </div>
                     <p className="text-sm text-muted-foreground font-body">
                       {serviceNeededOptions.find((item) => item.value === request.service_needed)?.label || request.service_needed}
+                    </p>
+                    <p className="text-xs text-muted-foreground font-body">
+                      Cost: {creditCost} credit{creditCost === 1 ? "" : "s"}
                     </p>
                     <p className="line-clamp-2 text-sm text-foreground font-body">{request.description}</p>
                     <div className="flex flex-wrap gap-2">
@@ -409,6 +413,13 @@ export default function PractitionerLeads() {
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Service Needed</p>
                 <p className="mt-2 text-sm text-foreground font-body">
                   {serviceNeededOptions.find((item) => item.value === selectedRequest.service_needed)?.label || selectedRequest.service_needed}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Credit Cost</p>
+                <p className="mt-2 text-sm text-foreground font-body">
+                  {getServiceRequestCreditCost(selectedRequest.service_needed)} credit
+                  {getServiceRequestCreditCost(selectedRequest.service_needed) === 1 ? "" : "s"}
                 </p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/20 p-4">

@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { Enums } from "@/integrations/supabase/types";
-import { serviceNeededOptions } from "@/lib/serviceRequests";
+import { serviceCategoryMap, serviceCategoryOptions, serviceNeededOptions } from "@/lib/serviceRequests";
 import { practitionerAvailabilityOptions } from "@/lib/practitionerMarketplace";
 
 export type PractitionerProfileFormState = {
@@ -32,6 +32,8 @@ export function PractitionerProfileFields({
 
     onChange({ ...value, servicesOffered: nextServices });
   };
+
+  const serviceLabelMap = new Map(serviceNeededOptions.map((service) => [service.value, service.label]));
 
   return (
     <div className="space-y-5">
@@ -105,16 +107,25 @@ export function PractitionerProfileFields({
 
       <div>
         <label className="mb-2 block text-sm font-semibold text-foreground font-body">Services Offered</label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {serviceNeededOptions.map((option) => (
-            <label key={option.value} className="flex items-start gap-3 rounded-2xl border border-border p-4">
-              <Checkbox
-                checked={value.servicesOffered.includes(option.value)}
-                onCheckedChange={(checked) => toggleService(option.value, checked === true)}
-                className="mt-0.5"
-              />
-              <span className="text-sm text-foreground font-body">{option.label}</span>
-            </label>
+        <div className="space-y-4">
+          {serviceCategoryOptions.map((category) => (
+            <div key={category.value}>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">
+                {category.label}
+              </p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                {serviceCategoryMap[category.value].map((service) => (
+                  <label key={service} className="flex items-start gap-3 rounded-2xl border border-border p-4">
+                    <Checkbox
+                      checked={value.servicesOffered.includes(service)}
+                      onCheckedChange={(checked) => toggleService(service, checked === true)}
+                      className="mt-0.5"
+                    />
+                    <span className="text-sm text-foreground font-body">{serviceLabelMap.get(service) || service}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>

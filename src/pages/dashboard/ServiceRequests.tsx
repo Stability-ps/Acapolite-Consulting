@@ -11,7 +11,7 @@ import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog"
 import { RatingStars } from "@/components/dashboard/RatingStars";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { serviceNeededOptions, formatServiceRequestLabel, getServiceRequestRiskClass, getServiceRequestStatusClass } from "@/lib/serviceRequests";
+import { serviceCategoryOptions, serviceNeededOptions, formatServiceRequestLabel, getServiceRequestRiskClass, getServiceRequestStatusClass } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, getResponseStatusClass } from "@/lib/practitionerMarketplace";
 import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
 
@@ -160,6 +160,15 @@ export default function ClientServiceRequests() {
 
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
   const selectedResponses = selectedRequest ? responsesByRequest.get(selectedRequest.id) ?? [] : [];
+  const selectedServiceLabel = selectedRequest
+    ? serviceNeededOptions.find((item) => item.value === selectedRequest.service_needed)?.label || selectedRequest.service_needed
+    : null;
+  const selectedCategoryLabel = selectedRequest
+    ? serviceCategoryOptions.find((item) => item.value === selectedRequest.service_category)?.label || selectedRequest.service_category
+    : null;
+  const formattedSubmittedAt = selectedRequest?.created_at
+    ? new Date(selectedRequest.created_at).toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" })
+    : "N/A";
 
   const selectPractitioner = async (responseId: string) => {
     if (!client) {
@@ -302,11 +311,94 @@ export default function ClientServiceRequests() {
       <DashboardItemDialog
         open={!!selectedRequest}
         onOpenChange={(open) => setSelectedRequestId(open ? selectedRequestId : null)}
-        title={selectedRequest ? serviceNeededOptions.find((item) => item.value === selectedRequest.service_needed)?.label || "Service Request" : "Service Request"}
+        title={selectedServiceLabel || "Service Request"}
         description="Review responses and choose the practitioner you want Acapolite to assign to your case."
       >
         {selectedRequest ? (
           <div className="space-y-6">
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Request Details</p>
+              <div className="mt-4 grid gap-3 text-sm text-foreground font-body sm:grid-cols-2">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Request ID</p>
+                  <p className="mt-1 font-mono text-xs">{selectedRequest.id}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Submitted</p>
+                  <p className="mt-1">{formattedSubmittedAt}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Service Category</p>
+                  <p className="mt-1">{selectedCategoryLabel}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Service Needed</p>
+                  <p className="mt-1">{selectedServiceLabel}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Status</p>
+                  <p className="mt-1">{formatServiceRequestLabel(selectedRequest.status)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Priority</p>
+                  <p className="mt-1">{formatServiceRequestLabel(selectedRequest.priority_level)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Risk</p>
+                  <p className="mt-1">{formatServiceRequestLabel(selectedRequest.risk_indicator)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Client Type</p>
+                  <p className="mt-1">{formatServiceRequestLabel(selectedRequest.client_type)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Contact Email</p>
+                  <p className="mt-1">{selectedRequest.email}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Contact Phone</p>
+                  <p className="mt-1">{selectedRequest.phone}</p>
+                </div>
+                {selectedRequest.client_type === "individual" ? (
+                  <>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">ID Type</p>
+                      <p className="mt-1">{formatServiceRequestLabel(selectedRequest.identity_document_type || "id_number")}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">ID Number</p>
+                      <p className="mt-1">{selectedRequest.id_number || "Not provided"}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Company Registration</p>
+                    <p className="mt-1">{selectedRequest.company_registration_number || "Not provided"}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">SARS Debt Amount</p>
+                  <p className="mt-1">R {selectedRequest.sars_debt_amount.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Returns Filed</p>
+                  <p className="mt-1">{selectedRequest.returns_filed ? "Yes" : "No"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Debt Flag</p>
+                  <p className="mt-1">{selectedRequest.has_debt_flag ? "Yes" : "No"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Missing Returns</p>
+                  <p className="mt-1">{selectedRequest.missing_returns_flag ? "Yes" : "No"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Missing Documents</p>
+                  <p className="mt-1">{selectedRequest.missing_documents_flag ? "Yes" : "No"}</p>
+                </div>
+              </div>
+            </div>
+
             <div className="rounded-2xl border border-border bg-card p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Request Summary</p>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">{selectedRequest.description}</p>

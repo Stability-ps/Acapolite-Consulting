@@ -269,6 +269,21 @@ export default function PractitionerOverview() {
     enabled: !!user,
   });
 
+  const { data: creditAccount } = useQuery({
+    queryKey: ["practitioner-credit-account", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_credit_accounts")
+        .select("balance")
+        .eq("profile_id", user!.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as { balance: number } | null;
+    },
+    enabled: !!user,
+  });
+
   const clientMap = useMemo(() => {
     const map = new Map<string, ClientRecord>();
 
@@ -472,6 +487,9 @@ export default function PractitionerOverview() {
         <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground font-body">
           Focus on the work queue for today: new leads, active matters, document issues, and client risks that need attention.
         </p>
+        <div className="mt-5 inline-flex items-center gap-3 rounded-full border border-primary/15 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
+          Credit Balance: {creditAccount?.balance ?? 0} Credits
+        </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

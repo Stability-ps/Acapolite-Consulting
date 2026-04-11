@@ -31,6 +31,7 @@ import AdminClientWorkspace from "./pages/dashboard/admin/AdminClientWorkspace";
 import AdminUsers from "./pages/dashboard/admin/AdminUsers";
 import AdminServiceRequests from "./pages/dashboard/admin/AdminServiceRequests";
 import PractitionerProfile from "./pages/dashboard/admin/PractitionerProfile";
+import PractitionerCredits from "./pages/dashboard/admin/PractitionerCredits";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -70,6 +71,7 @@ const App = () => (
                 </Route>
                 <Route element={<RequireRole allowedRoles={["consultant"]} />}>
                   <Route path="staff/profile" element={<PractitionerProfile />} />
+                  <Route path="staff/credits" element={<PractitionerCredits />} />
                 </Route>
                 <Route element={<RequireStaffPermission permission="can_view_clients" />}>
                   <Route path="staff/clients" element={<AdminClients />} />
