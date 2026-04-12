@@ -13,6 +13,18 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
 import RequestTaxAssistance from "./pages/RequestTaxAssistance";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import RefundPolicy from "./pages/RefundPolicy";
+import Disclaimer from "./pages/Disclaimer";
+import PractitionerGuidelines from "./pages/PractitionerGuidelines";
+import CookiePolicy from "./pages/CookiePolicy";
+import TermsAndConditions from "./pages/TermsAndConditions";
+import Faq from "./pages/Faq";
+import TrustSafety from "./pages/TrustSafety";
+import OurServices from "./pages/OurServices";
+import HowAcapoliteWorks from "./pages/HowAcapoliteWorks";
+import ContactUs from "./pages/ContactUs";
+import HelpCenter from "./pages/HelpCenter";
 import Dashboard from "./pages/Dashboard";
 import DashboardOverview from "./pages/dashboard/Overview";
 import ServiceRequests from "./pages/dashboard/ServiceRequests";
@@ -48,6 +60,18 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/refund-policy" element={<RefundPolicy />} />
+            <Route path="/disclaimer" element={<Disclaimer />} />
+            <Route path="/practitioner-guidelines" element={<PractitionerGuidelines />} />
+            <Route path="/cookie-policy" element={<CookiePolicy />} />
+            <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+            <Route path="/faq" element={<Faq />} />
+            <Route path="/trust-safety" element={<TrustSafety />} />
+            <Route path="/our-services" element={<OurServices />} />
+            <Route path="/how-acapolite-works" element={<HowAcapoliteWorks />} />
+            <Route path="/contact-us" element={<ContactUs />} />
+            <Route path="/help-center" element={<HelpCenter />} />
             <Route element={<RequireRole allowedRoles={["client"]} />}>
               <Route path="/request-tax-assistance" element={<RequestTaxAssistance />} />
             </Route>
