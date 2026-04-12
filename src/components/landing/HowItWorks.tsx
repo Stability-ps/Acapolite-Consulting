@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 
 const steps = [
-  { num: "1", title: "Create Your Account", desc: "Register on the portal or have your consultant set up your profile. Securely log in with your credentials." },
-  { num: "2", title: "Upload Your Documents", desc: "Submit your tax documents through the secure portal. Your consultant will review them and update your case status." },
-  { num: "3", title: "Track and Communicate", desc: "Monitor your case progress in real time, respond to document requests, and message your consultant directly." },
+  { num: "1", title: "Submit Request", desc: "Tell us what you need help with." },
+  { num: "2", title: "Get Matched", desc: "Verified practitioners review your request." },
+  { num: "3", title: "Get Assistance", desc: "Work securely through your portal." },
 ];
 
 export function HowItWorks() {
