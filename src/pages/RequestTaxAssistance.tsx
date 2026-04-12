@@ -141,11 +141,9 @@ export default function RequestTaxAssistance() {
     if (
       !form.full_name.trim()
       || !form.phone.trim()
-      || !form.description.trim()
       || !form.service_category
       || !form.service_needed
       || !form.priority_level
-      || form.sars_debt_amount === ""
     ) {
       toast.error("Please complete all required fields.");
       return;
@@ -166,15 +164,12 @@ export default function RequestTaxAssistance() {
       return;
     }
 
-    if (files.length === 0) {
-      toast.error("Please upload at least one supporting document.");
-      return;
-    }
-
     setSubmitting(true);
 
     try {
-      const debtAmount = Number(form.sars_debt_amount || 0);
+      const debtAmount = form.sars_debt_amount.trim() === ""
+        ? 0
+        : Number(form.sars_debt_amount);
 
       if (Number.isNaN(debtAmount) || debtAmount < 0) {
         throw new Error("Please enter a valid SARS debt amount.");
@@ -193,7 +188,7 @@ export default function RequestTaxAssistance() {
           service_category: form.service_category,
           service_needed: form.service_needed,
           priority_level: form.priority_level,
-          description: form.description.trim(),
+          description: form.description.trim() || "",
           sars_debt_amount: debtAmount,
           returns_filed: form.returns_filed,
         })
@@ -204,34 +199,38 @@ export default function RequestTaxAssistance() {
         throw new Error(requestError?.message || "Unable to save your request.");
       }
 
-      const uploadResults = await Promise.allSettled(
-        files.map(async (file) => {
-          const filePath = await uploadServiceRequestFile(file, serviceRequest.id);
+      if (files.length > 0) {
+        const uploadResults = await Promise.allSettled(
+          files.map(async (file) => {
+            const filePath = await uploadServiceRequestFile(file, serviceRequest.id);
 
-          const { error } = await supabase.from("service_request_documents").insert({
-            service_request_id: serviceRequest.id,
-            title: file.name,
-            file_name: file.name,
-            file_path: filePath,
-            file_size: file.size,
-            mime_type: file.type,
-          });
+            const { error } = await supabase.from("service_request_documents").insert({
+              service_request_id: serviceRequest.id,
+              title: file.name,
+              file_name: file.name,
+              file_path: filePath,
+              file_size: file.size,
+              mime_type: file.type,
+            });
 
-          if (error) {
-            throw new Error(error.message);
-          }
-        }),
-      );
+            if (error) {
+              throw new Error(error.message);
+            }
+          }),
+        );
 
-      const failedUploads = uploadResults.filter((result) => result.status === "rejected");
+        const failedUploads = uploadResults.filter((result) => result.status === "rejected");
 
-      if (failedUploads.length > 0) {
-        const firstReason = failedUploads[0];
-        const details = firstReason?.status === "rejected" && firstReason.reason instanceof Error
-          ? firstReason.reason.message
-          : "One or more document uploads failed.";
+        if (failedUploads.length > 0) {
+          const firstReason = failedUploads[0];
+          const details = firstReason?.status === "rejected" && firstReason.reason instanceof Error
+            ? firstReason.reason.message
+            : "One or more document uploads failed.";
 
-        toast.error(`Your request was submitted, but one or more documents could not be uploaded. ${details}`);
+          toast.error(`Your request was submitted, but one or more documents could not be uploaded. ${details}`);
+        } else {
+          toast.success("Your service request was submitted successfully.");
+        }
       } else {
         toast.success("Your service request was submitted successfully.");
       }
@@ -507,19 +506,18 @@ export default function RequestTaxAssistance() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Description of the Issue</label>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Description of the Issue (Optional)</label>
               <Textarea
                 value={form.description}
                 onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
                 placeholder={`Describe your ${selectedService?.label || "service"} request, SARS issue, deadlines, or supporting context.`}
                 className="min-h-[140px] rounded-xl"
-                required
               />
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Debt Amount</label>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Debt Amount (Optional)</label>
                 <Input
                   type="number"
                   min="0"
@@ -528,7 +526,6 @@ export default function RequestTaxAssistance() {
                   onChange={(event) => setForm((current) => ({ ...current, sars_debt_amount: event.target.value }))}
                   placeholder="0.00"
                   className="rounded-xl"
-                  required
                 />
               </div>
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
@@ -554,7 +551,7 @@ export default function RequestTaxAssistance() {
                   <Upload className="h-4 w-4" />
                 </div>
                 <div className="w-full">
-                  <p className="text-sm font-semibold text-foreground font-body">Upload Supporting Documents</p>
+                  <p className="text-sm font-semibold text-foreground font-body">Upload Supporting Documents (Optional)</p>
                   <p className="mt-1 text-xs text-muted-foreground font-body">
                     Attach any SARS letters, statements, IDs, or supporting files that help explain the request. You can add multiple files before submitting.
                   </p>
@@ -564,7 +561,6 @@ export default function RequestTaxAssistance() {
                     className="mt-4 block w-full rounded-xl border border-input/90 bg-white/92 px-3.5 py-2.5 text-sm text-foreground shadow-[0_6px_24px_-22px_rgba(15,23,42,0.28)] ring-offset-background transition-all duration-200 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:opacity-90 focus-visible:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2"
                     onChange={handleFileSelection}
                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
-                    required
                   />
                   {files.length > 0 ? (
                     <div className="mt-4 space-y-3">

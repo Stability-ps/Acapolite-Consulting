@@ -864,6 +864,7 @@ export type Database = {
           acknowledged_at: string | null;
           acknowledged_by: string | null;
           created_by: string | null;
+          is_system: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -880,6 +881,7 @@ export type Database = {
           acknowledged_at?: string | null;
           acknowledged_by?: string | null;
           created_by?: string | null;
+          is_system?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -896,6 +898,7 @@ export type Database = {
           acknowledged_at?: string | null;
           acknowledged_by?: string | null;
           created_by?: string | null;
+          is_system?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -1165,6 +1168,10 @@ export type Database = {
           p_service_needed: Database["public"]["Enums"]["service_request_service_needed"];
         };
         Returns: Database["public"]["Enums"]["case_type"];
+      };
+      refresh_system_alerts: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
       };
     };
     Enums: {

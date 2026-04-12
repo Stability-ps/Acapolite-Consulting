@@ -119,6 +119,17 @@ export default function AdminOverview() {
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
+  useQuery({
+    queryKey: ["staff-refresh-system-alerts"],
+    queryFn: async () => {
+      const { error } = await supabase.rpc("refresh_system_alerts");
+      if (error) {
+        console.error("Auto reminders refresh failed:", error.message);
+      }
+      return true;
+    },
+  });
+
   const { data: caseRows } = useQuery({
     queryKey: ["staff-overview-case-statuses", accessibleClientIdsKey],
     queryFn: async () => {
