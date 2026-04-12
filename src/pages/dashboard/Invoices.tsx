@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { sendProofOfPaymentUploadedNotification } from "@/lib/paymentNotifications";
 import { formatCaseReference } from "@/lib/practitionerAssignments";
+import { openInvoicePdf } from "@/lib/invoicePdf";
 
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
@@ -58,6 +59,7 @@ export default function Invoices() {
   });
 
   const selectedInvoice = invoices?.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
+  const disclaimerText = "Payment is made directly to the practitioner. Acapolite Consulting is not responsible for payment processing or payment disputes.";
 
   useEffect(() => {
     setProofReference(selectedInvoice?.payment_reference || "");
@@ -244,6 +246,10 @@ export default function Invoices() {
                 <p className="font-body text-foreground">{selectedInvoice.status.replace(/_/g, " ")}</p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Case Reference</p>
+                <p className="font-body text-foreground">{selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support"}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issue Date</p>
                 <p className="font-body text-foreground">{new Date(selectedInvoice.issue_date).toLocaleDateString()}</p>
               </div>
@@ -255,9 +261,20 @@ export default function Invoices() {
 
             <div className="grid sm:grid-cols-3 gap-4">
               <div className="rounded-2xl border border-border p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Total Amount</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Amount</p>
+                <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.subtotal).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">VAT</p>
+                <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.tax_amount || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Total</p>
                 <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.total_amount).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
               </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Amount Paid</p>
                 <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.amount_paid).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
@@ -265,6 +282,15 @@ export default function Invoices() {
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Balance Due</p>
                 <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.balance_due).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Practitioner Banking Details</p>
+              <div className="rounded-2xl border border-border p-4">
+                <p className="font-body text-foreground whitespace-pre-wrap">
+                  {selectedInvoice.practitioner_bank_details || "Banking details will be provided by the practitioner."}
+                </p>
               </div>
             </div>
 
@@ -276,6 +302,38 @@ export default function Invoices() {
                 </div>
               </div>
             ) : null}
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => openInvoicePdf({
+                  invoiceNumber: selectedInvoice.invoice_number,
+                  clientName:
+                    client?.company_name
+                    || profile?.full_name
+                    || [client?.first_name, client?.last_name].filter(Boolean).join(" ")
+                    || client?.client_code
+                    || "Client",
+                  caseReference: selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support",
+                  serviceDescription: selectedInvoice.title || selectedInvoice.description || "Professional tax services",
+                  issueDate: selectedInvoice.issue_date,
+                  dueDate: selectedInvoice.due_date,
+                  status: selectedInvoice.status,
+                  subtotal: Number(selectedInvoice.subtotal || 0),
+                  vatAmount: Number(selectedInvoice.tax_amount || 0),
+                  total: Number(selectedInvoice.total_amount || 0),
+                  bankDetails: selectedInvoice.practitioner_bank_details || "",
+                })}
+              >
+                Download PDF
+              </Button>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-accent/20 p-4">
+              <p className="text-sm text-muted-foreground font-body">{disclaimerText}</p>
+            </div>
 
             <div className="space-y-5 rounded-[24px] border border-border bg-accent/20 p-5">
               <div>

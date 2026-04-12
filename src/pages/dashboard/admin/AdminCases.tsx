@@ -17,6 +17,7 @@ import { getClientWarningSummary } from "@/lib/clientRisk";
 import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
 import { sendCaseStatusChangedNotification } from "@/lib/caseStatusNotifications";
 import { sendCaseCreatedNotification } from "@/lib/caseCreatedNotifications";
+import { logSystemActivity } from "@/lib/systemActivityLog";
 
 const statusOptions: Enums<"case_status">[] = [
   "new",
@@ -71,7 +72,7 @@ type CaseRecord = {
 
 export default function AdminCases() {
   const queryClient = useQueryClient();
-  const { user, hasStaffPermission, isConsultant } = useAuth();
+  const { user, role, hasStaffPermission, isConsultant } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -369,6 +370,19 @@ export default function AdminCases() {
     }
 
     toast.success(notified ? "Status updated and client notified." : "Status updated");
+    if (user && role) {
+      await logSystemActivity({
+        actorProfileId: user.id,
+        actorRole: role,
+        action: "case_status_updated",
+        targetType: "case",
+        targetId: caseId,
+        metadata: {
+          previousStatus: currentCase.status,
+          newStatus: status,
+        },
+      });
+    }
     queryClient.invalidateQueries({ queryKey: ["staff-cases"] });
   };
 
@@ -415,6 +429,18 @@ export default function AdminCases() {
           : "Consultant assigned."
         : "Consultant removed from this case.",
     );
+    if (user && role) {
+      await logSystemActivity({
+        actorProfileId: user.id,
+        actorRole: role,
+        action: "case_assignment_updated",
+        targetType: "case",
+        targetId: caseItem.id,
+        metadata: {
+          assignedConsultantId: consultantId,
+        },
+      });
+    }
     queryClient.invalidateQueries({ queryKey: ["staff-cases"] });
   };
 

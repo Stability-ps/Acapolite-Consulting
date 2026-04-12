@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { sendClientDocumentUploadNotification } from "@/lib/documentUploadNotifications";
+import { logSystemActivity } from "@/lib/systemActivityLog";
 
 const documentTypeOptions = [
   "IRP5",
@@ -52,7 +53,7 @@ async function uploadDocumentFile(file: File, userId: string, clientId: string) 
 }
 
 export default function Documents() {
-  const { user, profile } = useAuth();
+  const { user, profile, role } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -155,6 +156,20 @@ export default function Documents() {
         toast.error("Document uploaded, but the admin email notification could not be delivered.");
       } else {
         toast.success("Document uploaded successfully.");
+      }
+
+      if (user && role) {
+        await logSystemActivity({
+          actorProfileId: user.id,
+          actorRole: role,
+          action: "document_uploaded",
+          targetType: "document",
+          targetId: documentRow.id,
+          metadata: {
+            documentTitle: documentType,
+            fileName: selectedFile.name,
+          },
+        });
       }
 
       await queryClient.invalidateQueries({ queryKey: ["documents", client.id] });

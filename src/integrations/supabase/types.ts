@@ -111,6 +111,7 @@ export type Database = {
           business_name: string | null;
           registration_number: string | null;
           id_number: string | null;
+          tax_practitioner_number: string | null;
           professional_body: string | null;
           city: string | null;
           province: string | null;
@@ -119,6 +120,7 @@ export type Database = {
           id_document_path: string | null;
           certificate_document_path: string | null;
           proof_of_address_path: string | null;
+          bank_confirmation_document_path: string | null;
           services_offered: string[];
           years_of_experience: number;
           availability_status: Database["public"]["Enums"]["practitioner_availability_status"];
@@ -132,6 +134,7 @@ export type Database = {
           business_name?: string | null;
           registration_number?: string | null;
           id_number?: string | null;
+          tax_practitioner_number?: string | null;
           professional_body?: string | null;
           city?: string | null;
           province?: string | null;
@@ -140,6 +143,7 @@ export type Database = {
           id_document_path?: string | null;
           certificate_document_path?: string | null;
           proof_of_address_path?: string | null;
+          bank_confirmation_document_path?: string | null;
           services_offered?: string[];
           years_of_experience?: number;
           availability_status?: Database["public"]["Enums"]["practitioner_availability_status"];
@@ -153,6 +157,7 @@ export type Database = {
           business_name?: string | null;
           registration_number?: string | null;
           id_number?: string | null;
+          tax_practitioner_number?: string | null;
           professional_body?: string | null;
           city?: string | null;
           province?: string | null;
@@ -161,6 +166,7 @@ export type Database = {
           id_document_path?: string | null;
           certificate_document_path?: string | null;
           proof_of_address_path?: string | null;
+          bank_confirmation_document_path?: string | null;
           services_offered?: string[];
           years_of_experience?: number;
           availability_status?: Database["public"]["Enums"]["practitioner_availability_status"];
@@ -735,6 +741,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      system_activity_log: {
+        Row: {
+          id: string;
+          actor_profile_id: string | null;
+          actor_role: Database["public"]["Enums"]["app_role"];
+          action: string;
+          target_type: string;
+          target_id: string | null;
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_profile_id?: string | null;
+          actor_role: Database["public"]["Enums"]["app_role"];
+          action: string;
+          target_type: string;
+          target_id?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          actor_profile_id?: string | null;
+          actor_role?: Database["public"]["Enums"]["app_role"];
+          action?: string;
+          target_type?: string;
+          target_id?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       invoices: {
         Row: {
           id: string;
@@ -755,6 +794,7 @@ export type Database = {
           pdf_url: string | null;
           payment_reference: string | null;
           proof_of_payment_document_id: string | null;
+          practitioner_bank_details: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -777,6 +817,7 @@ export type Database = {
           pdf_url?: string | null;
           payment_reference?: string | null;
           proof_of_payment_document_id?: string | null;
+          practitioner_bank_details?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -799,6 +840,7 @@ export type Database = {
           pdf_url?: string | null;
           payment_reference?: string | null;
           proof_of_payment_document_id?: string | null;
+          practitioner_bank_details?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;

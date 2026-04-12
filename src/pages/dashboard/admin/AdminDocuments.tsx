@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import type { Enums, TablesUpdate } from "@/integrations/supabase/types";
+import { logSystemActivity } from "@/lib/systemActivityLog";
 
 type StaffDocument = {
   id: string;
@@ -48,7 +49,7 @@ function getClientName(document: StaffDocument) {
 }
 
 export default function AdminDocuments() {
-  const { user, hasStaffPermission } = useAuth();
+  const { user, role, hasStaffPermission } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -201,6 +202,19 @@ export default function AdminDocuments() {
 
     toast.success(nextStatus === "approved" ? "Document approved." : "Document rejected.");
     setActionLoading(null);
+    if (user && role) {
+      await logSystemActivity({
+        actorProfileId: user.id,
+        actorRole: role,
+        action: nextStatus === "approved" ? "document_approved" : "document_rejected",
+        targetType: "document",
+        targetId: selectedDocument.id,
+        metadata: {
+          status: nextStatus,
+          rejectionReason: nextStatus === "rejected" ? rejectionReason.trim() : null,
+        },
+      });
+    }
     await queryClient.invalidateQueries({ queryKey: ["staff-documents"] });
     setSelectedDocumentId(null);
   };
@@ -232,6 +246,18 @@ export default function AdminDocuments() {
 
     toast.success("Missing document requested.");
     setActionLoading(null);
+    if (user && role) {
+      await logSystemActivity({
+        actorProfileId: user.id,
+        actorRole: role,
+        action: "document_missing_requested",
+        targetType: "document",
+        targetId: selectedDocument.id,
+        metadata: {
+          previousStatus: selectedDocument.status,
+        },
+      });
+    }
     await queryClient.invalidateQueries({ queryKey: ["staff-documents"] });
     setSelectedDocumentId(null);
   };

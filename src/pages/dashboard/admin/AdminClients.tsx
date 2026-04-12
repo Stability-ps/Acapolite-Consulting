@@ -14,6 +14,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { getClientIdentityFieldLabel, getClientIdentityLabel, getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
 
+const provinces = [
+  "Gauteng",
+  "Western Cape",
+  "KwaZulu-Natal",
+  "Eastern Cape",
+  "Free State",
+  "Limpopo",
+  "Mpumalanga",
+  "North West",
+  "Northern Cape",
+];
+
 type StaffClient = {
   id: string;
   client_type: string;
@@ -134,6 +146,11 @@ function splitFullName(fullName: string) {
   };
 }
 
+function generateClientCode(seed: string) {
+  const compactSeed = seed.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  return `CL-${compactSeed.slice(-6)}`;
+}
+
 function formatCurrency(value: number) {
   return `R ${Number(value || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -147,6 +164,7 @@ export default function AdminClients() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isAssigningCodes, setIsAssigningCodes] = useState(false);
   const [formState, setFormState] = useState<NewClientFormState>(initialFormState);
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
@@ -415,7 +433,7 @@ export default function AdminClients() {
       id_number: formState.clientType === "individual" ? formState.idNumber.trim() || null : null,
       sars_outstanding_debt: Number(formState.sarsOutstandingDebt || 0),
       returns_filed: formState.returnsFiled,
-      client_code: formState.clientCode.trim() || null,
+      client_code: formState.clientCode.trim() || generateClientCode(profile.id),
       address_line_1: formState.addressLine1.trim() || null,
       address_line_2: formState.addressLine2.trim() || null,
       city: formState.city.trim() || null,
@@ -452,6 +470,42 @@ export default function AdminClients() {
     ]);
   };
 
+  const assignMissingClientCodes = async () => {
+    if (!canManageClients) {
+      toast.error("This consultant profile cannot update client records.");
+      return;
+    }
+
+    const missingCodes = (clients ?? []).filter((client) => !client.client_code);
+
+    if (!missingCodes.length) {
+      toast.success("All clients already have a client code.");
+      return;
+    }
+
+    setIsAssigningCodes(true);
+
+    const results = await Promise.allSettled(
+      missingCodes.map((client) =>
+        supabase
+          .from("clients")
+          .update({ client_code: generateClientCode(client.id) })
+          .eq("id", client.id),
+      ),
+    );
+
+    const failed = results.filter((result) => result.status === "rejected" || result.value?.error);
+
+    if (failed.length) {
+      toast.error(`Assigned codes to ${missingCodes.length - failed.length} clients. ${failed.length} updates failed.`);
+    } else {
+      toast.success(`Assigned client codes to ${missingCodes.length} clients.`);
+    }
+
+    setIsAssigningCodes(false);
+    await queryClient.invalidateQueries({ queryKey: ["staff-clients"] });
+  };
+
   return (
     <div>
       <div className="mb-8 flex items-start justify-between gap-4">
@@ -477,10 +531,21 @@ export default function AdminClients() {
             />
           </div>
           {canManageClients ? (
-            <Button type="button" className="rounded-xl shrink-0" onClick={() => setIsCreateOpen(true)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add New Client
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl shrink-0"
+                onClick={assignMissingClientCodes}
+                disabled={isAssigningCodes}
+              >
+                {isAssigningCodes ? "Assigning..." : "Auto Client Codes"}
+              </Button>
+              <Button type="button" className="rounded-xl shrink-0" onClick={() => setIsCreateOpen(true)}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add New Client
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
@@ -690,7 +755,18 @@ export default function AdminClients() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">Province</label>
-              <Input value={formState.province} onChange={(event) => updateForm("province", event.target.value)} placeholder="Province" className="rounded-xl" />
+              <Select value={formState.province} onValueChange={(value) => updateForm("province", value)}>
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue placeholder="Select province" />
+                </SelectTrigger>
+                <SelectContent>
+                  {provinces.map((province) => (
+                    <SelectItem key={province} value={province}>
+                      {province}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">Postal Code</label>

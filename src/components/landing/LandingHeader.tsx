@@ -5,13 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
-const navItems = [
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Services", href: "#services" },
-  { label: "Why Choose", href: "#why-choose" },
-  { label: "Testimonials", href: "#testimonials" },
-  { label: "Get Started", href: "#cta" },
-];
+const navItems: { label: string; href: string }[] = [];
 
 export function LandingHeader() {
   const { user, dashboardPath } = useAuth();
@@ -30,17 +24,19 @@ export function LandingHeader() {
           <AcapoliteLogo className="relative z-10 h-12 transition-transform duration-300 hover:scale-[1.02]" />
         </a>
 
-        <nav className="relative z-10 hidden items-center gap-1 rounded-full border border-sky-300/12 bg-slate-950/18 p-1 md:flex">
-          {navItems.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className="rounded-full px-4 py-2 text-sm font-medium text-white !text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/14 hover:text-white hover:shadow-[0_8px_24px_rgba(255,255,255,0.10)]"
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
+        {navItems.length ? (
+          <nav className="relative z-10 hidden items-center gap-1 rounded-full border border-sky-300/12 bg-slate-950/18 p-1 md:flex">
+            {navItems.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className="rounded-full px-4 py-2 text-sm font-medium text-white !text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/14 hover:text-white hover:shadow-[0_8px_24px_rgba(255,255,255,0.10)]"
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
 
         <div className="relative z-10 flex items-center gap-2">
           {user ? (

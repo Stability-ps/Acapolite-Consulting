@@ -45,6 +45,7 @@ import AdminUsers from "./pages/dashboard/admin/AdminUsers";
 import AdminServiceRequests from "./pages/dashboard/admin/AdminServiceRequests";
 import PractitionerProfile from "./pages/dashboard/admin/PractitionerProfile";
 import PractitionerCredits from "./pages/dashboard/admin/PractitionerCredits";
+import AdminActivityLog from "./pages/dashboard/admin/AdminActivityLog";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -119,6 +120,9 @@ const App = () => (
                 </Route>
                 <Route element={<RequireStaffPermission permission="can_view_messages" />}>
                   <Route path="staff/messages" element={<AdminMessages />} />
+                </Route>
+                <Route element={<RequireStaffPermission permission="can_view_overview" />}>
+                  <Route path="staff/activity-log" element={<AdminActivityLog />} />
                 </Route>
               </Route>
 

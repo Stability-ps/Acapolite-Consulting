@@ -77,6 +77,18 @@ const alertTypeOptions: Enums<"alert_type">[] = [
   "other",
 ];
 
+const provinces = [
+  "Gauteng",
+  "Western Cape",
+  "KwaZulu-Natal",
+  "Eastern Cape",
+  "Free State",
+  "Limpopo",
+  "Mpumalanga",
+  "North West",
+  "Northern Cape",
+];
+
 const UNASSIGNED_CONSULTANT = "unassigned";
 
 type ClientOption = {
@@ -1935,12 +1947,21 @@ export default function AdminClientWorkspace() {
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-foreground font-body">Province</label>
-                  <Input
+                  <Select
                     value={clientForm.province}
-                    onChange={(event) => setClientForm((current) => ({ ...current, province: event.target.value }))}
-                    placeholder="Province"
-                    className="rounded-xl"
-                  />
+                    onValueChange={(value) => setClientForm((current) => ({ ...current, province: value }))}
+                  >
+                    <SelectTrigger className="w-full rounded-xl">
+                      <SelectValue placeholder="Select province" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {provinces.map((province) => (
+                        <SelectItem key={province} value={province}>
+                          {province}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

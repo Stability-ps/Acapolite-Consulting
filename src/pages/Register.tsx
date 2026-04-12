@@ -15,6 +15,17 @@ import { getAppBaseUrl } from "@/lib/siteUrl";
 type AccountType = "client" | "practitioner";
 
 const professionalBodies = ["SAIT", "SAICA", "SARS", "Other"];
+const provinces = [
+  "Gauteng",
+  "Western Cape",
+  "KwaZulu-Natal",
+  "Eastern Cape",
+  "Free State",
+  "Limpopo",
+  "Mpumalanga",
+  "North West",
+  "Northern Cape",
+];
 
 export default function Register() {
   const [accountType, setAccountType] = useState<AccountType>("client");
@@ -26,12 +37,14 @@ export default function Register() {
     firstName: "",
     lastName: "",
     phone: "",
+    province: "",
   });
   const [practitionerForm, setPractitionerForm] = useState({
     firstName: "",
     lastName: "",
     phone: "",
     idNumber: "",
+    taxPractitionerNumber: "",
     registrationNumber: "",
     professionalBody: professionalBodies[0],
     yearsExperience: "",
@@ -42,6 +55,7 @@ export default function Register() {
     idCopy: null as File | null,
     certificate: null as File | null,
     proofOfAddress: null as File | null,
+    bankConfirmation: null as File | null,
   });
   const [loading, setLoading] = useState(false);
   const { dashboardPath, loading: authLoading, user } = useAuth();
@@ -63,7 +77,12 @@ export default function Register() {
   }, [authLoading, dashboardPath, user]);
 
   const uploadPractitionerDocuments = async (userId: string) => {
-    if (!practitionerDocuments.idCopy || !practitionerDocuments.certificate || !practitionerDocuments.proofOfAddress) {
+    if (
+      !practitionerDocuments.idCopy
+      || !practitionerDocuments.certificate
+      || !practitionerDocuments.proofOfAddress
+      || !practitionerDocuments.bankConfirmation
+    ) {
       throw new Error("Please upload all required verification documents.");
     }
 
@@ -71,6 +90,7 @@ export default function Register() {
       { file: practitionerDocuments.idCopy, key: "id-copy" },
       { file: practitionerDocuments.certificate, key: "practitioner-certificate" },
       { file: practitionerDocuments.proofOfAddress, key: "proof-of-address" },
+      { file: practitionerDocuments.bankConfirmation, key: "bank-confirmation-letter" },
     ];
 
     const uploadResults = await Promise.all(
@@ -91,6 +111,7 @@ export default function Register() {
       if (result.key === "id-copy") updates.id_document_path = result.filePath;
       if (result.key === "practitioner-certificate") updates.certificate_document_path = result.filePath;
       if (result.key === "proof-of-address") updates.proof_of_address_path = result.filePath;
+      if (result.key === "bank-confirmation-letter") updates.bank_confirmation_document_path = result.filePath;
     });
 
     const { error } = await supabase
@@ -121,7 +142,7 @@ export default function Register() {
     }
 
     if (accountType === "client") {
-      if (!clientForm.firstName.trim() || !clientForm.lastName.trim() || !clientForm.phone.trim()) {
+      if (!clientForm.firstName.trim() || !clientForm.lastName.trim() || !clientForm.phone.trim() || !clientForm.province.trim()) {
         toast.error("Please complete all required client fields.");
         return;
       }
@@ -133,6 +154,7 @@ export default function Register() {
         || !practitionerForm.lastName.trim()
         || !practitionerForm.phone.trim()
         || !practitionerForm.idNumber.trim()
+        || !practitionerForm.taxPractitionerNumber.trim()
         || !practitionerForm.registrationNumber.trim()
         || !practitionerForm.professionalBody.trim()
         || !practitionerForm.yearsExperience.trim()
@@ -143,7 +165,12 @@ export default function Register() {
         return;
       }
 
-      if (!practitionerDocuments.idCopy || !practitionerDocuments.certificate || !practitionerDocuments.proofOfAddress) {
+      if (
+        !practitionerDocuments.idCopy
+        || !practitionerDocuments.certificate
+        || !practitionerDocuments.proofOfAddress
+        || !practitionerDocuments.bankConfirmation
+      ) {
         toast.error("Please upload all required verification documents.");
         return;
       }
@@ -169,11 +196,12 @@ export default function Register() {
             last_name: accountType === "practitioner" ? practitionerForm.lastName.trim() : clientForm.lastName.trim(),
             phone: accountType === "practitioner" ? practitionerForm.phone.trim() : clientForm.phone.trim(),
             id_number: accountType === "practitioner" ? practitionerForm.idNumber.trim() : null,
+            tax_practitioner_number: accountType === "practitioner" ? practitionerForm.taxPractitionerNumber.trim() : null,
             registration_number: accountType === "practitioner" ? practitionerForm.registrationNumber.trim() : null,
             professional_body: accountType === "practitioner" ? practitionerForm.professionalBody.trim() : null,
             years_of_experience: accountType === "practitioner" ? practitionerForm.yearsExperience.trim() : null,
             city: accountType === "practitioner" ? practitionerForm.city.trim() : null,
-            province: accountType === "practitioner" ? practitionerForm.province.trim() : null,
+            province: accountType === "practitioner" ? practitionerForm.province.trim() : clientForm.province.trim(),
           },
           emailRedirectTo: `${getAppBaseUrl()}/login`,
         },
@@ -294,7 +322,7 @@ export default function Register() {
 
           {accountType === "practitioner" ? (
             <div className="mb-6 rounded-2xl border border-border/70 bg-muted/35 px-4 py-3 text-sm font-body text-muted-foreground">
-              Practitioner sign-up uses email and password so your portal role is created correctly from the start.
+              Register as a Practitioner using your email and password to ensure your account is created with the correct access permissions.
             </div>
           ) : null}
 
@@ -344,6 +372,26 @@ export default function Register() {
                 placeholder="+27 ..."
               />
             </div>
+            {accountType === "client" ? (
+              <div>
+                <Label htmlFor="client-province" className="font-body">Province</Label>
+                <Select
+                  value={clientForm.province}
+                  onValueChange={(value) => setClientForm((current) => ({ ...current, province: value }))}
+                >
+                  <SelectTrigger id="client-province" className="mt-1.5">
+                    <SelectValue placeholder="Select province" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {provinces.map((province) => (
+                      <SelectItem key={province} value={province}>
+                        {province}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             {accountType === "practitioner" ? (
               <>
                 <div>
@@ -355,6 +403,17 @@ export default function Register() {
                     required
                     className="mt-1.5"
                     placeholder="ID Number"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="tax-practitioner-number" className="font-body">Tax Practitioner Number</Label>
+                  <Input
+                    id="tax-practitioner-number"
+                    value={practitionerForm.taxPractitionerNumber}
+                    onChange={(event) => setPractitionerForm((current) => ({ ...current, taxPractitionerNumber: event.target.value }))}
+                    required
+                    className="mt-1.5"
+                    placeholder="Tax Practitioner Number"
                   />
                 </div>
                 <div>
@@ -410,14 +469,21 @@ export default function Register() {
                 </div>
                 <div>
                   <Label htmlFor="province" className="font-body">Province</Label>
-                  <Input
-                    id="province"
+                  <Select
                     value={practitionerForm.province}
-                    onChange={(event) => setPractitionerForm((current) => ({ ...current, province: event.target.value }))}
-                    required
-                    className="mt-1.5"
-                    placeholder="Province"
-                  />
+                    onValueChange={(value) => setPractitionerForm((current) => ({ ...current, province: value }))}
+                  >
+                    <SelectTrigger id="province" className="mt-1.5">
+                      <SelectValue placeholder="Select province" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {provinces.map((province) => (
+                        <SelectItem key={province} value={province}>
+                          {province}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </>
             ) : null}
@@ -473,6 +539,17 @@ export default function Register() {
                     required
                     className="mt-1.5"
                     onChange={(event) => setPractitionerDocuments((current) => ({ ...current, proofOfAddress: event.target.files?.[0] || null }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bank-confirmation" className="font-body">Bank Confirmation Letter</Label>
+                  <Input
+                    id="bank-confirmation"
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    required
+                    className="mt-1.5"
+                    onChange={(event) => setPractitionerDocuments((current) => ({ ...current, bankConfirmation: event.target.files?.[0] || null }))}
                   />
                 </div>
               </div>

@@ -12,6 +12,9 @@ import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog"
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { sendInvoiceCreatedNotification } from "@/lib/invoiceNotifications";
+import { formatCaseReference } from "@/lib/practitionerAssignments";
+import { openInvoicePdf } from "@/lib/invoicePdf";
+import { logSystemActivity } from "@/lib/systemActivityLog";
 
 const invoiceStatuses: Enums<"invoice_status">[] = ["draft", "issued", "partially_paid", "paid", "overdue", "cancelled"];
 
@@ -39,6 +42,7 @@ type StaffInvoice = {
       email?: string | null;
     } | null;
   } | null;
+  practitioner_bank_details?: string | null;
 };
 
 function getClientName(invoice: StaffInvoice) {
@@ -63,7 +67,7 @@ function getStatusColor(status: string) {
 }
 
 export default function AdminInvoices() {
-  const { user, hasStaffPermission } = useAuth();
+  const { user, role, hasStaffPermission } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -74,7 +78,10 @@ export default function AdminInvoices() {
   const [invoiceTitle, setInvoiceTitle] = useState("");
   const [invoiceDescription, setInvoiceDescription] = useState("");
   const [invoiceDueDate, setInvoiceDueDate] = useState("");
-  const [invoiceTotalAmount, setInvoiceTotalAmount] = useState("");
+  const [invoiceSubtotal, setInvoiceSubtotal] = useState("");
+  const [invoiceVatAmount, setInvoiceVatAmount] = useState("");
+  const [invoiceBankDetails, setInvoiceBankDetails] = useState("");
+  const [invoiceCaseId, setInvoiceCaseId] = useState<string | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
   const [resendingInvoice, setResendingInvoice] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
@@ -127,6 +134,28 @@ export default function AdminInvoices() {
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
+  const { data: cases } = useQuery({
+    queryKey: ["staff-invoice-cases", accessibleClientIdsKey],
+    queryFn: async () => {
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+
+      let query = supabase
+        .from("cases")
+        .select("id, client_id, case_title, case_type, sars_case_reference, created_at")
+        .order("created_at", { ascending: false });
+
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("client_id", accessibleClientIds);
+      }
+
+      const { data } = await query;
+      return data ?? [];
+    },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
+  });
+
   const filteredInvoices = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -151,9 +180,33 @@ export default function AdminInvoices() {
     });
   }, [invoices, searchQuery, statusFilter]);
 
+  const caseOptions = useMemo(() => {
+    const filteredCases = clientsFormValue
+      ? (cases ?? []).filter((caseItem: { client_id: string }) => caseItem.client_id === clientsFormValue)
+      : cases ?? [];
+
+    return filteredCases.map((caseItem: { id: string; case_title: string; case_type: string; sars_case_reference: string | null }) => ({
+      id: caseItem.id,
+      label: `${caseItem.case_title} • ${caseItem.sars_case_reference || formatCaseReference(caseItem.id)} • ${caseItem.case_type.replace(/_/g, " ")}`,
+    }));
+  }, [cases, clientsFormValue]);
+
   const selectedInvoice = filteredInvoices.find((invoice) => invoice.id === selectedInvoiceId)
     || invoices?.find((invoice) => invoice.id === selectedInvoiceId)
     || null;
+
+  const selectedInvoiceCaseOptions = useMemo(() => {
+    if (!selectedInvoice?.client_id) {
+      return [];
+    }
+
+    return (cases ?? [])
+      .filter((caseItem: { client_id: string }) => caseItem.client_id === selectedInvoice.client_id)
+      .map((caseItem: { id: string; case_title: string; case_type: string; sars_case_reference: string | null }) => ({
+        id: caseItem.id,
+        label: `${caseItem.case_title} • ${caseItem.sars_case_reference || formatCaseReference(caseItem.id)} • ${caseItem.case_type.replace(/_/g, " ")}`,
+      }));
+  }, [cases, selectedInvoice?.client_id]);
 
   useEffect(() => {
     if (selectedInvoice) {
@@ -161,7 +214,10 @@ export default function AdminInvoices() {
       setInvoiceTitle(selectedInvoice.title || "");
       setInvoiceDescription(selectedInvoice.description || "");
       setInvoiceDueDate(selectedInvoice.due_date || "");
-      setInvoiceTotalAmount(String(selectedInvoice.total_amount ?? ""));
+      setInvoiceSubtotal(String(selectedInvoice.subtotal ?? selectedInvoice.total_amount ?? ""));
+      setInvoiceVatAmount(String(selectedInvoice.tax_amount ?? 0));
+      setInvoiceBankDetails(selectedInvoice.practitioner_bank_details || "");
+      setInvoiceCaseId(selectedInvoice.case_id ?? null);
     }
   }, [selectedInvoice]);
 
@@ -170,7 +226,10 @@ export default function AdminInvoices() {
     setInvoiceTitle("");
     setInvoiceDescription("");
     setInvoiceDueDate("");
-    setInvoiceTotalAmount("");
+    setInvoiceSubtotal("");
+    setInvoiceVatAmount("");
+    setInvoiceBankDetails("");
+    setInvoiceCaseId(null);
     setSelectedStatus("draft");
   };
 
@@ -182,14 +241,19 @@ export default function AdminInvoices() {
     }
 
     setSavingStatus(true);
-    const totalAmount = Number(invoiceTotalAmount);
+    const subtotalAmount = Number(invoiceSubtotal);
+    const vatAmount = Number(invoiceVatAmount || 0);
+    const totalAmount = (Number.isNaN(subtotalAmount) ? selectedInvoice.subtotal : subtotalAmount) + (Number.isNaN(vatAmount) ? selectedInvoice.tax_amount : vatAmount);
     const updates: TablesUpdate<"invoices"> = {
       status: selectedStatus,
       title: invoiceTitle.trim() || null,
       description: invoiceDescription.trim() || null,
-      total_amount: Number.isNaN(totalAmount) ? selectedInvoice.total_amount : totalAmount,
-      subtotal: Number.isNaN(totalAmount) ? selectedInvoice.total_amount : totalAmount,
+      subtotal: Number.isNaN(subtotalAmount) ? selectedInvoice.subtotal : subtotalAmount,
+      tax_amount: Number.isNaN(vatAmount) ? selectedInvoice.tax_amount : vatAmount,
+      total_amount: totalAmount,
       due_date: invoiceDueDate || null,
+      practitioner_bank_details: invoiceBankDetails.trim() || null,
+      case_id: invoiceCaseId || null,
     };
     const { error } = await supabase.from("invoices").update(updates).eq("id", selectedInvoice.id);
 
@@ -201,6 +265,35 @@ export default function AdminInvoices() {
 
     toast.success("Invoice updated");
     setSavingStatus(false);
+    if (user && role) {
+      const previousStatus = selectedInvoice.status;
+      if (selectedStatus === "issued" && previousStatus !== "issued") {
+        await logSystemActivity({
+          actorProfileId: user.id,
+          actorRole: role,
+          action: "invoice_sent",
+          targetType: "invoice",
+          targetId: selectedInvoice.id,
+          metadata: {
+            previousStatus,
+            newStatus: selectedStatus,
+          },
+        });
+      }
+      if (selectedStatus === "paid" && previousStatus !== "paid") {
+        await logSystemActivity({
+          actorProfileId: user.id,
+          actorRole: role,
+          action: "invoice_marked_paid",
+          targetType: "invoice",
+          targetId: selectedInvoice.id,
+          metadata: {
+            previousStatus,
+            newStatus: selectedStatus,
+          },
+        });
+      }
+    }
     await queryClient.invalidateQueries({ queryKey: ["staff-invoices"] });
   };
 
@@ -228,9 +321,9 @@ export default function AdminInvoices() {
       clientEmail,
       clientName: getClientName(selectedInvoice),
       serviceDescription: invoiceTitle.trim() || invoiceDescription.trim() || selectedInvoice.title || selectedInvoice.description || "Professional tax services",
-      amount: Number(invoiceTotalAmount || selectedInvoice.total_amount || 0),
+      amount: (Number(invoiceSubtotal || selectedInvoice.subtotal || 0) + Number(invoiceVatAmount || selectedInvoice.tax_amount || 0)),
       dueDate: invoiceDueDate || selectedInvoice.due_date,
-      caseNumber: selectedInvoice.case_id?.trim() || undefined,
+      caseNumber: selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : undefined,
       status: selectedStatus || selectedInvoice.status,
     });
 
@@ -243,6 +336,18 @@ export default function AdminInvoices() {
     }
 
     toast.success(notification.skipped ? "Invoice email was already logged for this invoice." : "Invoice email sent to the client.");
+    if (user && role) {
+      await logSystemActivity({
+        actorProfileId: user.id,
+        actorRole: role,
+        action: "invoice_sent",
+        targetType: "invoice",
+        targetId: selectedInvoice.id,
+        metadata: {
+          status: selectedStatus || selectedInvoice.status,
+        },
+      });
+    }
   };
 
   const createInvoice = async () => {
@@ -256,9 +361,16 @@ export default function AdminInvoices() {
       return;
     }
 
-    const totalAmount = Number(invoiceTotalAmount);
+    if (!invoiceBankDetails.trim()) {
+      toast.error("Enter the practitioner banking details.");
+      return;
+    }
 
-    if (Number.isNaN(totalAmount) || totalAmount < 0) {
+    const subtotalAmount = Number(invoiceSubtotal);
+    const vatAmount = Number(invoiceVatAmount || 0);
+    const totalAmount = subtotalAmount + vatAmount;
+
+    if (Number.isNaN(subtotalAmount) || subtotalAmount < 0) {
       toast.error("Enter a valid invoice amount.");
       return;
     }
@@ -267,16 +379,18 @@ export default function AdminInvoices() {
 
     const payload: TablesInsert<"invoices"> = {
       client_id: clientsFormValue,
+      case_id: invoiceCaseId || null,
       invoice_number: `TEMP-${Date.now()}`,
       title: invoiceTitle.trim() || null,
       description: invoiceDescription.trim() || null,
-      subtotal: totalAmount,
-      tax_amount: 0,
+      subtotal: subtotalAmount,
+      tax_amount: Number.isNaN(vatAmount) ? 0 : vatAmount,
       total_amount: totalAmount,
       amount_paid: 0,
       due_date: invoiceDueDate || null,
       status: selectedStatus,
       created_by: user?.id ?? null,
+      practitioner_bank_details: invoiceBankDetails.trim() || null,
     };
 
     const { data, error } = await supabase.from("invoices").insert(payload).select("id, invoice_number, due_date, status").single();
@@ -314,6 +428,7 @@ export default function AdminInvoices() {
         serviceDescription: invoiceTitle.trim() || invoiceDescription.trim() || "Professional tax services",
         amount: totalAmount,
         dueDate: data.due_date,
+        caseNumber: invoiceCaseId ? formatCaseReference(invoiceCaseId) : undefined,
         status: data.status,
       });
 
@@ -332,6 +447,31 @@ export default function AdminInvoices() {
     } else {
       toast.success("Invoice created");
     }
+    if (user && role && data?.id) {
+      await logSystemActivity({
+        actorProfileId: user.id,
+        actorRole: role,
+        action: "invoice_created",
+        targetType: "invoice",
+        targetId: data.id,
+        metadata: {
+          status: data.status,
+          amount: totalAmount,
+        },
+      });
+      if (data.status === "issued") {
+        await logSystemActivity({
+          actorProfileId: user.id,
+          actorRole: role,
+          action: "invoice_sent",
+          targetType: "invoice",
+          targetId: data.id,
+          metadata: {
+            status: data.status,
+          },
+        });
+      }
+    }
     setCreatingInvoice(false);
     setIsCreateOpen(false);
     resetCreateForm();
@@ -340,6 +480,7 @@ export default function AdminInvoices() {
 
   const overdueCount = (invoices ?? []).filter((invoice) => invoice.status === "overdue").length;
   const unpaidCount = (invoices ?? []).filter((invoice) => !["paid", "cancelled"].includes(invoice.status)).length;
+  const disclaimerText = "Payment is made directly to the practitioner. Acapolite Consulting is not responsible for payment processing or payment disputes.";
 
   return (
     <div>
@@ -522,6 +663,26 @@ export default function AdminInvoices() {
                 <p className="font-body text-foreground">{getClientName(selectedInvoice)}</p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Case Reference</p>
+                {canManageInvoices ? (
+                  <Select value={invoiceCaseId ?? "general"} onValueChange={(value) => setInvoiceCaseId(value === "general" ? null : value)}>
+                    <SelectTrigger className="w-full rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="general">General Support</SelectItem>
+                      {selectedInvoiceCaseOptions.map((caseOption) => (
+                        <SelectItem key={caseOption.id} value={caseOption.id}>
+                          {caseOption.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="font-body text-foreground">{selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support"}</p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Invoice Title</p>
                 {canManageInvoices ? (
                   <Input
@@ -555,20 +716,44 @@ export default function AdminInvoices() {
 
             <div className="grid sm:grid-cols-3 gap-4">
               <div className="rounded-2xl border border-border p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Total Amount</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Amount</p>
                 {canManageInvoices ? (
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={invoiceTotalAmount}
-                    onChange={(event) => setInvoiceTotalAmount(event.target.value)}
+                    value={invoiceSubtotal}
+                    onChange={(event) => setInvoiceSubtotal(event.target.value)}
                     className="rounded-xl"
                   />
                 ) : (
-                  <p className="font-display text-2xl text-foreground">R {Number(invoiceTotalAmount || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
+                  <p className="font-display text-2xl text-foreground">R {Number(invoiceSubtotal || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
                 )}
               </div>
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">VAT (optional)</p>
+                {canManageInvoices ? (
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={invoiceVatAmount}
+                    onChange={(event) => setInvoiceVatAmount(event.target.value)}
+                    className="rounded-xl"
+                  />
+                ) : (
+                  <p className="font-display text-2xl text-foreground">R {Number(invoiceVatAmount || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Total</p>
+                <p className="font-display text-2xl text-foreground">
+                  R {Number(Number(invoiceSubtotal || 0) + Number(invoiceVatAmount || 0)).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Amount Paid</p>
                 <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.amount_paid).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
@@ -591,6 +776,22 @@ export default function AdminInvoices() {
               ) : (
                 <div className="rounded-2xl border border-border p-4">
                   <p className="font-body text-foreground">{invoiceDescription || "No description added."}</p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">Practitioner Banking Details</label>
+              {canManageInvoices ? (
+                <Textarea
+                  value={invoiceBankDetails}
+                  onChange={(event) => setInvoiceBankDetails(event.target.value)}
+                  placeholder="Account holder, bank name, branch code, account number"
+                  className="rounded-xl"
+                />
+              ) : (
+                <div className="rounded-2xl border border-border p-4">
+                  <p className="font-body text-foreground">{invoiceBankDetails || "No banking details added yet."}</p>
                 </div>
               )}
             </div>
@@ -631,6 +832,33 @@ export default function AdminInvoices() {
                 </div>
               )}
             </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => openInvoicePdf({
+                  invoiceNumber: selectedInvoice.invoice_number,
+                  clientName: getClientName(selectedInvoice),
+                  caseReference: selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support",
+                  serviceDescription: invoiceTitle || invoiceDescription || "Professional tax services",
+                  issueDate: selectedInvoice.issue_date,
+                  dueDate: invoiceDueDate || selectedInvoice.due_date,
+                  status: selectedStatus,
+                  subtotal: Number(invoiceSubtotal || 0),
+                  vatAmount: Number(invoiceVatAmount || 0),
+                  total: Number(Number(invoiceSubtotal || 0) + Number(invoiceVatAmount || 0)),
+                  bankDetails: invoiceBankDetails,
+                })}
+              >
+                Download PDF
+              </Button>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-accent/20 p-4">
+              <p className="text-sm text-muted-foreground font-body">{disclaimerText}</p>
+            </div>
           </div>
         ) : null}
       </DashboardItemDialog>
@@ -647,7 +875,13 @@ export default function AdminInvoices() {
         <div className="space-y-5">
           <div>
             <label className="block text-sm font-semibold text-foreground font-body mb-2">Client</label>
-            <Select value={clientsFormValue} onValueChange={setClientsFormValue}>
+            <Select
+              value={clientsFormValue}
+              onValueChange={(value) => {
+                setClientsFormValue(value);
+                setInvoiceCaseId(null);
+              }}
+            >
               <SelectTrigger className="w-full rounded-xl">
                 <SelectValue placeholder="Select a client" />
               </SelectTrigger>
@@ -656,6 +890,23 @@ export default function AdminInvoices() {
                   <SelectItem key={client.id} value={client.id}>
                     {client.company_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || "Client"}
                     {client.client_code ? ` (${client.client_code})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">Case Reference</label>
+            <Select value={invoiceCaseId ?? "general"} onValueChange={(value) => setInvoiceCaseId(value === "general" ? null : value)}>
+              <SelectTrigger className="w-full rounded-xl" disabled={!clientsFormValue}>
+                <SelectValue placeholder={clientsFormValue ? "Select a case" : "Select a client first"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="general">General Support</SelectItem>
+                {caseOptions.map((caseOption) => (
+                  <SelectItem key={caseOption.id} value={caseOption.id}>
+                    {caseOption.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -684,17 +935,35 @@ export default function AdminInvoices() {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-foreground font-body mb-2">Total Amount</label>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">Amount</label>
               <Input
                 type="number"
                 min="0"
                 step="0.01"
-                value={invoiceTotalAmount}
-                onChange={(event) => setInvoiceTotalAmount(event.target.value)}
+                value={invoiceSubtotal}
+                onChange={(event) => setInvoiceSubtotal(event.target.value)}
+                placeholder="0.00"
+                className="rounded-xl"
+              />
+              <p className="mt-2 text-xs text-muted-foreground font-body">
+                Total: R {Number(Number(invoiceSubtotal || 0) + Number(invoiceVatAmount || 0)).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">VAT (optional)</label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={invoiceVatAmount}
+                onChange={(event) => setInvoiceVatAmount(event.target.value)}
                 placeholder="0.00"
                 className="rounded-xl"
               />
             </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Status</label>
               <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as Enums<"invoice_status">)}>
@@ -708,14 +977,23 @@ export default function AdminInvoices() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">Due Date</label>
+              <Input
+                type="date"
+                value={invoiceDueDate}
+                onChange={(event) => setInvoiceDueDate(event.target.value)}
+                className="rounded-xl"
+              />
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-foreground font-body mb-2">Due Date</label>
-            <Input
-              type="date"
-              value={invoiceDueDate}
-              onChange={(event) => setInvoiceDueDate(event.target.value)}
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">Practitioner Banking Details</label>
+            <Textarea
+              value={invoiceBankDetails}
+              onChange={(event) => setInvoiceBankDetails(event.target.value)}
+              placeholder="Account holder, bank name, branch code, account number"
               className="rounded-xl"
             />
           </div>
