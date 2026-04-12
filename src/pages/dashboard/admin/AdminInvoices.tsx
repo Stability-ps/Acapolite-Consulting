@@ -29,6 +29,10 @@ type StaffInvoice = {
   balance_due: number;
   due_date: string | null;
   issue_date: string;
+  sent_at?: string | null;
+  paid_at?: string | null;
+  overdue_at?: string | null;
+  cancelled_at?: string | null;
   status: Enums<"invoice_status">;
   payment_reference: string | null;
   clients?: {
@@ -314,6 +318,7 @@ export default function AdminInvoices() {
     const subtotalAmount = Number(invoiceSubtotal);
     const vatAmount = Number(invoiceVatAmount || 0);
     const totalAmount = (Number.isNaN(subtotalAmount) ? selectedInvoice.subtotal : subtotalAmount) + (Number.isNaN(vatAmount) ? selectedInvoice.tax_amount : vatAmount);
+    const nowIso = new Date().toISOString();
     const updates: TablesUpdate<"invoices"> = {
       status: selectedStatus,
       title: invoiceTitle.trim() || null,
@@ -324,6 +329,21 @@ export default function AdminInvoices() {
       due_date: invoiceDueDate || null,
       case_id: invoiceCaseId || null,
     };
+
+    if (selectedStatus !== selectedInvoice.status) {
+      if (selectedStatus === "issued") {
+        updates.sent_at = nowIso;
+      }
+      if (selectedStatus === "paid") {
+        updates.paid_at = nowIso;
+      }
+      if (selectedStatus === "overdue") {
+        updates.overdue_at = nowIso;
+      }
+      if (selectedStatus === "cancelled") {
+        updates.cancelled_at = nowIso;
+      }
+    }
     const { error } = await supabase.from("invoices").update(updates).eq("id", selectedInvoice.id);
 
     if (error) {
@@ -404,6 +424,19 @@ export default function AdminInvoices() {
       return;
     }
 
+    if (!notification.error) {
+      const statusUpdate: TablesUpdate<"invoices"> = {
+        sent_at: new Date().toISOString(),
+      };
+      if (selectedInvoice.status === "draft") {
+        statusUpdate.status = "issued";
+      }
+      const { error } = await supabase.from("invoices").update(statusUpdate).eq("id", selectedInvoice.id);
+      if (error) {
+        console.error("Unable to update sent timestamp:", error.message);
+      }
+    }
+
     toast.success(notification.skipped ? "Invoice email was already logged for this invoice." : "Invoice email sent to the client.");
     if (user && role) {
       await logSystemActivity({
@@ -457,6 +490,7 @@ export default function AdminInvoices() {
 
     setCreatingInvoice(true);
 
+    const nowIso = new Date().toISOString();
     const payload: TablesInsert<"invoices"> = {
       client_id: clientsFormValue,
       case_id: invoiceCaseId || null,
@@ -472,6 +506,19 @@ export default function AdminInvoices() {
       created_by: user?.id ?? null,
       practitioner_bank_details: formatBankDetails(bankProfile),
     };
+
+    if (selectedStatus === "issued") {
+      payload.sent_at = nowIso;
+    }
+    if (selectedStatus === "paid") {
+      payload.paid_at = nowIso;
+    }
+    if (selectedStatus === "overdue") {
+      payload.overdue_at = nowIso;
+    }
+    if (selectedStatus === "cancelled") {
+      payload.cancelled_at = nowIso;
+    }
 
     const { data, error } = await supabase.from("invoices").insert(payload).select("id, invoice_number, due_date, status").single();
 
@@ -780,6 +827,22 @@ export default function AdminInvoices() {
                 <p className="font-body text-foreground">{new Date(selectedInvoice.issue_date).toLocaleDateString()}</p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Sent At</p>
+                <p className="font-body text-foreground">{selectedInvoice.sent_at ? new Date(selectedInvoice.sent_at).toLocaleString() : "Not sent yet"}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Paid At</p>
+                <p className="font-body text-foreground">{selectedInvoice.paid_at ? new Date(selectedInvoice.paid_at).toLocaleString() : "Not paid yet"}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Overdue At</p>
+                <p className="font-body text-foreground">{selectedInvoice.overdue_at ? new Date(selectedInvoice.overdue_at).toLocaleString() : "Not overdue"}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Cancelled At</p>
+                <p className="font-body text-foreground">{selectedInvoice.cancelled_at ? new Date(selectedInvoice.cancelled_at).toLocaleString() : "Not cancelled"}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Due Date</p>
                 {canManageInvoices ? (
                   <Input
@@ -899,7 +962,7 @@ export default function AdminInvoices() {
                     {savingStatus ? "Saving..." : "Save Invoice"}
                   </Button>
                   <Button type="button" variant="outline" className="rounded-xl" onClick={resendInvoice} disabled={resendingInvoice}>
-                    {resendingInvoice ? "Sending..." : "Send Reminder"}
+                    {resendingInvoice ? "Sending..." : "Resend Invoice"}
                   </Button>
                 </div>
               ) : (
@@ -907,29 +970,6 @@ export default function AdminInvoices() {
                   <p className="text-sm text-muted-foreground font-body">This consultant profile can view invoices but cannot change billing records.</p>
                 </div>
               )}
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-xl"
-                onClick={() => openInvoicePdf({
-                  invoiceNumber: selectedInvoice.invoice_number,
-                  clientName: getClientName(selectedInvoice),
-                  caseReference: selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support",
-                  serviceDescription: invoiceTitle || invoiceDescription || "Professional tax services",
-                  issueDate: selectedInvoice.issue_date,
-                  dueDate: invoiceDueDate || selectedInvoice.due_date,
-                  status: selectedStatus,
-                  subtotal: Number(invoiceSubtotal || 0),
-                  vatAmount: Number(invoiceVatAmount || 0),
-                  total: Number(Number(invoiceSubtotal || 0) + Number(invoiceVatAmount || 0)),
-                  bankDetails: selectedInvoice.practitioner_bank_details || "",
-                })}
-              >
-                Download PDF
-              </Button>
             </div>
 
             <div className="rounded-2xl border border-border bg-accent/20 p-4">

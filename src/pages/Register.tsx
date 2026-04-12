@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
@@ -14,7 +14,7 @@ import { getAppBaseUrl } from "@/lib/siteUrl";
 
 type AccountType = "client" | "practitioner";
 
-const professionalBodies = ["SAIT", "SAICA", "SARS", "Other"];
+const professionalBodies = ["SAIT", "SAICA", "SAIPA", "ACCA", "CIMA", "CIBA", "IAC", "CGISA", "FPI", "Other"];
 const provinces = [
   "Gauteng",
   "Western Cape",
@@ -45,8 +45,8 @@ export default function Register() {
     phone: "",
     idNumber: "",
     taxPractitionerNumber: "",
-    registrationNumber: "",
     professionalBody: professionalBodies[0],
+    professionalBodyOther: "",
     yearsExperience: "",
     city: "",
     province: "",
@@ -59,6 +59,8 @@ export default function Register() {
   });
   const [loading, setLoading] = useState(false);
   const { dashboardPath, loading: authLoading, user } = useAuth();
+  const location = useLocation();
+  const [prefillApplied, setPrefillApplied] = useState(false);
   const passwordRules = useMemo(
     () => ({
       minLength: password.length >= 8,
@@ -75,6 +77,37 @@ export default function Register() {
       window.location.replace(dashboardPath);
     }
   }, [authLoading, dashboardPath, user]);
+
+  useEffect(() => {
+    if (prefillApplied) {
+      return;
+    }
+
+    const params = new URLSearchParams(location.search);
+    const fullName = params.get("full_name")?.trim() ?? "";
+    const emailParam = params.get("email")?.trim() ?? "";
+    const phoneParam = params.get("phone")?.trim() ?? "";
+
+    if (!fullName && !emailParam && !phoneParam) {
+      return;
+    }
+
+    const [firstName, ...rest] = fullName.split(/\s+/).filter(Boolean);
+    const lastName = rest.join(" ");
+
+    setAccountType("client");
+    if (emailParam) {
+      setEmail((current) => current || emailParam);
+    }
+    setClientForm((current) => ({
+      ...current,
+      firstName: current.firstName || firstName || current.firstName,
+      lastName: current.lastName || lastName || current.lastName,
+      phone: current.phone || phoneParam || current.phone,
+    }));
+
+    setPrefillApplied(true);
+  }, [location.search, prefillApplied]);
 
   const uploadPractitionerDocuments = async (userId: string) => {
     if (
@@ -155,8 +188,8 @@ export default function Register() {
         || !practitionerForm.phone.trim()
         || !practitionerForm.idNumber.trim()
         || !practitionerForm.taxPractitionerNumber.trim()
-        || !practitionerForm.registrationNumber.trim()
         || !practitionerForm.professionalBody.trim()
+        || (practitionerForm.professionalBody === "Other" && !practitionerForm.professionalBodyOther.trim())
         || !practitionerForm.yearsExperience.trim()
         || !practitionerForm.city.trim()
         || !practitionerForm.province.trim()
@@ -183,6 +216,9 @@ export default function Register() {
       const fullName = accountType === "practitioner"
         ? `${practitionerForm.firstName.trim()} ${practitionerForm.lastName.trim()}`
         : `${clientForm.firstName.trim()} ${clientForm.lastName.trim()}`;
+      const resolvedProfessionalBody = accountType === "practitioner" && practitionerForm.professionalBody === "Other"
+        ? practitionerForm.professionalBodyOther.trim()
+        : practitionerForm.professionalBody.trim();
 
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -197,8 +233,8 @@ export default function Register() {
             phone: accountType === "practitioner" ? practitionerForm.phone.trim() : clientForm.phone.trim(),
             id_number: accountType === "practitioner" ? practitionerForm.idNumber.trim() : null,
             tax_practitioner_number: accountType === "practitioner" ? practitionerForm.taxPractitionerNumber.trim() : null,
-            registration_number: accountType === "practitioner" ? practitionerForm.registrationNumber.trim() : null,
-            professional_body: accountType === "practitioner" ? practitionerForm.professionalBody.trim() : null,
+            registration_number: null,
+            professional_body: accountType === "practitioner" ? resolvedProfessionalBody : null,
             years_of_experience: accountType === "practitioner" ? practitionerForm.yearsExperience.trim() : null,
             city: accountType === "practitioner" ? practitionerForm.city.trim() : null,
             province: accountType === "practitioner" ? practitionerForm.province.trim() : clientForm.province.trim(),
@@ -417,17 +453,6 @@ export default function Register() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="registration-number" className="font-body">Practitioner Registration Number</Label>
-                  <Input
-                    id="registration-number"
-                    value={practitionerForm.registrationNumber}
-                    onChange={(event) => setPractitionerForm((current) => ({ ...current, registrationNumber: event.target.value }))}
-                    required
-                    className="mt-1.5"
-                    placeholder="Registration Number"
-                  />
-                </div>
-                <div>
                   <Label htmlFor="professional-body" className="font-body">Professional Body</Label>
                   <Select
                     value={practitionerForm.professionalBody}
@@ -443,6 +468,19 @@ export default function Register() {
                     </SelectContent>
                   </Select>
                 </div>
+                {practitionerForm.professionalBody === "Other" ? (
+                  <div>
+                    <Label htmlFor="professional-body-other" className="font-body">Specify Professional Body</Label>
+                    <Input
+                      id="professional-body-other"
+                      value={practitionerForm.professionalBodyOther}
+                      onChange={(event) => setPractitionerForm((current) => ({ ...current, professionalBodyOther: event.target.value }))}
+                      required
+                      className="mt-1.5"
+                      placeholder="Enter professional body"
+                    />
+                  </div>
+                ) : null}
                 <div>
                   <Label htmlFor="years-experience" className="font-body">Years of Experience</Label>
                   <Input

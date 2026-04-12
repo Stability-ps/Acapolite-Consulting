@@ -12,10 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
-import type { Enums, TablesInsert } from "@/integrations/supabase/types";
+import type { Enums, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { getClientIdentityFieldLabel, getClientIdentityLabel, getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
-import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
+import { formatCaseReference, sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
 import { sendClientMessageNotification } from "@/lib/clientMessageNotifications";
 import { sendInvoiceCreatedNotification } from "@/lib/invoiceNotifications";
 import { sendCaseStatusChangedNotification } from "@/lib/caseStatusNotifications";
@@ -167,11 +167,17 @@ type ClientInvoice = {
   id: string;
   invoice_number: string;
   title: string | null;
+  description: string | null;
   status: string;
   total_amount: number;
   amount_paid: number;
   balance_due: number;
   due_date: string | null;
+  case_id: string | null;
+  sent_at: string | null;
+  paid_at: string | null;
+  overdue_at: string | null;
+  cancelled_at: string | null;
 };
 
 type ClientAlert = {
@@ -282,6 +288,7 @@ export default function AdminClientWorkspace() {
   const [savingClient, setSavingClient] = useState(false);
   const [creatingCase, setCreatingCase] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [resendingInvoiceId, setResendingInvoiceId] = useState<string | null>(null);
   const [creatingAlert, setCreatingAlert] = useState(false);
   const [creatingDocumentRequest, setCreatingDocumentRequest] = useState(false);
   const [clientForm, setClientForm] = useState({
@@ -447,7 +454,7 @@ export default function AdminClientWorkspace() {
     queryFn: async () => {
       const { data } = await supabase
         .from("invoices")
-        .select("id, invoice_number, title, status, total_amount, amount_paid, balance_due, due_date")
+        .select("id, invoice_number, title, description, status, total_amount, amount_paid, balance_due, due_date, case_id, sent_at, paid_at, overdue_at, cancelled_at")
         .eq("client_id", selectedClientId)
         .order("created_at", { ascending: false });
       return (data ?? []) as ClientInvoice[];
@@ -843,6 +850,7 @@ export default function AdminClientWorkspace() {
       return;
     }
 
+    const nowIso = new Date().toISOString();
     const payload: TablesInsert<"invoices"> = {
       client_id: selectedClientId,
       invoice_number: `TEMP-${Date.now()}`,
@@ -856,6 +864,18 @@ export default function AdminClientWorkspace() {
       due_date: invoiceForm.due_date || null,
       created_by: user?.id ?? null,
     };
+    if (invoiceForm.status === "issued") {
+      payload.sent_at = nowIso;
+    }
+    if (invoiceForm.status === "paid") {
+      payload.paid_at = nowIso;
+    }
+    if (invoiceForm.status === "overdue") {
+      payload.overdue_at = nowIso;
+    }
+    if (invoiceForm.status === "cancelled") {
+      payload.cancelled_at = nowIso;
+    }
 
     const { data, error } = await supabase.from("invoices").insert(payload).select("id, invoice_number, due_date, status").single();
 
@@ -1088,7 +1108,22 @@ export default function AdminClientWorkspace() {
       return;
     }
 
-    const { error } = await supabase.from("invoices").update({ status }).eq("id", invoiceId);
+    const nowIso = new Date().toISOString();
+    const updates: TablesUpdate<"invoices"> = { status };
+    if (status === "issued") {
+      updates.sent_at = nowIso;
+    }
+    if (status === "paid") {
+      updates.paid_at = nowIso;
+    }
+    if (status === "overdue") {
+      updates.overdue_at = nowIso;
+    }
+    if (status === "cancelled") {
+      updates.cancelled_at = nowIso;
+    }
+
+    const { error } = await supabase.from("invoices").update(updates).eq("id", invoiceId);
 
     if (error) {
       toast.error(error.message);
@@ -1096,6 +1131,54 @@ export default function AdminClientWorkspace() {
     }
 
     toast.success("Invoice updated.");
+    await refreshWorkspace();
+  };
+
+  const resendInvoice = async (invoice: ClientInvoice) => {
+    if (!canManageInvoices) {
+      toast.error("This consultant profile cannot resend invoices.");
+      return;
+    }
+    if (!clientDetails?.profile_id || !clientDetails?.profiles?.email) {
+      toast.error("This invoice cannot be emailed because the client does not have a valid portal profile and email.");
+      return;
+    }
+
+    setResendingInvoiceId(invoice.id);
+
+    const notification = await sendInvoiceCreatedNotification({
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoice_number,
+      clientProfileId: clientDetails.profile_id,
+      clientEmail: clientDetails.profiles.email,
+      clientName: getClientName(clientDetails),
+      serviceDescription: invoice.title || invoice.description || "Professional tax services",
+      amount: Number(invoice.total_amount || 0),
+      dueDate: invoice.due_date,
+      caseNumber: invoice.case_id ? formatCaseReference(invoice.case_id) : "General Support",
+      status: invoice.status,
+    });
+
+    setResendingInvoiceId(null);
+
+    if (notification.error) {
+      console.error("Resend invoice email failed:", notification.error);
+      toast.error(notification.error.message || "Unable to resend the invoice email.");
+      return;
+    }
+
+    const statusUpdate: TablesUpdate<"invoices"> = {
+      sent_at: new Date().toISOString(),
+    };
+    if (invoice.status === "draft") {
+      statusUpdate.status = "issued";
+    }
+    const { error } = await supabase.from("invoices").update(statusUpdate).eq("id", invoice.id);
+    if (error) {
+      console.error("Unable to update sent timestamp:", error.message);
+    }
+
+    toast.success(notification.skipped ? "Invoice email was already logged for this invoice." : "Invoice email sent to the client.");
     await refreshWorkspace();
   };
 
@@ -1688,7 +1771,25 @@ export default function AdminClientWorkspace() {
                       <p className="font-body text-foreground">{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "Not set"}</p>
                     </div>
                   </div>
-                  <div className="mt-4 flex items-center gap-3">
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Sent</p>
+                      <p className="font-body text-foreground">{invoice.sent_at ? new Date(invoice.sent_at).toLocaleString() : "Not sent yet"}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Paid</p>
+                      <p className="font-body text-foreground">{invoice.paid_at ? new Date(invoice.paid_at).toLocaleString() : "Not paid yet"}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Overdue</p>
+                      <p className="font-body text-foreground">{invoice.overdue_at ? new Date(invoice.overdue_at).toLocaleString() : "Not overdue"}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Cancelled</p>
+                      <p className="font-body text-foreground">{invoice.cancelled_at ? new Date(invoice.cancelled_at).toLocaleString() : "Not cancelled"}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
                     <span className="text-xs text-muted-foreground font-body">Update status:</span>
                     <Select value={invoice.status} onValueChange={(value) => updateInvoiceStatus(invoice.id, value as Enums<"invoice_status">)}>
                       <SelectTrigger className="w-64 rounded-xl">
@@ -1700,6 +1801,17 @@ export default function AdminClientWorkspace() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {canManageInvoices ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => resendInvoice(invoice)}
+                        disabled={resendingInvoiceId === invoice.id}
+                      >
+                        {resendingInvoiceId === invoice.id ? "Sending..." : "Resend Invoice"}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               )) : (

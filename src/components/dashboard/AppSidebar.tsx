@@ -1,5 +1,20 @@
 import {
-  LayoutDashboard, FolderOpen, Upload, Receipt, MessageSquare, Bell, Settings, Users, Shield, LogOut, UserRound, UserPlus, ClipboardList, BriefcaseBusiness, Coins,
+  LayoutDashboard,
+  FolderOpen,
+  Upload,
+  Receipt,
+  MessageSquare,
+  Bell,
+  Settings,
+  Users,
+  Shield,
+  LogOut,
+  UserRound,
+  UserPlus,
+  ClipboardList,
+  BriefcaseBusiness,
+  Coins,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -22,6 +37,7 @@ const clientItems = [
   { title: "Invoices", url: "/dashboard/client/invoices", icon: Receipt },
   { title: "Messages", url: "/dashboard/client/messages", icon: MessageSquare },
   { title: "Deadlines", url: "/dashboard/client/deadlines", icon: Bell },
+  { title: "Tax Coach AI", url: "/dashboard/client/tax-coach-ai", icon: Sparkles },
   { title: "Settings", url: "/dashboard/client/settings", icon: Settings },
 ];
 
@@ -35,6 +51,7 @@ const adminItems = [
   { title: "Documents", url: "/dashboard/staff/documents", icon: Upload, permission: "can_view_documents" as StaffPermissionKey },
   { title: "Invoices", url: "/dashboard/staff/invoices", icon: Receipt, permission: "can_view_invoices" as StaffPermissionKey },
   { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare, permission: "can_view_messages" as StaffPermissionKey },
+  { title: "Tax Coach AI", url: "/dashboard/staff/tax-coach-ai", icon: Sparkles, permission: "can_view_overview" as StaffPermissionKey },
   { title: "System Activity Log", url: "/dashboard/staff/activity-log", icon: ClipboardList, permission: "can_view_overview" as StaffPermissionKey },
 ];
 
@@ -49,6 +66,7 @@ const consultantItems = [
   { title: "Documents", url: "/dashboard/staff/documents", icon: Upload, permission: "can_view_documents" as StaffPermissionKey },
   { title: "Invoices", url: "/dashboard/staff/invoices", icon: Receipt, permission: "can_view_invoices" as StaffPermissionKey },
   { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare, permission: "can_view_messages" as StaffPermissionKey },
+  { title: "Tax Coach AI", url: "/dashboard/staff/tax-coach-ai", icon: Sparkles, permission: "can_view_overview" as StaffPermissionKey },
 ];
 
 export function AppSidebar() {

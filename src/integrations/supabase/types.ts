@@ -814,6 +814,10 @@ export type Database = {
           balance_due: number;
           status: Database["public"]["Enums"]["invoice_status"];
           issue_date: string;
+          sent_at: string | null;
+          paid_at: string | null;
+          overdue_at: string | null;
+          cancelled_at: string | null;
           due_date: string | null;
           pdf_url: string | null;
           payment_reference: string | null;
@@ -837,6 +841,10 @@ export type Database = {
           amount_paid?: number;
           status?: Database["public"]["Enums"]["invoice_status"];
           issue_date?: string;
+          sent_at?: string | null;
+          paid_at?: string | null;
+          overdue_at?: string | null;
+          cancelled_at?: string | null;
           due_date?: string | null;
           pdf_url?: string | null;
           payment_reference?: string | null;
@@ -860,6 +868,10 @@ export type Database = {
           amount_paid?: number;
           status?: Database["public"]["Enums"]["invoice_status"];
           issue_date?: string;
+          sent_at?: string | null;
+          paid_at?: string | null;
+          overdue_at?: string | null;
+          cancelled_at?: string | null;
           due_date?: string | null;
           pdf_url?: string | null;
           payment_reference?: string | null;
@@ -931,6 +943,7 @@ export type Database = {
           full_name: string;
           email: string;
           phone: string;
+          province: string | null;
           client_type: Database["public"]["Enums"]["service_request_client_type"];
           identity_document_type: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number: string | null;
@@ -961,6 +974,7 @@ export type Database = {
           full_name: string;
           email: string;
           phone: string;
+          province?: string | null;
           client_type: Database["public"]["Enums"]["service_request_client_type"];
           identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
@@ -991,6 +1005,7 @@ export type Database = {
           full_name?: string;
           email?: string;
           phone?: string;
+          province?: string | null;
           client_type?: Database["public"]["Enums"]["service_request_client_type"];
           identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
@@ -1126,6 +1141,81 @@ export type Database = {
         };
         Relationships: [];
       };
+      service_request_access_requests: {
+        Row: {
+          id: string;
+          service_request_id: string;
+          practitioner_profile_id: string;
+          status: string;
+          credit_cost: number;
+          credit_deducted: boolean;
+          requested_at: string;
+          responded_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          service_request_id: string;
+          practitioner_profile_id: string;
+          status?: string;
+          credit_cost?: number;
+          credit_deducted?: boolean;
+          requested_at?: string;
+          responded_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          service_request_id?: string;
+          practitioner_profile_id?: string;
+          status?: string;
+          credit_cost?: number;
+          credit_deducted?: boolean;
+          requested_at?: string;
+          responded_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      practitioner_reports: {
+        Row: {
+          id: string;
+          service_request_id: string | null;
+          practitioner_profile_id: string | null;
+          client_profile_id: string | null;
+          reason: string;
+          details: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          service_request_id?: string | null;
+          practitioner_profile_id?: string | null;
+          client_profile_id?: string | null;
+          reason: string;
+          details?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          service_request_id?: string | null;
+          practitioner_profile_id?: string | null;
+          client_profile_id?: string | null;
+          reason?: string;
+          details?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       admin_dashboard_summary: {
@@ -1193,6 +1283,13 @@ export type Database = {
       refresh_system_alerts: {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
+      };
+      request_practitioner_change: {
+        Args: {
+          p_request_id: string;
+          p_reason?: string | null;
+        };
+        Returns: boolean;
       };
     };
     Enums: {

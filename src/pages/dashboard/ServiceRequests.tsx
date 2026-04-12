@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, BadgeCheck, BriefcaseBusiness, CheckCircle2 } from "lucide-react";
+import { ArrowRight, BadgeCheck, BriefcaseBusiness, CheckCircle2, Clock, Flag } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,9 @@ import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog"
 import { RatingStars } from "@/components/dashboard/RatingStars";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { serviceCategoryOptions, serviceNeededOptions, formatServiceRequestLabel, getServiceRequestRiskClass, getServiceRequestStatusClass } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, getResponseStatusClass } from "@/lib/practitionerMarketplace";
 import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
@@ -20,6 +23,7 @@ type ServiceRequestResponse = Tables<"service_request_responses">;
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type Profile = Tables<"profiles">;
 type PractitionerReview = Tables<"practitioner_reviews">;
+type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
 
 export default function ClientServiceRequests() {
   const { user } = useAuth();
@@ -27,6 +31,15 @@ export default function ClientServiceRequests() {
   const queryClient = useQueryClient();
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectingResponseId, setSelectingResponseId] = useState<string | null>(null);
+  const [respondingAccessId, setRespondingAccessId] = useState<string | null>(null);
+  const [showProfileId, setShowProfileId] = useState<string | null>(null);
+  const [reportPractitionerId, setReportPractitionerId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState("poor_communication");
+  const [reportDetails, setReportDetails] = useState("");
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [isChangePractitionerOpen, setIsChangePractitionerOpen] = useState(false);
+  const [changeReason, setChangeReason] = useState("");
+  const [changingPractitioner, setChangingPractitioner] = useState(false);
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["client-service-requests", user?.email],
@@ -62,9 +75,29 @@ export default function ClientServiceRequests() {
     enabled: requestIds.length > 0,
   });
 
+  const { data: accessRequests } = useQuery({
+    queryKey: ["client-service-request-access-requests", requestIds],
+    queryFn: async () => {
+      if (!requestIds.length) return [] as ServiceRequestAccessRequest[];
+
+      const { data, error } = await supabase
+        .from("service_request_access_requests")
+        .select("*")
+        .in("service_request_id", requestIds)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as ServiceRequestAccessRequest[];
+    },
+    enabled: requestIds.length > 0,
+  });
+
   const practitionerIds = useMemo(
-    () => Array.from(new Set((responses ?? []).map((response) => response.practitioner_profile_id))),
-    [responses],
+    () => Array.from(new Set([
+      ...(responses ?? []).map((response) => response.practitioner_profile_id),
+      ...(accessRequests ?? []).map((request) => request.practitioner_profile_id),
+    ])),
+    [accessRequests, responses],
   );
   const practitionerIdsKey = practitionerIds.join(",");
 
@@ -128,6 +161,18 @@ export default function ClientServiceRequests() {
     return map;
   }, [responses]);
 
+  const accessRequestsByRequest = useMemo(() => {
+    const map = new Map<string, ServiceRequestAccessRequest[]>();
+
+    for (const request of accessRequests ?? []) {
+      const current = map.get(request.service_request_id) ?? [];
+      current.push(request);
+      map.set(request.service_request_id, current);
+    }
+
+    return map;
+  }, [accessRequests]);
+
   const practitionerProfileMap = useMemo(
     () => new Map((practitionerProfiles ?? []).map((profile) => [profile.profile_id, profile])),
     [practitionerProfiles],
@@ -169,6 +214,23 @@ export default function ClientServiceRequests() {
   const formattedSubmittedAt = selectedRequest?.created_at
     ? new Date(selectedRequest.created_at).toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" })
     : "N/A";
+  const changeWindowHours = 24;
+  const changeWindowMs = changeWindowHours * 60 * 60 * 1000;
+  const canChangePractitioner = Boolean(
+    selectedRequest?.assigned_practitioner_id
+    && selectedRequest?.assigned_at
+    && Date.now() - new Date(selectedRequest.assigned_at).getTime() <= changeWindowMs,
+  );
+  const changeWindowLabel = selectedRequest?.assigned_at
+    ? new Date(new Date(selectedRequest.assigned_at).getTime() + changeWindowMs).toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" })
+    : null;
+
+  const responseTimeLabel = (profile?: PractitionerProfile | null) => {
+    if (!profile?.availability_status) return "Responds within 24 hours";
+    if (profile.availability_status === "available") return "Responds within 2 hours";
+    if (profile.availability_status === "limited") return "Responds within 24 hours";
+    return "Responds within 48 hours";
+  };
 
   const selectPractitioner = async (responseId: string) => {
     if (!client) {
@@ -223,6 +285,81 @@ export default function ClientServiceRequests() {
     if (data) {
       window.location.assign("/dashboard/client/cases");
     }
+  };
+
+  const respondToAccessRequest = async (accessRequestId: string, action: "approve" | "decline") => {
+    setRespondingAccessId(accessRequestId);
+    const { error } = await supabase.rpc("respond_to_service_request_access", {
+      p_access_request_id: accessRequestId,
+      p_action: action,
+    });
+    setRespondingAccessId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success(action === "approve" ? "Access approved." : "Access declined.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["client-service-request-access-requests", requestIds] }),
+      queryClient.invalidateQueries({ queryKey: ["client-service-request-responses", requestIds] }),
+    ]);
+  };
+
+  const submitPractitionerReport = async () => {
+    if (!selectedRequest || !user?.id || !reportPractitionerId) {
+      return;
+    }
+
+    if (!reportReason) {
+      toast.error("Select a report reason first.");
+      return;
+    }
+
+    setSubmittingReport(true);
+    const { error } = await supabase.from("practitioner_reports").insert({
+      service_request_id: selectedRequest.id,
+      practitioner_profile_id: reportPractitionerId,
+      client_profile_id: user.id,
+      reason: reportReason,
+      details: reportDetails.trim() || null,
+    });
+    setSubmittingReport(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Report submitted. Our admin team will review it.");
+    setReportPractitionerId(null);
+    setReportReason("poor_communication");
+    setReportDetails("");
+  };
+
+  const requestPractitionerChange = async () => {
+    if (!selectedRequest) return;
+
+    setChangingPractitioner(true);
+    const { error } = await supabase.rpc("request_practitioner_change", {
+      p_request_id: selectedRequest.id,
+      p_reason: changeReason.trim() || null,
+    });
+    setChangingPractitioner(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Practitioner unassigned. You can now select another response.");
+    setIsChangePractitionerOpen(false);
+    setChangeReason("");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["client-service-requests", user?.email] }),
+      queryClient.invalidateQueries({ queryKey: ["client-service-request-responses", requestIds] }),
+    ]);
   };
 
   return (
@@ -404,7 +541,99 @@ export default function ClientServiceRequests() {
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">{selectedRequest.description}</p>
             </div>
 
+            <div className="rounded-2xl border border-border bg-accent/20 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Messaging Policy</p>
+              <p className="mt-2 text-sm text-muted-foreground font-body">
+                Please keep all communication inside the Acapolite portal. This protects your case history and helps resolve disputes quickly.
+              </p>
+            </div>
+
+            {selectedRequest.selected_response_id ? (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Assignment Controls</p>
+                    <p className="mt-2 text-sm text-muted-foreground font-body">
+                      You can change practitioners within {changeWindowHours} hours of assignment, before major work begins.
+                    </p>
+                    {changeWindowLabel ? (
+                      <p className="mt-1 text-xs text-muted-foreground font-body">
+                        Change window ends {changeWindowLabel}.
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => setIsChangePractitionerOpen(true)}
+                    disabled={!canChangePractitioner}
+                  >
+                    Change Practitioner
+                  </Button>
+                </div>
+                {!canChangePractitioner ? (
+                  <p className="mt-3 text-xs text-muted-foreground font-body">
+                    This request is past the change window or already in progress. Contact support if you still need help.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="space-y-4">
+              {(accessRequestsByRequest.get(selectedRequest.id) ?? []).length ? (
+                <div className="rounded-2xl border border-border bg-card p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Access Requests</p>
+                  <div className="mt-4 space-y-3">
+                    {(accessRequestsByRequest.get(selectedRequest.id) ?? []).map((accessRequest) => {
+                      const practitionerProfile = practitionerProfileMap.get(accessRequest.practitioner_profile_id);
+                      const practitionerUser = practitionerUserMap.get(accessRequest.practitioner_profile_id);
+                      const statusLabel = formatServiceRequestLabel(accessRequest.status);
+
+                      return (
+                        <div key={accessRequest.id} className="flex flex-col gap-3 rounded-2xl border border-border bg-background/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-body font-semibold text-foreground">
+                              {practitionerUser?.full_name || practitionerProfile?.business_name || "Practitioner"}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground font-body">
+                              Status: {statusLabel}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            {accessRequest.status === "pending" ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="rounded-xl"
+                                  disabled={respondingAccessId === accessRequest.id}
+                                  onClick={() => void respondToAccessRequest(accessRequest.id, "decline")}
+                                >
+                                  {respondingAccessId === accessRequest.id ? "Processing..." : "Decline"}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  className="rounded-xl"
+                                  disabled={respondingAccessId === accessRequest.id}
+                                  onClick={() => void respondToAccessRequest(accessRequest.id, "approve")}
+                                >
+                                  {respondingAccessId === accessRequest.id ? "Processing..." : "Approve"}
+                                </Button>
+                              </>
+                            ) : (
+                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${accessRequest.status === "approved" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+                                {statusLabel}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               {selectedResponses.length ? selectedResponses.map((response) => {
                 const practitionerProfile = practitionerProfileMap.get(response.practitioner_profile_id);
                 const practitionerUser = practitionerUserMap.get(response.practitioner_profile_id);
@@ -445,6 +674,10 @@ export default function ClientServiceRequests() {
                           </span>
                           <span>{practitionerProfile?.years_of_experience ?? 0} years experience</span>
                           <span className="inline-flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            {responseTimeLabel(practitionerProfile)}
+                          </span>
+                          <span className="inline-flex items-center gap-2">
                             <RatingStars value={ratingSummary?.average ?? 0} readOnly className="gap-0.5" />
                             {ratingSummary?.count
                               ? `${ratingSummary.average.toFixed(1)} (${ratingSummary.count} review${ratingSummary.count === 1 ? "" : "s"})`
@@ -474,7 +707,7 @@ export default function ClientServiceRequests() {
                         ) : null}
                       </div>
 
-                      <div className="lg:min-w-[220px]">
+                      <div className="lg:min-w-[220px] space-y-3">
                         <Button
                           type="button"
                           className="w-full rounded-xl"
@@ -488,6 +721,23 @@ export default function ClientServiceRequests() {
                             </>
                           ) : selectingResponseId === response.id ? "Selecting..." : "Select Practitioner"}
                         </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full rounded-xl"
+                          onClick={() => setShowProfileId(response.practitioner_profile_id)}
+                        >
+                          View Full Profile
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="w-full rounded-xl text-rose-600 hover:text-rose-600"
+                          onClick={() => setReportPractitionerId(response.practitioner_profile_id)}
+                        >
+                          <Flag className="mr-2 h-4 w-4" />
+                          Report Practitioner
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -500,6 +750,172 @@ export default function ClientServiceRequests() {
             </div>
           </div>
         ) : null}
+      </DashboardItemDialog>
+
+      <DashboardItemDialog
+        open={!!showProfileId}
+        onOpenChange={(open) => setShowProfileId(open ? showProfileId : null)}
+        title="Practitioner Profile"
+        description="Review credentials, services, and verification details."
+      >
+        {showProfileId ? (() => {
+          const practitionerProfile = practitionerProfileMap.get(showProfileId);
+          const practitionerUser = practitionerUserMap.get(showProfileId);
+          const ratingSummary = practitionerRatingSummaryMap.get(showProfileId);
+
+          return (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioner</p>
+                    <h3 className="mt-2 font-display text-2xl text-foreground">
+                      {practitionerUser?.full_name || practitionerProfile?.business_name || "Practitioner"}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground font-body">
+                      {practitionerProfile?.business_name || "Independent Practitioner"}
+                    </p>
+                  </div>
+                  <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${practitionerProfile?.is_verified ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                    {practitionerProfile?.is_verified ? "Verified" : "Verification Pending"}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Experience</p>
+                  <p className="mt-2 text-sm text-foreground font-body">{practitionerProfile?.years_of_experience ?? 0} years</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Typical Response</p>
+                  <p className="mt-2 text-sm text-foreground font-body">{responseTimeLabel(practitionerProfile)}</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Professional Body</p>
+                  <p className="mt-2 text-sm text-foreground font-body">{practitionerProfile?.professional_body || "Not specified"}</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Location</p>
+                  <p className="mt-2 text-sm text-foreground font-body">
+                    {[practitionerProfile?.city, practitionerProfile?.province].filter(Boolean).join(", ") || "Not specified"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Credentials & Verification</p>
+                <div className="mt-3 space-y-2 text-sm text-muted-foreground font-body">
+                  <p>Verification status: {practitionerProfile?.verification_status || "pending"}</p>
+                  <p>Tax practitioner number: {practitionerProfile?.tax_practitioner_number || "On file with admin"}</p>
+                  <div className="flex items-center gap-2 text-foreground">
+                    <BadgeCheck className="h-4 w-4 text-emerald-600" />
+                    {practitionerProfile?.is_verified ? "Verified documents and credentials" : "Verification in progress"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Services Offered</p>
+                {(practitionerProfile?.services_offered ?? []).length ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(practitionerProfile?.services_offered ?? []).map((service) => (
+                      <Badge key={service} className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                        {serviceNeededOptions.find((item) => item.value === service)?.label || service}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-muted-foreground font-body">No services listed.</p>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Ratings</p>
+                <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground font-body">
+                  <RatingStars value={ratingSummary?.average ?? 0} readOnly className="gap-0.5" />
+                  {ratingSummary?.count
+                    ? `${ratingSummary.average.toFixed(1)} (${ratingSummary.count} review${ratingSummary.count === 1 ? "" : "s"})`
+                    : "No reviews yet"}
+                </div>
+              </div>
+            </div>
+          );
+        })() : null}
+      </DashboardItemDialog>
+
+      <DashboardItemDialog
+        open={!!reportPractitionerId}
+        onOpenChange={(open) => setReportPractitionerId(open ? reportPractitionerId : null)}
+        title="Report Practitioner"
+        description="Tell us what went wrong so we can review the practitioner for compliance."
+      >
+        <div className="space-y-5">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground font-body">Reason</label>
+            <Select value={reportReason} onValueChange={setReportReason}>
+              <SelectTrigger className="w-full rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="poor_communication">Poor communication</SelectItem>
+                <SelectItem value="unprofessional_behavior">Unprofessional behavior</SelectItem>
+                <SelectItem value="payment_outside_platform">Requesting payment outside platform</SelectItem>
+                <SelectItem value="suspicious_behavior">Suspicious or dishonest behavior</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground font-body">Details</label>
+            <Textarea
+              value={reportDetails}
+              onChange={(event) => setReportDetails(event.target.value)}
+              placeholder="Share any details or dates that will help the admin team investigate."
+              className="min-h-[120px] rounded-xl"
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" className="rounded-xl" onClick={() => setReportPractitionerId(null)} disabled={submittingReport}>
+              Cancel
+            </Button>
+            <Button type="button" className="rounded-xl" onClick={submitPractitionerReport} disabled={submittingReport}>
+              {submittingReport ? "Submitting..." : "Submit Report"}
+            </Button>
+          </div>
+        </div>
+      </DashboardItemDialog>
+
+      <DashboardItemDialog
+        open={isChangePractitionerOpen}
+        onOpenChange={setIsChangePractitionerOpen}
+        title="Change Practitioner"
+        description="Confirm that you want to unassign the current practitioner and return this request to the marketplace."
+      >
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-border bg-accent/20 p-4">
+            <p className="text-sm text-muted-foreground font-body">
+              This will remove the current practitioner and reopen the request so you can select another response. Please share a brief reason for the change.
+            </p>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground font-body">Reason (optional)</label>
+            <Input
+              value={changeReason}
+              onChange={(event) => setChangeReason(event.target.value)}
+              placeholder="Example: Need a faster response time"
+              className="rounded-xl"
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsChangePractitionerOpen(false)} disabled={changingPractitioner}>
+              Cancel
+            </Button>
+            <Button type="button" className="rounded-xl" onClick={requestPractitionerChange} disabled={changingPractitioner || !canChangePractitioner}>
+              {changingPractitioner ? "Processing..." : "Confirm Change"}
+            </Button>
+          </div>
+        </div>
       </DashboardItemDialog>
     </div>
   );

@@ -3,11 +3,17 @@ import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowRight,
+  Building2,
   BadgeCheck,
+  ClipboardCheck,
   ClipboardList,
   ExternalLink,
+  FileText,
   FileWarning,
   FolderOpen,
+  Landmark,
+  ShieldCheck,
+  Activity,
   ShieldAlert,
   Upload,
 } from "lucide-react";
@@ -30,6 +36,7 @@ import { formatAvailabilityLabel, getAvailabilityBadgeClass } from "@/lib/practi
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
+type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
 
 type ClientRecord = {
   id: string;
@@ -269,6 +276,20 @@ export default function PractitionerOverview() {
     enabled: !!user,
   });
 
+  const { data: accessRequests } = useQuery({
+    queryKey: ["practitioner-overview-access-requests", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_request_access_requests")
+        .select("*")
+        .eq("practitioner_profile_id", user!.id);
+
+      if (error) throw error;
+      return (data ?? []) as ServiceRequestAccessRequest[];
+    },
+    enabled: !!user,
+  });
+
   const { data: creditAccount } = useQuery({
     queryKey: ["practitioner-credit-account", user?.id],
     queryFn: async () => {
@@ -305,6 +326,11 @@ export default function PractitionerOverview() {
     [responses],
   );
 
+  const accessRequestMap = useMemo(
+    () => new Map((accessRequests ?? []).map((request) => [request.service_request_id, request])),
+    [accessRequests],
+  );
+
   const visibleLeads = useMemo(() => {
     const servicesOffered = new Set(practitionerProfile?.services_offered ?? []);
 
@@ -313,13 +339,12 @@ export default function PractitionerOverview() {
         const matchesService = servicesOffered.size === 0 || servicesOffered.has(lead.service_needed);
         const visibleToPractitioner =
           lead.assigned_practitioner_id === null
-          || lead.assigned_practitioner_id === user?.id
-          || responseMap.has(lead.id);
+          || lead.assigned_practitioner_id === user?.id;
 
         return matchesService && visibleToPractitioner;
       })
       .slice(0, 5);
-  }, [overviewLeads, practitionerProfile?.services_offered, responseMap, user?.id]);
+  }, [overviewLeads, practitionerProfile?.services_offered, user?.id]);
 
   const activeCases = useMemo(
     () => (assignedCases ?? []).filter((caseItem) => !["resolved", "closed"].includes(caseItem.status)),
@@ -477,6 +502,39 @@ export default function PractitionerOverview() {
     },
   ].filter((card) => card.visible);
 
+  const externalTools = [
+    {
+      label: "SARS eFiling",
+      description: "Secure SARS eFiling access",
+      href: "https://secure.sarsefiling.co.za/app/login",
+      icon: ShieldCheck,
+    },
+    {
+      label: "SARS Status Dashboard",
+      description: "Live SARS system status",
+      href: "https://tools.sars.gov.za/status",
+      icon: Activity,
+    },
+    {
+      label: "SARS EasyFile",
+      description: "EasyFile services portal",
+      href: "https://secure.sarsefiling.co.za/app/login",
+      icon: FileText,
+    },
+    {
+      label: "CIPC eServices",
+      description: "Companies and IP Commission",
+      href: "https://eservices.cipc.co.za/",
+      icon: Building2,
+    },
+    {
+      label: "CIPC BizPortal",
+      description: "BizPortal by the CIPC",
+      href: "https://bizportal.gov.za/",
+      icon: Landmark,
+    },
+  ];
+
   return (
     <div className="space-y-8">
       <section className="rounded-[28px] border border-border bg-card p-6 shadow-card sm:p-8">
@@ -528,13 +586,16 @@ export default function PractitionerOverview() {
             {visibleLeads.length ? (
               visibleLeads.map((lead) => {
                 const hasResponse = responseMap.has(lead.id);
+                const accessRequest = accessRequestMap.get(lead.id);
+                const accessApproved = Boolean(hasResponse || accessRequest?.status === "approved");
+                const displayName = accessApproved ? lead.full_name : "Hidden - Unlock to View";
 
                 return (
                   <div key={lead.id} className="rounded-2xl border border-border bg-background/60 p-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-body font-semibold text-foreground">{lead.full_name}</p>
+                          <p className="font-body font-semibold text-foreground">{displayName}</p>
                           <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestStatusClass(lead.status)}`}>
                             {formatServiceRequestLabel(lead.status)}
                           </Badge>
@@ -555,14 +616,9 @@ export default function PractitionerOverview() {
                       </div>
 
                       <div className="flex shrink-0 flex-wrap gap-3">
-                        <Button asChild variant="outline" className="rounded-xl">
-                          <Link to={`/dashboard/staff/service-requests?leadId=${lead.id}`}>
-                            Open Lead
-                          </Link>
-                        </Button>
                         <Button asChild className="rounded-xl">
                           <Link to={`/dashboard/staff/service-requests?leadId=${lead.id}&action=respond`}>
-                            {hasResponse ? "Update Response" : "Respond"}
+                            {hasResponse ? "Update Response" : "Unlock to View & Respond (Use Credits)"}
                           </Link>
                         </Button>
                       </div>
@@ -580,6 +636,33 @@ export default function PractitionerOverview() {
 
         <div className="space-y-6">
           <WebPushPrompt profileLink="/dashboard/staff/profile" />
+
+          <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
+            <div className="flex items-center gap-3">
+              <ClipboardCheck className="h-5 w-5 text-primary" />
+              <div>
+                <h2 className="font-display text-2xl text-foreground">External Tools</h2>
+                <p className="mt-1 text-sm text-muted-foreground font-body">Quick access to daily government platforms.</p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3">
+              {externalTools.map((tool) => (
+                <a
+                  key={tool.label}
+                  href={tool.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between rounded-2xl border border-border bg-accent/20 p-4 transition-all hover:border-primary/30 hover:bg-accent/30"
+                >
+                  <div>
+                    <p className="font-body font-semibold text-foreground">{tool.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground font-body">{tool.description}</p>
+                  </div>
+                  <tool.icon className="h-5 w-5 text-primary" />
+                </a>
+              ))}
+            </div>
+          </section>
 
           <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
             <h2 className="font-display text-2xl text-foreground">Workload Summary</h2>

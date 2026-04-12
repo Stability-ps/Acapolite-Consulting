@@ -23,17 +23,31 @@ import {
 type ClientType = Enums<"service_request_client_type">;
 type IdentityDocumentType = Enums<"service_request_identity_document_type">;
 
+const provinces = [
+  "Gauteng",
+  "Western Cape",
+  "KwaZulu-Natal",
+  "Eastern Cape",
+  "Free State",
+  "Limpopo",
+  "Mpumalanga",
+  "North West",
+  "Northern Cape",
+];
+
 export default function RequestTaxAssistance() {
   const { user, profile, dashboardPath } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [submitting, setSubmitting] = useState(false);
   const [completedRequestId, setCompletedRequestId] = useState<string | null>(null);
+  const [completedRequestDetails, setCompletedRequestDetails] = useState<{ fullName: string; email: string; phone: string } | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [form, setForm] = useState({
     full_name: "",
     email: "",
     phone: "",
+    province: "",
     client_type: "individual" as ClientType,
     identity_document_type: "id_number" as IdentityDocumentType,
     id_number: "",
@@ -50,12 +64,14 @@ export default function RequestTaxAssistance() {
     || user?.user_metadata?.full_name
     || user?.user_metadata?.name
     || "";
+  const isAuthenticated = Boolean(user?.email);
 
   const resetFormToAccount = () => {
     setForm({
       full_name: resolvedAccountFullName,
       email: user?.email || "",
       phone: profile?.phone || "",
+      province: "",
       client_type: "individual",
       identity_document_type: "id_number",
       id_number: "",
@@ -79,6 +95,24 @@ export default function RequestTaxAssistance() {
       phone: current.phone || profile?.phone || "",
     }));
   }, [profile?.phone, resolvedAccountFullName, user]);
+
+  useEffect(() => {
+    if (!completedRequestId || isAuthenticated || !completedRequestDetails) {
+      return;
+    }
+
+    const params = new URLSearchParams({
+      full_name: completedRequestDetails.fullName,
+      email: completedRequestDetails.email,
+      phone: completedRequestDetails.phone,
+      source: "service-request",
+    });
+    const timer = window.setTimeout(() => {
+      navigate(`/register?${params.toString()}`, { replace: true });
+    }, 3500);
+
+    return () => window.clearTimeout(timer);
+  }, [completedRequestDetails, completedRequestId, isAuthenticated, navigate]);
 
   const selectedService = useMemo(
     () => serviceNeededOptions.find((option) => option.value === form.service_needed),
@@ -121,6 +155,11 @@ export default function RequestTaxAssistance() {
     const state = location.state as { fromPortal?: boolean; fromPath?: string } | null;
     const fallbackPath = state?.fromPath || dashboardPath || portalFallbackPath;
 
+    if (!isAuthenticated) {
+      navigate("/", { replace: true });
+      return;
+    }
+
     if (state?.fromPortal && window.history.length > 1) {
       navigate(-1);
       return;
@@ -132,15 +171,15 @@ export default function RequestTaxAssistance() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!user?.email) {
-      toast.error("You must be signed in to submit a service request.");
-      navigate("/login", { replace: true });
-      return;
-    }
+    const requestEmail = (user?.email || form.email).trim().toLowerCase();
+    const requestPhone = form.phone.trim();
+    const requestName = form.full_name.trim();
 
     if (
-      !form.full_name.trim()
-      || !form.phone.trim()
+      !requestName
+      || !requestEmail
+      || !requestPhone
+      || !form.province.trim()
       || !form.service_category
       || !form.service_needed
       || !form.priority_level
@@ -178,9 +217,10 @@ export default function RequestTaxAssistance() {
       const { data: serviceRequest, error: requestError } = await supabase
         .from("service_requests")
         .insert({
-          full_name: form.full_name.trim(),
-          email: user.email.trim().toLowerCase(),
-          phone: form.phone.trim(),
+          full_name: requestName,
+          email: requestEmail,
+          phone: requestPhone,
+          province: form.province.trim(),
           client_type: form.client_type,
           identity_document_type: form.client_type === "individual" ? form.identity_document_type : null,
           id_number: form.client_type === "individual" ? form.id_number.trim() : null,
@@ -235,7 +275,30 @@ export default function RequestTaxAssistance() {
         toast.success("Your service request was submitted successfully.");
       }
 
+      const emailPayload = {
+        type: "service_request_received" as const,
+        requestId: serviceRequest.id,
+        clientName: requestName,
+        clientEmail: requestEmail,
+        clientPhone: requestPhone,
+        serviceType: selectedService?.label || formatServiceRequestLabel(form.service_needed),
+        province: form.province.trim(),
+      };
+
+      const { error: emailError } = await supabase.functions.invoke("send-portal-email", {
+        body: emailPayload,
+      });
+
+      if (emailError) {
+        console.error("Service request email error:", emailError);
+      }
+
       setCompletedRequestId(serviceRequest.id);
+      setCompletedRequestDetails({
+        fullName: requestName,
+        email: requestEmail,
+        phone: requestPhone,
+      });
       setFiles([]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit your request.";
@@ -246,6 +309,14 @@ export default function RequestTaxAssistance() {
   };
 
   if (completedRequestId) {
+    const registerParams = completedRequestDetails
+      ? new URLSearchParams({
+        full_name: completedRequestDetails.fullName,
+        email: completedRequestDetails.email,
+        phone: completedRequestDetails.phone,
+        source: "service-request",
+      })
+      : null;
     return (
       <div className="min-h-screen bg-surface-gradient px-4 py-16">
         <div className="mx-auto w-full max-w-3xl">
@@ -255,7 +326,7 @@ export default function RequestTaxAssistance() {
             className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground font-body"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to portal
+            {isAuthenticated ? "Back to portal" : "Back to home"}
           </button>
 
           <div className="rounded-[32px] border border-border bg-card p-8 shadow-elevated sm:p-10">
@@ -265,8 +336,9 @@ export default function RequestTaxAssistance() {
             </div>
             <h1 className="mt-6 font-display text-3xl text-foreground">Request Submitted</h1>
             <p className="mt-3 max-w-2xl text-sm text-muted-foreground font-body">
-              Your tax assistance request is now in the Acapolite pipeline. The team can review your request, documents,
-              and risk profile from the staff dashboard.
+              {isAuthenticated
+                ? "Your tax assistance request is now in the Acapolite pipeline. The team can review your request, documents, and risk profile from the staff dashboard."
+                : "Thank you for your request. To track your case, upload documents, and communicate securely, please create your account."}
             </p>
 
             <div className="mt-8 rounded-2xl border border-border bg-accent/20 p-5">
@@ -275,16 +347,46 @@ export default function RequestTaxAssistance() {
             </div>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button type="button" className="rounded-xl" onClick={goBackInsidePortal}>
-                Return to Portal
-              </Button>
+              {isAuthenticated ? (
+                <Button type="button" className="rounded-xl" onClick={goBackInsidePortal}>
+                  Return to Portal
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  className="rounded-xl"
+                  onClick={() => {
+                    if (registerParams) {
+                      navigate(`/register?${registerParams.toString()}`, { replace: true });
+                    } else {
+                      navigate("/register", { replace: true });
+                    }
+                  }}
+                >
+                  Create Account
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
                 className="rounded-xl"
                 onClick={() => {
                   setCompletedRequestId(null);
-                  resetFormToAccount();
+                  setCompletedRequestDetails(null);
+                  if (isAuthenticated) {
+                    resetFormToAccount();
+                  } else {
+                    setForm((current) => ({
+                      ...current,
+                      full_name: "",
+                      email: "",
+                      phone: "",
+                      province: "",
+                      description: "",
+                      sars_debt_amount: "",
+                      returns_filed: true,
+                    }));
+                  }
                 }}
               >
                 Submit Another Request
@@ -316,7 +418,7 @@ export default function RequestTaxAssistance() {
             </p>
             <h1 className="font-display text-3xl text-foreground sm:text-4xl">Request Tax Assistance</h1>
             <p className="mt-3 text-sm leading-6 text-muted-foreground font-body sm:text-base">
-              Tell Acapolite what you need help with, attach any supporting documents, and submit the request from your logged-in client account so it stays linked to your portal profile.
+              Tell Acapolite what you need help with, attach any supporting documents, and submit the request. If you do not yet have an account, you will be guided to create one after submission.
             </p>
           </div>
 
@@ -337,13 +439,17 @@ export default function RequestTaxAssistance() {
                 <Input
                   type="email"
                   value={form.email}
-                  readOnly
-                  placeholder="Linked to your portal account"
+                  readOnly={isAuthenticated}
+                  placeholder={isAuthenticated ? "Linked to your portal account" : "you@example.com"}
                   className="rounded-xl"
+                  onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                  required={!isAuthenticated}
                 />
-                <p className="mt-2 text-xs text-muted-foreground font-body">
-                  This request will be submitted using your logged-in portal email.
-                </p>
+                {isAuthenticated ? (
+                  <p className="mt-2 text-xs text-muted-foreground font-body">
+                    This request will be submitted using your logged-in portal email.
+                  </p>
+                ) : null}
               </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">Phone Number</label>
@@ -354,6 +460,24 @@ export default function RequestTaxAssistance() {
                   className="rounded-xl"
                   required
                 />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Province</label>
+                <Select
+                  value={form.province}
+                  onValueChange={(value) => setForm((current) => ({ ...current, province: value }))}
+                >
+                  <SelectTrigger className="w-full rounded-xl">
+                    <SelectValue placeholder="Select province" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {provinces.map((province) => (
+                      <SelectItem key={province} value={province}>
+                        {province}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">Individual or Company</label>

@@ -11,16 +11,24 @@ import {
   Clock3,
   FolderKanban,
   Wallet,
+  TrendingUp,
+  ClipboardCheck,
+  Building2,
+  FileText,
+  Landmark,
+  ShieldCheck,
+  Activity,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ElevenLabsWidget } from "@/components/dashboard/ElevenLabsWidget";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
 
 type CaseStatusRow = {
   status: string;
+  created_at?: string | null;
+  closed_at?: string | null;
 };
 
 type RecentClient = {
@@ -59,12 +67,18 @@ type InvoiceSnapshot = {
   status: string;
   balance_due: number;
   total_amount: number;
+  created_at?: string;
 };
 
 type RiskDocumentRequest = {
   client_id: string;
   is_required: boolean;
   is_fulfilled: boolean;
+};
+
+type ClientGrowthRow = {
+  id: string;
+  created_at: string;
 };
 
 type DueAlert = {
@@ -136,7 +150,7 @@ export default function AdminOverview() {
       if (hasRestrictedClientScope && !accessibleClientIds?.length) {
         return [];
       }
-      let query = supabase.from("cases").select("status");
+      let query = supabase.from("cases").select("status, created_at, closed_at");
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
         query = query.in("client_id", accessibleClientIds);
       }
@@ -162,6 +176,22 @@ export default function AdminOverview() {
       }
       const { data } = await query;
       return (data ?? []) as RecentClient[];
+    },
+    enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
+  });
+
+  const { data: clientGrowthRows } = useQuery({
+    queryKey: ["staff-overview-client-growth", accessibleClientIdsKey],
+    queryFn: async () => {
+      if (hasRestrictedClientScope && !accessibleClientIds?.length) {
+        return [];
+      }
+      let query = supabase.from("clients").select("id, created_at");
+      if (hasRestrictedClientScope && accessibleClientIds?.length) {
+        query = query.in("id", accessibleClientIds);
+      }
+      const { data } = await query;
+      return (data ?? []) as ClientGrowthRow[];
     },
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
@@ -208,7 +238,7 @@ export default function AdminOverview() {
       if (hasRestrictedClientScope && !accessibleClientIds?.length) {
         return [];
       }
-      let query = supabase.from("invoices").select("id, client_id, status, balance_due, total_amount");
+      let query = supabase.from("invoices").select("id, client_id, status, balance_due, total_amount, created_at");
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
         query = query.in("client_id", accessibleClientIds);
       }
@@ -371,6 +401,73 @@ export default function AdminOverview() {
     };
   }, [invoiceRows]);
 
+  const reportingSnapshot = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const monthStartIso = monthStart.toISOString();
+
+    const paidInvoicesThisMonth = (invoiceRows ?? []).filter((invoice) =>
+      invoice.status === "paid"
+      && invoice.created_at
+      && invoice.created_at >= monthStartIso
+    );
+    const monthlyRevenue = paidInvoicesThisMonth.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+
+    const completedCasesThisMonth = (caseRows ?? []).filter((caseRow) => {
+      if (!["resolved", "closed"].includes(caseRow.status)) {
+        return false;
+      }
+      const closedAt = caseRow.closed_at || caseRow.created_at;
+      return Boolean(closedAt && closedAt >= monthStartIso);
+    }).length;
+
+    const clientGrowth = (clientGrowthRows ?? []).filter((client) => client.created_at >= monthStartIso).length;
+    const outstandingInvoices = (invoiceRows ?? []).filter((invoice) =>
+      ["issued", "partially_paid", "overdue"].includes(invoice.status)
+      && Number(invoice.balance_due || 0) > 0
+    ).length;
+
+    return {
+      monthlyRevenue,
+      completedCasesThisMonth,
+      clientGrowth,
+      outstandingInvoices,
+    };
+  }, [caseRows, clientGrowthRows, invoiceRows]);
+
+  const externalTools = [
+    {
+      label: "SARS eFiling",
+      description: "Secure SARS eFiling access",
+      href: "https://secure.sarsefiling.co.za/app/login",
+      icon: ShieldCheck,
+    },
+    {
+      label: "SARS Status Dashboard",
+      description: "Live SARS system status",
+      href: "https://tools.sars.gov.za/status",
+      icon: Activity,
+    },
+    {
+      label: "SARS EasyFile",
+      description: "EasyFile services portal",
+      href: "https://secure.sarsefiling.co.za/app/login",
+      icon: FileText,
+    },
+    {
+      label: "CIPC eServices",
+      description: "Companies and IP Commission",
+      href: "https://eservices.cipc.co.za/",
+      icon: Building2,
+    },
+    {
+      label: "CIPC BizPortal",
+      description: "BizPortal by the CIPC",
+      href: "https://bizportal.gov.za/",
+      icon: Landmark,
+    },
+  ];
+
   const attentionClients = useMemo(() => {
     const outstandingInvoicesByClient = new Map<string, number>();
     const outstandingRequestsByClient = new Map<string, number>();
@@ -439,6 +536,66 @@ export default function AdminOverview() {
             <p className="mt-3 text-sm text-muted-foreground font-body">{card.label}</p>
           </Link>
         ))}
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
+        <div className="mb-5 flex items-center gap-3">
+          <TrendingUp className="h-5 w-5 text-primary" />
+          <div>
+            <h2 className="font-display text-xl font-semibold text-foreground">Reporting Overview</h2>
+            <p className="text-sm text-muted-foreground font-body">Business performance metrics for scaling decisions.</p>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-border bg-accent/30 p-5">
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Monthly Revenue</p>
+            <p className="font-display text-2xl text-foreground">{formatCurrency(reportingSnapshot.monthlyRevenue)}</p>
+          </div>
+          <div className="rounded-2xl border border-border bg-accent/30 p-5">
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Cases Completed</p>
+            <p className="font-display text-2xl text-foreground">{reportingSnapshot.completedCasesThisMonth}</p>
+          </div>
+          <div className="rounded-2xl border border-border bg-accent/30 p-5">
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Growth</p>
+            <p className="font-display text-2xl text-foreground">{reportingSnapshot.clientGrowth}</p>
+          </div>
+          <div className="rounded-2xl border border-border bg-accent/30 p-5">
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Outstanding Invoices</p>
+            <p className="font-display text-2xl text-foreground">{reportingSnapshot.outstandingInvoices}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
+        <div className="mb-5 flex items-center gap-3">
+          <ClipboardCheck className="h-5 w-5 text-primary" />
+          <div>
+            <h2 className="font-display text-xl font-semibold text-foreground">External Tools</h2>
+            <p className="text-sm text-muted-foreground font-body">Quick access to the government platforms used daily.</p>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {externalTools.map((tool) => (
+            <a
+              key={tool.label}
+              href={tool.href}
+              target="_blank"
+              rel="noreferrer"
+              className="group rounded-2xl border border-border bg-accent/20 p-5 transition-all hover:border-primary/30 hover:bg-accent/30"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-body font-semibold text-foreground">{tool.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground font-body">{tool.description}</p>
+                </div>
+                <tool.icon className="h-5 w-5 text-primary" />
+              </div>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                Open in new tab
+              </p>
+            </a>
+          ))}
+        </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -553,7 +710,6 @@ export default function AdminOverview() {
       </section>
       ) : null}
 
-      <ElevenLabsWidget />
 
       <section className="grid gap-6 xl:grid-cols-3">
         {(isAdmin || hasStaffPermission("can_view_clients")) ? (

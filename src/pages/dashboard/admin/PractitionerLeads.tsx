@@ -28,6 +28,7 @@ type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestDocument = Tables<"service_request_documents">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
 type PractitionerCreditAccount = Tables<"practitioner_credit_accounts">;
+type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
 
 export default function PractitionerLeads() {
   const { user } = useAuth();
@@ -39,6 +40,7 @@ export default function PractitionerLeads() {
   const [servicePitch, setServicePitch] = useState("");
   const [savingResponse, setSavingResponse] = useState(false);
   const [startingQuickPurchase, setStartingQuickPurchase] = useState(false);
+  const [requestingAccessId, setRequestingAccessId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     status: "all",
     risk: "all",
@@ -112,6 +114,21 @@ export default function PractitionerLeads() {
     enabled: !!user,
   });
 
+  const { data: accessRequests } = useQuery({
+    queryKey: ["practitioner-lead-access-requests", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_request_access_requests")
+        .select("*")
+        .eq("practitioner_profile_id", user!.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as ServiceRequestAccessRequest[];
+    },
+    enabled: !!user,
+  });
+
   const { data: creditAccount } = useQuery({
     queryKey: ["practitioner-credit-account", user?.id],
     queryFn: async () => {
@@ -144,6 +161,11 @@ export default function PractitionerLeads() {
     [responses],
   );
 
+  const accessRequestMap = useMemo(
+    () => new Map((accessRequests ?? []).map((request) => [request.service_request_id, request])),
+    [accessRequests],
+  );
+
   const filteredRequests = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
     const servicesOffered = new Set(practitionerProfile?.services_offered ?? []);
@@ -153,8 +175,7 @@ export default function PractitionerLeads() {
         const matchesService = servicesOffered.size === 0 || servicesOffered.has(request.service_needed);
         const visibleToPractitioner =
           request.assigned_practitioner_id === null
-          || request.assigned_practitioner_id === user?.id
-          || responseMap.has(request.id);
+          || request.assigned_practitioner_id === user?.id;
 
         return matchesService && visibleToPractitioner;
       })
@@ -203,8 +224,10 @@ export default function PractitionerLeads() {
     || null;
   const selectedResponse = selectedRequest ? responseMap.get(selectedRequest.id) ?? null : null;
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
+  const selectedAccessRequest = selectedRequest ? accessRequestMap.get(selectedRequest.id) ?? null : null;
   const availableCredits = creditAccount?.balance ?? 0;
-  const canSendNewResponse = Boolean(selectedResponse || availableCredits > 0);
+  const hasApprovedAccess = Boolean(selectedResponse || selectedAccessRequest?.status === "approved");
+  const canSendNewResponse = Boolean(selectedResponse || selectedAccessRequest?.status === "approved");
 
   useEffect(() => {
     if (!leadIdFromQuery || !(requests ?? []).some((request) => request.id === leadIdFromQuery)) {
@@ -244,8 +267,8 @@ export default function PractitionerLeads() {
       return;
     }
 
-    if (!selectedResponse && availableCredits < 1) {
-      toast.error("You need at least 1 credit to respond to a new lead.");
+    if (!selectedResponse && !hasApprovedAccess) {
+      toast.error("Client approval is required before you can respond to this lead.");
       return;
     }
 
@@ -288,8 +311,40 @@ export default function PractitionerLeads() {
       queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", user.id] }),
       queryClient.invalidateQueries({ queryKey: ["practitioner-own-lead-responses", user.id] }),
       queryClient.invalidateQueries({ queryKey: ["practitioner-visible-leads", user.id] }),
+      queryClient.invalidateQueries({ queryKey: ["practitioner-lead-access-requests", user.id] }),
     ]);
     setSelectedRequestId(null);
+  };
+
+  const requestLeadAccess = async (request: ServiceRequest) => {
+    if (!user?.id) return;
+    setRequestingAccessId(request.id);
+
+    try {
+      const creditCost = getServiceRequestCreditCost(request.service_needed);
+      const { error } = await supabase
+        .from("service_request_access_requests")
+        .upsert({
+          service_request_id: request.id,
+          practitioner_profile_id: user.id,
+          credit_cost: creditCost,
+        }, {
+          onConflict: "service_request_id,practitioner_profile_id",
+          ignoreDuplicates: true,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success("Access request sent to the client.");
+      await queryClient.invalidateQueries({ queryKey: ["practitioner-lead-access-requests", user.id] });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to send access request.";
+      toast.error(message);
+    } finally {
+      setRequestingAccessId(null);
+    }
   };
 
   const quickBuyStarterCredits = async () => {
@@ -499,7 +554,7 @@ export default function PractitionerLeads() {
               <p className="font-display text-3xl text-foreground">{availableCredits}</p>
             </div>
             <p className="mt-2 text-sm text-muted-foreground font-body">
-              1 credit is deducted when you submit a first response to a lead. Updating an existing response does not use another credit.
+              Credits are deducted only after a client approves your unlock request. Updating an existing response does not use another credit.
             </p>
           </div>
 
@@ -530,6 +585,9 @@ export default function PractitionerLeads() {
               missingDocumentsFlag: request.missing_documents_flag,
             });
             const creditCost = getServiceRequestCreditCost(request.service_needed);
+            const accessRequest = accessRequestMap.get(request.id);
+            const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
+            const displayName = accessApproved ? request.full_name : "Hidden - Unlock to View";
 
             return (
               <button
@@ -541,7 +599,7 @@ export default function PractitionerLeads() {
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-display text-xl text-foreground">{request.full_name}</h2>
+                      <h2 className="font-display text-xl text-foreground">{displayName}</h2>
                       <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestStatusClass(request.status)}`}>
                         {formatServiceRequestLabel(request.status)}
                       </Badge>
@@ -601,7 +659,9 @@ export default function PractitionerLeads() {
             setSearchParams(next, { replace: true });
           }
         }}
-        title={selectedRequest ? selectedRequest.full_name : "Lead"}
+        title={selectedRequest
+          ? (hasApprovedAccess ? selectedRequest.full_name : "Hidden - Unlock to View")
+          : "Lead"}
         description={selectedRequest ? "Review this lead and send your practitioner introduction." : undefined}
       >
         {selectedRequest ? (
@@ -622,8 +682,17 @@ export default function PractitionerLeads() {
               </div>
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Contact</p>
-                <p className="mt-2 text-sm text-foreground font-body">{selectedRequest.email}</p>
-                <p className="mt-1 text-sm text-muted-foreground font-body">{selectedRequest.phone}</p>
+                {hasApprovedAccess ? (
+                  <>
+                    <p className="mt-2 text-sm text-foreground font-body">{selectedRequest.email}</p>
+                    <p className="mt-1 text-sm text-muted-foreground font-body">{selectedRequest.phone}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm text-muted-foreground font-body">Hidden - Unlock to View</p>
+                    <p className="mt-1 text-sm text-muted-foreground font-body">Hidden - Unlock to View</p>
+                  </>
+                )}
               </div>
             </div>
 
@@ -658,9 +727,17 @@ export default function PractitionerLeads() {
                 <p className="mt-2 text-sm text-foreground font-body">
                   {selectedResponse
                     ? "Updating this existing response will not deduct another credit."
-                    : `You have ${availableCredits} credit${availableCredits === 1 ? "" : "s"} available for new lead responses.`}
+                    : "Credits are deducted only after the client approves your unlock request."}
                 </p>
               </div>
+
+              {!hasApprovedAccess ? (
+                <div className="rounded-2xl border border-dashed border-border bg-accent/10 p-4">
+                  <p className="text-sm text-muted-foreground font-body">
+                    Client contact details are hidden until the client approves your access request.
+                  </p>
+                </div>
+              ) : null}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">Introduction Message</label>
@@ -683,16 +760,31 @@ export default function PractitionerLeads() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button type="button" className="rounded-xl" onClick={saveResponse} disabled={savingResponse || !canSendNewResponse}>
-                  <SendHorizonal className="mr-2 h-4 w-4" />
-                  {savingResponse
-                    ? "Saving..."
-                    : selectedResponse
-                      ? "Update Response"
-                      : canSendNewResponse
-                        ? "Respond to Lead"
-                        : "No Credits Available"}
-                </Button>
+                {hasApprovedAccess ? (
+                  <Button type="button" className="rounded-xl" onClick={saveResponse} disabled={savingResponse || !canSendNewResponse}>
+                    <SendHorizonal className="mr-2 h-4 w-4" />
+                    {savingResponse
+                      ? "Saving..."
+                      : selectedResponse
+                        ? "Update Response"
+                        : "Respond to Lead"}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    className="rounded-xl"
+                    onClick={() => void requestLeadAccess(selectedRequest)}
+                    disabled={requestingAccessId === selectedRequest.id || selectedAccessRequest?.status === "pending" || selectedAccessRequest?.status === "declined"}
+                  >
+                    {selectedAccessRequest?.status === "pending"
+                      ? "Awaiting Client Approval"
+                      : selectedAccessRequest?.status === "declined"
+                        ? "Access Declined"
+                        : requestingAccessId === selectedRequest.id
+                          ? "Requesting..."
+                          : "Unlock to View & Respond (Use Credits)"}
+                  </Button>
+                )}
               </div>
             </div>
           </div>

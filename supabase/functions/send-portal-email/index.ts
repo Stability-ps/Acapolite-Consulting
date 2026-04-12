@@ -120,6 +120,16 @@ type DocumentsUploadedAdminPayload = {
   uploadDate?: string;
 };
 
+type ServiceRequestReceivedPayload = {
+  type: "service_request_received";
+  requestId?: string;
+  clientName?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  serviceType?: string;
+  province?: string;
+};
+
 type PortalEmailPayload =
   | ContactFormPayload
   | SignupNotificationPayload
@@ -131,7 +141,8 @@ type PortalEmailPayload =
   | ProofOfPaymentUploadedPayload
   | CaseStatusChangedPayload
   | DocumentsRequestedPayload
-  | DocumentsUploadedAdminPayload;
+  | DocumentsUploadedAdminPayload
+  | ServiceRequestReceivedPayload;
 
 type MailtrapMessage = {
   toEmail: string;
@@ -1068,6 +1079,158 @@ function buildEmailContent(params: {
         contactEmail: email,
         metadata: {
           full_name: fullName,
+        },
+      } satisfies NotificationLogEntry,
+    };
+  }
+
+  if (payload.type === "service_request_received") {
+    const requestId = trimString(payload.requestId);
+    const clientName = trimString(payload.clientName) || "Client";
+    const clientEmail = normalizeEmail(payload.clientEmail);
+    const clientPhone = trimString(payload.clientPhone);
+    const serviceType = trimString(payload.serviceType) || "Tax Assistance";
+    const province = trimString(payload.province);
+
+    if (!requestId || !clientEmail) {
+      throw new Error("Request ID and client email are required.");
+    }
+
+    const registerParams = new URLSearchParams({
+      full_name: clientName,
+      email: clientEmail,
+      phone: clientPhone,
+      source: "service-request",
+    });
+    const registerLink = `${buildPortalLink(portalUrl, "/register")}?${registerParams.toString()}`;
+    const safeClientName = escapeHtml(clientName);
+    const safeServiceType = escapeHtml(serviceType);
+    const safeProvince = escapeHtml(province || "Not specified");
+    const safeRegisterLink = escapeHtml(registerLink);
+    const safeSupportEmail = escapeHtml(supportEmail);
+    const safeSupportWhatsapp = escapeHtml(supportWhatsapp);
+    const notificationKey = `service_request_received:${requestId}`;
+
+    return {
+      requiresAuth: false,
+      mail: {
+        toEmail: clientEmail,
+        subject: "We Received Your Tax Assistance Request",
+        text: [
+          `Dear ${clientName},`,
+          "",
+          "Thank you for submitting your Request Tax Assistance form. Your request has been received and will be reviewed by our team.",
+          "",
+          `Service Requested: ${serviceType}`,
+          province ? `Province: ${province}` : null,
+          `Reference: ${requestId}`,
+          "",
+          "To track your case, upload documents, and communicate securely, please create your account using the link below.",
+          "",
+          `Create Account: ${registerLink}`,
+          "",
+          "If you already have an account, you can log in with the same email address.",
+          "",
+          "The Acapolite Consulting Team",
+          `${supportEmail} | ${supportWhatsapp}`,
+        ].filter(Boolean).join("\n"),
+        html: `<!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width,initial-scale=1" />
+            </head>
+            <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:32px 16px">
+                    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+                      <tr>
+                        <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td>
+                                <table cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="background:#c8a84b;border-radius:8px;width:40px;height:40px;text-align:center;vertical-align:middle;font-family:Georgia,serif;font-size:20px;color:#fff;font-weight:bold">A</td>
+                                    <td style="padding-left:12px">
+                                      <div style="font-size:15px;font-weight:bold;color:#fff">ACAPOLITE CONSULTING</div>
+                                      <div style="font-size:11px;color:rgba(255,255,255,0.55)">Request Received</div>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                              <td align="right">
+                                <span style="background:#16a34a;color:#fff;font-size:11px;font-weight:bold;padding:4px 12px;border-radius:20px">Request</span>
+                              </td>
+                            </tr>
+                          </table>
+                          <h1 style="color:#fff;font-size:22px;margin:24px 0 6px;font-family:Georgia,serif;font-weight:normal">Your Request Has Been Received</h1>
+                          <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Reference #${escapeHtml(requestId)}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#ffffff;padding:32px 36px">
+                          <p style="font-size:15px;font-weight:bold;color:#1a3a5c;margin:0 0 12px">Dear ${safeClientName},</p>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 20px">Thank you for submitting your Request Tax Assistance form. Your request has been received and will be reviewed by our team.</p>
+                          <table width="100%" cellpadding="0" cellspacing="0" style="background:#fdf8ef;border-left:4px solid #c8a84b;border-radius:0 8px 8px 0;margin-bottom:20px">
+                            <tr>
+                              <td style="padding:16px">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;width:140px;padding:4px 0">Service Requested</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${safeServiceType}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Province</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${safeProvince}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Reference</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">#${escapeHtml(requestId)}</td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 24px">To track your case, upload documents, and communicate securely, please create your account using the button below.</p>
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="background:#c8a84b;border-radius:6px">
+                                <a href="${safeRegisterLink}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:14px;font-weight:bold;text-decoration:none">Create Your Account</a>
+                              </td>
+                            </tr>
+                          </table>
+                          <p style="font-size:13px;color:#666;margin:20px 0 0">If you already have an account, you can log in with the same email address.</p>
+                          <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+                          <p style="font-size:13px;color:#555;line-height:1.7;margin:0">
+                            <strong style="color:#1a3a5c">The Acapolite Consulting Team</strong><br />
+                            ${safeSupportEmail} | ${safeSupportWhatsapp}
+                          </p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#f0f2f5;border-radius:0 0 10px 10px;padding:16px 36px;text-align:center">
+                          <p style="font-size:11px;color:#999;margin:0">Copyright 2026 Acapolite Consulting. Please do not reply to this email.</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>`,
+        category: "Service Request",
+      } satisfies MailtrapMessage,
+      log: {
+        notificationType: "service_request_received",
+        recipientEmail: clientEmail,
+        contactEmail: clientEmail,
+        metadata: {
+          request_id: requestId,
+          notification_key: notificationKey,
+          service_type: serviceType,
+          province,
         },
       } satisfies NotificationLogEntry,
     };

@@ -28,6 +28,7 @@ import HelpCenter from "./pages/HelpCenter";
 import AboutUs from "./pages/AboutUs";
 import Dashboard from "./pages/Dashboard";
 import DashboardOverview from "./pages/dashboard/Overview";
+import TaxCoachAIClient from "./pages/dashboard/TaxCoachAIClient";
 import ServiceRequests from "./pages/dashboard/ServiceRequests";
 import Cases from "./pages/dashboard/Cases";
 import Documents from "./pages/dashboard/Documents";
@@ -46,6 +47,7 @@ import AdminServiceRequests from "./pages/dashboard/admin/AdminServiceRequests";
 import PractitionerProfile from "./pages/dashboard/admin/PractitionerProfile";
 import PractitionerCredits from "./pages/dashboard/admin/PractitionerCredits";
 import AdminActivityLog from "./pages/dashboard/admin/AdminActivityLog";
+import TaxCoachAIStaff from "./pages/dashboard/admin/TaxCoachAIStaff";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -75,9 +77,7 @@ const App = () => (
             <Route path="/contact-us" element={<ContactUs />} />
             <Route path="/help-center" element={<HelpCenter />} />
             <Route path="/about-us" element={<AboutUs />} />
-            <Route element={<RequireRole allowedRoles={["client"]} />}>
-              <Route path="/request-tax-assistance" element={<RequestTaxAssistance />} />
-            </Route>
+            <Route path="/request-tax-assistance" element={<RequestTaxAssistance />} />
             <Route path="/dashboard" element={<Dashboard />}>
               <Route index element={<DashboardIndexRedirect />} />
 
@@ -89,6 +89,7 @@ const App = () => (
                 <Route path="client/invoices" element={<Invoices />} />
                 <Route path="client/messages" element={<Messages />} />
                 <Route path="client/deadlines" element={<Deadlines />} />
+                <Route path="client/tax-coach-ai" element={<TaxCoachAIClient />} />
                 <Route path="client/settings" element={<SettingsPage />} />
               </Route>
 
@@ -123,6 +124,7 @@ const App = () => (
                 </Route>
                 <Route element={<RequireStaffPermission permission="can_view_overview" />}>
                   <Route path="staff/activity-log" element={<AdminActivityLog />} />
+                  <Route path="staff/tax-coach-ai" element={<TaxCoachAIStaff />} />
                 </Route>
               </Route>
 

@@ -303,34 +303,6 @@ export default function Invoices() {
               </div>
             ) : null}
 
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-xl"
-                onClick={() => openInvoicePdf({
-                  invoiceNumber: selectedInvoice.invoice_number,
-                  clientName:
-                    client?.company_name
-                    || profile?.full_name
-                    || [client?.first_name, client?.last_name].filter(Boolean).join(" ")
-                    || client?.client_code
-                    || "Client",
-                  caseReference: selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support",
-                  serviceDescription: selectedInvoice.title || selectedInvoice.description || "Professional tax services",
-                  issueDate: selectedInvoice.issue_date,
-                  dueDate: selectedInvoice.due_date,
-                  status: selectedInvoice.status,
-                  subtotal: Number(selectedInvoice.subtotal || 0),
-                  vatAmount: Number(selectedInvoice.tax_amount || 0),
-                  total: Number(selectedInvoice.total_amount || 0),
-                  bankDetails: selectedInvoice.practitioner_bank_details || "",
-                })}
-              >
-                Download PDF
-              </Button>
-            </div>
-
             <div className="rounded-2xl border border-border bg-accent/20 p-4">
               <p className="text-sm text-muted-foreground font-body">{disclaimerText}</p>
             </div>
