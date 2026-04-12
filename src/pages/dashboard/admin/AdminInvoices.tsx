@@ -67,6 +67,7 @@ export default function AdminInvoices() {
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | Enums<"invoice_status">>("all");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<Enums<"invoice_status">>("draft");
@@ -129,11 +130,13 @@ export default function AdminInvoices() {
   const filteredInvoices = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
-    if (!normalizedSearch) {
-      return invoices ?? [];
-    }
-
     return (invoices ?? []).filter((invoice) => {
+      if (statusFilter !== "all" && invoice.status !== statusFilter) {
+        return false;
+      }
+      if (!normalizedSearch) {
+        return true;
+      }
       const invoiceNumber = invoice.invoice_number.toLowerCase();
       const title = (invoice.title || invoice.description || "").toLowerCase();
       const clientName = getClientName(invoice).toLowerCase();
@@ -146,7 +149,7 @@ export default function AdminInvoices() {
         clientCode.includes(normalizedSearch)
       );
     });
-  }, [invoices, searchQuery]);
+  }, [invoices, searchQuery, statusFilter]);
 
   const selectedInvoice = filteredInvoices.find((invoice) => invoice.id === selectedInvoiceId)
     || invoices?.find((invoice) => invoice.id === selectedInvoiceId)
@@ -369,14 +372,36 @@ export default function AdminInvoices() {
         </div>
       </div>
 
-      <div className="relative w-full max-w-sm mb-6">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search invoice, client, or code..."
-          className="rounded-xl pl-9"
-        />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search invoice, client, or code..."
+            className="rounded-xl pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {([
+            { label: "All", value: "all" },
+            { label: "Draft", value: "draft" },
+            { label: "Sent", value: "issued" },
+            { label: "Paid", value: "paid" },
+            { label: "Overdue", value: "overdue" },
+            { label: "Cancelled", value: "cancelled" },
+          ] as const).map((item) => (
+            <Button
+              key={item.value}
+              type="button"
+              variant={statusFilter === item.value ? "default" : "outline"}
+              className="rounded-full px-4"
+              onClick={() => setStatusFilter(item.value)}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {isLoading || isLoadingAccessibleClientIds ? (
@@ -402,7 +427,55 @@ export default function AdminInvoices() {
                 </span>
               </div>
 
-              <p className="text-sm text-foreground font-body mb-4">{invoice.title || invoice.description || "Service invoice"}</p>
+                <p className="text-sm text-foreground font-body mb-4">{invoice.title || invoice.description || "Service invoice"}</p>
+
+                {canManageInvoices ? (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {invoice.status !== "issued" && invoice.status !== "paid" && invoice.status !== "cancelled" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-full px-4"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedInvoiceId(invoice.id);
+                          setSelectedStatus("issued");
+                          void updateInvoice();
+                        }}
+                      >
+                        Send Invoice
+                      </Button>
+                    ) : null}
+                    {invoice.status !== "paid" && invoice.status !== "cancelled" ? (
+                      <Button
+                        type="button"
+                        className="rounded-full px-4"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedInvoiceId(invoice.id);
+                          setSelectedStatus("paid");
+                          void updateInvoice();
+                        }}
+                      >
+                        Mark as Paid
+                      </Button>
+                    ) : null}
+                    {invoice.status === "issued" || invoice.status === "overdue" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-full px-4"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedInvoiceId(invoice.id);
+                          void resendInvoice();
+                        }}
+                      >
+                        Send Reminder
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
 
               <div className="grid sm:grid-cols-4 gap-3 text-sm font-body">
                 <div>
@@ -549,7 +622,7 @@ export default function AdminInvoices() {
                     {savingStatus ? "Saving..." : "Save Invoice"}
                   </Button>
                   <Button type="button" variant="outline" className="rounded-xl" onClick={resendInvoice} disabled={resendingInvoice}>
-                    {resendingInvoice ? "Sending..." : "Resend Invoice"}
+                    {resendingInvoice ? "Sending..." : "Send Reminder"}
                   </Button>
                 </div>
               ) : (

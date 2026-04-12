@@ -53,6 +53,7 @@ type CaseRecord = {
   case_type: string;
   status: Enums<"case_status">;
   description: string | null;
+  created_at: string;
   due_date: string | null;
   priority: number;
   assigned_consultant_id: string | null;
@@ -74,6 +75,7 @@ export default function AdminCases() {
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [form, setForm] = useState({
     client_id: "",
     case_title: "",
@@ -263,6 +265,15 @@ export default function AdminCases() {
 
     return map;
   }, [riskClients, riskInvoices, riskRequests]);
+
+  const filteredCases = useMemo(() => {
+    if (priorityFilter === "all") {
+      return cases ?? [];
+    }
+
+    const targetPriority = priorityFilter === "high" ? 1 : priorityFilter === "medium" ? 2 : 3;
+    return (cases ?? []).filter((caseItem) => caseItem.priority === targetPriority);
+  }, [cases, priorityFilter]);
 
   const notifyAssignedConsultant = async (params: {
     caseId: string;
@@ -527,13 +538,57 @@ export default function AdminCases() {
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : (
         <div className="space-y-4">
-          {cases?.map((caseItem) => (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-body">Priority</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={priorityFilter === "all" ? "default" : "outline"}
+              className="rounded-full"
+              onClick={() => setPriorityFilter("all")}
+            >
+              All
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={priorityFilter === "high" ? "default" : "outline"}
+              className="rounded-full"
+              onClick={() => setPriorityFilter("high")}
+            >
+              🔴 High
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={priorityFilter === "medium" ? "default" : "outline"}
+              className="rounded-full"
+              onClick={() => setPriorityFilter("medium")}
+            >
+              🟡 Medium
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={priorityFilter === "low" ? "default" : "outline"}
+              className="rounded-full"
+              onClick={() => setPriorityFilter("low")}
+            >
+              🟢 Low
+            </Button>
+          </div>
+
+          {filteredCases?.map((caseItem) => (
             <div key={caseItem.id} className="bg-card rounded-xl border border-border shadow-card p-6">
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h3 className="font-display text-lg font-semibold text-foreground">{caseItem.case_title}</h3>
                   <p className="text-sm text-muted-foreground font-body">
                     {caseItem.clients?.company_name || [caseItem.clients?.first_name, caseItem.clients?.last_name].filter(Boolean).join(" ") || "Client"} | {caseItem.case_type.replace(/_/g, " ")}
+                  </p>
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    Created: {new Date(caseItem.created_at).toLocaleString()}
+                    {caseItem.due_date ? ` | Due: ${new Date(caseItem.due_date).toLocaleDateString()}` : ""}
                   </p>
                 </div>
                 <Badge variant="outline" className={statusColor(caseItem.status)}>
@@ -549,7 +604,7 @@ export default function AdminCases() {
               ) : null}
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="text-xs text-muted-foreground font-body">
-                  {caseItem.clients?.client_code ? `Client code: ${caseItem.clients.client_code}` : "No client code"}{caseItem.due_date ? ` | Due: ${new Date(caseItem.due_date).toLocaleDateString()}` : ""}
+                  {caseItem.clients?.client_code ? `Client code: ${caseItem.clients.client_code}` : "No client code"}
                 </div>
                 <div className="flex items-center gap-3 flex-wrap justify-end">
                   <div className="flex items-center gap-3">

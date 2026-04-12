@@ -56,12 +56,13 @@ export default function AdminDocuments() {
   const [searchQuery, setSearchQuery] = useState("");
   const [reviewNotes, setReviewNotes] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
-  const [actionLoading, setActionLoading] = useState<"approve" | "reject" | "open" | null>(null);
+  const [actionLoading, setActionLoading] = useState<"approve" | "reject" | "open" | "request" | null>(null);
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canReviewDocuments = hasStaffPermission("can_review_documents");
   const practitionerFilterId = searchParams.get("practitionerId") ?? "";
   const documentStateFilter = searchParams.get("documentState") ?? "";
+  const documentStatusFilter = searchParams.get("documentStatus") ?? "";
 
   const { data: documents, isLoading } = useQuery({
     queryKey: ["staff-documents", accessibleClientIdsKey],
@@ -92,12 +93,13 @@ export default function AdminDocuments() {
       return (documents ?? []).filter((document) => {
         const assignedPractitionerId = document.linked_case?.assigned_consultant_id || document.clients?.assigned_consultant_id || "";
         const matchesPractitioner = !practitionerFilterId || assignedPractitionerId === practitionerFilterId;
+        const matchesStatus = !documentStatusFilter || document.status === documentStatusFilter;
         const matchesState = !documentStateFilter
           || (documentStateFilter === "outstanding" && ["uploaded", "pending_review"].includes(document.status))
           || (documentStateFilter === "rejected" && document.status === "rejected")
           || (documentStateFilter === "attention" && ["uploaded", "pending_review", "rejected"].includes(document.status));
 
-        return matchesPractitioner && matchesState;
+        return matchesPractitioner && matchesStatus && matchesState;
       });
     }
 
@@ -108,6 +110,7 @@ export default function AdminDocuments() {
       const clientCode = (document.clients?.client_code || "").toLowerCase();
       const assignedPractitionerId = document.linked_case?.assigned_consultant_id || document.clients?.assigned_consultant_id || "";
       const matchesPractitioner = !practitionerFilterId || assignedPractitionerId === practitionerFilterId;
+      const matchesStatus = !documentStatusFilter || document.status === documentStatusFilter;
       const matchesState = !documentStateFilter
         || (documentStateFilter === "outstanding" && ["uploaded", "pending_review"].includes(document.status))
         || (documentStateFilter === "rejected" && document.status === "rejected")
@@ -115,6 +118,7 @@ export default function AdminDocuments() {
 
       return (
         matchesPractitioner
+        && matchesStatus
         && matchesState
         && (
           title.includes(normalizedSearch) ||
@@ -124,7 +128,7 @@ export default function AdminDocuments() {
         )
       );
     });
-  }, [documentStateFilter, documents, practitionerFilterId, searchQuery]);
+  }, [documentStateFilter, documentStatusFilter, documents, practitionerFilterId, searchQuery]);
 
   const selectedDocument = filteredDocuments.find((document) => document.id === selectedDocumentId)
     || documents?.find((document) => document.id === selectedDocumentId)
@@ -134,6 +138,7 @@ export default function AdminDocuments() {
     const next = new URLSearchParams(searchParams);
     next.delete("practitionerId");
     next.delete("documentState");
+    next.delete("documentStatus");
     setSearchParams(next, { replace: true });
   };
 
@@ -200,6 +205,47 @@ export default function AdminDocuments() {
     setSelectedDocumentId(null);
   };
 
+  const requestMissingDocument = async () => {
+    if (!selectedDocument || !user) return;
+    if (!canReviewDocuments) {
+      toast.error("This consultant profile cannot request documents.");
+      return;
+    }
+
+    setActionLoading("request");
+
+    const updates: TablesUpdate<"documents"> = {
+      status: "requested",
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: user.id,
+      notes: reviewNotes.trim() || null,
+      rejection_reason: null,
+    };
+
+    const { error } = await supabase.from("documents").update(updates).eq("id", selectedDocument.id);
+
+    if (error) {
+      toast.error(error.message);
+      setActionLoading(null);
+      return;
+    }
+
+    toast.success("Missing document requested.");
+    setActionLoading(null);
+    await queryClient.invalidateQueries({ queryKey: ["staff-documents"] });
+    setSelectedDocumentId(null);
+  };
+
+  const setStatusFilter = (status: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (!status) {
+      next.delete("documentStatus");
+    } else {
+      next.set("documentStatus", status);
+    }
+    setSearchParams(next, { replace: true });
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between gap-4 mb-8">
@@ -218,10 +264,61 @@ export default function AdminDocuments() {
         </div>
       </div>
 
-      {practitionerFilterId || documentStateFilter ? (
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-body">Document Status</span>
+        <Button
+          type="button"
+          size="sm"
+          variant={documentStatusFilter ? "outline" : "default"}
+          className="rounded-full"
+          onClick={() => setStatusFilter("")}
+        >
+          All
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={documentStatusFilter === "uploaded" ? "default" : "outline"}
+          className="rounded-full"
+          onClick={() => setStatusFilter("uploaded")}
+        >
+          Uploaded
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={documentStatusFilter === "pending_review" ? "default" : "outline"}
+          className="rounded-full"
+          onClick={() => setStatusFilter("pending_review")}
+        >
+          Under Review
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={documentStatusFilter === "approved" ? "default" : "outline"}
+          className="rounded-full"
+          onClick={() => setStatusFilter("approved")}
+        >
+          Approved
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={documentStatusFilter === "rejected" ? "default" : "outline"}
+          className="rounded-full"
+          onClick={() => setStatusFilter("rejected")}
+        >
+          Rejected
+        </Button>
+      </div>
+
+      {practitionerFilterId || documentStateFilter || documentStatusFilter ? (
         <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground font-body">
-            Showing the practitioner document queue{documentStateFilter ? ` | ${documentStateFilter.replace(/_/g, " ")}` : ""}.
+            Showing the practitioner document queue
+            {documentStatusFilter ? ` | ${documentStatusFilter.replace(/_/g, " ")}` : ""}
+            {documentStateFilter ? ` | ${documentStateFilter.replace(/_/g, " ")}` : ""}.
           </p>
           <Button type="button" variant="outline" className="rounded-xl" onClick={clearQuickFilters}>
             Clear Document Filter
@@ -256,6 +353,7 @@ export default function AdminDocuments() {
                   document.status === "approved" ? "bg-green-100 text-green-700" :
                   document.status === "rejected" ? "bg-red-100 text-red-700" :
                   document.status === "pending_review" ? "bg-yellow-100 text-yellow-700" :
+                  document.status === "requested" ? "bg-blue-100 text-blue-700" :
                   "bg-accent text-accent-foreground"
                 }`}>
                   {document.status.replace(/_/g, " ")}
@@ -331,6 +429,15 @@ export default function AdminDocuments() {
                 </div>
 
                 <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={requestMissingDocument}
+                    disabled={actionLoading !== null}
+                  >
+                    {actionLoading === "request" ? "Requesting..." : "Request Missing Document"}
+                  </Button>
                   <Button
                     type="button"
                     variant="destructive"
