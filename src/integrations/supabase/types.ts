@@ -672,7 +672,8 @@ export type Database = {
       conversations: {
         Row: {
           id: string;
-          client_id: string;
+          client_id: string | null;
+          practitioner_profile_id: string | null;
           case_id: string | null;
           subject: string | null;
           created_by: string | null;
@@ -683,7 +684,8 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          client_id: string;
+          client_id?: string | null;
+          practitioner_profile_id?: string | null;
           case_id?: string | null;
           subject?: string | null;
           created_by?: string | null;
@@ -694,7 +696,8 @@ export type Database = {
         };
         Update: {
           id?: string;
-          client_id?: string;
+          client_id?: string | null;
+          practitioner_profile_id?: string | null;
           case_id?: string | null;
           subject?: string | null;
           created_by?: string | null;

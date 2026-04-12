@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -208,6 +208,7 @@ function PermissionEditor({
 export default function AdminUsers() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | StaffRole>("all");
   const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "not_verified">("all");
@@ -232,6 +233,7 @@ export default function AdminUsers() {
   const [editPermissions, setEditPermissions] = useState<StaffPermissionValues>(defaultConsultantPermissions);
   const [createPractitionerProfile, setCreatePractitionerProfile] = useState<PractitionerProfileFormState>(initialPractitionerProfileForm);
   const [editPractitionerProfile, setEditPractitionerProfile] = useState<PractitionerProfileFormState>(initialPractitionerProfileForm);
+  const [startingConversationId, setStartingConversationId] = useState<string | null>(null);
 
   const { data: staffUsers, isLoading } = useQuery({
     queryKey: ["staff-users"],
@@ -508,6 +510,64 @@ export default function AdminUsers() {
   const selectedStaffCard = filteredStaffCards.find((card) => card.staffUser.id === selectedStaffId)
     || staffCards.find((card) => card.staffUser.id === selectedStaffId)
     || null;
+
+  const startPractitionerConversation = async (card: StaffCardRecord) => {
+    if (!user) {
+      toast.error("Please sign in again to start a conversation.");
+      return;
+    }
+
+    if (card.role !== "consultant") {
+      toast.error("Only practitioner profiles can receive practitioner conversations.");
+      return;
+    }
+
+    if (startingConversationId === card.staffUser.id) return;
+    setStartingConversationId(card.staffUser.id);
+
+    const practitionerName = card.staffUser.full_name || card.staffUser.email || "Practitioner";
+
+    const { data: existingConversation, error: existingError } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("practitioner_profile_id", card.staffUser.id)
+      .is("client_id", null)
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingError) {
+      toast.error(existingError.message);
+      setStartingConversationId(null);
+      return;
+    }
+
+    let conversationId = existingConversation?.id ?? "";
+
+    if (!conversationId) {
+      const { data: createdConversation, error: createError } = await supabase
+        .from("conversations")
+        .insert({
+          practitioner_profile_id: card.staffUser.id,
+          subject: `Practitioner Support: ${practitionerName}`,
+          created_by: user.id,
+        })
+        .select("id")
+        .single();
+
+      if (createError) {
+        toast.error(createError.message);
+        setStartingConversationId(null);
+        return;
+      }
+
+      conversationId = createdConversation.id;
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ["staff-conversations"] });
+    setStartingConversationId(null);
+    navigate(`/dashboard/staff/messages?conversationId=${conversationId}`);
+  };
 
   const selectedStaffUser = selectedStaffCard?.staffUser ?? null;
 
@@ -1164,6 +1224,19 @@ export default function AdminUsers() {
                       <Eye className="mr-2 h-4 w-4" />
                       Open Profile
                     </Button>
+
+                    {isPractitioner ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => void startPractitionerConversation(card)}
+                        disabled={startingConversationId === staffUser.id}
+                      >
+                        <Users className="mr-2 h-4 w-4" />
+                        {startingConversationId === staffUser.id ? "Opening Chat..." : "Start Chat"}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               </div>

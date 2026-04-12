@@ -9,30 +9,69 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { sendClientMessageNotification } from "@/lib/clientMessageNotifications";
 import { formatCaseReference } from "@/lib/practitionerAssignments";
+import { useSearchParams } from "react-router-dom";
 
-function getConversationName(conversation: {
+type ConversationRecord = {
+  id: string;
   subject: string | null;
+  case_id: string | null;
+  client_id: string | null;
+  practitioner_profile_id: string | null;
+  is_closed?: boolean;
+  last_message_at?: string | null;
   clients?: {
     company_name?: string | null;
     first_name?: string | null;
     last_name?: string | null;
     client_code?: string | null;
+    profile_id?: string | null;
     profiles?: { full_name?: string | null; email?: string | null } | null;
   } | null;
-}) {
+  practitioner?: {
+    full_name?: string | null;
+    email?: string | null;
+    practitioner_profiles?: { business_name?: string | null }[] | null;
+  } | null;
+  cases?: { id?: string | null; status?: string | null; case_title?: string | null } | null;
+};
+
+type ConversationFilter = "all" | "clients" | "practitioners" | "open_cases" | "support";
+
+function getConversationName(conversation: ConversationRecord) {
+  const practitionerBusinessName = conversation.practitioner?.practitioner_profiles?.[0]?.business_name;
   return (
     conversation.clients?.company_name ||
     conversation.clients?.profiles?.full_name ||
     [conversation.clients?.first_name, conversation.clients?.last_name].filter(Boolean).join(" ") ||
+    practitionerBusinessName ||
+    conversation.practitioner?.full_name ||
     conversation.subject ||
     conversation.clients?.client_code ||
+    conversation.practitioner?.email ||
     "Conversation"
   );
 }
 
-function getConversationPreview(messageText?: string | null) {
-  if (!messageText?.trim()) return "No messages yet";
-  return messageText.split("\n")[0];
+function getConversationTags(conversation: ConversationRecord) {
+  const tags: string[] = [];
+
+  if (conversation.case_id) {
+    tags.push("Case");
+  }
+
+  if (conversation.client_id) {
+    tags.push("Client");
+  }
+
+  if (conversation.practitioner_profile_id) {
+    tags.push("Practitioner");
+  }
+
+  if (!conversation.case_id) {
+    tags.push("Support");
+  }
+
+  return tags;
 }
 
 export default function AdminMessages() {
@@ -40,9 +79,12 @@ export default function AdminMessages() {
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedConversationId = searchParams.get("conversationId") ?? "";
   const [selectedConversation, setSelectedConversation] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<ConversationFilter>("all");
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canReplyMessages = hasStaffPermission("can_reply_messages");
@@ -56,11 +98,24 @@ export default function AdminMessages() {
 
       let query = supabase
         .from("conversations")
-        .select("*, clients(company_name, first_name, last_name, client_code, profile_id, profiles!clients_profile_id_fkey(full_name, email))")
+        .select("*, clients(company_name, first_name, last_name, client_code, profile_id, profiles!clients_profile_id_fkey(full_name, email)), practitioner:practitioner_profile_id(full_name, email, practitioner_profiles!practitioner_profiles_profile_id_fkey(business_name)), cases:case_id(id, status, case_title)")
         .order("last_message_at", { ascending: false });
 
-      if (hasRestrictedClientScope && accessibleClientIds?.length) {
-        query = query.in("client_id", accessibleClientIds);
+      if (hasRestrictedClientScope) {
+        if (!accessibleClientIds?.length && !user?.id) {
+          return [];
+        }
+
+        const filters: string[] = [];
+        if (accessibleClientIds?.length) {
+          filters.push(`client_id.in.(${accessibleClientIds.join(",")})`);
+        }
+        if (user?.id) {
+          filters.push(`practitioner_profile_id.eq.${user.id}`);
+        }
+        if (filters.length) {
+          query = query.or(filters.join(","));
+        }
       }
 
       const { data } = await query;
@@ -70,10 +125,20 @@ export default function AdminMessages() {
   });
 
   useEffect(() => {
+    if (requestedConversationId && selectedConversation !== requestedConversationId) {
+      setSelectedConversation(requestedConversationId);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete("conversationId");
+        return next;
+      });
+      return;
+    }
+
     if (!selectedConversation && conversations?.length) {
       setSelectedConversation(conversations[0].id);
     }
-  }, [conversations, selectedConversation]);
+  }, [conversations, requestedConversationId, selectedConversation, setSearchParams]);
 
   const { data: messages } = useQuery({
     queryKey: ["staff-messages", selectedConversation],
@@ -100,9 +165,8 @@ export default function AdminMessages() {
 
       const { data } = await supabase
         .from("messages")
-        .select("id, conversation_id, sender_type")
+        .select("id, conversation_id, sender_type, sender_profile_id")
         .in("conversation_id", conversationIds)
-        .eq("sender_type", "client")
         .eq("is_read", false);
 
       return data ?? [];
@@ -115,9 +179,7 @@ export default function AdminMessages() {
       if (!selectedConversation || !messages?.length) return;
 
       const unreadIncomingMessages = messages.filter(
-        (message) => message.sender_profile_id !== user?.id
-          && message.sender_type === "client"
-          && !message.is_read,
+        (message) => message.sender_profile_id !== user?.id && !message.is_read,
       );
 
       if (!unreadIncomingMessages.length) return;
@@ -152,27 +214,95 @@ export default function AdminMessages() {
     });
   }, [messages, selectedConversation]);
 
+  useEffect(() => {
+    const channel = supabase.channel("staff-conversations-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["staff-conversations"] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    const channel = supabase.channel(`staff-messages-${selectedConversation}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${selectedConversation}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ["staff-messages", selectedConversation] });
+        queryClient.invalidateQueries({ queryKey: ["staff-unread-messages"] });
+        queryClient.invalidateQueries({ queryKey: ["staff-conversations"] });
+        queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, selectedConversation]);
+
   const filteredConversations = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
+    const filteredByType = (conversations ?? []).filter((conversation) => {
+      switch (activeFilter) {
+        case "clients":
+          return Boolean(conversation.client_id);
+        case "practitioners":
+          return Boolean(conversation.practitioner_profile_id);
+        case "open_cases": {
+          if (!conversation.case_id) return false;
+          const status = conversation.cases?.status ?? "";
+          return !["resolved", "closed"].includes(status);
+        }
+        case "support":
+          return !conversation.case_id;
+        default:
+          return true;
+      }
+    });
 
     if (!normalizedSearch) {
-      return conversations ?? [];
+      return filteredByType;
     }
 
-    return (conversations ?? []).filter((conversation) => {
+    return filteredByType.filter((conversation) => {
       const name = getConversationName(conversation).toLowerCase();
       const subject = (conversation.subject || "").toLowerCase();
       const code = (conversation.clients?.client_code || "").toLowerCase();
-      return name.includes(normalizedSearch) || subject.includes(normalizedSearch) || code.includes(normalizedSearch);
+      const clientEmail = (conversation.clients?.profiles?.email || "").toLowerCase();
+      const practitionerEmail = (conversation.practitioner?.email || "").toLowerCase();
+      const caseReference = conversation.case_id ? formatCaseReference(conversation.case_id).toLowerCase() : "";
+      const caseTitle = (conversation.cases?.case_title || "").toLowerCase();
+      const tags = getConversationTags(conversation).map((tag) => tag.toLowerCase());
+      return [
+        name,
+        subject,
+        code,
+        clientEmail,
+        practitionerEmail,
+        caseReference,
+        caseTitle,
+        ...tags,
+      ].some((value) => value.includes(normalizedSearch));
     });
-  }, [conversations, searchQuery]);
+  }, [activeFilter, conversations, searchQuery]);
 
   const unreadCounts = useMemo(() => {
     return (unreadMessages ?? []).reduce<Record<string, number>>((accumulator, message) => {
+      if (message.sender_profile_id === user?.id) {
+        return accumulator;
+      }
       accumulator[message.conversation_id] = (accumulator[message.conversation_id] ?? 0) + 1;
       return accumulator;
     }, {});
-  }, [unreadMessages]);
+  }, [unreadMessages, user?.id]);
 
   const selectedConversationRecord = filteredConversations.find((conversation) => conversation.id === selectedConversation)
     || conversations?.find((conversation) => conversation.id === selectedConversation)
@@ -234,7 +364,7 @@ export default function AdminMessages() {
     <div>
       <h1 className="font-display text-2xl font-bold text-foreground mb-1">All Messages</h1>
       <p className="text-muted-foreground font-body text-sm mb-8">
-        {hasRestrictedClientScope ? "Manage communication for assigned client conversations only." : "Manage communication across all client conversations"}
+        {hasRestrictedClientScope ? "Manage communication for assigned client and practitioner conversations." : "Manage communication across all client and practitioner conversations."}
       </p>
 
       <div className="grid xl:grid-cols-[360px_1fr] gap-6 h-[72vh] min-h-0">
@@ -245,9 +375,29 @@ export default function AdminMessages() {
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search client chats..."
+                placeholder="Search by name, email, case #, or role..."
                 className="rounded-xl pl-9"
               />
+            </div>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {([
+                { id: "all", label: "All" },
+                { id: "clients", label: "Clients" },
+                { id: "practitioners", label: "Practitioners" },
+                { id: "open_cases", label: "Open Cases" },
+                { id: "support", label: "Support" },
+              ] as { id: ConversationFilter; label: string }[]).map((filter) => (
+                <Button
+                  key={filter.id}
+                  type="button"
+                  size="sm"
+                  variant={activeFilter === filter.id ? "secondary" : "outline"}
+                  onClick={() => setActiveFilter(filter.id)}
+                  className="rounded-full px-4"
+                >
+                  {filter.label}
+                </Button>
+              ))}
             </div>
           </div>
 
@@ -257,6 +407,7 @@ export default function AdminMessages() {
                 const isSelected = conversation.id === selectedConversation;
                 const lastMessage = conversation.last_message_at ? new Date(conversation.last_message_at).toLocaleString() : "";
                 const unreadCount = unreadCounts[conversation.id] ?? 0;
+                const tags = getConversationTags(conversation);
 
                 return (
                   <button
@@ -275,6 +426,16 @@ export default function AdminMessages() {
                         <p className="text-xs text-muted-foreground font-body truncate">
                           {conversation.subject || "General conversation"}
                         </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {unreadCount > 0 ? (
@@ -313,8 +474,23 @@ export default function AdminMessages() {
                       {getConversationName(selectedConversationRecord)}
                     </h2>
                     <p className="text-sm text-muted-foreground font-body mt-1">
-                      {unreadCounts[selectedConversationRecord.id] ? `${unreadCounts[selectedConversationRecord.id]} unread client message(s)` : selectedConversationRecord.subject || "General conversation"}
+                      {unreadCounts[selectedConversationRecord.id] ? `${unreadCounts[selectedConversationRecord.id]} unread message(s)` : selectedConversationRecord.subject || "General conversation"}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {getConversationTags(selectedConversationRecord).map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-accent text-accent-foreground font-body"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {selectedConversationRecord.cases?.status ? (
+                        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-body">
+                          {selectedConversationRecord.cases.status.replace(/_/g, " ")}
+                        </span>
+                      ) : null}
+                    </div>
                     {selectedConversationRecord.case_id ? (
                       <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
                         {formatCaseReference(selectedConversationRecord.case_id)}
