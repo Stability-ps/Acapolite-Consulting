@@ -25,6 +25,7 @@ import OurServices from "./pages/OurServices";
 import HowAcapoliteWorks from "./pages/HowAcapoliteWorks";
 import ContactUs from "./pages/ContactUs";
 import HelpCenter from "./pages/HelpCenter";
+import AboutUs from "./pages/AboutUs";
 import Dashboard from "./pages/Dashboard";
 import DashboardOverview from "./pages/dashboard/Overview";
 import ServiceRequests from "./pages/dashboard/ServiceRequests";
@@ -72,6 +73,7 @@ const App = () => (
             <Route path="/how-acapolite-works" element={<HowAcapoliteWorks />} />
             <Route path="/contact-us" element={<ContactUs />} />
             <Route path="/help-center" element={<HelpCenter />} />
+            <Route path="/about-us" element={<AboutUs />} />
             <Route element={<RequireRole allowedRoles={["client"]} />}>
               <Route path="/request-tax-assistance" element={<RequestTaxAssistance />} />
             </Route>

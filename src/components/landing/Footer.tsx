@@ -23,7 +23,7 @@ export function Footer() {
           <div className="space-y-3">
             <p className="text-sm font-semibold text-background font-body">Company</p>
             <div className="grid gap-2 text-sm text-background/70 font-body">
-              <a href="#" className="hover:text-background">About Us</a>
+              <Link to="/about-us" className="hover:text-background">About Us</Link>
               <Link to="/how-acapolite-works" className="hover:text-background">How Acapolite Works</Link>
               <Link to="/our-services" className="hover:text-background">Our Services</Link>
               <a href="#" className="hover:text-background">Become a Practitioner</a>
