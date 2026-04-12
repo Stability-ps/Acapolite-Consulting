@@ -138,7 +138,15 @@ export default function RequestTaxAssistance() {
       return;
     }
 
-    if (!form.full_name.trim() || !form.phone.trim() || !form.description.trim()) {
+    if (
+      !form.full_name.trim()
+      || !form.phone.trim()
+      || !form.description.trim()
+      || !form.service_category
+      || !form.service_needed
+      || !form.priority_level
+      || form.sars_debt_amount === ""
+    ) {
       toast.error("Please complete all required fields.");
       return;
     }
@@ -155,6 +163,11 @@ export default function RequestTaxAssistance() {
 
     if (form.client_type === "company" && !form.company_registration_number.trim()) {
       toast.error("Please enter the company registration number.");
+      return;
+    }
+
+    if (files.length === 0) {
+      toast.error("Please upload at least one supporting document.");
       return;
     }
 
@@ -515,6 +528,7 @@ export default function RequestTaxAssistance() {
                   onChange={(event) => setForm((current) => ({ ...current, sars_debt_amount: event.target.value }))}
                   placeholder="0.00"
                   className="rounded-xl"
+                  required
                 />
               </div>
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
@@ -550,6 +564,7 @@ export default function RequestTaxAssistance() {
                     className="mt-4 block w-full rounded-xl border border-input/90 bg-white/92 px-3.5 py-2.5 text-sm text-foreground shadow-[0_6px_24px_-22px_rgba(15,23,42,0.28)] ring-offset-background transition-all duration-200 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:opacity-90 focus-visible:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2"
                     onChange={handleFileSelection}
                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                    required
                   />
                   {files.length > 0 ? (
                     <div className="mt-4 space-y-3">

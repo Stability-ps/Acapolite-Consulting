@@ -8,7 +8,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { Tables } from "@/integrations/supabase/types";
 import {
@@ -16,6 +18,7 @@ import {
   getServiceRequestIssueFlags,
   getServiceRequestRiskClass,
   getServiceRequestStatusClass,
+  serviceCategoryOptions,
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
 import { getResponseStatusClass } from "@/lib/practitionerMarketplace";
@@ -36,6 +39,17 @@ export default function PractitionerLeads() {
   const [servicePitch, setServicePitch] = useState("");
   const [savingResponse, setSavingResponse] = useState(false);
   const [startingQuickPurchase, setStartingQuickPurchase] = useState(false);
+  const [filters, setFilters] = useState({
+    status: "all",
+    risk: "all",
+    priority: "all",
+    clientType: "all",
+    category: "all",
+    service: "all",
+    hasDocuments: false,
+    hasIssueFlags: false,
+    onlyMyResponses: false,
+  });
   const leadIdFromQuery = searchParams.get("leadId");
   const leadAction = searchParams.get("action");
 
@@ -145,6 +159,25 @@ export default function PractitionerLeads() {
         return matchesService && visibleToPractitioner;
       })
       .filter((request) => {
+        if (filters.status !== "all" && request.status !== filters.status) return false;
+        if (filters.risk !== "all" && request.risk_indicator !== filters.risk) return false;
+        if (filters.priority !== "all" && request.priority_level !== filters.priority) return false;
+        if (filters.clientType !== "all" && request.client_type !== filters.clientType) return false;
+        if (filters.category !== "all" && request.service_category !== filters.category) return false;
+        if (filters.service !== "all" && request.service_needed !== filters.service) return false;
+        if (filters.onlyMyResponses && !responseMap.has(request.id)) return false;
+        if (filters.hasDocuments && !(documentMap.get(request.id)?.length ?? 0)) return false;
+        if (filters.hasIssueFlags) {
+          const flags = getServiceRequestIssueFlags({
+            hasDebtFlag: request.has_debt_flag,
+            missingReturnsFlag: request.missing_returns_flag,
+            missingDocumentsFlag: request.missing_documents_flag,
+          });
+          if (flags.length === 0) return false;
+        }
+        return true;
+      })
+      .filter((request) => {
         if (!search) return true;
         return [
           request.full_name,
@@ -155,7 +188,15 @@ export default function PractitionerLeads() {
           request.status,
         ].join(" ").toLowerCase().includes(search);
       });
-  }, [practitionerProfile?.services_offered, requests, responseMap, searchQuery, user?.id]);
+  }, [
+    documentMap,
+    filters,
+    practitionerProfile?.services_offered,
+    requests,
+    responseMap,
+    searchQuery,
+    user?.id,
+  ]);
 
   const selectedRequest = filteredRequests.find((request) => request.id === selectedRequestId)
     || requests?.find((request) => request.id === selectedRequestId)
@@ -282,15 +323,172 @@ export default function PractitionerLeads() {
         </p>
       </section>
 
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search leads..."
-          className="rounded-xl pl-10"
-        />
-      </div>
+      <section className="rounded-[24px] border border-border bg-card p-5 shadow-card">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search leads..."
+              className="rounded-xl pl-10"
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">Status</label>
+              <Select
+                value={filters.status}
+                onValueChange={(value) => setFilters((current) => ({ ...current, status: value }))}
+              >
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="viewed">Viewed</SelectItem>
+                  <SelectItem value="responded">Responded</SelectItem>
+                  <SelectItem value="assigned">Assigned</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">Risk</label>
+              <Select
+                value={filters.risk}
+                onValueChange={(value) => setFilters((current) => ({ ...current, risk: value }))}
+              >
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">Priority</label>
+              <Select
+                value={filters.priority}
+                onValueChange={(value) => setFilters((current) => ({ ...current, priority: value }))}
+              >
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">Client Type</label>
+              <Select
+                value={filters.clientType}
+                onValueChange={(value) => setFilters((current) => ({ ...current, clientType: value }))}
+              >
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="individual">Individual</SelectItem>
+                  <SelectItem value="company">Company</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">Category</label>
+              <Select
+                value={filters.category}
+                onValueChange={(value) => setFilters((current) => ({ ...current, category: value, service: "all" }))}
+              >
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {serviceCategoryOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">Service</label>
+              <Select
+                value={filters.service}
+                onValueChange={(value) => setFilters((current) => ({ ...current, service: value }))}
+              >
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {serviceNeededOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground font-body">
+            <Checkbox
+              checked={filters.onlyMyResponses}
+              onCheckedChange={(checked) => setFilters((current) => ({ ...current, onlyMyResponses: checked === true }))}
+            />
+            My responses only
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground font-body">
+            <Checkbox
+              checked={filters.hasDocuments}
+              onCheckedChange={(checked) => setFilters((current) => ({ ...current, hasDocuments: checked === true }))}
+            />
+            Has documents
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground font-body">
+            <Checkbox
+              checked={filters.hasIssueFlags}
+              onCheckedChange={(checked) => setFilters((current) => ({ ...current, hasIssueFlags: checked === true }))}
+            />
+            Issue flags only
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            className="rounded-xl text-xs uppercase tracking-[0.18em]"
+            onClick={() => setFilters({
+              status: "all",
+              risk: "all",
+              priority: "all",
+              clientType: "all",
+              category: "all",
+              service: "all",
+              hasDocuments: false,
+              hasIssueFlags: false,
+              onlyMyResponses: false,
+            })}
+          >
+            Reset Filters
+          </Button>
+        </div>
+      </section>
 
       <section className="rounded-[24px] border border-border bg-card p-5 shadow-card">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
