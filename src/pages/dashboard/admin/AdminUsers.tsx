@@ -104,6 +104,13 @@ const initialPractitionerProfileForm: PractitionerProfileFormState = {
   isVerified: false,
   internalNotes: "",
   servicesOffered: [],
+  bankAccountHolderName: "",
+  bankName: "",
+  bankBranchName: "",
+  bankBranchCode: "",
+  bankAccountNumber: "",
+  bankAccountType: "",
+  vatNumber: "",
 };
 
 function getRoleLabel(role: StaffRole) {
@@ -623,6 +630,15 @@ export default function AdminUsers() {
   }, [selectedPermissionRow, selectedStaffUser]);
 
   useEffect(() => {
+    if (!createForm.fullName.trim()) return;
+    setCreatePractitionerProfile((current) => (
+      current.bankAccountHolderName.trim()
+        ? current
+        : { ...current, bankAccountHolderName: createForm.fullName.trim() }
+    ));
+  }, [createForm.fullName]);
+
+  useEffect(() => {
     if (!selectedStaffUser || selectedStaffUser.role !== "consultant") {
       setEditPractitionerProfile(initialPractitionerProfileForm);
       return;
@@ -636,6 +652,13 @@ export default function AdminUsers() {
       isVerified: selectedPractitionerProfile?.is_verified ?? false,
       internalNotes: selectedPractitionerProfile?.internal_notes || "",
       servicesOffered: selectedPractitionerProfile?.services_offered ?? [],
+      bankAccountHolderName: selectedPractitionerProfile?.bank_account_holder_name || selectedStaffUser.full_name || "",
+      bankName: selectedPractitionerProfile?.bank_name || "",
+      bankBranchName: selectedPractitionerProfile?.bank_branch_name || "",
+      bankBranchCode: selectedPractitionerProfile?.bank_branch_code || "",
+      bankAccountNumber: selectedPractitionerProfile?.bank_account_number || "",
+      bankAccountType: selectedPractitionerProfile?.bank_account_type || "",
+      vatNumber: selectedPractitionerProfile?.vat_number || "",
     });
   }, [selectedPractitionerProfile, selectedStaffUser]);
 
@@ -676,6 +699,13 @@ export default function AdminUsers() {
         is_verified: values.isVerified,
         internal_notes: values.internalNotes.trim() || null,
         services_offered: normalizeServicesOffered(values.servicesOffered),
+        bank_account_holder_name: values.bankAccountHolderName.trim() || null,
+        bank_name: values.bankName.trim() || null,
+        bank_branch_name: values.bankBranchName.trim() || null,
+        bank_branch_code: values.bankBranchCode.trim() || null,
+        bank_account_number: values.bankAccountNumber.trim() || null,
+        bank_account_type: values.bankAccountType.trim() || null,
+        vat_number: values.vatNumber.trim() || null,
       });
 
     return error;

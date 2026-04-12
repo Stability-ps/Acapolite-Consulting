@@ -14,7 +14,29 @@ export type PractitionerProfileFormState = {
   isVerified: boolean;
   internalNotes: string;
   servicesOffered: string[];
+  bankAccountHolderName: string;
+  bankName: string;
+  bankBranchName: string;
+  bankBranchCode: string;
+  bankAccountNumber: string;
+  bankAccountType: string;
+  vatNumber: string;
 };
+
+const bankOptions = [
+  "ABSA",
+  "Capitec",
+  "FNB",
+  "Nedbank",
+  "Standard Bank",
+  "Discovery Bank",
+  "Investec",
+  "TymeBank",
+  "African Bank",
+  "Other",
+];
+
+const accountTypeOptions = ["Cheque", "Savings", "Business"];
 
 export function PractitionerProfileFields({
   value,
@@ -84,6 +106,93 @@ export function PractitionerProfileFields({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-accent/20 p-4">
+        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Banking Profile</p>
+        <p className="mt-2 text-sm text-muted-foreground font-body">
+          These details are used to auto-fill invoices. Keep them accurate and up to date.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Account Holder Name</label>
+          <Input
+            value={value.bankAccountHolderName}
+            onChange={(event) => onChange({ ...value, bankAccountHolderName: event.target.value })}
+            placeholder="Account holder name"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Bank Name</label>
+          <Select
+            value={value.bankName}
+            onValueChange={(next) => onChange({ ...value, bankName: next })}
+          >
+            <SelectTrigger className="w-full rounded-xl">
+              <SelectValue placeholder="Select bank" />
+            </SelectTrigger>
+            <SelectContent>
+              {bankOptions.map((option) => (
+                <SelectItem key={option} value={option}>{option}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Branch Name</label>
+          <Input
+            value={value.bankBranchName}
+            onChange={(event) => onChange({ ...value, bankBranchName: event.target.value })}
+            placeholder="Branch name"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Branch Code</label>
+          <Input
+            value={value.bankBranchCode}
+            onChange={(event) => onChange({ ...value, bankBranchCode: event.target.value })}
+            placeholder="Branch code"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Account Number</label>
+          <Input
+            value={value.bankAccountNumber}
+            onChange={(event) => onChange({ ...value, bankAccountNumber: event.target.value })}
+            placeholder="Account number"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Account Type</label>
+          <Select
+            value={value.bankAccountType}
+            onValueChange={(next) => onChange({ ...value, bankAccountType: next })}
+          >
+            <SelectTrigger className="w-full rounded-xl">
+              <SelectValue placeholder="Select account type" />
+            </SelectTrigger>
+            <SelectContent>
+              {accountTypeOptions.map((option) => (
+                <SelectItem key={option} value={option}>{option}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">VAT Number (Optional)</label>
+          <Input
+            value={value.vatNumber}
+            onChange={(event) => onChange({ ...value, vatNumber: event.target.value })}
+            placeholder="VAT number"
+            className="rounded-xl"
+          />
         </div>
       </div>
 

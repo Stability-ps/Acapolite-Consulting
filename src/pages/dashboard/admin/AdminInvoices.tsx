@@ -45,6 +45,18 @@ type StaffInvoice = {
   practitioner_bank_details?: string | null;
 };
 
+type PractitionerBankProfile = {
+  profile_id: string;
+  bank_account_holder_name: string | null;
+  bank_name: string | null;
+  bank_branch_name: string | null;
+  bank_branch_code: string | null;
+  bank_account_number: string | null;
+  bank_account_type: string | null;
+  vat_number: string | null;
+  profiles?: { full_name?: string | null } | null;
+};
+
 function getClientName(invoice: StaffInvoice) {
   return (
     invoice.clients?.company_name ||
@@ -80,7 +92,6 @@ export default function AdminInvoices() {
   const [invoiceDueDate, setInvoiceDueDate] = useState("");
   const [invoiceSubtotal, setInvoiceSubtotal] = useState("");
   const [invoiceVatAmount, setInvoiceVatAmount] = useState("");
-  const [invoiceBankDetails, setInvoiceBankDetails] = useState("");
   const [invoiceCaseId, setInvoiceCaseId] = useState<string | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
   const [resendingInvoice, setResendingInvoice] = useState(false);
@@ -121,7 +132,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("clients")
-        .select("id, profile_id, company_name, first_name, last_name, client_code, profiles!clients_profile_id_fkey(full_name, email)")
+        .select("id, profile_id, company_name, first_name, last_name, client_code, assigned_consultant_id, profiles!clients_profile_id_fkey(full_name, email)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -143,7 +154,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("cases")
-        .select("id, client_id, case_title, case_type, sars_case_reference, created_at")
+        .select("id, client_id, assigned_consultant_id, case_title, case_type, sars_case_reference, created_at")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -155,6 +166,24 @@ export default function AdminInvoices() {
     },
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
+
+  const { data: practitionerProfiles } = useQuery({
+    queryKey: ["staff-invoice-practitioners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_profiles")
+        .select("profile_id, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, profiles!practitioner_profiles_profile_id_fkey(full_name)")
+        .order("profile_id", { ascending: true });
+      if (error) {
+        throw error;
+      }
+      return (data ?? []) as PractitionerBankProfile[];
+    },
+  });
+
+  const practitionerProfileMap = useMemo(() => {
+    return new Map((practitionerProfiles ?? []).map((profile) => [profile.profile_id, profile]));
+  }, [practitionerProfiles]);
 
   const filteredInvoices = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -216,7 +245,6 @@ export default function AdminInvoices() {
       setInvoiceDueDate(selectedInvoice.due_date || "");
       setInvoiceSubtotal(String(selectedInvoice.subtotal ?? selectedInvoice.total_amount ?? ""));
       setInvoiceVatAmount(String(selectedInvoice.tax_amount ?? 0));
-      setInvoiceBankDetails(selectedInvoice.practitioner_bank_details || "");
       setInvoiceCaseId(selectedInvoice.case_id ?? null);
     }
   }, [selectedInvoice]);
@@ -228,9 +256,51 @@ export default function AdminInvoices() {
     setInvoiceDueDate("");
     setInvoiceSubtotal("");
     setInvoiceVatAmount("");
-    setInvoiceBankDetails("");
     setInvoiceCaseId(null);
     setSelectedStatus("draft");
+  };
+
+  const resolvePractitionerId = () => {
+    if (role === "consultant" && user?.id) {
+      return user.id;
+    }
+
+    const selectedCase = (cases ?? []).find((caseItem: { id: string }) => caseItem.id === invoiceCaseId);
+    if (selectedCase?.assigned_consultant_id) {
+      return selectedCase.assigned_consultant_id;
+    }
+
+    const selectedClient = (clients ?? []).find((client: { id: string }) => client.id === clientsFormValue) as
+      | { assigned_consultant_id?: string | null }
+      | undefined;
+
+    return selectedClient?.assigned_consultant_id || null;
+  };
+
+  const resolveBankProfile = () => {
+    const practitionerId = resolvePractitionerId();
+    if (!practitionerId) return null;
+    return practitionerProfileMap.get(practitionerId) ?? null;
+  };
+
+  const formatBankDetails = (profile: PractitionerBankProfile) => {
+    const accountHolder = profile.bank_account_holder_name || profile.profiles?.full_name || "";
+    const lines = [
+      accountHolder && `Account Holder: ${accountHolder}`,
+      profile.bank_name && `Bank: ${profile.bank_name}`,
+      profile.bank_branch_name && `Branch: ${profile.bank_branch_name}`,
+      profile.bank_branch_code && `Branch Code: ${profile.bank_branch_code}`,
+      profile.bank_account_number && `Account Number: ${profile.bank_account_number}`,
+      profile.bank_account_type && `Account Type: ${profile.bank_account_type}`,
+      profile.vat_number && `VAT Number: ${profile.vat_number}`,
+    ].filter(Boolean);
+    return lines.join("\n");
+  };
+
+  const maskAccountNumber = (value?: string | null) => {
+    const trimmed = value?.trim() || "";
+    if (trimmed.length <= 4) return trimmed;
+    return `${"*".repeat(Math.max(0, trimmed.length - 4))}${trimmed.slice(-4)}`;
   };
 
   const updateInvoice = async () => {
@@ -252,7 +322,6 @@ export default function AdminInvoices() {
       tax_amount: Number.isNaN(vatAmount) ? selectedInvoice.tax_amount : vatAmount,
       total_amount: totalAmount,
       due_date: invoiceDueDate || null,
-      practitioner_bank_details: invoiceBankDetails.trim() || null,
       case_id: invoiceCaseId || null,
     };
     const { error } = await supabase.from("invoices").update(updates).eq("id", selectedInvoice.id);
@@ -361,8 +430,19 @@ export default function AdminInvoices() {
       return;
     }
 
-    if (!invoiceBankDetails.trim()) {
-      toast.error("Enter the practitioner banking details.");
+    const bankProfile = resolveBankProfile();
+    const accountHolderName = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
+    const hasCompleteBanking = Boolean(
+      accountHolderName.trim()
+      && bankProfile?.bank_name?.trim()
+      && bankProfile?.bank_branch_name?.trim()
+      && bankProfile?.bank_branch_code?.trim()
+      && bankProfile?.bank_account_number?.trim()
+      && bankProfile?.bank_account_type?.trim(),
+    );
+
+    if (!bankProfile || !hasCompleteBanking) {
+      toast.error("Practitioner banking details are incomplete. Update the banking profile before creating an invoice.");
       return;
     }
 
@@ -390,7 +470,7 @@ export default function AdminInvoices() {
       due_date: invoiceDueDate || null,
       status: selectedStatus,
       created_by: user?.id ?? null,
-      practitioner_bank_details: invoiceBankDetails.trim() || null,
+      practitioner_bank_details: formatBankDetails(bankProfile),
     };
 
     const { data, error } = await supabase.from("invoices").insert(payload).select("id, invoice_number, due_date, status").single();
@@ -782,18 +862,14 @@ export default function AdminInvoices() {
 
             <div>
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Practitioner Banking Details</label>
-              {canManageInvoices ? (
-                <Textarea
-                  value={invoiceBankDetails}
-                  onChange={(event) => setInvoiceBankDetails(event.target.value)}
-                  placeholder="Account holder, bank name, branch code, account number"
-                  className="rounded-xl"
-                />
-              ) : (
-                <div className="rounded-2xl border border-border p-4">
-                  <p className="font-body text-foreground">{invoiceBankDetails || "No banking details added yet."}</p>
-                </div>
-              )}
+              <div className="rounded-2xl border border-border p-4">
+                <p className="font-body text-foreground whitespace-pre-wrap">
+                  {selectedInvoice.practitioner_bank_details || "Banking details were not captured on this invoice."}
+                </p>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground font-body">
+                Banking details are read-only on issued invoices.
+              </p>
             </div>
 
             {selectedInvoice.payment_reference ? (
@@ -849,7 +925,7 @@ export default function AdminInvoices() {
                   subtotal: Number(invoiceSubtotal || 0),
                   vatAmount: Number(invoiceVatAmount || 0),
                   total: Number(Number(invoiceSubtotal || 0) + Number(invoiceVatAmount || 0)),
-                  bankDetails: invoiceBankDetails,
+                  bankDetails: selectedInvoice.practitioner_bank_details || "",
                 })}
               >
                 Download PDF
@@ -988,14 +1064,50 @@ export default function AdminInvoices() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-foreground font-body mb-2">Practitioner Banking Details</label>
-            <Textarea
-              value={invoiceBankDetails}
-              onChange={(event) => setInvoiceBankDetails(event.target.value)}
-              placeholder="Account holder, bank name, branch code, account number"
-              className="rounded-xl"
-            />
+          <div className="rounded-2xl border border-border bg-accent/20 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioner Banking Details</p>
+            {(() => {
+              const bankProfile = resolveBankProfile();
+              if (!bankProfile) {
+                return (
+                  <p className="mt-2 text-sm text-muted-foreground font-body">
+                    Assign a practitioner to the selected case or client to auto-fill banking details.
+                  </p>
+                );
+              }
+              return (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 text-sm font-body text-foreground">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Account Holder</p>
+                    <p className="font-semibold">{bankProfile.bank_account_holder_name || bankProfile.profiles?.full_name || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Bank Name</p>
+                    <p className="font-semibold">{bankProfile.bank_name || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Branch Name</p>
+                    <p className="font-semibold">{bankProfile.bank_branch_name || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Branch Code</p>
+                    <p className="font-semibold">{bankProfile.bank_branch_code || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Account Number</p>
+                    <p className="font-semibold">{bankProfile.bank_account_number ? maskAccountNumber(bankProfile.bank_account_number) : "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Account Type</p>
+                    <p className="font-semibold">{bankProfile.bank_account_type || "—"}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-muted-foreground">VAT Number (Optional)</p>
+                    <p className="font-semibold">{bankProfile.vat_number || "—"}</p>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex justify-end gap-3">

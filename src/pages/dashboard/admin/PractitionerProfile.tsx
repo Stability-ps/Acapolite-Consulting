@@ -22,6 +22,13 @@ const initialPractitionerForm: PractitionerProfileFormState = {
   isVerified: false,
   internalNotes: "",
   servicesOffered: [],
+  bankAccountHolderName: "",
+  bankName: "",
+  bankBranchName: "",
+  bankBranchCode: "",
+  bankAccountNumber: "",
+  bankAccountType: "",
+  vatNumber: "",
 };
 
 type PractitionerReview = Tables<"practitioner_reviews">;
@@ -94,8 +101,15 @@ export default function PractitionerProfile() {
       isVerified: practitionerProfile.is_verified ?? false,
       internalNotes: practitionerProfile.internal_notes || "",
       servicesOffered: practitionerProfile.services_offered ?? [],
+      bankAccountHolderName: practitionerProfile.bank_account_holder_name || profile?.full_name || "",
+      bankName: practitionerProfile.bank_name || "",
+      bankBranchName: practitionerProfile.bank_branch_name || "",
+      bankBranchCode: practitionerProfile.bank_branch_code || "",
+      bankAccountNumber: practitionerProfile.bank_account_number || "",
+      bankAccountType: practitionerProfile.bank_account_type || "",
+      vatNumber: practitionerProfile.vat_number || "",
     });
-  }, [practitionerProfile]);
+  }, [practitionerProfile, profile?.full_name]);
 
   const completion = useMemo(() => getProfileCompletion(form), [form]);
   const serviceLabels = useMemo(() => {
@@ -127,6 +141,13 @@ export default function PractitionerProfile() {
       is_verified: practitionerProfile?.is_verified ?? false,
       internal_notes: form.internalNotes.trim() || null,
       services_offered: normalizeServicesOffered(form.servicesOffered),
+      bank_account_holder_name: form.bankAccountHolderName.trim() || null,
+      bank_name: form.bankName.trim() || null,
+      bank_branch_name: form.bankBranchName.trim() || null,
+      bank_branch_code: form.bankBranchCode.trim() || null,
+      bank_account_number: form.bankAccountNumber.trim() || null,
+      bank_account_type: form.bankAccountType.trim() || null,
+      vat_number: form.vatNumber.trim() || null,
     });
 
     setSaving(false);
