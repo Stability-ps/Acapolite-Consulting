@@ -4,9 +4,16 @@ import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
+const trustIndicators = [
+  "SARS Registered Tax Practitioners",
+  "Secure Client Portal",
+  "Trusted by South African Individuals & Businesses",
+  "Confidential & POPIA-Compliant",
+];
+
 export function Hero() {
   return (
-    <section id="top" className="relative flex min-h-[92vh] items-center overflow-hidden bg-hero-gradient pt-28 md:pt-32">
+    <section id="top" className="relative flex min-h-[92vh] items-center overflow-hidden bg-hero-gradient pb-8 pt-28 md:pt-32">
       <div className="absolute inset-0 opacity-10">
         <div
           className="absolute inset-0"
@@ -31,14 +38,24 @@ export function Hero() {
           <AcapoliteLogo className="mb-6 h-16 sm:h-20" />
 
           <h1 className="mb-6 font-display text-4xl font-bold leading-tight text-primary-foreground md:text-6xl lg:text-7xl">
-            Expert Tax Consulting,{" "}
-            <span className="text-primary-foreground/80 italic">Simplified</span> for You
+            Professional SARS Tax Assistance for Individuals and Businesses
           </h1>
 
-          <p className="mb-10 max-w-2xl text-lg font-body leading-relaxed text-primary-foreground/75 md:text-xl">
-            Acapolite Consulting guides South African individuals and businesses through complex SARS
-            processes, from tax returns to dispute resolution, all managed securely in one portal.
+          <p className="mb-8 max-w-2xl text-lg font-body leading-relaxed text-primary-foreground/75 md:text-xl">
+            We help South African individuals and businesses resolve SARS issues, submit tax returns, manage compliance,
+            and work securely through one platform.
           </p>
+
+          <div className="mb-12 flex flex-wrap gap-3">
+            {trustIndicators.map((item) => (
+              <span
+                key={item}
+                className="rounded-full border border-white/14 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground/80"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
 
           <div className="flex flex-col gap-4 sm:flex-row">
             <Button asChild size="lg" className="rounded-xl bg-primary px-8 py-6 text-base font-semibold text-primary-foreground shadow-elevated hover:bg-primary/90">

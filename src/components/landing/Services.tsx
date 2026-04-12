@@ -1,13 +1,12 @@
 import { motion } from "framer-motion";
-import { Building2, Scale, FileCheck, FileText, CalendarClock, Headset } from "lucide-react";
+import { BriefcaseBusiness, Building2, Calculator, UserRound } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const services = [
-  { icon: Building2, title: "Corporate Tax and VAT", desc: "Comprehensive corporate tax returns, VAT registration, and provisional tax management for businesses of all sizes." },
-  { icon: Scale, title: "SARS Disputes and Objections", desc: "Expert representation and dispute resolution for SARS objections, audits, and tax clearance certificate applications." },
-  { icon: FileCheck, title: "Tax Clearance Certificates", desc: "Prompt processing of tax clearance certificates for tenders, emigration, foreign investment, and compliance purposes." },
-  { icon: FileText, title: "Individual Tax Returns", desc: "Accurate and timely submission of your personal income tax returns with full SARS compliance and maximum deduction optimisation." },
-  { icon: CalendarClock, title: "Provisional Tax Planning", desc: "Strategic provisional tax submissions and planning to ensure you never miss a deadline or face unnecessary penalties." },
-  { icon: Headset, title: "Dedicated Consultant Support", desc: "Direct communication with your assigned consultant through our secure portal, no emails, no delays, no confusion." },
+  { icon: UserRound, title: "Individual Tax Services", desc: "Personal income tax returns, SARS issues, compliance checks, and dispute support." },
+  { icon: Building2, title: "Business Tax Services", desc: "Company tax returns, VAT registration/returns, PAYE compliance, and audit support." },
+  { icon: Calculator, title: "Accounting Services", desc: "Bookkeeping, financial statements, management accounts, and payroll processing." },
+  { icon: BriefcaseBusiness, title: "Business Support Services", desc: "Company registration, amendments, annual returns, and compliance monitoring." },
 ];
 
 export function Services() {
@@ -22,14 +21,14 @@ export function Services() {
         >
           <span className="mb-2 block text-sm font-semibold uppercase tracking-widest text-primary font-body">Our Services</span>
           <h2 className="mb-4 font-display text-3xl font-bold text-foreground md:text-5xl">
-            Everything You Need for Tax Compliance
+            Get Help Across Every SARS Need
           </h2>
           <p className="mx-auto max-w-3xl text-lg text-muted-foreground font-body">
-            From individual tax returns to corporate compliance, our consultants handle every aspect of your tax obligations with precision and care.
+            Browse our core categories or visit the full services page for detailed coverage and specialist support.
           </p>
         </motion.div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {services.map((service, index) => (
             <motion.div
               key={service.title}
@@ -44,6 +43,9 @@ export function Services() {
               </div>
               <h3 className="mb-2 font-display text-lg font-semibold text-card-foreground">{service.title}</h3>
               <p className="text-sm leading-relaxed text-muted-foreground font-body">{service.desc}</p>
+              <Link to="/our-services" className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline">
+                View services
+              </Link>
             </motion.div>
           ))}
         </div>

@@ -1,9 +1,10 @@
 import { motion } from "framer-motion";
+import { FileText, BadgeCheck, ShieldCheck } from "lucide-react";
 
 const steps = [
-  { num: "1", title: "Submit Request", desc: "Tell us what you need help with." },
-  { num: "2", title: "Get Matched", desc: "Verified practitioners review your request." },
-  { num: "3", title: "Get Assistance", desc: "Work securely through your portal." },
+  { num: "1", title: "Submit Request", desc: "Client submits a service request.", icon: FileText },
+  { num: "2", title: "Get Matched", desc: "Verified practitioners review the request.", icon: BadgeCheck },
+  { num: "3", title: "Get Assistance", desc: "Client works securely through the portal.", icon: ShieldCheck },
 ];
 
 export function HowItWorks() {
@@ -33,7 +34,7 @@ export function HowItWorks() {
               className="text-center"
             >
               <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground font-display">
-                {step.num}
+                <step.icon className="h-6 w-6" />
               </div>
               <h3 className="mb-3 font-display text-xl font-semibold text-foreground">{step.title}</h3>
               <p className="leading-relaxed text-muted-foreground font-body">{step.desc}</p>
