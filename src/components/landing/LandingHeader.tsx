@@ -8,7 +8,7 @@ import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 const navItems: { label: string; href: string }[] = [
   { label: "Portal", href: "/login" },
   { label: "How It Works", href: "#how-it-works" },
-  { label: "Service", href: "#services" },
+  { label: "Services", href: "#services" },
   { label: "Contact", href: "/contact-us" },
 ];
 
