@@ -15,8 +15,7 @@ export function Hero() {
   return (
     <section
       id="top"
-      className="relative flex items-center overflow-hidden bg-hero-gradient pb-8 pt-20 md:pt-24"
-      style={{ aspectRatio: "16 / 9" }}
+      className="relative flex items-center overflow-hidden bg-hero-gradient pb-8 pt-16 md:pt-24 md:aspect-[16/9]"
     >
       <div className="absolute inset-0 opacity-10">
         <div
@@ -43,13 +42,13 @@ export function Hero() {
           transition={{ duration: 0.8 }}
           className="max-w-3xl"
         >
-          <AcapoliteLogo className="mb-4 h-14 sm:h-16" />
+          <AcapoliteLogo className="mb-3 h-11 sm:h-16" />
 
-          <h1 className="mb-3 font-display text-4xl font-bold leading-tight text-primary-foreground md:text-6xl lg:text-7xl">
+          <h1 className="mb-3 font-display text-3xl font-bold leading-tight text-primary-foreground sm:text-4xl md:text-6xl lg:text-7xl">
             Professional SARS Tax Assistance for Individuals and Businesses
           </h1>
 
-          <p className="mb-4 max-w-2xl text-lg font-body leading-relaxed text-primary-foreground/75 md:text-xl">
+          <p className="mb-4 max-w-2xl text-base font-body leading-relaxed text-primary-foreground/75 sm:text-lg md:text-xl">
             We help South African individuals and businesses resolve SARS issues, submit tax returns, manage compliance,
             and work securely through one platform.
           </p>
@@ -58,14 +57,20 @@ export function Hero() {
             {trustIndicators.map((item) => (
               <span
                 key={item}
-                className="rounded-full border border-white/14 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground/80"
+                className="rounded-full border border-white/14 bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-foreground/80 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.2em]"
               >
                 {item}
               </span>
             ))}
           </div>
 
-          <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="sm:hidden">
+            <Button asChild size="lg" className="w-full rounded-xl bg-primary px-6 py-5 text-sm font-semibold text-primary-foreground shadow-elevated hover:bg-primary/90">
+              <Link to="/request-tax-assistance">Request Tax Assistance</Link>
+            </Button>
+          </div>
+
+          <div className="hidden flex-col gap-4 sm:flex sm:flex-row">
             <Button asChild size="lg" className="rounded-xl bg-primary px-8 py-6 text-base font-semibold text-primary-foreground shadow-elevated hover:bg-primary/90">
               <Link to="/request-tax-assistance">Request Tax Assistance</Link>
             </Button>
