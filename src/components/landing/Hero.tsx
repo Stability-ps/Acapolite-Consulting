@@ -43,10 +43,6 @@ export function Hero() {
           transition={{ duration: 0.8 }}
           className="max-w-3xl"
         >
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-4 py-2 text-sm font-semibold text-primary-foreground/80 backdrop-blur">
-            Resolve tax stress with confident guidance
-          </div>
-
           <AcapoliteLogo className="mb-6 h-16 sm:h-20" />
 
           <h1 className="mb-6 font-display text-4xl font-bold leading-tight text-primary-foreground md:text-6xl lg:text-7xl">
