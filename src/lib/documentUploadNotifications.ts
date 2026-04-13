@@ -49,3 +49,32 @@ export async function sendClientDocumentUploadNotification(
     skipped: Boolean(data && typeof data === "object" && "skipped" in data && data.skipped),
   };
 }
+
+export async function sendClientDocumentUploadConfirmation(
+  input: DocumentUploadNotificationInput & { clientEmail: string },
+): Promise<DocumentUploadNotificationResult> {
+  const { data, error } = await supabase.functions.invoke("send-portal-email", {
+    body: {
+      type: "documents_uploaded_client",
+      documentId: input.documentId,
+      clientProfileId: input.clientProfileId,
+      clientEmail: input.clientEmail,
+      clientName: input.clientName,
+      caseNumber: input.caseNumber?.trim() || "General Support",
+      documentList: input.documentList,
+      uploadDate: formatDateLabel(input.uploadedAt),
+    },
+  });
+
+  if (error) {
+    return { error };
+  }
+
+  if (data && typeof data === "object" && "error" in data && typeof data.error === "string") {
+    return { error: new Error(data.error) };
+  }
+
+  return {
+    skipped: Boolean(data && typeof data === "object" && "skipped" in data && data.skipped),
+  };
+}

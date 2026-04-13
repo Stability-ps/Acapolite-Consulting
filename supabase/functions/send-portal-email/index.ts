@@ -120,6 +120,17 @@ type DocumentsUploadedAdminPayload = {
   uploadDate?: string;
 };
 
+type DocumentsUploadedClientPayload = {
+  type: "documents_uploaded_client";
+  documentId?: string;
+  clientProfileId?: string;
+  clientEmail?: string;
+  clientName?: string;
+  caseNumber?: string;
+  documentList?: string;
+  uploadDate?: string;
+};
+
 type ServiceRequestReceivedPayload = {
   type: "service_request_received";
   requestId?: string;
@@ -128,6 +139,45 @@ type ServiceRequestReceivedPayload = {
   clientPhone?: string;
   serviceType?: string;
   province?: string;
+};
+
+type ServiceRequestReceivedAdminPayload = {
+  type: "service_request_received_admin";
+  requestId?: string;
+  clientName?: string;
+  clientEmail?: string;
+  serviceType?: string;
+  province?: string;
+  status?: string;
+  priority?: string;
+  submittedAt?: string;
+  summary?: string;
+};
+
+type ServiceRequestReceivedPractitionerPayload = {
+  type: "service_request_received_practitioner";
+  requestId?: string;
+  clientName?: string;
+  clientEmail?: string;
+  serviceType?: string;
+  province?: string;
+  status?: string;
+  priority?: string;
+  submittedAt?: string;
+  summary?: string;
+  recipientEmail?: string;
+  practitionerProfileId?: string;
+  practitionerName?: string;
+};
+
+type LeadUnlockedPayload = {
+  type: "lead_unlocked";
+  requestId?: string;
+  clientProfileId?: string;
+  clientEmail?: string;
+  clientName?: string;
+  practitionerName?: string;
+  serviceType?: string;
 };
 
 type PortalEmailPayload =
@@ -142,7 +192,11 @@ type PortalEmailPayload =
   | CaseStatusChangedPayload
   | DocumentsRequestedPayload
   | DocumentsUploadedAdminPayload
-  | ServiceRequestReceivedPayload;
+  | DocumentsUploadedClientPayload
+  | ServiceRequestReceivedPayload
+  | ServiceRequestReceivedAdminPayload
+  | ServiceRequestReceivedPractitionerPayload
+  | LeadUnlockedPayload;
 
 type MailtrapMessage = {
   toEmail: string;
@@ -327,6 +381,14 @@ function buildWebPushContent(params: {
         body: trimNotificationText(`${trimString(payload.practitionerName) || "Acapolite Consulting"} requested ${trimString(payload.documentList) || "additional documents"} for your case.`),
         url: buildPortalLink(portalUrl, "/dashboard/client/documents"),
         tag: `documents-requested:${trimString(payload.requestId)}`,
+      } satisfies WebPushMessage;
+
+    case "lead_unlocked":
+      return {
+        title: "Practitioner unlocked your request",
+        body: trimNotificationText(`${trimString(payload.practitionerName) || "A practitioner"} unlocked your request and is ready to assist.`),
+        url: buildPortalLink(portalUrl, "/dashboard/client/messages"),
+        tag: `lead-unlocked:${trimString(payload.requestId)}`,
       } satisfies WebPushMessage;
 
     default:
@@ -552,6 +614,10 @@ async function authorizeEmailRequest(params: {
   }
 
   switch (payload.type) {
+    case "lead_unlocked":
+      return {
+        error: jsonResponse(request, { error: "You must be signed in to send this notification." }, 401),
+      };
     case "signup_notification":
     case "welcome_email": {
       const profileId = trimString(payload.profileId);
@@ -785,7 +851,8 @@ async function authorizeEmailRequest(params: {
       return { error: null };
     }
 
-    case "documents_uploaded_admin": {
+    case "documents_uploaded_admin":
+    case "documents_uploaded_client": {
       const documentId = trimString(payload.documentId);
       const clientProfileId = trimString(payload.clientProfileId);
 
@@ -822,6 +889,20 @@ async function authorizeEmailRequest(params: {
         return {
           error: jsonResponse(request, { error: "Unable to validate this document upload notification." }, 403),
         };
+      }
+
+      if (payload.type === "documents_uploaded_client") {
+        const { profile } = await validateProfileEmail({
+          adminClient,
+          profileId: clientProfileId,
+          email: normalizeEmail(payload.clientEmail),
+        });
+
+        if (!profile) {
+          return {
+            error: jsonResponse(request, { error: "Unable to validate this document upload notification." }, 403),
+          };
+        }
       }
 
       return { error: null };
@@ -1231,6 +1312,256 @@ function buildEmailContent(params: {
           notification_key: notificationKey,
           service_type: serviceType,
           province,
+        },
+      } satisfies NotificationLogEntry,
+    };
+  }
+
+  if (payload.type === "service_request_received_admin") {
+    const requestId = trimString(payload.requestId);
+    const clientName = trimString(payload.clientName) || "Client";
+    const clientEmail = normalizeEmail(payload.clientEmail);
+    const serviceType = trimString(payload.serviceType) || "Tax Assistance";
+    const province = trimString(payload.province);
+    const status = trimString(payload.status) || "Open";
+    const priority = trimString(payload.priority) || "Normal";
+    const submittedAt = trimString(payload.submittedAt) || new Date().toLocaleDateString("en-ZA");
+    const summary = trimString(payload.summary) || "No summary provided.";
+    const notificationKey = `service_request_received_admin:${requestId}`;
+    const requestLink = buildPortalLink(portalUrl, `/dashboard/staff/service-requests?leadId=${requestId}`);
+
+    if (!requestId) {
+      throw new Error("Request ID is required.");
+    }
+
+    return {
+      requiresAuth: false,
+      mail: {
+        toEmail: notificationEmail,
+        subject: `New Service Request: ${serviceType} - ${clientName}`,
+        text: [
+          "A new service request has been submitted.",
+          "",
+          `Client Name: ${clientName}`,
+          clientEmail ? `Client Email: ${clientEmail}` : null,
+          `Service Requested: ${serviceType}`,
+          province ? `Location: ${province}` : null,
+          `Request Status: ${status}`,
+          `Date Submitted: ${submittedAt}`,
+          `Priority Level: ${priority}`,
+          "",
+          "Summary:",
+          summary,
+          "",
+          `View Request: ${requestLink}`,
+        ].filter(Boolean).join("\n"),
+        html: `<!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8" />
+            </head>
+            <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:32px 16px">
+                    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+                      <tr>
+                        <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
+                          <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Service Request</h1>
+                          <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Request #${escapeHtml(requestId)}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#fff;padding:32px 36px">
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 18px">A new service request has been submitted.</p>
+                          <table width="100%" cellpadding="0" cellspacing="0" style="background:#fdf8ef;border-left:4px solid #c8a84b;border-radius:0 8px 8px 0;margin-bottom:20px">
+                            <tr>
+                              <td style="padding:16px">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;width:150px;padding:4px 0">Client Name</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(clientName)}</td>
+                                  </tr>
+                                  ${clientEmail ? `<tr><td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Client Email</td><td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(clientEmail)}</td></tr>` : ""}
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Service Requested</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(serviceType)}</td>
+                                  </tr>
+                                  ${province ? `<tr><td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Location</td><td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(province)}</td></tr>` : ""}
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Request Status</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(status)}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Date Submitted</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(submittedAt)}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Priority Level</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(priority)}</td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                          <p style="font-size:13px;color:#555;margin:0 0 20px"><strong>Summary:</strong> ${escapeHtml(summary)}</p>
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="background:#c8a84b;border-radius:6px">
+                                <a href="${escapeHtml(requestLink)}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:14px;font-weight:bold;text-decoration:none">View Request</a>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#f0f2f5;border-radius:0 0 10px 10px;padding:16px 36px;text-align:center">
+                          <p style="font-size:11px;color:#999;margin:0">Acapolite Consulting Admin Notification</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>`,
+        category: "Service Request",
+      } satisfies MailtrapMessage,
+      log: {
+        notificationType: "service_request_received_admin",
+        recipientEmail: notificationEmail,
+        contactEmail: clientEmail,
+        metadata: {
+          request_id: requestId,
+          notification_key: notificationKey,
+        },
+      } satisfies NotificationLogEntry,
+    };
+  }
+
+  if (payload.type === "service_request_received_practitioner") {
+    const requestId = trimString(payload.requestId);
+    const clientName = trimString(payload.clientName) || "Client";
+    const serviceType = trimString(payload.serviceType) || "Tax Assistance";
+    const province = trimString(payload.province);
+    const status = trimString(payload.status) || "Open";
+    const priority = trimString(payload.priority) || "Normal";
+    const submittedAt = trimString(payload.submittedAt) || new Date().toLocaleDateString("en-ZA");
+    const summary = trimString(payload.summary) || "No summary provided.";
+    const recipientEmail = normalizeEmail(payload.recipientEmail);
+    const practitionerProfileId = trimString(payload.practitionerProfileId);
+    const practitionerName = trimString(payload.practitionerName) || "Practitioner";
+    const notificationKey = `service_request_received_practitioner:${requestId}:${practitionerProfileId || recipientEmail}`;
+    const requestLink = buildPortalLink(portalUrl, `/dashboard/staff/service-requests?leadId=${requestId}`);
+
+    if (!requestId || !recipientEmail) {
+      throw new Error("Request ID and recipient email are required.");
+    }
+
+    return {
+      requiresAuth: false,
+      mail: {
+        toEmail: recipientEmail,
+        subject: `New Lead Available: ${serviceType}`,
+        text: [
+          `Hello ${practitionerName},`,
+          "",
+          "A new client request is available in the marketplace.",
+          "",
+          `Client Name: ${clientName}`,
+          `Service Requested: ${serviceType}`,
+          province ? `Location: ${province}` : null,
+          `Request Status: ${status}`,
+          `Date Submitted: ${submittedAt}`,
+          `Priority Level: ${priority}`,
+          "",
+          "Summary:",
+          summary,
+          "",
+          "Unlocking this lead will require credits to view client contact details.",
+          "",
+          `View Request: ${requestLink}`,
+        ].filter(Boolean).join("\n"),
+        html: `<!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8" />
+            </head>
+            <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:32px 16px">
+                    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+                      <tr>
+                        <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
+                          <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Lead Available</h1>
+                          <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Request #${escapeHtml(requestId)}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#fff;padding:32px 36px">
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 18px">A new client request is available in the marketplace.</p>
+                          <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f9;border-left:4px solid #1a3a5c;border-radius:0 8px 8px 0;margin-bottom:20px">
+                            <tr>
+                              <td style="padding:16px">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;width:150px;padding:4px 0">Client Name</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(clientName)}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Service Requested</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(serviceType)}</td>
+                                  </tr>
+                                  ${province ? `<tr><td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Location</td><td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(province)}</td></tr>` : ""}
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Request Status</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(status)}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Date Submitted</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(submittedAt)}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Priority Level</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(priority)}</td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                          <p style="font-size:13px;color:#555;margin:0 0 20px"><strong>Summary:</strong> ${escapeHtml(summary)}</p>
+                          <p style="font-size:13px;color:#888;margin:0 0 20px">Unlocking this lead will require credits to view client contact details.</p>
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="background:#1a3a5c;border-radius:6px">
+                                <a href="${escapeHtml(requestLink)}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:14px;font-weight:bold;text-decoration:none">View Request</a>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#f0f2f5;border-radius:0 0 10px 10px;padding:16px 36px;text-align:center">
+                          <p style="font-size:11px;color:#999;margin:0">Acapolite Consulting Practitioner Notification</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>`,
+        category: "Service Request",
+      } satisfies MailtrapMessage,
+      log: {
+        notificationType: "service_request_received_practitioner",
+        recipientEmail: recipientEmail,
+        profileId: practitionerProfileId || undefined,
+        contactEmail: null,
+        metadata: {
+          request_id: requestId,
+          notification_key: notificationKey,
         },
       } satisfies NotificationLogEntry,
     };
@@ -2290,6 +2621,121 @@ function buildEmailContent(params: {
     };
   }
 
+  if (payload.type === "lead_unlocked") {
+    const requestId = trimString(payload.requestId);
+    const clientProfileId = trimString(payload.clientProfileId);
+    const clientEmail = normalizeEmail(payload.clientEmail);
+    const clientName = trimString(payload.clientName) || "Client";
+    const practitionerName = trimString(payload.practitionerName) || "Practitioner";
+    const serviceType = trimString(payload.serviceType) || "tax assistance";
+    const notificationKey = `lead_unlocked:${requestId || clientEmail}`;
+
+    if (!clientEmail) {
+      throw new Error("Client email is required.");
+    }
+
+    const safeClientName = escapeHtml(clientName);
+    const safePractitionerName = escapeHtml(practitionerName);
+    const safeServiceType = escapeHtml(serviceType);
+    const portalLink = buildPortalLink(portalUrl, "/dashboard/client/messages");
+
+    return {
+      requiresAuth: true,
+      mail: {
+        toEmail: clientEmail,
+        subject: "A practitioner unlocked your request",
+        text: [
+          `Dear ${clientName},`,
+          "",
+          `${practitionerName} has unlocked your request for ${serviceType} and is ready to assist you.`,
+          "Please use the portal messaging area to communicate securely.",
+          "",
+          `Open Messages: ${portalLink}`,
+          "",
+          "The Acapolite Consulting Team",
+          `${supportEmail} | ${supportWhatsapp}`,
+        ].join("\n"),
+        html: `<!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8" />
+            </head>
+            <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:32px 16px">
+                    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+                      <tr>
+                        <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td>
+                                <table cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="background:#c8a84b;border-radius:8px;width:40px;height:40px;text-align:center;vertical-align:middle;font-family:Georgia,serif;font-size:20px;color:#fff;font-weight:bold">A</td>
+                                    <td style="padding-left:12px">
+                                      <div style="font-size:15px;font-weight:bold;color:#fff">ACAPOLITE CONSULTING</div>
+                                      <div style="font-size:11px;color:rgba(255,255,255,0.55)">Portal Notification</div>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                              <td align="right">
+                                <span style="background:#0ea5e9;color:#fff;font-size:11px;font-weight:bold;padding:4px 12px;border-radius:20px">Lead Unlocked</span>
+                              </td>
+                            </tr>
+                          </table>
+                          <h1 style="color:#fff;font-size:22px;margin:24px 0 6px;font-family:Georgia,serif;font-weight:normal">A practitioner unlocked your request</h1>
+                          <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Use the portal to continue the conversation.</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#fff;padding:32px 36px">
+                          <p style="font-size:15px;font-weight:bold;color:#1a3a5c;margin:0 0 12px">Dear ${safeClientName},</p>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 20px">
+                            ${safePractitionerName} has unlocked your request for ${safeServiceType} and is ready to assist you.
+                            Please use the portal messaging area to communicate securely.
+                          </p>
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="background:#0ea5e9;border-radius:6px">
+                                <a href="${portalLink}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:14px;font-weight:bold;text-decoration:none">Open Messages</a>
+                              </td>
+                            </tr>
+                          </table>
+                          <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+                          <p style="font-size:13px;color:#555;margin:0">
+                            <strong style="color:#1a3a5c">The Acapolite Consulting Team</strong><br />
+                            ${supportEmail} | ${supportWhatsapp}
+                          </p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#f0f2f5;border-radius:0 0 10px 10px;padding:16px 36px;text-align:center">
+                          <p style="font-size:11px;color:#999;margin:0">Copyright 2026 Acapolite Consulting. Automated notification.</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>`,
+        category: "Lead Unlock",
+      } satisfies MailtrapMessage,
+      log: {
+        notificationType: "lead_unlocked",
+        recipientEmail: clientEmail,
+        profileId: clientProfileId || undefined,
+        contactEmail: clientEmail,
+        metadata: {
+          request_id: requestId,
+          notification_key: notificationKey,
+        },
+      } satisfies NotificationLogEntry,
+    };
+  }
+
   if (payload.type === "documents_uploaded_admin") {
     const documentId = trimString(payload.documentId);
     const clientProfileId = trimString(payload.clientProfileId);
@@ -2428,6 +2874,120 @@ function buildEmailContent(params: {
     };
   }
 
+  if (payload.type === "documents_uploaded_client") {
+    const documentId = trimString(payload.documentId);
+    const clientProfileId = trimString(payload.clientProfileId);
+    const clientEmail = normalizeEmail(payload.clientEmail);
+    const clientName = trimString(payload.clientName) || "Client";
+    const caseNumber = trimString(payload.caseNumber) || "General Support";
+    const documentList = trimString(payload.documentList) || "Supporting documents";
+    const uploadDate = trimString(payload.uploadDate) || new Date().toLocaleDateString("en-ZA");
+    const notificationKey = `documents_uploaded_client:${documentId}`;
+
+    if (!documentId || !clientProfileId || !clientEmail) {
+      throw new Error("Document ID, client profile ID, and client email are required.");
+    }
+
+    const safeClientName = escapeHtml(clientName);
+    const safeCaseNumber = escapeHtml(caseNumber);
+    const safeDocumentList = escapeHtml(documentList);
+    const safeUploadDate = escapeHtml(uploadDate);
+
+    return {
+      requiresAuth: true,
+      mail: {
+        toEmail: clientEmail,
+        subject: `Documents Received - Case #${caseNumber}`,
+        text: [
+          `Dear ${clientName},`,
+          "",
+          "We have received your document upload and will review it shortly.",
+          "",
+          `Case Number: #${caseNumber}`,
+          `Documents: ${documentList}`,
+          `Uploaded: ${uploadDate}`,
+          "",
+          `View documents in your portal: ${portalUrl}`,
+          "",
+          "The Acapolite Consulting Team",
+          `${supportEmail} | ${supportWhatsapp}`,
+        ].join("\n"),
+        html: `<!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8" />
+            </head>
+            <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:32px 16px">
+                    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+                      <tr>
+                        <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
+                          <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">Documents Received</h1>
+                          <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Case #${safeCaseNumber}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#fff;padding:32px 36px">
+                          <p style="font-size:15px;font-weight:bold;color:#1a3a5c;margin:0 0 12px">Dear ${safeClientName},</p>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 20px">We have received your document upload and will review it shortly.</p>
+                          <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f9;border-left:4px solid #1a3a5c;border-radius:0 8px 8px 0;margin-bottom:20px">
+                            <tr>
+                              <td style="padding:16px">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;width:120px;padding:4px 0">Documents</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${safeDocumentList}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Uploaded</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${safeUploadDate}</td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="background:#1a3a5c;border-radius:6px">
+                                <a href="${portalUrl}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:14px;font-weight:bold;text-decoration:none">View Documents</a>
+                              </td>
+                            </tr>
+                          </table>
+                          <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+                          <p style="font-size:13px;color:#555;margin:0">
+                            <strong style="color:#1a3a5c">The Acapolite Consulting Team</strong><br />
+                            ${supportEmail} | ${supportWhatsapp}
+                          </p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#f0f2f5;border-radius:0 0 10px 10px;padding:16px 36px;text-align:center">
+                          <p style="font-size:11px;color:#999;margin:0">Acapolite Consulting Automated Notification</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>`,
+        category: "Document Upload",
+      } satisfies MailtrapMessage,
+      log: {
+        notificationType: "documents_uploaded_client",
+        recipientEmail: clientEmail,
+        profileId: clientProfileId,
+        contactEmail: clientEmail,
+        metadata: {
+          document_id: documentId,
+          notification_key: notificationKey,
+        },
+      } satisfies NotificationLogEntry,
+    };
+  }
+
   throw new Error("Unsupported email notification type.");
 }
 
@@ -2453,6 +3013,85 @@ Deno.serve(async (request) => {
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    if (payload.type === "service_request_received_practitioner" && !payload.recipientEmail) {
+      const { data: practitioners, error: practitionerError } = await adminClient
+        .from("profiles")
+        .select("id, email, full_name")
+        .eq("role", "consultant")
+        .eq("is_active", true);
+
+      if (practitionerError) {
+        return jsonResponse(request, { error: practitionerError.message }, 500);
+      }
+
+      let sent = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const practitioner of practitioners ?? []) {
+        const recipientEmail = normalizeEmail(practitioner.email);
+        if (!recipientEmail) {
+          continue;
+        }
+
+        const emailContent = buildEmailContent({
+          payload: {
+            ...payload,
+            recipientEmail,
+            practitionerProfileId: practitioner.id,
+            practitionerName: practitioner.full_name || practitioner.email || "Practitioner",
+          },
+          notificationEmail,
+          portalUrl,
+          supportEmail,
+          supportWhatsapp,
+        });
+
+        const notificationKey = typeof emailContent.log.metadata?.notification_key === "string"
+          ? emailContent.log.metadata.notification_key
+          : "";
+
+        if (emailContent.log.profileId && notificationKey) {
+          const { data: existingLog } = await adminClient
+            .from("email_notification_logs")
+            .select("id")
+            .eq("notification_type", emailContent.log.notificationType)
+            .eq("profile_id", emailContent.log.profileId)
+            .contains("metadata", { notification_key: notificationKey })
+            .maybeSingle();
+
+          if (existingLog) {
+            skipped += 1;
+            continue;
+          }
+        }
+
+        try {
+          await sendMailtrapEmail({
+            token: mailtrapApiToken,
+            fromEmail,
+            fromName,
+            message: emailContent.mail,
+          });
+
+          await adminClient.from("email_notification_logs").insert({
+            notification_type: emailContent.log.notificationType,
+            recipient_email: emailContent.log.recipientEmail,
+            profile_id: emailContent.log.profileId ?? null,
+            contact_email: emailContent.log.contactEmail ?? null,
+            metadata: emailContent.log.metadata ?? null,
+          });
+
+          sent += 1;
+        } catch (error) {
+          failed += 1;
+          console.error("Practitioner lead email failed.", error);
+        }
+      }
+
+      return jsonResponse(request, { success: true, sent, skipped, failed }, 200);
+    }
 
     const emailContent = buildEmailContent({
       payload,

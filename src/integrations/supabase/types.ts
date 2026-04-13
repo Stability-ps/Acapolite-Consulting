@@ -1291,6 +1291,12 @@ export type Database = {
         };
         Returns: boolean;
       };
+      unlock_service_request_access: {
+        Args: {
+          p_request_id: string;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       app_role: "admin" | "consultant" | "client";

@@ -23,6 +23,7 @@ import {
 } from "@/lib/serviceRequests";
 import { getResponseStatusClass } from "@/lib/practitionerMarketplace";
 import { getServiceRequestCreditCost, purchasePractitionerCredits } from "@/lib/practitionerCredits";
+import { sendLeadUnlockedNotification } from "@/lib/leadUnlockNotifications";
 
 type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestDocument = Tables<"service_request_documents">;
@@ -268,7 +269,7 @@ export default function PractitionerLeads() {
     }
 
     if (!selectedResponse && !hasApprovedAccess) {
-      toast.error("Client approval is required before you can respond to this lead.");
+      toast.error("Unlock this lead before you can respond.");
       return;
     }
 
@@ -322,22 +323,27 @@ export default function PractitionerLeads() {
 
     try {
       const creditCost = getServiceRequestCreditCost(request.service_needed);
-      const { error } = await supabase
-        .from("service_request_access_requests")
-        .upsert({
-          service_request_id: request.id,
-          practitioner_profile_id: user.id,
-          credit_cost: creditCost,
-        }, {
-          onConflict: "service_request_id,practitioner_profile_id",
-          ignoreDuplicates: true,
-        });
+      const { data, error } = await supabase.rpc("unlock_service_request_access", {
+        p_request_id: request.id,
+      });
 
       if (error) {
         throw error;
       }
 
-      toast.success("Access request sent to the client.");
+      const notificationResult = await sendLeadUnlockedNotification({
+        requestId: request.id,
+        clientEmail: request.email,
+        clientName: request.full_name,
+        practitionerName: practitionerProfile?.business_name || user?.email || "Practitioner",
+        serviceType: request.service_needed,
+      });
+
+      if (notificationResult.error) {
+        console.error("Lead unlock notification failed:", notificationResult.error);
+      }
+
+      toast.success(data === "already_unlocked" ? "Lead already unlocked." : "Lead unlocked. Credits deducted.");
       await queryClient.invalidateQueries({ queryKey: ["practitioner-lead-access-requests", user.id] });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to send access request.";
@@ -554,7 +560,7 @@ export default function PractitionerLeads() {
               <p className="font-display text-3xl text-foreground">{availableCredits}</p>
             </div>
             <p className="mt-2 text-sm text-muted-foreground font-body">
-              Credits are deducted only after a client approves your unlock request. Updating an existing response does not use another credit.
+              Credits are deducted immediately when you unlock a lead. Updating an existing response does not use another credit.
             </p>
           </div>
 
@@ -727,14 +733,14 @@ export default function PractitionerLeads() {
                 <p className="mt-2 text-sm text-foreground font-body">
                   {selectedResponse
                     ? "Updating this existing response will not deduct another credit."
-                    : "Credits are deducted only after the client approves your unlock request."}
+                    : "Credits are deducted immediately when you unlock this lead."}
                 </p>
               </div>
 
               {!hasApprovedAccess ? (
                 <div className="rounded-2xl border border-dashed border-border bg-accent/10 p-4">
                   <p className="text-sm text-muted-foreground font-body">
-                    Client contact details are hidden until the client approves your access request.
+                    Client contact details are hidden until you unlock this lead.
                   </p>
                 </div>
               ) : null}
@@ -774,15 +780,13 @@ export default function PractitionerLeads() {
                     type="button"
                     className="rounded-xl"
                     onClick={() => void requestLeadAccess(selectedRequest)}
-                    disabled={requestingAccessId === selectedRequest.id || selectedAccessRequest?.status === "pending" || selectedAccessRequest?.status === "declined"}
+                    disabled={requestingAccessId === selectedRequest.id || selectedAccessRequest?.status === "approved"}
                   >
-                    {selectedAccessRequest?.status === "pending"
-                      ? "Awaiting Client Approval"
-                      : selectedAccessRequest?.status === "declined"
-                        ? "Access Declined"
-                        : requestingAccessId === selectedRequest.id
-                          ? "Requesting..."
-                          : "Unlock to View & Respond (Use Credits)"}
+                    {selectedAccessRequest?.status === "approved"
+                      ? "Unlocked"
+                      : requestingAccessId === selectedRequest.id
+                        ? "Unlocking..."
+                        : "Unlock to View & Respond (Use Credits)"}
                   </Button>
                 )}
               </div>

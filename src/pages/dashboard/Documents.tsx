@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
-import { sendClientDocumentUploadNotification } from "@/lib/documentUploadNotifications";
+import { sendClientDocumentUploadConfirmation, sendClientDocumentUploadNotification } from "@/lib/documentUploadNotifications";
 import { logSystemActivity } from "@/lib/systemActivityLog";
 
 const documentTypeOptions = [
@@ -156,6 +156,24 @@ export default function Documents() {
         toast.error("Document uploaded, but the admin email notification could not be delivered.");
       } else {
         toast.success("Document uploaded successfully.");
+      }
+
+      const confirmation = await sendClientDocumentUploadConfirmation({
+        documentId: documentRow.id,
+        clientProfileId: client.profile_id,
+        clientName:
+          client.company_name
+          || profile?.full_name
+          || [client.first_name, client.last_name].filter(Boolean).join(" ")
+          || client.client_code
+          || "Client",
+        clientEmail: profile?.email || user.email || "",
+        documentList: `${documentType} | ${selectedFile.name}`,
+        uploadedAt: documentRow.uploaded_at,
+      });
+
+      if (confirmation.error) {
+        console.error("Client document confirmation email failed:", confirmation.error);
       }
 
       if (user && role) {

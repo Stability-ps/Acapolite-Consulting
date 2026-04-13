@@ -125,6 +125,13 @@ export default function RequestTaxAssistance() {
     return services.map((service) => ({ value: service, label: labelMap.get(service) || formatServiceRequestLabel(service) }));
   }, [form.service_category]);
 
+  const buildSummary = (value: string, maxLength = 160) => {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (!normalized) return "No summary provided.";
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+  };
+
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const nextFiles = Array.from(event.target.files ?? []);
 
@@ -232,7 +239,7 @@ export default function RequestTaxAssistance() {
           sars_debt_amount: debtAmount,
           returns_filed: form.returns_filed,
         })
-        .select("id")
+        .select("id, created_at, status, priority_level, description")
         .single();
 
       if (requestError || !serviceRequest) {
@@ -291,6 +298,45 @@ export default function RequestTaxAssistance() {
 
       if (emailError) {
         console.error("Service request email error:", emailError);
+      }
+
+      const staffPayload = {
+        requestId: serviceRequest.id,
+        clientName: requestName,
+        clientEmail: requestEmail,
+        serviceType: selectedService?.label || formatServiceRequestLabel(form.service_needed),
+        province: form.province.trim(),
+        status: "Open",
+        priority: formatServiceRequestLabel(serviceRequest.priority_level),
+        submittedAt: new Date(serviceRequest.created_at).toLocaleDateString("en-ZA", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        summary: buildSummary(serviceRequest.description || form.description),
+      };
+
+      const [{ error: adminError }, { error: practitionerError }] = await Promise.all([
+        supabase.functions.invoke("send-portal-email", {
+          body: {
+            type: "service_request_received_admin" as const,
+            ...staffPayload,
+          },
+        }),
+        supabase.functions.invoke("send-portal-email", {
+          body: {
+            type: "service_request_received_practitioner" as const,
+            ...staffPayload,
+          },
+        }),
+      ]);
+
+      if (adminError) {
+        console.error("Admin service request email error:", adminError);
+      }
+
+      if (practitionerError) {
+        console.error("Practitioner service request email error:", practitionerError);
       }
 
       setCompletedRequestId(serviceRequest.id);

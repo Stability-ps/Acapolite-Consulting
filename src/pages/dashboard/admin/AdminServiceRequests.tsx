@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Tables, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
+import { useSearchParams } from "react-router-dom";
 import PractitionerLeads from "./PractitionerLeads";
 import {
   formatServiceRequestLabel,
@@ -32,6 +33,7 @@ type PractitionerUser = Tables<"profiles">;
 export default function AdminServiceRequests() {
   const { role } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [serviceFilter, setServiceFilter] = useState<string>("all");
@@ -46,6 +48,7 @@ export default function AdminServiceRequests() {
   const [assigningRequestId, setAssigningRequestId] = useState<string | null>(null);
   const [selectedPractitionerId, setSelectedPractitionerId] = useState<string>("");
   const [convertingRequestId, setConvertingRequestId] = useState<string | null>(null);
+  const leadIdFromQuery = searchParams.get("leadId");
 
   if (role === "consultant") {
     return <PractitionerLeads />;
@@ -262,6 +265,14 @@ export default function AdminServiceRequests() {
   useEffect(() => {
     setSelectedPractitionerId(selectedRequest?.assigned_practitioner_id ?? "");
   }, [selectedRequest?.assigned_practitioner_id]);
+
+  useEffect(() => {
+    if (!leadIdFromQuery || !(requests ?? []).some((request) => request.id === leadIdFromQuery)) {
+      return;
+    }
+
+    setSelectedRequestId(leadIdFromQuery);
+  }, [leadIdFromQuery, requests]);
 
   const requestMetrics = useMemo(() => {
     const rows = requests ?? [];
@@ -630,6 +641,11 @@ export default function AdminServiceRequests() {
         open={!!selectedRequest}
         onOpenChange={(open) => {
           if (!open) setSelectedRequestId(null);
+          if (!open && leadIdFromQuery) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("leadId");
+            setSearchParams(next, { replace: true });
+          }
         }}
         title={selectedRequest?.full_name || "Service Request"}
         description="Review request details, issue flags, uploaded documents, and lead status."
