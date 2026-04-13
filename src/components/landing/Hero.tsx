@@ -4,13 +4,6 @@ import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
-const trustIndicators = [
-  "SARS Registered Tax Practitioners",
-  "Secure Client Portal",
-  "Trusted by South African Individuals & Businesses",
-  "Confidential & POPIA-Compliant",
-];
-
 export function Hero() {
   return (
     <section
@@ -52,17 +45,6 @@ export function Hero() {
             We help South African individuals and businesses resolve SARS issues, submit tax returns, manage compliance,
             and work securely through one platform.
           </p>
-
-          <div className="mb-4 flex flex-wrap gap-3">
-            {trustIndicators.map((item) => (
-              <span
-                key={item}
-                className="rounded-full border border-white/14 bg-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary-foreground/80 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.2em]"
-              >
-                {item}
-              </span>
-            ))}
-          </div>
 
           <div className="sm:hidden">
             <Button asChild size="lg" className="w-full rounded-xl bg-primary px-6 py-5 text-sm font-semibold text-primary-foreground shadow-elevated hover:bg-primary/90">

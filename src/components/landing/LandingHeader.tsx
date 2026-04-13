@@ -1,7 +1,13 @@
 import { motion } from "framer-motion";
-import { ArrowRight, Menu } from "lucide-react";
+import { ArrowRight, ChevronDown, Menu } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
@@ -34,10 +40,10 @@ export function LandingHeader() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="md:hidden h-9 w-9 rounded-full border border-sky-300/20 bg-slate-950/25 text-white hover:bg-white/10"
+                  className="md:hidden h-11 w-11 rounded-full border border-sky-200/40 bg-slate-950/70 text-white shadow-[0_10px_24px_rgba(15,23,42,0.55)] ring-1 ring-white/30 hover:bg-slate-900/80"
                   aria-label="Open menu"
                 >
-                  <Menu className="h-4 w-4" />
+                  <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-80 bg-slate-950 text-white">
@@ -66,8 +72,11 @@ export function LandingHeader() {
                       <Button asChild className="w-full rounded-xl bg-white text-slate-950">
                         <Link to="/request-tax-assistance">Request Tax Assistance</Link>
                       </Button>
-                      <Button asChild variant="outline" className="w-full rounded-xl border-white/30 text-white">
-                        <Link to="/register">Create Account</Link>
+                      <Button asChild variant="outline" className="w-full rounded-xl border-white/30 bg-white/90 !text-slate-950 hover:bg-white">
+                        <Link to="/register">Create Account (Client)</Link>
+                      </Button>
+                      <Button asChild variant="outline" className="w-full rounded-xl border-white/30 bg-white/90 !text-slate-950 hover:bg-white">
+                        <Link to="/register?role=consultant">Join as Practitioner</Link>
                       </Button>
                       <Button asChild variant="ghost" className="w-full rounded-xl border border-white/15 text-white">
                         <Link to="/login">Log In</Link>
@@ -120,25 +129,32 @@ export function LandingHeader() {
                 <Button
                   asChild
                   variant="ghost"
-                  className="hidden rounded-full border border-sky-300/16 bg-sky-100/12 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-sky-100/18 hover:text-white hover:shadow-[0_8px_24px_rgba(125,211,252,0.16)] sm:inline-flex"
+                  className="rounded-full border border-sky-300/12 bg-slate-950/22 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/14 hover:text-white hover:shadow-[0_8px_24px_rgba(255,255,255,0.10)]"
                 >
-                  <Link to="/contact-us">Request Demo</Link>
+                  <Link to="/login">Login</Link>
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="rounded-full border border-sky-300/18 bg-white/95 px-5 text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_30px_rgba(255,255,255,0.18)]">
+                      Join
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="min-w-[220px]">
+                    <DropdownMenuItem asChild>
+                      <Link to="/register">Create Account (Client)</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/register?role=consultant">Join as Practitioner</Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
                   asChild
                   variant="ghost"
-                  className="hidden rounded-full border border-sky-300/12 bg-slate-950/18 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/14 hover:text-white hover:shadow-[0_8px_24px_rgba(255,255,255,0.10)] sm:inline-flex"
+                  className="hidden rounded-full border border-sky-300/16 bg-sky-100/12 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-sky-100/18 hover:text-white hover:shadow-[0_8px_24px_rgba(125,211,252,0.16)] sm:inline-flex"
                 >
-                  <Link to="/login">Log In</Link>
-                </Button>
-                <Button
-                  asChild
-                  className="rounded-full border border-sky-300/18 bg-white/95 px-5 text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_30px_rgba(255,255,255,0.18)]"
-                >
-                  <Link to="/register">
-                    Create Account
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
+                  <Link to="/contact-us">Request Demo</Link>
                 </Button>
               </>
             )}
