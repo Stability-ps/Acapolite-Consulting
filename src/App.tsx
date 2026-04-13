@@ -8,6 +8,7 @@ import { RequireRole } from "@/components/auth/RequireRole";
 import { RequireStaffPermission } from "@/components/auth/RequireStaffPermission";
 import { DashboardIndexRedirect } from "@/components/auth/DashboardIndexRedirect";
 import { StaffOverviewRouter } from "@/components/auth/StaffOverviewRouter";
+import { StaffExternalToolsRouter } from "@/components/auth/StaffExternalToolsRouter";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -125,6 +126,7 @@ const App = () => (
                 <Route element={<RequireStaffPermission permission="can_view_overview" />}>
                   <Route path="staff/activity-log" element={<AdminActivityLog />} />
                   <Route path="staff/tax-coach-ai" element={<TaxCoachAIStaff />} />
+                  <Route path="staff/external-tools" element={<StaffExternalToolsRouter />} />
                 </Route>
               </Route>
 

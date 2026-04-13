@@ -13,11 +13,6 @@ import {
   Wallet,
   TrendingUp,
   ClipboardCheck,
-  Building2,
-  FileText,
-  Landmark,
-  ShieldCheck,
-  Activity,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -435,38 +430,6 @@ export default function AdminOverview() {
     };
   }, [caseRows, clientGrowthRows, invoiceRows]);
 
-  const externalTools = [
-    {
-      label: "SARS eFiling",
-      description: "Secure SARS eFiling access",
-      href: "https://secure.sarsefiling.co.za/app/login",
-      icon: ShieldCheck,
-    },
-    {
-      label: "SARS Status Dashboard",
-      description: "Live SARS system status",
-      href: "https://tools.sars.gov.za/status",
-      icon: Activity,
-    },
-    {
-      label: "SARS EasyFile",
-      description: "EasyFile services portal",
-      href: "https://secure.sarsefiling.co.za/app/login",
-      icon: FileText,
-    },
-    {
-      label: "CIPC eServices",
-      description: "Companies and IP Commission",
-      href: "https://eservices.cipc.co.za/",
-      icon: Building2,
-    },
-    {
-      label: "CIPC BizPortal",
-      description: "BizPortal by the CIPC",
-      href: "https://bizportal.gov.za/",
-      icon: Landmark,
-    },
-  ];
 
   const attentionClients = useMemo(() => {
     const outstandingInvoicesByClient = new Map<string, number>();
@@ -563,38 +526,6 @@ export default function AdminOverview() {
             <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Outstanding Invoices</p>
             <p className="font-display text-2xl text-foreground">{reportingSnapshot.outstandingInvoices}</p>
           </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
-        <div className="mb-5 flex items-center gap-3">
-          <ClipboardCheck className="h-5 w-5 text-primary" />
-          <div>
-            <h2 className="font-display text-xl font-semibold text-foreground">External Tools</h2>
-            <p className="text-sm text-muted-foreground font-body">Quick access to the government platforms used daily.</p>
-          </div>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {externalTools.map((tool) => (
-            <a
-              key={tool.label}
-              href={tool.href}
-              target="_blank"
-              rel="noreferrer"
-              className="group rounded-2xl border border-border bg-accent/20 p-5 transition-all hover:border-primary/30 hover:bg-accent/30"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-body font-semibold text-foreground">{tool.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground font-body">{tool.description}</p>
-                </div>
-                <tool.icon className="h-5 w-5 text-primary" />
-              </div>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                Open in new tab
-              </p>
-            </a>
-          ))}
         </div>
       </section>
 

@@ -3,17 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowRight,
-  Building2,
   BadgeCheck,
-  ClipboardCheck,
   ClipboardList,
   ExternalLink,
-  FileText,
   FileWarning,
   FolderOpen,
-  Landmark,
-  ShieldCheck,
-  Activity,
   ShieldAlert,
   Upload,
 } from "lucide-react";
@@ -502,38 +496,6 @@ export default function PractitionerOverview() {
     },
   ].filter((card) => card.visible);
 
-  const externalTools = [
-    {
-      label: "SARS eFiling",
-      description: "Secure SARS eFiling access",
-      href: "https://secure.sarsefiling.co.za/app/login",
-      icon: ShieldCheck,
-    },
-    {
-      label: "SARS Status Dashboard",
-      description: "Live SARS system status",
-      href: "https://tools.sars.gov.za/status",
-      icon: Activity,
-    },
-    {
-      label: "SARS EasyFile",
-      description: "EasyFile services portal",
-      href: "https://secure.sarsefiling.co.za/app/login",
-      icon: FileText,
-    },
-    {
-      label: "CIPC eServices",
-      description: "Companies and IP Commission",
-      href: "https://eservices.cipc.co.za/",
-      icon: Building2,
-    },
-    {
-      label: "CIPC BizPortal",
-      description: "BizPortal by the CIPC",
-      href: "https://bizportal.gov.za/",
-      icon: Landmark,
-    },
-  ];
 
   return (
     <div className="space-y-8">
@@ -636,33 +598,6 @@ export default function PractitionerOverview() {
 
         <div className="space-y-6">
           <WebPushPrompt profileLink="/dashboard/staff/profile" />
-
-          <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
-            <div className="flex items-center gap-3">
-              <ClipboardCheck className="h-5 w-5 text-primary" />
-              <div>
-                <h2 className="font-display text-2xl text-foreground">External Tools</h2>
-                <p className="mt-1 text-sm text-muted-foreground font-body">Quick access to daily government platforms.</p>
-              </div>
-            </div>
-            <div className="mt-5 grid gap-3">
-              {externalTools.map((tool) => (
-                <a
-                  key={tool.label}
-                  href={tool.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-between rounded-2xl border border-border bg-accent/20 p-4 transition-all hover:border-primary/30 hover:bg-accent/30"
-                >
-                  <div>
-                    <p className="font-body font-semibold text-foreground">{tool.label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground font-body">{tool.description}</p>
-                  </div>
-                  <tool.icon className="h-5 w-5 text-primary" />
-                </a>
-              ))}
-            </div>
-          </section>
 
           <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
             <h2 className="font-display text-2xl text-foreground">Workload Summary</h2>

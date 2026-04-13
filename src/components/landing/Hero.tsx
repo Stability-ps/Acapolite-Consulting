@@ -13,7 +13,11 @@ const trustIndicators = [
 
 export function Hero() {
   return (
-    <section id="top" className="relative flex min-h-[92vh] items-center overflow-hidden bg-hero-gradient pb-8 pt-28 md:pt-32">
+    <section
+      id="top"
+      className="relative flex items-center overflow-hidden bg-hero-gradient pb-8 pt-28 md:pt-32"
+      style={{ aspectRatio: "16 / 9" }}
+    >
       <div className="absolute inset-0 opacity-10">
         <div
           className="absolute inset-0"
@@ -22,6 +26,14 @@ export function Hero() {
                              radial-gradient(circle at 75% 75%, rgba(255,255,255,0.05) 0%, transparent 50%)`,
           }}
         />
+      </div>
+      <div className="absolute inset-0">
+        <img
+          src="/MASS.png"
+          alt="Professional tax assistance"
+          className="h-full w-full object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0b1f3a]/95 via-[#0b1f3a]/70 to-[#0b1f3a]/30" />
       </div>
 
       <div className="container relative z-10 mx-auto px-6">

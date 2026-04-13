@@ -21,6 +21,14 @@ type ActivityLogRecord = {
   } | null;
 };
 
+type TargetDetails =
+  | { kind: "invoice"; label: string; sublabel?: string | null }
+  | { kind: "case"; label: string; sublabel?: string | null }
+  | { kind: "document"; label: string; sublabel?: string | null }
+  | { kind: "service_request"; label: string; sublabel?: string | null }
+  | { kind: "message"; label: string; sublabel?: string | null }
+  | { kind: "generic"; label: string; sublabel?: string | null };
+
 const actionLabels: Record<string, string> = {
   case_status_updated: "Case updated",
   case_assignment_updated: "Case assignment updated",
@@ -48,6 +56,20 @@ const actionOptions = [
 
 function getActorLabel(record: ActivityLogRecord) {
   return record.actor?.full_name || record.actor?.email || record.actor_profile_id || "System";
+}
+
+function formatClientName(client?: {
+  company_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  client_code?: string | null;
+} | null) {
+  return (
+    client?.company_name
+    || [client?.first_name, client?.last_name].filter(Boolean).join(" ")
+    || client?.client_code
+    || "Client"
+  );
 }
 
 export default function AdminActivityLog() {
@@ -93,9 +115,96 @@ export default function AdminActivityLog() {
     });
   }, [actionFilter, logs, searchQuery]);
 
+  const displayLogs = useMemo(
+    () => filteredLogs.map((record) => ({ ...record, target_id: null })),
+    [filteredLogs],
+  );
+
   const selectedLog = filteredLogs.find((record) => record.id === selectedLogId)
     || logs?.find((record) => record.id === selectedLogId)
     || null;
+
+  const { data: targetDetails } = useQuery({
+    queryKey: ["activity-target-details", selectedLog?.target_type, selectedLog?.target_id],
+    queryFn: async () => {
+      if (!selectedLog?.target_id) return null;
+
+      switch (selectedLog.target_type) {
+        case "invoice": {
+          const { data } = await supabase
+            .from("invoices")
+            .select("invoice_number, title, clients(company_name, first_name, last_name, client_code)")
+            .eq("id", selectedLog.target_id)
+            .maybeSingle();
+          if (!data) return null;
+          return {
+            kind: "invoice",
+            label: data.invoice_number || "Invoice",
+            sublabel: data.title || formatClientName(data.clients),
+          } as TargetDetails;
+        }
+        case "case": {
+          const { data } = await supabase
+            .from("cases")
+            .select("case_title, case_type, clients(company_name, first_name, last_name, client_code)")
+            .eq("id", selectedLog.target_id)
+            .maybeSingle();
+          if (!data) return null;
+          return {
+            kind: "case",
+            label: data.case_title || "Case",
+            sublabel: formatClientName(data.clients),
+          } as TargetDetails;
+        }
+        case "document": {
+          const { data } = await supabase
+            .from("documents")
+            .select("title, category, file_name, clients(company_name, first_name, last_name, client_code)")
+            .eq("id", selectedLog.target_id)
+            .maybeSingle();
+          if (!data) return null;
+          return {
+            kind: "document",
+            label: data.title || data.category || data.file_name || "Document",
+            sublabel: formatClientName(data.clients),
+          } as TargetDetails;
+        }
+        case "service_request": {
+          const { data } = await supabase
+            .from("service_requests")
+            .select("service_needed, full_name, email")
+            .eq("id", selectedLog.target_id)
+            .maybeSingle();
+          if (!data) return null;
+          return {
+            kind: "service_request",
+            label: data.service_needed?.replace(/_/g, " ") || "Service request",
+            sublabel: data.full_name || data.email || null,
+          } as TargetDetails;
+        }
+        case "message": {
+          const { data } = await supabase
+            .from("messages")
+            .select("message_text, conversation_id")
+            .eq("id", selectedLog.target_id)
+            .maybeSingle();
+          if (!data) return null;
+          return {
+            kind: "message",
+            label: "Message",
+            sublabel: data.message_text?.slice(0, 80) || null,
+          } as TargetDetails;
+        }
+        default:
+          return null;
+      }
+    },
+    enabled: !!selectedLog?.target_id,
+  });
+
+  const targetDisplay = selectedLog
+    ? (targetDetails ?? { kind: "generic", label: selectedLog.target_type.replace(/_/g, " ") })
+    : null;
 
   return (
     <div>
@@ -133,9 +242,9 @@ export default function AdminActivityLog() {
 
       {isLoading ? (
         <div className="text-muted-foreground font-body">Loading...</div>
-      ) : filteredLogs.length > 0 ? (
+      ) : displayLogs.length > 0 ? (
         <div className="space-y-3">
-          {filteredLogs.map((record) => (
+          {displayLogs.map((record) => (
             <button
               key={record.id}
               type="button"
@@ -148,7 +257,7 @@ export default function AdminActivityLog() {
                     {actionLabels[record.action] || record.action.replace(/_/g, " ")}
                   </p>
                   <p className="text-xs text-muted-foreground font-body">
-                    {getActorLabel(record)} • {record.actor_role}
+                    {getActorLabel(record)}{" • "}{record.actor_role}
                   </p>
                 </div>
                 <p className="text-xs text-muted-foreground font-body">
@@ -156,7 +265,7 @@ export default function AdminActivityLog() {
                 </p>
               </div>
               <div className="text-xs text-muted-foreground font-body">
-                Target: {record.target_type}{record.target_id ? ` • ${record.target_id}` : ""}
+                Target: {record.target_type.replace(/_/g, " ")}
               </div>
               {record.metadata ? (
                 <div className="mt-3 rounded-lg border border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground font-body">
@@ -196,8 +305,13 @@ export default function AdminActivityLog() {
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Target</p>
                 <p className="font-body text-foreground">
-                  {selectedLog.target_type}{selectedLog.target_id ? ` • ${selectedLog.target_id}` : ""}
+                  {targetDisplay?.label ?? selectedLog.target_type.replace(/_/g, " ")}
                 </p>
+                {targetDisplay?.sublabel ? (
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    {targetDisplay.sublabel}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Time</p>

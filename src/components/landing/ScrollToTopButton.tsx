@@ -17,7 +17,10 @@ export function ScrollToTopButton() {
   }, []);
 
   const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const options: ScrollToOptions = { top: 0, behavior: "smooth" };
+    window.scrollTo(options);
+    document.documentElement?.scrollTo(options);
+    document.body?.scrollTo(options);
   };
 
   return (
