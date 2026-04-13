@@ -1,4 +1,4 @@
-import { Activity, Building2, ClipboardCheck, FileText, Landmark, ShieldCheck } from "lucide-react";
+import { Building2, ClipboardCheck, FileText, Landmark, ShieldCheck } from "lucide-react";
 
 const externalTools = [
   {
@@ -8,15 +8,9 @@ const externalTools = [
     icon: ShieldCheck,
   },
   {
-    label: "SARS Status Dashboard",
-    description: "Live SARS system status",
-    href: "https://tools.sars.gov.za/status",
-    icon: Activity,
-  },
-  {
     label: "SARS EasyFile",
     description: "EasyFile services portal",
-    href: "https://secure.sarsefiling.co.za/app/login",
+    href: "https://downloads.sarsefiling.co.za/easyfilehome/easyfile.html",
     icon: FileText,
   },
   {

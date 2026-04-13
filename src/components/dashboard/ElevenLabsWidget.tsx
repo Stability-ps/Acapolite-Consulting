@@ -36,9 +36,10 @@ export function ElevenLabsWidget() {
   }
 
   return createPortal(
-    <section className="fixed bottom-6 right-6 z-[60]">
-      <div className="pointer-events-auto">
+    <section className="fixed bottom-4 right-6 z-[60]">
+      <div className="relative pointer-events-auto">
         <elevenlabs-convai agent-id={ELEVENLABS_AGENT_ID} />
+        <div className="pointer-events-none absolute left-1/2 top-full mt-3 h-16 w-px -translate-x-1/2 bg-gradient-to-b from-sky-300/40 via-sky-300/15 to-transparent shadow-[0_12px_24px_rgba(56,189,248,0.35)]" />
       </div>
     </section>,
     document.body,
