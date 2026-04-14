@@ -106,6 +106,41 @@ export function LandingHeader() {
             </nav>
           ) : null}
 
+          <div className="relative z-10 flex items-center gap-2 md:hidden">
+            {user ? (
+              <Button asChild size="sm" className="rounded-full bg-white text-slate-950">
+                <Link to={dashboardPath}>Dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button
+                  asChild
+                  size="sm"
+                  variant="ghost"
+                  className="rounded-full border border-sky-300/25 bg-white/15 text-white hover:bg-white/20"
+                >
+                  <Link to="/login">Login</Link>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" className="rounded-full bg-white text-slate-950">
+                      Join
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="min-w-[220px]">
+                    <DropdownMenuItem asChild>
+                      <Link to="/register">Create Account (Client)</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/register?role=consultant">Join as Practitioner</Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+          </div>
+
           <div className="relative z-10 hidden items-center gap-2 md:flex">
             {user ? (
               <Button
