@@ -1319,8 +1319,6 @@ function buildEmailContent(params: {
 
   if (payload.type === "service_request_received_admin") {
     const requestId = trimString(payload.requestId);
-    const clientName = trimString(payload.clientName) || "Client";
-    const clientEmail = normalizeEmail(payload.clientEmail);
     const serviceType = trimString(payload.serviceType) || "Tax Assistance";
     const province = trimString(payload.province);
     const status = trimString(payload.status) || "Open";
@@ -1329,6 +1327,7 @@ function buildEmailContent(params: {
     const summary = trimString(payload.summary) || "No summary provided.";
     const notificationKey = `service_request_received_admin:${requestId}`;
     const requestLink = buildPortalLink(portalUrl, `/dashboard/staff/service-requests?leadId=${requestId}`);
+    const serviceItems = serviceType.split(",").map((item) => item.trim()).filter(Boolean);
 
     if (!requestId) {
       throw new Error("Request ID is required.");
@@ -1338,13 +1337,13 @@ function buildEmailContent(params: {
       requiresAuth: false,
       mail: {
         toEmail: notificationEmail,
-        subject: `New Service Request: ${serviceType} - ${clientName}`,
+        subject: "New Lead Available",
         text: [
-          "A new service request has been submitted.",
+          "New Lead Available",
           "",
-          `Client Name: ${clientName}`,
-          clientEmail ? `Client Email: ${clientEmail}` : null,
-          `Service Requested: ${serviceType}`,
+          "Client: Hidden until unlocked",
+          "Services Requested:",
+          ...serviceItems.map((item) => `- ${item}`),
           province ? `Location: ${province}` : null,
           `Request Status: ${status}`,
           `Date Submitted: ${submittedAt}`,
@@ -1352,6 +1351,8 @@ function buildEmailContent(params: {
           "",
           "Summary:",
           summary,
+          "",
+          "Unlocking this lead will require credits to view client contact details.",
           "",
           `View Request: ${requestLink}`,
         ].filter(Boolean).join("\n"),
@@ -1367,25 +1368,28 @@ function buildEmailContent(params: {
                     <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
                       <tr>
                         <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
-                          <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Service Request</h1>
+                          <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Lead Available</h1>
                           <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Request #${escapeHtml(requestId)}</p>
                         </td>
                       </tr>
                       <tr>
                         <td style="background:#fff;padding:32px 36px">
-                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 18px">A new service request has been submitted.</p>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 18px">A new client request is available in the marketplace.</p>
                           <table width="100%" cellpadding="0" cellspacing="0" style="background:#fdf8ef;border-left:4px solid #c8a84b;border-radius:0 8px 8px 0;margin-bottom:20px">
                             <tr>
                               <td style="padding:16px">
                                 <table width="100%" cellpadding="0" cellspacing="0">
                                   <tr>
                                     <td style="font-size:13px;font-weight:bold;color:#1a3a5c;width:150px;padding:4px 0">Client Name</td>
-                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(clientName)}</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">Hidden until unlocked</td>
                                   </tr>
-                                  ${clientEmail ? `<tr><td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Client Email</td><td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(clientEmail)}</td></tr>` : ""}
                                   <tr>
                                     <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Service Requested</td>
-                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(serviceType)}</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">
+                                      <ul style="margin:0;padding-left:18px">
+                                        ${serviceItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+                                      </ul>
+                                    </td>
                                   </tr>
                                   ${province ? `<tr><td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Location</td><td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(province)}</td></tr>` : ""}
                                   <tr>
@@ -1405,6 +1409,7 @@ function buildEmailContent(params: {
                             </tr>
                           </table>
                           <p style="font-size:13px;color:#555;margin:0 0 20px"><strong>Summary:</strong> ${escapeHtml(summary)}</p>
+                          <p style="font-size:13px;color:#888;margin:0 0 20px">Unlocking this lead will require credits to view client contact details.</p>
                           <table cellpadding="0" cellspacing="0">
                             <tr>
                               <td style="background:#c8a84b;border-radius:6px">
@@ -1430,7 +1435,7 @@ function buildEmailContent(params: {
       log: {
         notificationType: "service_request_received_admin",
         recipientEmail: notificationEmail,
-        contactEmail: clientEmail,
+        contactEmail: null,
         metadata: {
           request_id: requestId,
           notification_key: notificationKey,
@@ -1441,7 +1446,6 @@ function buildEmailContent(params: {
 
   if (payload.type === "service_request_received_practitioner") {
     const requestId = trimString(payload.requestId);
-    const clientName = trimString(payload.clientName) || "Client";
     const serviceType = trimString(payload.serviceType) || "Tax Assistance";
     const province = trimString(payload.province);
     const status = trimString(payload.status) || "Open";
@@ -1453,6 +1457,7 @@ function buildEmailContent(params: {
     const practitionerName = trimString(payload.practitionerName) || "Practitioner";
     const notificationKey = `service_request_received_practitioner:${requestId}:${practitionerProfileId || recipientEmail}`;
     const requestLink = buildPortalLink(portalUrl, `/dashboard/staff/service-requests?leadId=${requestId}`);
+    const serviceItems = serviceType.split(",").map((item) => item.trim()).filter(Boolean);
 
     if (!requestId || !recipientEmail) {
       throw new Error("Request ID and recipient email are required.");
@@ -1462,14 +1467,15 @@ function buildEmailContent(params: {
       requiresAuth: false,
       mail: {
         toEmail: recipientEmail,
-        subject: `New Lead Available: ${serviceType}`,
+        subject: "New Lead Available",
         text: [
           `Hello ${practitionerName},`,
           "",
           "A new client request is available in the marketplace.",
           "",
-          `Client Name: ${clientName}`,
-          `Service Requested: ${serviceType}`,
+          "Client: Hidden until unlocked",
+          "Services Requested:",
+          ...serviceItems.map((item) => `- ${item}`),
           province ? `Location: ${province}` : null,
           `Request Status: ${status}`,
           `Date Submitted: ${submittedAt}`,
@@ -1507,11 +1513,15 @@ function buildEmailContent(params: {
                                 <table width="100%" cellpadding="0" cellspacing="0">
                                   <tr>
                                     <td style="font-size:13px;font-weight:bold;color:#1a3a5c;width:150px;padding:4px 0">Client Name</td>
-                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(clientName)}</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">Hidden until unlocked</td>
                                   </tr>
                                   <tr>
                                     <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Service Requested</td>
-                                    <td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(serviceType)}</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">
+                                      <ul style="margin:0;padding-left:18px">
+                                        ${serviceItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+                                      </ul>
+                                    </td>
                                   </tr>
                                   ${province ? `<tr><td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Location</td><td style="font-size:13px;color:#333;padding:4px 0">${escapeHtml(province)}</td></tr>` : ""}
                                   <tr>
