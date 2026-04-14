@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { ArrowRight, ChevronDown, Menu } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,8 @@ const navItems: { label: string; href: string }[] = [
 
 export function LandingHeader() {
   const { user, dashboardPath } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = () => setMenuOpen(false);
 
   return (
     <motion.header
@@ -34,7 +37,7 @@ export function LandingHeader() {
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_32%),radial-gradient(circle_at_80%_20%,rgba(125,211,252,0.16),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.06),transparent)]" />
           <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-sky-200/20 to-transparent" />
           <div className="flex items-center gap-3">
-            <Sheet>
+            <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
               <SheetTrigger asChild>
                 <Button
                   type="button"
@@ -56,12 +59,7 @@ export function LandingHeader() {
                     <a
                       key={item.href}
                       href={item.href}
-                      onClick={() => {
-                        document.dispatchEvent(new KeyboardEvent("keydown", {
-                          key: "Escape",
-                          bubbles: true,
-                        }));
-                      }}
+                      onClick={closeMenu}
                       className="block rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10"
                     >
                       {item.label}
@@ -71,21 +69,21 @@ export function LandingHeader() {
                 <div className="mt-6 grid gap-3">
                   {user ? (
                     <Button asChild className="w-full rounded-xl bg-white text-slate-950">
-                      <Link to={dashboardPath}>Dashboard</Link>
+                      <Link to={dashboardPath} onClick={closeMenu}>Dashboard</Link>
                     </Button>
                   ) : (
                     <>
                       <Button asChild className="w-full rounded-xl bg-white text-slate-950">
-                        <Link to="/request-tax-assistance">Request Tax Assistance</Link>
+                        <Link to="/request-tax-assistance" onClick={closeMenu}>Request Tax Assistance</Link>
                       </Button>
                       <Button asChild variant="outline" className="w-full rounded-xl border-white/30 bg-white/90 !text-slate-950 hover:bg-white">
-                        <Link to="/register">Create Account (Client)</Link>
+                        <Link to="/register" onClick={closeMenu}>Create Account (Client)</Link>
                       </Button>
                       <Button asChild variant="outline" className="w-full rounded-xl border-white/30 bg-white/90 !text-slate-950 hover:bg-white">
-                        <Link to="/register?role=consultant">Join as Practitioner</Link>
+                        <Link to="/register?role=consultant" onClick={closeMenu}>Join as Practitioner</Link>
                       </Button>
                       <Button asChild variant="ghost" className="w-full rounded-xl border border-white/15 text-white">
-                        <Link to="/login">Log In</Link>
+                        <Link to="/login" onClick={closeMenu}>Log In</Link>
                       </Button>
                     </>
                   )}
