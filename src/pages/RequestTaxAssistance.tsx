@@ -42,7 +42,7 @@ export default function RequestTaxAssistance() {
   const location = useLocation();
   const [submitting, setSubmitting] = useState(false);
   const [completedRequestId, setCompletedRequestId] = useState<string | null>(null);
-  const [completedRequestDetails, setCompletedRequestDetails] = useState<{ fullName: string; email: string; phone: string } | null>(null);
+  const [completedRequestDetails, setCompletedRequestDetails] = useState<{ fullName: string; email: string; phone: string; province: string } | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [form, setForm] = useState({
     full_name: "",
@@ -106,6 +106,7 @@ export default function RequestTaxAssistance() {
       full_name: completedRequestDetails.fullName,
       email: completedRequestDetails.email,
       phone: completedRequestDetails.phone,
+      province: completedRequestDetails.province,
       source: "service-request",
     });
     const timer = window.setTimeout(() => {
@@ -418,6 +419,7 @@ export default function RequestTaxAssistance() {
         fullName: requestName,
         email: requestEmail,
         phone: requestPhone,
+        province: form.province.trim(),
       });
       setFiles([]);
     } catch (error) {
@@ -434,6 +436,7 @@ export default function RequestTaxAssistance() {
         full_name: completedRequestDetails.fullName,
         email: completedRequestDetails.email,
         phone: completedRequestDetails.phone,
+        province: completedRequestDetails.province,
         source: "service-request",
       })
       : null;

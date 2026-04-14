@@ -1181,6 +1181,7 @@ function buildEmailContent(params: {
       full_name: clientName,
       email: clientEmail,
       phone: clientPhone,
+      province,
       source: "service-request",
     });
     const registerLink = `${buildPortalLink(portalUrl, "/register")}?${registerParams.toString()}`;
@@ -1352,7 +1353,7 @@ function buildEmailContent(params: {
           "Summary:",
           summary,
           "",
-          "Unlocking this lead will require credits to view client contact details.",
+          "Unlock this lead using credits to view full client contact details and respond.",
           "",
           `View Request: ${requestLink}`,
         ].filter(Boolean).join("\n"),
@@ -1409,7 +1410,7 @@ function buildEmailContent(params: {
                             </tr>
                           </table>
                           <p style="font-size:13px;color:#555;margin:0 0 20px"><strong>Summary:</strong> ${escapeHtml(summary)}</p>
-                          <p style="font-size:13px;color:#888;margin:0 0 20px">Unlocking this lead will require credits to view client contact details.</p>
+                          <p style="font-size:13px;color:#888;margin:0 0 20px">Unlock this lead using credits to view full client contact details and respond.</p>
                           <table cellpadding="0" cellspacing="0">
                             <tr>
                               <td style="background:#c8a84b;border-radius:6px">
@@ -1484,7 +1485,7 @@ function buildEmailContent(params: {
           "Summary:",
           summary,
           "",
-          "Unlocking this lead will require credits to view client contact details.",
+          "Unlock this lead using credits to view full client contact details and respond.",
           "",
           `View Request: ${requestLink}`,
         ].filter(Boolean).join("\n"),
@@ -1541,7 +1542,7 @@ function buildEmailContent(params: {
                             </tr>
                           </table>
                           <p style="font-size:13px;color:#555;margin:0 0 20px"><strong>Summary:</strong> ${escapeHtml(summary)}</p>
-                          <p style="font-size:13px;color:#888;margin:0 0 20px">Unlocking this lead will require credits to view client contact details.</p>
+                          <p style="font-size:13px;color:#888;margin:0 0 20px">Unlock this lead using credits to view full client contact details and respond.</p>
                           <table cellpadding="0" cellspacing="0">
                             <tr>
                               <td style="background:#1a3a5c;border-radius:6px">

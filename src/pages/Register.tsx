@@ -87,8 +87,9 @@ export default function Register() {
     const fullName = params.get("full_name")?.trim() ?? "";
     const emailParam = params.get("email")?.trim() ?? "";
     const phoneParam = params.get("phone")?.trim() ?? "";
+    const provinceParam = params.get("province")?.trim() ?? "";
 
-    if (!fullName && !emailParam && !phoneParam) {
+    if (!fullName && !emailParam && !phoneParam && !provinceParam) {
       return;
     }
 
@@ -104,6 +105,7 @@ export default function Register() {
       firstName: current.firstName || firstName || current.firstName,
       lastName: current.lastName || lastName || current.lastName,
       phone: current.phone || phoneParam || current.phone,
+      province: current.province || provinceParam || current.province,
     }));
 
     setPrefillApplied(true);
