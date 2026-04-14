@@ -73,7 +73,7 @@ const consultantItems = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const { role, signOut, user, hasStaffPermission } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
@@ -151,7 +151,17 @@ export function AppSidebar() {
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <NavLink to={item.url} end className="rounded-xl hover:bg-sidebar-accent/80" activeClassName="rounded-xl bg-white/10 text-sidebar-primary font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <NavLink
+                      to={item.url}
+                      end
+                      onClick={() => {
+                        if (isMobile) {
+                          setOpenMobile(false);
+                        }
+                      }}
+                      className="rounded-xl hover:bg-sidebar-accent/80"
+                      activeClassName="rounded-xl bg-white/10 text-sidebar-primary font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    >
                       <item.icon className="mr-2 h-4 w-4 shrink-0" />
                       {!collapsed && (
                         <div className="flex items-center justify-between gap-2 w-full">

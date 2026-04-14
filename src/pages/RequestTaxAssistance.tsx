@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { supabase } from "@/integrations/supabase/client";
 import type { Enums } from "@/integrations/supabase/types";
@@ -52,8 +53,8 @@ export default function RequestTaxAssistance() {
     identity_document_type: "id_number" as IdentityDocumentType,
     id_number: "",
     company_registration_number: "",
-    service_category: "individual_tax" as Enums<"service_request_category">,
-    service_needed: "individual_personal_income_tax_returns" as Enums<"service_request_service_needed">,
+    service_categories: ["individual_tax"] as Enums<"service_request_category">[],
+    service_needed_list: ["individual_personal_income_tax_returns"] as Enums<"service_request_service_needed">[],
     priority_level: "medium" as Enums<"service_request_priority">,
     description: "",
     sars_debt_amount: "",
@@ -76,8 +77,8 @@ export default function RequestTaxAssistance() {
       identity_document_type: "id_number",
       id_number: "",
       company_registration_number: "",
-      service_category: "individual_tax",
-      service_needed: "individual_personal_income_tax_returns",
+      service_categories: ["individual_tax"],
+      service_needed_list: ["individual_personal_income_tax_returns"],
       priority_level: "medium",
       description: "",
       sars_debt_amount: "",
@@ -114,16 +115,84 @@ export default function RequestTaxAssistance() {
     return () => window.clearTimeout(timer);
   }, [completedRequestDetails, completedRequestId, isAuthenticated, navigate]);
 
+  const primaryService = form.service_needed_list[0];
   const selectedService = useMemo(
-    () => serviceNeededOptions.find((option) => option.value === form.service_needed),
-    [form.service_needed],
+    () => serviceNeededOptions.find((option) => option.value === primaryService),
+    [primaryService],
   );
 
   const availableServices = useMemo(() => {
-    const services = getServicesForCategory(form.service_category);
+    const categories = form.service_categories.length
+      ? form.service_categories
+      : serviceCategoryOptions.map((option) => option.value);
+    const services = Array.from(
+      new Set(categories.flatMap((category) => getServicesForCategory(category))),
+    );
     const labelMap = new Map(serviceNeededOptions.map((option) => [option.value, option.label]));
     return services.map((service) => ({ value: service, label: labelMap.get(service) || formatServiceRequestLabel(service) }));
-  }, [form.service_category]);
+  }, [form.service_categories]);
+
+  const categoryLabelMap = useMemo(
+    () => new Map(serviceCategoryOptions.map((option) => [option.value, option.label])),
+    [],
+  );
+
+  const serviceLabelMap = useMemo(
+    () => new Map(serviceNeededOptions.map((option) => [option.value, option.label])),
+    [],
+  );
+
+  const resolveServiceLabels = (services: Enums<"service_request_service_needed">[]) =>
+    services.map((service) => serviceLabelMap.get(service) || formatServiceRequestLabel(service));
+
+  const resolveCategoryLabels = (categories: Enums<"service_request_category">[]) =>
+    categories.map((category) => categoryLabelMap.get(category) || formatServiceRequestLabel(category));
+
+  const toggleServiceCategory = (category: Enums<"service_request_category">) => {
+    setForm((current) => {
+      const alreadySelected = current.service_categories.includes(category);
+      if (alreadySelected && current.service_categories.length === 1) {
+        return current;
+      }
+
+      const nextCategories = alreadySelected
+        ? current.service_categories.filter((item) => item !== category)
+        : [...current.service_categories, category];
+
+      const nextServicesAllowed = Array.from(
+        new Set(nextCategories.flatMap((item) => getServicesForCategory(item))),
+      );
+
+      let nextServices = current.service_needed_list.filter((service) => nextServicesAllowed.includes(service));
+      if (!nextServices.length && nextServicesAllowed.length) {
+        nextServices = [nextServicesAllowed[0]];
+      }
+
+      return {
+        ...current,
+        service_categories: nextCategories,
+        service_needed_list: nextServices,
+      };
+    });
+  };
+
+  const toggleServiceNeeded = (service: Enums<"service_request_service_needed">) => {
+    setForm((current) => {
+      const alreadySelected = current.service_needed_list.includes(service);
+      if (alreadySelected && current.service_needed_list.length === 1) {
+        return current;
+      }
+
+      const nextServices = alreadySelected
+        ? current.service_needed_list.filter((item) => item !== service)
+        : [...current.service_needed_list, service];
+
+      return {
+        ...current,
+        service_needed_list: nextServices,
+      };
+    });
+  };
 
   const buildSummary = (value: string, maxLength = 160) => {
     const normalized = value.replace(/\s+/g, " ").trim();
@@ -187,8 +256,8 @@ export default function RequestTaxAssistance() {
       || !requestEmail
       || !requestPhone
       || !form.province.trim()
-      || !form.service_category
-      || !form.service_needed
+      || form.service_categories.length === 0
+      || form.service_needed_list.length === 0
       || !form.priority_level
     ) {
       toast.error("Please complete all required fields.");
@@ -221,6 +290,8 @@ export default function RequestTaxAssistance() {
         throw new Error("Please enter a valid SARS debt amount.");
       }
 
+      const primaryCategory = form.service_categories[0];
+      const primaryService = form.service_needed_list[0];
       const { data: serviceRequest, error: requestError } = await supabase
         .from("service_requests")
         .insert({
@@ -232,8 +303,10 @@ export default function RequestTaxAssistance() {
           identity_document_type: form.client_type === "individual" ? form.identity_document_type : null,
           id_number: form.client_type === "individual" ? form.id_number.trim() : null,
           company_registration_number: form.client_type === "company" ? form.company_registration_number.trim() : null,
-          service_category: form.service_category,
-          service_needed: form.service_needed,
+          service_category: primaryCategory,
+          service_categories: form.service_categories,
+          service_needed: primaryService,
+          service_needed_list: form.service_needed_list,
           priority_level: form.priority_level,
           description: form.description.trim() || "",
           sars_debt_amount: debtAmount,
@@ -282,13 +355,14 @@ export default function RequestTaxAssistance() {
         toast.success("Your service request was submitted successfully.");
       }
 
+      const selectedServiceLabels = resolveServiceLabels(form.service_needed_list).join(", ");
       const emailPayload = {
         type: "service_request_received" as const,
         requestId: serviceRequest.id,
         clientName: requestName,
         clientEmail: requestEmail,
         clientPhone: requestPhone,
-        serviceType: selectedService?.label || formatServiceRequestLabel(form.service_needed),
+        serviceType: selectedServiceLabels || selectedService?.label || "Tax assistance",
         province: form.province.trim(),
       };
 
@@ -304,7 +378,7 @@ export default function RequestTaxAssistance() {
         requestId: serviceRequest.id,
         clientName: requestName,
         clientEmail: requestEmail,
-        serviceType: selectedService?.label || formatServiceRequestLabel(form.service_needed),
+        serviceType: selectedServiceLabels || selectedService?.label || "Tax assistance",
         province: form.province.trim(),
         status: "Open",
         priority: formatServiceRequestLabel(serviceRequest.priority_level),
@@ -615,46 +689,69 @@ export default function RequestTaxAssistance() {
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">Service Category</label>
-                <Select
-                  value={form.service_category}
-                  onValueChange={(value) => {
-                    const nextCategory = value as Enums<"service_request_category">;
-                    const nextServices = getServicesForCategory(nextCategory);
-                    const nextService = nextServices[0] || form.service_needed;
-
-                    setForm((current) => ({
-                      ...current,
-                      service_category: nextCategory,
-                      service_needed: nextService,
-                    }));
-                  }}
-                >
-                  <SelectTrigger className="w-full rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {serviceCategoryOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-xl border border-input/90 bg-white/92 px-3.5 py-2.5 text-left text-sm shadow-[0_6px_24px_-22px_rgba(15,23,42,0.28)] transition-all hover:border-primary/30"
+                    >
+                      <span className={form.service_categories.length ? "text-foreground" : "text-muted-foreground"}>
+                        {form.service_categories.length
+                          ? resolveCategoryLabels(form.service_categories).join(", ")
+                          : "Select one or more categories"}
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-3">
+                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                      {serviceCategoryOptions.map((option) => (
+                        <label key={option.value} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/60">
+                          <Checkbox
+                            checked={form.service_categories.includes(option.value)}
+                            onCheckedChange={() => toggleServiceCategory(option.value)}
+                          />
+                          <span className="text-sm text-foreground font-body">{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <p className="mt-2 text-xs text-muted-foreground font-body">Select all categories that apply.</p>
               </div>
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">Service Needed</label>
-                <Select
-                  value={form.service_needed}
-                  onValueChange={(value) => setForm((current) => ({ ...current, service_needed: value as Enums<"service_request_service_needed"> }))}
-                >
-                  <SelectTrigger className="w-full rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableServices.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-xl border border-input/90 bg-white/92 px-3.5 py-2.5 text-left text-sm shadow-[0_6px_24px_-22px_rgba(15,23,42,0.28)] transition-all hover:border-primary/30"
+                    >
+                      <span className={form.service_needed_list.length ? "text-foreground" : "text-muted-foreground"}>
+                        {form.service_needed_list.length
+                          ? resolveServiceLabels(form.service_needed_list).join(", ")
+                          : "Select one or more services"}
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-3">
+                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                      {availableServices.map((option) => (
+                        <label key={option.value} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/60">
+                          <Checkbox
+                            checked={form.service_needed_list.includes(option.value)}
+                            onCheckedChange={() => toggleServiceNeeded(option.value)}
+                          />
+                          <span className="text-sm text-foreground font-body">{option.label}</span>
+                        </label>
+                      ))}
+                      {!availableServices.length ? (
+                        <p className="text-xs text-muted-foreground font-body">Select a service category to see available services.</p>
+                      ) : null}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <p className="mt-2 text-xs text-muted-foreground font-body">Choose every service you need help with.</p>
               </div>
 
               <div>

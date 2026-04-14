@@ -246,7 +246,7 @@ export default function PractitionerOverview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("service_requests")
-        .select("id, full_name, service_needed, priority_level, risk_indicator, status, assigned_practitioner_id, description, created_at")
+        .select("id, full_name, service_needed, service_needed_list, service_categories, priority_level, risk_indicator, status, assigned_practitioner_id, description, created_at")
         .neq("status", "closed")
         .order("created_at", { ascending: false });
 
@@ -325,12 +325,28 @@ export default function PractitionerOverview() {
     [accessRequests],
   );
 
+  const serviceLabelMap = useMemo(
+    () => new Map(serviceNeededOptions.map((option) => [option.value, option.label])),
+    [],
+  );
+
+  const resolveServiceList = (lead: ServiceRequest) => (
+    lead.service_needed_list?.length
+      ? lead.service_needed_list
+      : lead.service_needed
+        ? [lead.service_needed]
+        : []
+  );
+
+  const formatServiceList = (services: Enums<"service_request_service_needed">[]) =>
+    services.map((service) => serviceLabelMap.get(service) || formatServiceRequestLabel(service)).join(", ");
+
   const visibleLeads = useMemo(() => {
     const servicesOffered = new Set(practitionerProfile?.services_offered ?? []);
 
     return (overviewLeads ?? [])
       .filter((lead) => {
-        const matchesService = servicesOffered.size === 0 || servicesOffered.has(lead.service_needed);
+        const matchesService = servicesOffered.size === 0 || resolveServiceList(lead).some((service) => servicesOffered.has(service));
         const visibleToPractitioner =
           lead.assigned_practitioner_id === null
           || lead.assigned_practitioner_id === user?.id;
@@ -567,9 +583,7 @@ export default function PractitionerOverview() {
                         </div>
 
                         <p className="text-sm text-muted-foreground font-body">
-                          {serviceNeededOptions.find((option) => option.value === lead.service_needed)?.label || lead.service_needed}
-                          {" | "}
-                          Priority {formatServiceRequestLabel(lead.priority_level)}
+                          {formatServiceList(resolveServiceList(lead))} | Priority {formatServiceRequestLabel(lead.priority_level)}
                         </p>
                         <p className="line-clamp-2 text-sm text-foreground font-body">{lead.description}</p>
                         <p className="text-xs text-muted-foreground font-body">

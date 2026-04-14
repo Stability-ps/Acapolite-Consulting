@@ -19,6 +19,7 @@ import {
   getServiceRequestRiskClass,
   getServiceRequestStatusClass,
   serviceRequestStatusOptions,
+  serviceCategoryOptions,
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, getAssignmentTypeLabel, getResponseStatusClass } from "@/lib/practitionerMarketplace";
@@ -178,6 +179,38 @@ export default function AdminServiceRequests() {
     [practitioners],
   );
 
+  const serviceLabelMap = useMemo(
+    () => new Map(serviceNeededOptions.map((option) => [option.value, option.label])),
+    [],
+  );
+
+  const categoryLabelMap = useMemo(
+    () => new Map(serviceCategoryOptions.map((option) => [option.value, option.label])),
+    [],
+  );
+
+  const resolveServiceList = (request: ServiceRequestRecord) => (
+    request.service_needed_list?.length
+      ? request.service_needed_list
+      : request.service_needed
+        ? [request.service_needed]
+        : []
+  );
+
+  const resolveCategoryList = (request: ServiceRequestRecord) => (
+    request.service_categories?.length
+      ? request.service_categories
+      : request.service_category
+        ? [request.service_category]
+        : []
+  );
+
+  const formatServiceList = (services: Enums<"service_request_service_needed">[]) =>
+    services.map((service) => serviceLabelMap.get(service) || formatServiceRequestLabel(service)).join(", ");
+
+  const formatCategoryList = (categories: Enums<"service_request_category">[]) =>
+    categories.map((category) => categoryLabelMap.get(category) || formatServiceRequestLabel(category)).join(", ");
+
   const hasActiveFilters = [
     searchQuery.trim(),
     statusFilter,
@@ -204,6 +237,8 @@ export default function AdminServiceRequests() {
           || "")
         : "";
       const responseCount = responsesByRequest.get(request.id)?.length ?? 0;
+      const serviceLabels = formatServiceList(resolveServiceList(request));
+      const categoryLabels = formatCategoryList(resolveCategoryList(request));
       const matchesSearch = !normalizedSearch || [
         request.full_name,
         request.email,
@@ -211,14 +246,15 @@ export default function AdminServiceRequests() {
         request.id_number || "",
         formatServiceRequestLabel(request.identity_document_type),
         assignedPractitionerName,
-        formatServiceRequestLabel(request.service_needed),
+        serviceLabels,
+        categoryLabels,
         formatServiceRequestLabel(request.status),
         formatServiceRequestLabel(request.priority_level),
         formatServiceRequestLabel(request.client_type),
         formatServiceRequestLabel(request.risk_indicator),
       ].some((value) => value.toLowerCase().includes(normalizedSearch));
       const matchesStatus = statusFilter === "all" || request.status === statusFilter;
-      const matchesService = serviceFilter === "all" || request.service_needed === serviceFilter;
+      const matchesService = serviceFilter === "all" || resolveServiceList(request).includes(serviceFilter as Enums<"service_request_service_needed">);
       const matchesRisk = riskFilter === "all" || request.risk_indicator === riskFilter;
       const matchesPriority = priorityFilter === "all" || request.priority_level === priorityFilter;
       const matchesClientType = clientTypeFilter === "all" || request.client_type === clientTypeFilter;
@@ -590,7 +626,7 @@ export default function AdminServiceRequests() {
                       {request.email} | {request.phone}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground font-body">
-                      {formatServiceRequestLabel(request.client_type)} | {formatServiceRequestLabel(request.service_needed)} | Priority {formatServiceRequestLabel(request.priority_level)}
+                      {formatServiceRequestLabel(request.client_type)} | {formatServiceList(resolveServiceList(request))} | Priority {formatServiceRequestLabel(request.priority_level)}
                     </p>
                     <p className="mt-3 line-clamp-2 text-sm text-foreground font-body">{request.description}</p>
 
@@ -679,7 +715,10 @@ export default function AdminServiceRequests() {
               </div>
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Request Type</p>
-                <p className="font-body text-foreground">{formatServiceRequestLabel(selectedRequest.service_needed)}</p>
+                <p className="font-body text-foreground">{formatServiceList(resolveServiceList(selectedRequest))}</p>
+                <p className="mt-1 text-sm text-muted-foreground font-body">
+                  Categories: {formatCategoryList(resolveCategoryList(selectedRequest)) || "Not specified"}
+                </p>
                 <p className="mt-1 text-sm text-muted-foreground font-body">Priority {formatServiceRequestLabel(selectedRequest.priority_level)}</p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/20 p-4">

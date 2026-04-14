@@ -4,7 +4,7 @@ import { ArrowRight, BadgeCheck, BriefcaseBusiness, CheckCircle2, Clock, Flag } 
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
+import type { Tables, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
@@ -203,13 +203,45 @@ export default function ClientServiceRequests() {
     );
   }, [practitionerReviews]);
 
+  const serviceLabelMap = useMemo(
+    () => new Map(serviceNeededOptions.map((option) => [option.value, option.label])),
+    [],
+  );
+
+  const categoryLabelMap = useMemo(
+    () => new Map(serviceCategoryOptions.map((option) => [option.value, option.label])),
+    [],
+  );
+
+  const resolveServiceList = (request: ServiceRequest) => (
+    request.service_needed_list?.length
+      ? request.service_needed_list
+      : request.service_needed
+        ? [request.service_needed]
+        : []
+  );
+
+  const resolveCategoryList = (request: ServiceRequest) => (
+    request.service_categories?.length
+      ? request.service_categories
+      : request.service_category
+        ? [request.service_category]
+        : []
+  );
+
+  const formatServiceList = (services: Enums<"service_request_service_needed">[]) =>
+    services.map((service) => serviceLabelMap.get(service) || formatServiceRequestLabel(service)).join(", ");
+
+  const formatCategoryList = (categories: Enums<"service_request_category">[]) =>
+    categories.map((category) => categoryLabelMap.get(category) || formatServiceRequestLabel(category)).join(", ");
+
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
   const selectedResponses = selectedRequest ? responsesByRequest.get(selectedRequest.id) ?? [] : [];
   const selectedServiceLabel = selectedRequest
-    ? serviceNeededOptions.find((item) => item.value === selectedRequest.service_needed)?.label || selectedRequest.service_needed
+    ? formatServiceList(resolveServiceList(selectedRequest))
     : null;
   const selectedCategoryLabel = selectedRequest
-    ? serviceCategoryOptions.find((item) => item.value === selectedRequest.service_category)?.label || selectedRequest.service_category
+    ? formatCategoryList(resolveCategoryList(selectedRequest))
     : null;
   const formattedSubmittedAt = selectedRequest?.created_at
     ? new Date(selectedRequest.created_at).toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" })
@@ -269,7 +301,7 @@ export default function ClientServiceRequests() {
         practitionerEmail: practitionerUser?.email,
         practitionerName: practitionerUser?.full_name || practitionerProfile?.business_name || "Practitioner",
         clientName: client.company_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || selectedRequest.full_name,
-        caseType: serviceNeededOptions.find((item) => item.value === selectedRequest.service_needed)?.label || selectedRequest.service_needed,
+        caseType: formatServiceList(resolveServiceList(selectedRequest)),
         priority: selectedRequest.priority_level === "urgent" || selectedRequest.priority_level === "high"
           ? 1
           : selectedRequest.priority_level === "low"
@@ -412,7 +444,7 @@ export default function ClientServiceRequests() {
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-display text-xl text-foreground">
-                        {serviceNeededOptions.find((item) => item.value === request.service_needed)?.label || request.service_needed}
+                        {formatServiceList(resolveServiceList(request))}
                       </h2>
                       <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestStatusClass(request.status)}`}>
                         {formatServiceRequestLabel(request.status)}
@@ -466,11 +498,11 @@ export default function ClientServiceRequests() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Service Category</p>
-                  <p className="mt-1">{selectedCategoryLabel}</p>
+                  <p className="mt-1">{selectedCategoryLabel || "Not specified"}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Service Needed</p>
-                  <p className="mt-1">{selectedServiceLabel}</p>
+                  <p className="mt-1">{selectedServiceLabel || "Not specified"}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Status</p>

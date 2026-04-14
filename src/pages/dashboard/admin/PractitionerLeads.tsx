@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { Tables } from "@/integrations/supabase/types";
+import type { Tables, Enums } from "@/integrations/supabase/types";
 import {
   formatServiceRequestLabel,
   getServiceRequestIssueFlags,
@@ -167,13 +167,45 @@ export default function PractitionerLeads() {
     [accessRequests],
   );
 
+  const serviceLabelMap = useMemo(
+    () => new Map(serviceNeededOptions.map((option) => [option.value, option.label])),
+    [],
+  );
+
+  const categoryLabelMap = useMemo(
+    () => new Map(serviceCategoryOptions.map((option) => [option.value, option.label])),
+    [],
+  );
+
+  const resolveServiceList = (request: ServiceRequest) => (
+    request.service_needed_list?.length
+      ? request.service_needed_list
+      : request.service_needed
+        ? [request.service_needed]
+        : []
+  );
+
+  const resolveCategoryList = (request: ServiceRequest) => (
+    request.service_categories?.length
+      ? request.service_categories
+      : request.service_category
+        ? [request.service_category]
+        : []
+  );
+
+  const formatServiceList = (services: Enums<"service_request_service_needed">[]) =>
+    services.map((service) => serviceLabelMap.get(service) || formatServiceRequestLabel(service)).join(", ");
+
+  const formatCategoryList = (categories: Enums<"service_request_category">[]) =>
+    categories.map((category) => categoryLabelMap.get(category) || formatServiceRequestLabel(category)).join(", ");
+
   const filteredRequests = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
     const servicesOffered = new Set(practitionerProfile?.services_offered ?? []);
 
     return (requests ?? [])
       .filter((request) => {
-        const matchesService = servicesOffered.size === 0 || servicesOffered.has(request.service_needed);
+        const matchesService = servicesOffered.size === 0 || resolveServiceList(request).some((service) => servicesOffered.has(service));
         const visibleToPractitioner =
           request.assigned_practitioner_id === null
           || request.assigned_practitioner_id === user?.id;
@@ -185,8 +217,8 @@ export default function PractitionerLeads() {
         if (filters.risk !== "all" && request.risk_indicator !== filters.risk) return false;
         if (filters.priority !== "all" && request.priority_level !== filters.priority) return false;
         if (filters.clientType !== "all" && request.client_type !== filters.clientType) return false;
-        if (filters.category !== "all" && request.service_category !== filters.category) return false;
-        if (filters.service !== "all" && request.service_needed !== filters.service) return false;
+        if (filters.category !== "all" && !resolveCategoryList(request).includes(filters.category as Enums<"service_request_category">)) return false;
+        if (filters.service !== "all" && !resolveServiceList(request).includes(filters.service as Enums<"service_request_service_needed">)) return false;
         if (filters.onlyMyResponses && !responseMap.has(request.id)) return false;
         if (filters.hasDocuments && !(documentMap.get(request.id)?.length ?? 0)) return false;
         if (filters.hasIssueFlags) {
@@ -206,7 +238,7 @@ export default function PractitionerLeads() {
           request.email,
           request.phone,
           request.description,
-          request.service_needed,
+          formatServiceList(resolveServiceList(request)),
           request.status,
         ].join(" ").toLowerCase().includes(search);
       });
@@ -336,7 +368,7 @@ export default function PractitionerLeads() {
         clientEmail: request.email,
         clientName: request.full_name,
         practitionerName: practitionerProfile?.business_name || user?.email || "Practitioner",
-        serviceType: request.service_needed,
+        serviceType: formatServiceList(resolveServiceList(request)) || request.service_needed,
       });
 
       if (notificationResult.error) {
@@ -619,7 +651,7 @@ export default function PractitionerLeads() {
                       ) : null}
                     </div>
                     <p className="text-sm text-muted-foreground font-body">
-                      {serviceNeededOptions.find((item) => item.value === request.service_needed)?.label || request.service_needed}
+                      {formatServiceList(resolveServiceList(request))}
                     </p>
                     <p className="text-xs text-muted-foreground font-body">
                       Cost: {creditCost} credit{creditCost === 1 ? "" : "s"}
@@ -676,7 +708,10 @@ export default function PractitionerLeads() {
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Service Needed</p>
                 <p className="mt-2 text-sm text-foreground font-body">
-                  {serviceNeededOptions.find((item) => item.value === selectedRequest.service_needed)?.label || selectedRequest.service_needed}
+                  {formatServiceList(resolveServiceList(selectedRequest))}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground font-body">
+                  Categories: {formatCategoryList(resolveCategoryList(selectedRequest)) || "Not specified"}
                 </p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/20 p-4">

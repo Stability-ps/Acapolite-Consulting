@@ -949,7 +949,9 @@ export type Database = {
           id_number: string | null;
           company_registration_number: string | null;
           service_category: Database["public"]["Enums"]["service_request_category"];
+          service_categories: Database["public"]["Enums"]["service_request_category"][] | null;
           service_needed: Database["public"]["Enums"]["service_request_service_needed"];
+          service_needed_list: Database["public"]["Enums"]["service_request_service_needed"][] | null;
           priority_level: Database["public"]["Enums"]["service_request_priority"];
           description: string;
           sars_debt_amount: number;
@@ -980,7 +982,9 @@ export type Database = {
           id_number?: string | null;
           company_registration_number?: string | null;
           service_category: Database["public"]["Enums"]["service_request_category"];
+          service_categories?: Database["public"]["Enums"]["service_request_category"][] | null;
           service_needed: Database["public"]["Enums"]["service_request_service_needed"];
+          service_needed_list?: Database["public"]["Enums"]["service_request_service_needed"][] | null;
           priority_level?: Database["public"]["Enums"]["service_request_priority"];
           description: string;
           sars_debt_amount?: number;
@@ -1011,7 +1015,9 @@ export type Database = {
           id_number?: string | null;
           company_registration_number?: string | null;
           service_category?: Database["public"]["Enums"]["service_request_category"];
+          service_categories?: Database["public"]["Enums"]["service_request_category"][] | null;
           service_needed?: Database["public"]["Enums"]["service_request_service_needed"];
+          service_needed_list?: Database["public"]["Enums"]["service_request_service_needed"][] | null;
           priority_level?: Database["public"]["Enums"]["service_request_priority"];
           description?: string;
           sars_debt_amount?: number;

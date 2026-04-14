@@ -39,11 +39,11 @@ export function LandingHeader() {
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon"
-                  className="md:hidden h-11 w-11 rounded-full border border-sky-200/40 bg-slate-950/70 text-white shadow-[0_10px_24px_rgba(15,23,42,0.55)] ring-1 ring-white/30 hover:bg-slate-900/80"
+                  className="md:hidden h-11 gap-2 rounded-full border border-sky-200/45 bg-slate-950/80 px-4 text-white shadow-[0_12px_26px_rgba(15,23,42,0.6)] ring-1 ring-white/40 hover:bg-slate-900/85"
                   aria-label="Open menu"
                 >
                   <Menu className="h-5 w-5" />
+                  <span className="text-sm font-semibold tracking-wide">Menu</span>
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-80 bg-slate-950 text-white">
