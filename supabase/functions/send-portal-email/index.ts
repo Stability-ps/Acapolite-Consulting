@@ -328,6 +328,10 @@ function buildPortalLink(portalUrl: string, pathname: string) {
   return `${base}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
 }
 
+function buildPublicAssetUrl(portalUrl: string, assetPath: string) {
+  return buildPortalLink(portalUrl, assetPath);
+}
+
 function buildWebPushContent(params: {
   payload: PortalEmailPayload;
   portalUrl: string;
@@ -1328,6 +1332,7 @@ function buildEmailContent(params: {
     const summary = trimString(payload.summary) || "No summary provided.";
     const notificationKey = `service_request_received_admin:${requestId}`;
     const requestLink = buildPortalLink(portalUrl, `/dashboard/staff/service-requests?leadId=${requestId}`);
+    const logoUrl = buildPublicAssetUrl(portalUrl, "/acapolite-logo.png");
     const serviceItems = serviceType.split(",").map((item) => item.trim()).filter(Boolean);
 
     if (!requestId) {
@@ -1369,6 +1374,12 @@ function buildEmailContent(params: {
                     <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
                       <tr>
                         <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
+                          <img
+                            src="${escapeHtml(logoUrl)}"
+                            alt="Acapolite Consulting"
+                            width="180"
+                            style="display:block;width:180px;max-width:100%;height:auto;margin:0 0 18px"
+                          />
                           <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Lead Available</h1>
                           <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Request #${escapeHtml(requestId)}</p>
                         </td>
@@ -1458,6 +1469,7 @@ function buildEmailContent(params: {
     const practitionerName = trimString(payload.practitionerName) || "Practitioner";
     const notificationKey = `service_request_received_practitioner:${requestId}:${practitionerProfileId || recipientEmail}`;
     const requestLink = buildPortalLink(portalUrl, `/dashboard/staff/service-requests?leadId=${requestId}`);
+    const logoUrl = buildPublicAssetUrl(portalUrl, "/acapolite-logo.png");
     const serviceItems = serviceType.split(",").map((item) => item.trim()).filter(Boolean);
 
     if (!requestId || !recipientEmail) {
@@ -1501,6 +1513,12 @@ function buildEmailContent(params: {
                     <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
                       <tr>
                         <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
+                          <img
+                            src="${escapeHtml(logoUrl)}"
+                            alt="Acapolite Consulting"
+                            width="180"
+                            style="display:block;width:180px;max-width:100%;height:auto;margin:0 0 18px"
+                          />
                           <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Lead Available</h1>
                           <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Request #${escapeHtml(requestId)}</p>
                         </td>
