@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, Search, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -166,10 +166,17 @@ export default function AdminClients() {
   const [isCreating, setIsCreating] = useState(false);
   const [isAssigningCodes, setIsAssigningCodes] = useState(false);
   const [formState, setFormState] = useState<NewClientFormState>(initialFormState);
+  const [isUpdatingReturnStatus, setIsUpdatingReturnStatus] = useState(false);
+  const [updatingInvoiceId, setUpdatingInvoiceId] = useState<string | null>(null);
+  const [showInvoiceWarningActions, setShowInvoiceWarningActions] = useState(false);
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageClients = hasStaffPermission("can_manage_clients");
+  const canManageInvoices = hasStaffPermission("can_manage_invoices");
   const canViewClientWorkspace = hasStaffPermission("can_view_client_workspace");
+  const canViewInvoices = hasStaffPermission("can_view_invoices");
+  const canResolveReturnWarnings = canManageClients || canViewClientWorkspace;
+  const canResolveInvoiceWarnings = canManageInvoices || canViewInvoices || canViewClientWorkspace;
   const practitionerFilterId = searchParams.get("practitionerId") ?? "";
 
   const { data: clients, isLoading } = useQuery({
@@ -296,6 +303,34 @@ export default function AdminClients() {
     || clients?.find((client) => client.id === selectedClientId)
     || null;
 
+  useEffect(() => {
+    setShowInvoiceWarningActions(false);
+  }, [selectedClientId]);
+
+  const { data: selectedClientOutstandingInvoices } = useQuery({
+    queryKey: ["staff-client-warning-invoices", selectedClientId],
+    queryFn: async () => {
+      if (!selectedClientId) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("id, invoice_number, title, status, total_amount, amount_paid, balance_due")
+        .eq("client_id", selectedClientId)
+        .in("status", ["issued", "partially_paid", "overdue"])
+        .gt("balance_due", 0)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      return data ?? [];
+    },
+    enabled: !!selectedClientId,
+  });
+
   const filteredPractitionerLabel = useMemo(
     () => clients?.find((client) => client.assigned_consultant?.id === practitionerFilterId)?.assigned_consultant?.full_name
       || clients?.find((client) => client.assigned_consultant?.id === practitionerFilterId)?.assigned_consultant?.email
@@ -307,6 +342,66 @@ export default function AdminClients() {
     const next = new URLSearchParams(searchParams);
     next.delete("practitionerId");
     setSearchParams(next, { replace: true });
+  };
+
+  const refreshClientViews = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-clients"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-client-risk-invoices"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-client-risk-document-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-overview-risk-clients"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-client-warning-invoices", selectedClientId] }),
+    ]);
+  };
+
+  const updateClientReturnStatus = async () => {
+    if (!selectedClient || !canResolveReturnWarnings) {
+      toast.error("This consultant profile cannot update client return status.");
+      return;
+    }
+
+    setIsUpdatingReturnStatus(true);
+    const { error } = await supabase
+      .from("clients")
+      .update({ returns_filed: true })
+      .eq("id", selectedClient.id);
+    setIsUpdatingReturnStatus(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Return status updated.");
+    await refreshClientViews();
+  };
+
+  const markInvoiceAsPaid = async (invoiceId: string, totalAmount: number | null) => {
+    if (!canResolveInvoiceWarnings) {
+      toast.error("This consultant profile cannot update payment status.");
+      return;
+    }
+
+    setUpdatingInvoiceId(invoiceId);
+    const total = Number(totalAmount || 0);
+    const { error } = await supabase
+      .from("invoices")
+      .update({
+        status: "paid",
+        paid_at: new Date().toISOString(),
+        amount_paid: total,
+        balance_due: 0,
+      })
+      .eq("id", invoiceId);
+    setUpdatingInvoiceId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Payment status updated.");
+    await refreshClientViews();
   };
 
   const updateForm = <K extends keyof NewClientFormState>(key: K, value: NewClientFormState[K]) => {
@@ -804,7 +899,10 @@ export default function AdminClients() {
       <DashboardItemDialog
         open={!!selectedClient}
         onOpenChange={(open) => {
-          if (!open) setSelectedClientId(null);
+          if (!open) {
+            setSelectedClientId(null);
+            setShowInvoiceWarningActions(false);
+          }
         }}
         title={selectedClient ? getClientName(selectedClient) : "Client Details"}
         description="Review this client's profile, tax details, assignment, and address information."
@@ -817,14 +915,80 @@ export default function AdminClients() {
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-                    <div>
+                    <div className="w-full">
                       <p className="font-body text-sm font-semibold text-red-700">Attention needed on this client account</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {warningSummary.reasons.map((reason) => (
-                          <span key={reason} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-700">
-                            {reason}
-                          </span>
-                        ))}
+                      <div className="mt-3 space-y-3">
+                        {warningSummary.debtAmount > 0 ? (
+                          <div className="rounded-xl border border-red-100 bg-white px-3 py-3 text-sm font-medium text-red-700">
+                            SARS debt outstanding
+                          </div>
+                        ) : null}
+
+                        {selectedClient.returns_filed === false ? (
+                          <div className="flex flex-col gap-3 rounded-xl border border-red-100 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                            <span className="text-sm font-medium text-red-700">Returns not filed</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="rounded-lg bg-red-600 text-white shadow-sm hover:bg-red-700"
+                              onClick={updateClientReturnStatus}
+                              disabled={isUpdatingReturnStatus || !canResolveReturnWarnings}
+                            >
+                              {isUpdatingReturnStatus ? "Updating..." : "Update Return Status"}
+                            </Button>
+                          </div>
+                        ) : null}
+
+                        {warningSummary.outstandingInvoices > 0 ? (
+                          <div className="rounded-xl border border-red-100 bg-white px-3 py-3">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <span className="text-sm font-medium text-red-700">
+                                {warningSummary.outstandingInvoices} invoice{warningSummary.outstandingInvoices === 1 ? "" : "s"} outstanding
+                              </span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="rounded-lg border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
+                                onClick={() => setShowInvoiceWarningActions((current) => !current)}
+                                disabled={!canResolveInvoiceWarnings}
+                              >
+                                Update Payment Status
+                              </Button>
+                            </div>
+                            {showInvoiceWarningActions && selectedClientOutstandingInvoices?.length ? (
+                              <div className="mt-3 space-y-2">
+                                {selectedClientOutstandingInvoices.map((invoice) => (
+                                  <div key={invoice.id} className="flex flex-col gap-2 rounded-lg border border-border/70 bg-accent/20 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                      <p className="text-sm font-semibold text-foreground">
+                                        {invoice.invoice_number ? `INV-${invoice.invoice_number}` : invoice.title || "Outstanding invoice"}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Outstanding: {formatCurrency(Number(invoice.balance_due || 0))}
+                                      </p>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="rounded-lg bg-emerald-600 text-white shadow-sm hover:bg-emerald-700"
+                                      onClick={() => markInvoiceAsPaid(invoice.id, Number(invoice.total_amount || 0))}
+                                      disabled={updatingInvoiceId === invoice.id || !canResolveInvoiceWarnings}
+                                    >
+                                      {updatingInvoiceId === invoice.id ? "Updating..." : "Mark as Paid"}
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {warningSummary.outstandingDocumentRequests > 0 ? (
+                          <div className="rounded-xl border border-red-100 bg-white px-3 py-3 text-sm font-medium text-red-700">
+                            {warningSummary.outstandingDocumentRequests} document request{warningSummary.outstandingDocumentRequests === 1 ? "" : "s"} outstanding
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>

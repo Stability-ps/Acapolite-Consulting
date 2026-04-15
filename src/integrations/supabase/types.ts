@@ -572,6 +572,7 @@ export type Database = {
           id: string;
           client_id: string;
           assigned_consultant_id: string | null;
+          case_number: string;
           case_title: string;
           case_type: Database["public"]["Enums"]["case_type"];
           status: Database["public"]["Enums"]["case_status"];
@@ -590,6 +591,7 @@ export type Database = {
           id?: string;
           client_id: string;
           assigned_consultant_id?: string | null;
+          case_number?: string;
           case_title: string;
           case_type: Database["public"]["Enums"]["case_type"];
           status?: Database["public"]["Enums"]["case_status"];
@@ -608,6 +610,7 @@ export type Database = {
           id?: string;
           client_id?: string;
           assigned_consultant_id?: string | null;
+          case_number?: string;
           case_title?: string;
           case_type?: Database["public"]["Enums"]["case_type"];
           status?: Database["public"]["Enums"]["case_status"];

@@ -46,6 +46,10 @@ type StaffInvoice = {
       email?: string | null;
     } | null;
   } | null;
+  created_by_profile?: {
+    full_name?: string | null;
+    email?: string | null;
+  } | null;
   practitioner_bank_details?: string | null;
 };
 
@@ -114,7 +118,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("invoices")
-        .select("*, clients(profile_id, company_name, first_name, last_name, client_code, profiles!clients_profile_id_fkey(full_name, email))")
+        .select("*, clients(profile_id, company_name, first_name, last_name, client_code, profiles!clients_profile_id_fkey(full_name, email)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -689,6 +693,9 @@ export default function AdminInvoices() {
                   <p className="text-sm text-muted-foreground font-body">
                     {getClientName(invoice)}{invoice.clients?.client_code ? ` (${invoice.clients.client_code})` : ""}
                   </p>
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    Issued by {invoice.created_by_profile?.full_name || invoice.created_by_profile?.email || "Acapolite Consulting"}
+                  </p>
                 </div>
                 <span className={`text-xs font-semibold px-3 py-1 rounded-full font-body ${getStatusColor(invoice.status)}`}>
                   {invoice.status.replace(/_/g, " ")}
@@ -825,6 +832,12 @@ export default function AdminInvoices() {
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issue Date</p>
                 <p className="font-body text-foreground">{new Date(selectedInvoice.issue_date).toLocaleDateString()}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issued By</p>
+                <p className="font-body text-foreground">
+                  {selectedInvoice.created_by_profile?.full_name || selectedInvoice.created_by_profile?.email || "Acapolite Consulting"}
+                </p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Sent At</p>

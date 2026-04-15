@@ -892,7 +892,6 @@ export default function ClientServiceRequests() {
               <SelectContent>
                 <SelectItem value="poor_communication">Poor communication</SelectItem>
                 <SelectItem value="unprofessional_behavior">Unprofessional behavior</SelectItem>
-                <SelectItem value="payment_outside_platform">Requesting payment outside platform</SelectItem>
                 <SelectItem value="suspicious_behavior">Suspicious or dishonest behavior</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>

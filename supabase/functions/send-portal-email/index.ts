@@ -1374,14 +1374,22 @@ function buildEmailContent(params: {
                     <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
                       <tr>
                         <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
-                          <img
-                            src="${escapeHtml(logoUrl)}"
-                            alt="Acapolite Consulting"
-                            width="180"
-                            style="display:block;width:180px;max-width:100%;height:auto;margin:0 0 18px"
-                          />
-                          <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Lead Available</h1>
-                          <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Request #${escapeHtml(requestId)}</p>
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="width:72px;vertical-align:middle">
+                                <img
+                                  src="${escapeHtml(logoUrl)}"
+                                  alt="Acapolite Consulting"
+                                  width="56"
+                                  style="display:block;width:56px;height:auto"
+                                />
+                              </td>
+                              <td style="vertical-align:middle">
+                                <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Lead Available</h1>
+                                <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Request #${escapeHtml(requestId)}</p>
+                              </td>
+                            </tr>
+                          </table>
                         </td>
                       </tr>
                       <tr>
@@ -1513,14 +1521,22 @@ function buildEmailContent(params: {
                     <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
                       <tr>
                         <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
-                          <img
-                            src="${escapeHtml(logoUrl)}"
-                            alt="Acapolite Consulting"
-                            width="180"
-                            style="display:block;width:180px;max-width:100%;height:auto;margin:0 0 18px"
-                          />
-                          <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Lead Available</h1>
-                          <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Request #${escapeHtml(requestId)}</p>
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="width:72px;vertical-align:middle">
+                                <img
+                                  src="${escapeHtml(logoUrl)}"
+                                  alt="Acapolite Consulting"
+                                  width="56"
+                                  style="display:block;width:56px;height:auto"
+                                />
+                              </td>
+                              <td style="vertical-align:middle">
+                                <h1 style="color:#fff;font-size:22px;margin:0 0 6px;font-family:Georgia,serif;font-weight:normal">New Lead Available</h1>
+                                <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Request #${escapeHtml(requestId)}</p>
+                              </td>
+                            </tr>
+                          </table>
                         </td>
                       </tr>
                       <tr>

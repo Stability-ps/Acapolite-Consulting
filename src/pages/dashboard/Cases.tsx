@@ -13,6 +13,7 @@ import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog"
 import { RatingStars } from "@/components/dashboard/RatingStars";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { formatCaseReference } from "@/lib/practitionerAssignments";
 
 const caseTypeOptions = [
   "individual_tax_return",
@@ -87,6 +88,8 @@ export default function Cases() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [savingReview, setSavingReview] = useState(false);
+  const [caseReply, setCaseReply] = useState("");
+  const [sendingCaseReply, setSendingCaseReply] = useState(false);
   const [requestForm, setRequestForm] = useState({
     case_title: "",
     case_type: "individual_tax_return",
@@ -151,6 +154,40 @@ export default function Cases() {
     enabled: !!client && !!selectedCaseId,
   });
 
+  const { data: selectedCaseConversations } = useQuery({
+    queryKey: ["case-conversations", selectedCaseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("*")
+        .eq("case_id", selectedCaseId!)
+        .order("last_message_at", { ascending: false })
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!selectedCaseId,
+  });
+
+  const selectedCaseConversationIds = (selectedCaseConversations ?? []).map((conversation) => conversation.id);
+  const primaryCaseConversationId = selectedCaseConversations?.[0]?.id ?? "";
+
+  const { data: selectedCaseMessages } = useQuery({
+    queryKey: ["case-messages", selectedCaseConversationIds],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .in("conversation_id", selectedCaseConversationIds)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: selectedCaseConversationIds.length > 0,
+  });
+
   const selectedCase = cases?.find((caseItem) => caseItem.id === selectedCaseId) ?? null;
   const selectedRequest = requestConversations?.find((request) => request.id === selectedRequestId) ?? null;
   const requestSummary = parseRequestMessage(selectedRequestMessages?.[0]?.message_text);
@@ -168,6 +205,38 @@ export default function Cases() {
     setReviewRating(selectedReview.rating);
     setReviewText(selectedReview.review_text || "");
   }, [selectedReview, selectedCaseId]);
+
+  useEffect(() => {
+    if (!selectedCaseId || !selectedCaseMessages?.length) return;
+
+    const markMessagesAsRead = async () => {
+      const unreadIncomingMessages = selectedCaseMessages.filter(
+        (message) => message.sender_profile_id !== user?.id
+          && ["admin", "consultant"].includes(message.sender_type)
+          && !message.is_read,
+      );
+
+      if (!unreadIncomingMessages.length) return;
+
+      const unreadIds = unreadIncomingMessages.map((message) => message.id);
+
+      const { error } = await supabase
+        .from("messages")
+        .update({
+          is_read: true,
+          read_at: new Date().toISOString(),
+        })
+        .in("id", unreadIds);
+
+      if (!error) {
+        queryClient.invalidateQueries({ queryKey: ["case-messages", selectedCaseConversationIds] });
+        queryClient.invalidateQueries({ queryKey: ["client-unread-messages"] });
+        queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] });
+      }
+    };
+
+    void markMessagesAsRead();
+  }, [queryClient, selectedCaseConversationIds, selectedCaseId, selectedCaseMessages, user?.id]);
 
   const resetRequestForm = () => {
     setRequestForm({
@@ -327,6 +396,63 @@ export default function Cases() {
     await queryClient.invalidateQueries({ queryKey: ["case-practitioner-review", client.id, selectedCase.id] });
   };
 
+  const sendCaseReply = async () => {
+    if (!client || !user || !selectedCase || !caseReply.trim()) {
+      return;
+    }
+
+    setSendingCaseReply(true);
+
+    try {
+      let conversationId = primaryCaseConversationId;
+
+      if (!conversationId) {
+        const { data: conversation, error: conversationError } = await supabase
+          .from("conversations")
+          .insert({
+            client_id: client.id,
+            case_id: selectedCase.id,
+            subject: `${selectedCase.case_number} - ${selectedCase.case_title}`,
+            created_by: user.id,
+          })
+          .select("id")
+          .single();
+
+        if (conversationError || !conversation) {
+          throw new Error(conversationError?.message || "Unable to start the case conversation.");
+        }
+
+        conversationId = conversation.id;
+      }
+
+      const { error } = await supabase.from("messages").insert({
+        conversation_id: conversationId,
+        sender_profile_id: user.id,
+        sender_type: "client",
+        message_text: caseReply.trim(),
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setCaseReply("");
+      toast.success("Case message sent.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["case-conversations", selectedCase.id] }),
+        queryClient.invalidateQueries({ queryKey: ["case-messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["conversations", client.id] }),
+        queryClient.invalidateQueries({ queryKey: ["cases", client.id] }),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to send your case message.";
+      toast.error(message);
+    } finally {
+      setSendingCaseReply(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between gap-4 mb-8">
@@ -365,7 +491,9 @@ export default function Cases() {
                     <div className="flex items-start justify-between mb-3 gap-4">
                       <div>
                         <h3 className="font-display text-lg font-semibold text-foreground">{caseItem.case_title}</h3>
-                        <p className="text-sm text-muted-foreground font-body">{caseItem.sars_case_reference || "No SARS reference yet"}</p>
+                        <p className="text-sm text-muted-foreground font-body">
+                          {caseItem.case_number} {caseItem.sars_case_reference ? `• SARS Ref: ${caseItem.sars_case_reference}` : ""}
+                        </p>
                       </div>
                       <Badge variant="outline" className={statusColor(caseItem.status)}>
                         {caseItem.status.replace(/_/g, " ")}
@@ -430,10 +558,13 @@ export default function Cases() {
       <DashboardItemDialog
         open={!!selectedCase}
         onOpenChange={(open) => {
-          if (!open) setSelectedCaseId(null);
+          if (!open) {
+            setSelectedCaseId(null);
+            setCaseReply("");
+          }
         }}
         title={selectedCase?.case_title ?? "Case Details"}
-        description="View the full case summary and progress information."
+        description="View the full case summary, updates, and messages for this case."
       >
         {selectedCase ? (
           <div className="space-y-6">
@@ -447,6 +578,10 @@ export default function Cases() {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Case Number</p>
+                <p className="font-body text-foreground">{selectedCase.case_number || formatCaseReference(selectedCase.id)}</p>
+              </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">SARS Reference</p>
                 <p className="font-body text-foreground">{selectedCase.sars_case_reference || "Not assigned yet"}</p>
@@ -469,6 +604,56 @@ export default function Cases() {
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Description</p>
               <div className="rounded-2xl border border-border p-4">
                 <p className="font-body text-foreground">{selectedCase.description || "No additional case description yet."}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Case Communication</p>
+              <div className="rounded-2xl border border-border overflow-hidden">
+                <div className="max-h-[320px] space-y-4 overflow-y-auto p-4">
+                  {selectedCaseMessages?.length ? selectedCaseMessages.map((message) => {
+                    const isOwnMessage = message.sender_profile_id === user?.id;
+
+                    return (
+                      <div key={message.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[84%] rounded-3xl px-4 py-3 ${
+                          isOwnMessage ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                        }`}>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] opacity-75">
+                            {isOwnMessage ? "You" : message.sender_type === "consultant" ? "Practitioner" : "Acapolite"}
+                          </p>
+                          <p className="text-sm font-body whitespace-pre-wrap">{message.message_text}</p>
+                          <p className={`mt-3 text-xs ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                            {new Date(message.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }) : (
+                    <p className="text-sm text-muted-foreground font-body">
+                      No messages on this case yet. When Acapolite or your practitioner updates this case, it will appear here.
+                    </p>
+                  )}
+                </div>
+                <div className="border-t border-border p-4">
+                  <div className="flex gap-3">
+                    <Input
+                      value={caseReply}
+                      onChange={(event) => setCaseReply(event.target.value)}
+                      placeholder={`Reply on ${selectedCase.case_number || formatCaseReference(selectedCase.id)}...`}
+                      className="flex-1 rounded-xl"
+                      onKeyDown={(event) => event.key === "Enter" && !event.shiftKey && sendCaseReply()}
+                    />
+                    <Button
+                      type="button"
+                      className="rounded-xl"
+                      onClick={sendCaseReply}
+                      disabled={sendingCaseReply || !caseReply.trim()}
+                    >
+                      {sendingCaseReply ? "Sending..." : "Send"}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
 

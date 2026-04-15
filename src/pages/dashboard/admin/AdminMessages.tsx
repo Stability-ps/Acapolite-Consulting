@@ -32,7 +32,7 @@ type ConversationRecord = {
     email?: string | null;
     practitioner_profiles?: { business_name?: string | null }[] | null;
   } | null;
-  cases?: { id?: string | null; status?: string | null; case_title?: string | null } | null;
+  cases?: { id?: string | null; status?: string | null; case_title?: string | null; case_number?: string | null } | null;
 };
 
 type ConversationFilter = "all" | "clients" | "practitioners" | "open_cases" | "support";
@@ -98,7 +98,7 @@ export default function AdminMessages() {
 
       let query = supabase
         .from("conversations")
-        .select("*, clients(company_name, first_name, last_name, client_code, profile_id, profiles!clients_profile_id_fkey(full_name, email)), practitioner:practitioner_profile_id(full_name, email, practitioner_profiles!practitioner_profiles_profile_id_fkey(business_name)), cases:case_id(id, status, case_title)")
+        .select("*, clients(company_name, first_name, last_name, client_code, profile_id, profiles!clients_profile_id_fkey(full_name, email)), practitioner:practitioner_profile_id(full_name, email, practitioner_profiles!practitioner_profiles_profile_id_fkey(business_name)), cases:case_id(id, status, case_title, case_number)")
         .order("last_message_at", { ascending: false });
 
       if (hasRestrictedClientScope) {
@@ -278,7 +278,9 @@ export default function AdminMessages() {
       const code = (conversation.clients?.client_code || "").toLowerCase();
       const clientEmail = (conversation.clients?.profiles?.email || "").toLowerCase();
       const practitionerEmail = (conversation.practitioner?.email || "").toLowerCase();
-      const caseReference = conversation.case_id ? formatCaseReference(conversation.case_id).toLowerCase() : "";
+      const caseReference = conversation.case_id
+        ? formatCaseReference(conversation.case_id, conversation.cases?.case_number).toLowerCase()
+        : "";
       const caseTitle = (conversation.cases?.case_title || "").toLowerCase();
       const tags = getConversationTags(conversation).map((tag) => tag.toLowerCase());
       return [
@@ -493,7 +495,7 @@ export default function AdminMessages() {
                     </div>
                     {selectedConversationRecord.case_id ? (
                       <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                        {formatCaseReference(selectedConversationRecord.case_id)}
+                        {formatCaseReference(selectedConversationRecord.case_id, selectedConversationRecord.cases?.case_number)}
                       </p>
                     ) : null}
                   </div>

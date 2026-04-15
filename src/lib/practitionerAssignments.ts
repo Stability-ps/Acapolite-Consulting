@@ -16,7 +16,12 @@ type PractitionerAssignmentNotificationResult = {
   skipped?: boolean;
 };
 
-export function formatCaseReference(caseId: string) {
+export function formatCaseReference(caseId: string, caseNumber?: string | null) {
+  const normalizedCaseNumber = caseNumber?.trim();
+  if (normalizedCaseNumber) {
+    return normalizedCaseNumber;
+  }
+
   return `CASE-${caseId.slice(0, 8).toUpperCase()}`;
 }
 

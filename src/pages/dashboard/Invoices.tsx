@@ -52,7 +52,11 @@ export default function Invoices() {
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["invoices", client?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("invoices").select("*").eq("client_id", client!.id).order("created_at", { ascending: false });
+      const { data } = await supabase
+        .from("invoices")
+        .select("*, created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
+        .eq("client_id", client!.id)
+        .order("created_at", { ascending: false });
       return data ?? [];
     },
     enabled: !!client,
@@ -186,6 +190,9 @@ export default function Invoices() {
                 <div>
                   <p className="font-display text-lg font-semibold text-foreground">{invoice.invoice_number}</p>
                   <p className="text-sm text-muted-foreground font-body">{invoice.title || invoice.description || "Service invoice"}</p>
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    Issued by {invoice.created_by_profile?.full_name || invoice.created_by_profile?.email || "Acapolite Consulting"}
+                  </p>
                 </div>
                 <span className={`text-xs font-semibold px-3 py-1 rounded-full font-body ${statusColor(invoice.status)}`}>
                   {invoice.status.replace(/_/g, " ")}
@@ -252,6 +259,12 @@ export default function Invoices() {
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issue Date</p>
                 <p className="font-body text-foreground">{new Date(selectedInvoice.issue_date).toLocaleDateString()}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issued By</p>
+                <p className="font-body text-foreground">
+                  {selectedInvoice.created_by_profile?.full_name || selectedInvoice.created_by_profile?.email || "Acapolite Consulting"}
+                </p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Due Date</p>
