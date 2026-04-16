@@ -1,13 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileCheck2, FileText, Search, ShieldCheck, Wallet } from "lucide-react";
+import {
+  FileCheck2,
+  FileText,
+  Search,
+  ShieldCheck,
+  Wallet,
+} from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
@@ -181,7 +193,11 @@ function getStatusBadgeClass(status: ReviewAction) {
 
 function formatDate(value?: string | null) {
   if (!value) return "Unknown date";
-  return new Date(value).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" });
+  return new Date(value).toLocaleDateString("en-ZA", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function formatFileSize(size?: number | null) {
@@ -192,18 +208,30 @@ function formatFileSize(size?: number | null) {
 }
 
 function isPaymentDocument(document: StaffDocumentRow) {
-  const haystack = `${document.title} ${document.file_name} ${document.category ?? ""}`.toLowerCase();
-  return haystack.includes("payment") || haystack.includes("invoice") || haystack.includes("proof of payment");
+  const haystack =
+    `${document.title} ${document.file_name} ${document.category ?? ""}`.toLowerCase();
+  return (
+    haystack.includes("payment") ||
+    haystack.includes("invoice") ||
+    haystack.includes("proof of payment")
+  );
 }
 
-function mapPractitionerStatus(status: string, isVerified: boolean): ReviewAction {
+function mapPractitionerStatus(
+  status: string,
+  isVerified: boolean,
+): ReviewAction {
   if (isVerified || status === "verified" || status === "approved") {
     return "approved";
   }
   if (status === "rejected") {
     return "rejected";
   }
-  if (status === "pending_review" || status === "under_review" || status === "pending") {
+  if (
+    status === "pending_review" ||
+    status === "under_review" ||
+    status === "pending"
+  ) {
     return "pending_review";
   }
   return "uploaded";
@@ -222,10 +250,17 @@ function mapInvoiceStatus(status: InvoiceStatus): ReviewAction {
   return "uploaded";
 }
 
-function buildPractitionerVerificationItems(profile: PractitionerVerificationRow): UnifiedItem[] {
-  const practitionerName = profile.profiles?.full_name || profile.business_name || "Practitioner";
-  const status = mapPractitionerStatus(profile.verification_status, profile.is_verified);
-  const uploadedAt = profile.verification_submitted_at || new Date().toISOString();
+function buildPractitionerVerificationItems(
+  profile: PractitionerVerificationRow,
+): UnifiedItem[] {
+  const practitionerName =
+    profile.profiles?.full_name || profile.business_name || "Practitioner";
+  const status = mapPractitionerStatus(
+    profile.verification_status,
+    profile.is_verified,
+  );
+  const uploadedAt =
+    profile.verification_submitted_at || new Date().toISOString();
   const base = {
     group: "practitioner" as const,
     sourceType: "practitioner" as const,
@@ -235,7 +270,8 @@ function buildPractitionerVerificationItems(profile: PractitionerVerificationRow
     caseLabel: "Verification documents",
     practitionerName,
     reviewerNotes: profile.internal_notes ?? "",
-    rejectionReason: status === "rejected" ? profile.internal_notes ?? "" : "",
+    rejectionReason:
+      status === "rejected" ? (profile.internal_notes ?? "") : "",
     relatedPractitionerId: profile.profile_id,
     documentId: null,
     invoice: null,
@@ -245,10 +281,30 @@ function buildPractitionerVerificationItems(profile: PractitionerVerificationRow
   };
 
   const definitions = [
-    { key: "id-copy", title: "ID Copy", filePath: profile.id_document_path, subtitle: "Identity verification" },
-    { key: "certificate", title: "Practitioner Certificate", filePath: profile.certificate_document_path, subtitle: "Professional certificate" },
-    { key: "proof-of-address", title: "Proof of Address", filePath: profile.proof_of_address_path, subtitle: "Business or residential address" },
-    { key: "bank-letter", title: "Bank Letter", filePath: profile.bank_confirmation_document_path, subtitle: "Bank confirmation letter" },
+    {
+      key: "id-copy",
+      title: "ID Copy",
+      filePath: profile.id_document_path,
+      subtitle: "Identity verification",
+    },
+    {
+      key: "certificate",
+      title: "Practitioner Certificate",
+      filePath: profile.certificate_document_path,
+      subtitle: "Professional certificate",
+    },
+    {
+      key: "proof-of-address",
+      title: "Proof of Address",
+      filePath: profile.proof_of_address_path,
+      subtitle: "Business or residential address",
+    },
+    {
+      key: "bank-letter",
+      title: "Bank Letter",
+      filePath: profile.bank_confirmation_document_path,
+      subtitle: "Bank confirmation letter",
+    },
   ];
 
   return definitions
@@ -265,13 +321,18 @@ function buildPractitionerVerificationItems(profile: PractitionerVerificationRow
 export default function AdminDocuments() {
   const queryClient = useQueryClient();
   const { user, role, hasStaffPermission } = useAuth();
-  const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
+  const {
+    accessibleClientIds,
+    hasRestrictedClientScope,
+    isLoadingAccessibleClientIds,
+  } = useAccessibleClientIds();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeGroup, setActiveGroup] = useState<GroupKey>("client");
   const [statusFilter, setStatusFilter] = useState<"all" | ReviewAction>("all");
   const [selectedItem, setSelectedItem] = useState<UnifiedItem | null>(null);
-  const [reviewStatus, setReviewStatus] = useState<ReviewAction>("pending_review");
+  const [reviewStatus, setReviewStatus] =
+    useState<ReviewAction>("pending_review");
   const [reviewNotes, setReviewNotes] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
@@ -287,7 +348,10 @@ export default function AdminDocuments() {
       setStatusFilter("rejected");
       return;
     }
-    if (documentStateFilter === "outstanding" || documentStateFilter === "attention") {
+    if (
+      documentStateFilter === "outstanding" ||
+      documentStateFilter === "attention"
+    ) {
       setStatusFilter("all");
     }
   }, [documentStateFilter]);
@@ -301,7 +365,9 @@ export default function AdminDocuments() {
 
       let query = supabase
         .from("documents")
-        .select("id, title, file_name, file_path, mime_type, file_size, client_id, case_id, uploaded_at, status, category, rejection_reason, notes, clients(id, company_name, first_name, last_name, client_code, assigned_consultant_id, profile_id, profiles!clients_profile_id_fkey(full_name, email)), linked_case:cases!documents_case_id_fkey(id, case_title, case_number, assigned_consultant_id)")
+        .select(
+          "id, title, file_name, file_path, mime_type, file_size, client_id, case_id, uploaded_at, status, category, rejection_reason, notes, clients(id, company_name, first_name, last_name, client_code, assigned_consultant_id, profile_id, profiles!clients_profile_id_fkey(full_name, email)), linked_case:cases!documents_case_id_fkey(id, case_title, case_number, assigned_consultant_id)",
+        )
         .order("uploaded_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -315,18 +381,21 @@ export default function AdminDocuments() {
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
-  const { data: practitionerProfiles, isLoading: loadingPractitionerProfiles } = useQuery({
-    queryKey: ["staff-practitioner-verification-documents"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("practitioner_profiles")
-        .select("profile_id, business_name, verification_status, verification_submitted_at, id_document_path, certificate_document_path, proof_of_address_path, bank_confirmation_document_path, internal_notes, is_verified, profiles!practitioner_profiles_profile_id_fkey(full_name, email)")
-        .order("updated_at", { ascending: false });
+  const { data: practitionerProfiles, isLoading: loadingPractitionerProfiles } =
+    useQuery({
+      queryKey: ["staff-practitioner-verification-documents"],
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from("practitioner_profiles")
+          .select(
+            "profile_id, business_name, verification_status, verification_submitted_at, id_document_path, certificate_document_path, proof_of_address_path, bank_confirmation_document_path, internal_notes, is_verified, profiles!practitioner_profiles_profile_id_fkey(full_name, email)",
+          )
+          .order("updated_at", { ascending: false });
 
-      if (error) throw error;
-      return (data ?? []) as PractitionerVerificationRow[];
-    },
-  });
+        if (error) throw error;
+        return (data ?? []) as PractitionerVerificationRow[];
+      },
+    });
 
   const { data: invoices, isLoading: loadingInvoices } = useQuery({
     queryKey: ["staff-payment-documents", accessibleClientIdsKey],
@@ -337,7 +406,9 @@ export default function AdminDocuments() {
 
       let query = supabase
         .from("invoices")
-        .select("id, invoice_number, title, description, subtotal, tax_amount, total_amount, issue_date, due_date, status, practitioner_bank_details, proof_of_payment_document_id, client_id, case_id, clients(id, company_name, first_name, last_name, client_code, assigned_consultant_id, profile_id, profiles!clients_profile_id_fkey(full_name, email)), linked_case:cases!invoices_case_id_fkey(id, case_title, case_number, assigned_consultant_id)")
+        .select(
+          "id, invoice_number, title, description, subtotal, tax_amount, total_amount, issue_date, due_date, status, practitioner_bank_details, proof_of_payment_document_id, client_id, case_id, clients(id, company_name, first_name, last_name, client_code, assigned_consultant_id, profile_id, profiles!clients_profile_id_fkey(full_name, email)), linked_case:cases!invoices_case_id_fkey(id, case_title, case_number, assigned_consultant_id)",
+        )
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -367,7 +438,10 @@ export default function AdminDocuments() {
         practitionerName: "N/A",
         reviewerNotes: document.notes ?? "",
         rejectionReason: document.rejection_reason ?? "",
-        relatedPractitionerId: document.linked_case?.assigned_consultant_id ?? document.clients?.assigned_consultant_id ?? null,
+        relatedPractitionerId:
+          document.linked_case?.assigned_consultant_id ??
+          document.clients?.assigned_consultant_id ??
+          null,
         filePath: document.file_path,
         documentId: document.id,
         invoice: null,
@@ -377,7 +451,9 @@ export default function AdminDocuments() {
       };
     });
 
-    const practitionerItems = (practitionerProfiles ?? []).flatMap(buildPractitionerVerificationItems);
+    const practitionerItems = (practitionerProfiles ?? []).flatMap(
+      buildPractitionerVerificationItems,
+    );
 
     const invoiceItems: UnifiedItem[] = (invoices ?? []).map((invoice) => ({
       id: `invoice:${invoice.id}`,
@@ -390,9 +466,14 @@ export default function AdminDocuments() {
       clientName: getClientName(invoice.clients),
       caseLabel: getCaseLabel(invoice.linked_case),
       practitionerName: "N/A",
-      reviewerNotes: invoice.proof_of_payment_document_id ? "Proof of payment linked to this invoice." : "",
+      reviewerNotes: invoice.proof_of_payment_document_id
+        ? "Proof of payment linked to this invoice."
+        : "",
       rejectionReason: "",
-      relatedPractitionerId: invoice.linked_case?.assigned_consultant_id ?? invoice.clients?.assigned_consultant_id ?? null,
+      relatedPractitionerId:
+        invoice.linked_case?.assigned_consultant_id ??
+        invoice.clients?.assigned_consultant_id ??
+        null,
       filePath: null,
       documentId: null,
       invoice,
@@ -426,7 +507,10 @@ export default function AdminDocuments() {
         return false;
       }
 
-      if (documentStateFilter === "outstanding" && !["uploaded", "pending_review"].includes(item.status)) {
+      if (
+        documentStateFilter === "outstanding" &&
+        !["uploaded", "pending_review"].includes(item.status)
+      ) {
         return false;
       }
 
@@ -434,7 +518,10 @@ export default function AdminDocuments() {
         return false;
       }
 
-      if (documentStateFilter === "attention" && !["uploaded", "pending_review", "rejected"].includes(item.status)) {
+      if (
+        documentStateFilter === "attention" &&
+        !["uploaded", "pending_review", "rejected"].includes(item.status)
+      ) {
         return false;
       }
 
@@ -459,16 +546,28 @@ export default function AdminDocuments() {
         item.caseLabel,
         item.practitionerName,
         item.practitionerBusinessName ?? "",
-      ].join(" ").toLowerCase();
+      ]
+        .join(" ")
+        .toLowerCase();
 
       return haystack.includes(normalizedSearch);
     });
-  }, [activeGroup, allItems, documentStateFilter, practitionerIdFilter, searchQuery, statusFilter]);
+  }, [
+    activeGroup,
+    allItems,
+    documentStateFilter,
+    practitionerIdFilter,
+    searchQuery,
+    statusFilter,
+  ]);
 
-  const isLoading = loadingDocuments || loadingPractitionerProfiles || loadingInvoices;
+  const isLoading =
+    loadingDocuments || loadingPractitionerProfiles || loadingInvoices;
 
   const openStorageDocument = async (filePath: string) => {
-    const { data, error } = await supabase.storage.from("documents").createSignedUrl(filePath, 60 * 5);
+    const { data, error } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(filePath, 60 * 5);
     if (error || !data?.signedUrl) {
       toast.error(error?.message || "Unable to open document.");
       return;
@@ -482,7 +581,8 @@ export default function AdminDocuments() {
         invoiceNumber: `INV-${item.invoice.invoice_number}`,
         clientName: item.clientName,
         caseReference: item.caseLabel,
-        serviceDescription: item.invoice.title || item.invoice.description || "Client invoice",
+        serviceDescription:
+          item.invoice.title || item.invoice.description || "Client invoice",
         issueDate: item.invoice.issue_date,
         dueDate: item.invoice.due_date,
         status: item.invoice.status,
@@ -518,7 +618,10 @@ export default function AdminDocuments() {
     setSavingReview(true);
 
     try {
-      if (selectedItem.sourceType === "practitioner" && selectedItem.practitionerProfileId) {
+      if (
+        selectedItem.sourceType === "practitioner" &&
+        selectedItem.practitionerProfileId
+      ) {
         const nextVerificationStatus =
           reviewStatus === "approved"
             ? "verified"
@@ -528,7 +631,10 @@ export default function AdminDocuments() {
                 ? "pending"
                 : "uploaded";
 
-        const noteParts = [reviewNotes.trim(), reviewStatus === "rejected" ? rejectionReason.trim() : ""].filter(Boolean);
+        const noteParts = [
+          reviewNotes.trim(),
+          reviewStatus === "rejected" ? rejectionReason.trim() : "",
+        ].filter(Boolean);
 
         const { error } = await supabase
           .from("practitioner_profiles")
@@ -546,12 +652,16 @@ export default function AdminDocuments() {
         const update: Database["public"]["Tables"]["documents"]["Update"] = {
           status: reviewStatus,
           notes: reviewNotes.trim() || null,
-          rejection_reason: reviewStatus === "rejected" ? rejectionReason.trim() || null : null,
+          rejection_reason:
+            reviewStatus === "rejected" ? rejectionReason.trim() || null : null,
           reviewed_at: new Date().toISOString(),
           reviewed_by: user.id,
         };
 
-        const { error } = await supabase.from("documents").update(update).eq("id", selectedItem.documentId);
+        const { error } = await supabase
+          .from("documents")
+          .update(update)
+          .eq("id", selectedItem.documentId);
         if (error) {
           throw error;
         }
@@ -571,22 +681,33 @@ export default function AdminDocuments() {
             title: selectedItem.title,
             status: reviewStatus,
             notes: reviewNotes.trim() || null,
-            rejection_reason: reviewStatus === "rejected" ? rejectionReason.trim() || null : null,
+            rejection_reason:
+              reviewStatus === "rejected"
+                ? rejectionReason.trim() || null
+                : null,
           },
         });
       }
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["staff-documents"] }),
-        queryClient.invalidateQueries({ queryKey: ["staff-practitioner-verification-documents"] }),
-        queryClient.invalidateQueries({ queryKey: ["staff-payment-documents"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["staff-practitioner-verification-documents"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["staff-payment-documents"],
+        }),
       ]);
 
       toast.success("Document review updated.");
       setIsReviewDialogOpen(false);
       setSelectedItem(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to save document review.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to save document review.",
+      );
     } finally {
       setSavingReview(false);
     }
@@ -604,48 +725,169 @@ export default function AdminDocuments() {
       <section className="rounded-[28px] border border-border bg-card p-6 shadow-card sm:p-8">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-primary/70 font-body">Admin Documents</p>
-            <h1 className="mt-2 font-display text-3xl text-foreground">Structured document management</h1>
+            <p className="text-sm uppercase tracking-[0.2em] text-primary/70 font-body">
+              Admin Documents
+            </p>
+            <h1 className="mt-2 font-display text-3xl text-foreground">
+              Structured document management
+            </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground font-body">
-              Review client uploads, practitioner verification files, case attachments, and payment records in separate queues so the admin workspace stays manageable as volume grows.
+              Review client uploads, practitioner verification files, case
+              attachments, and payment records in separate queues so the admin
+              workspace stays manageable as volume grows.
             </p>
           </div>
 
-          {(practitionerIdFilter || documentStateFilter) ? (
+          {practitionerIdFilter || documentStateFilter ? (
             <div className="rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm text-foreground font-body">
               <p>
                 Linked filter active
-                {practitionerIdFilter ? ` • Practitioner: ${practitionerIdFilter}` : ""}
+                {practitionerIdFilter
+                  ? ` • Practitioner: ${practitionerIdFilter}`
+                  : ""}
                 {documentStateFilter ? ` • State: ${documentStateFilter}` : ""}
               </p>
-              <Button type="button" variant="ghost" className="mt-2 h-auto px-0 text-primary" onClick={clearLinkedFilters}>
+              <Button
+                type="button"
+                variant="ghost"
+                className="mt-2 h-auto px-0 text-primary"
+                onClick={clearLinkedFilters}
+              >
                 Clear linked filters
               </Button>
             </div>
           ) : null}
         </div>
       </section>
+      <section className="rounded-[28px] border border-border bg-card p-6 shadow-card sm:p-8">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between mb-6">
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(groupLabels).map(([key, label]) => (
+              <Button
+                key={key}
+                type="button"
+                variant={activeGroup === key ? "default" : "outline"}
+                className="rounded-full px-4"
+                onClick={() => setActiveGroup(key as GroupKey)}
+              >
+                {label}
+                <span className="ml-2 inline-flex h-6 min-w-[24px] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-700">
+                  {countsByGroup[key as GroupKey]}
+                </span>
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search documents, cases, clients..."
+                className="rounded-xl pl-9"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {statusOptions.map((item) => (
+                <Button
+                  key={item.value}
+                  type="button"
+                  variant={statusFilter === item.value ? "default" : "outline"}
+                  className="rounded-full px-4"
+                  onClick={() => setStatusFilter(item.value)}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="text-muted-foreground font-body">
+            Loading documents...
+          </div>
+        ) : filteredItems.length > 0 ? (
+          <div className="grid gap-3">
+            {filteredItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => void openItem(item)}
+                className="w-full text-left bg-card rounded-xl border border-border shadow-card p-5 hover:shadow-elevated hover:border-primary/30 transition-all"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-display text-lg font-semibold text-foreground truncate">
+                        {item.title}
+                      </p>
+                      <Badge className={getStatusBadgeClass(item.status)}>
+                        {formatStatusLabel(item.status)}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2 truncate">
+                      {item.subtitle}
+                    </p>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    <p>{item.clientName}</p>
+                    <p>{item.caseLabel}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-card rounded-xl border border-border p-12 text-center">
+            <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-foreground font-semibold mb-2">
+              No documents found
+            </p>
+            <p className="text-sm text-muted-foreground font-body">
+              Adjust your filters or search terms to find uploaded documents,
+              invoices, or practitioner verification files.
+            </p>
+          </div>
+        )}
+      </section>
       <DashboardItemDialog
         open={isReviewDialogOpen}
         onOpenChange={setIsReviewDialogOpen}
-        title={selectedItem ? `Review ${selectedItem.title}` : "Review document"}
+        title={
+          selectedItem ? `Review ${selectedItem.title}` : "Review document"
+        }
         description="Save an admin decision and keep review notes for future follow-up."
       >
         <div className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Client</p>
-              <p className="mt-2 text-sm text-foreground font-body">{selectedItem?.clientName || "N/A"}</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">
+                Client
+              </p>
+              <p className="mt-2 text-sm text-foreground font-body">
+                {selectedItem?.clientName || "N/A"}
+              </p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Case / Context</p>
-              <p className="mt-2 text-sm text-foreground font-body">{selectedItem?.caseLabel || "N/A"}</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">
+                Case / Context
+              </p>
+              <p className="mt-2 text-sm text-foreground font-body">
+                {selectedItem?.caseLabel || "N/A"}
+              </p>
             </div>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-foreground font-body">Decision</label>
-            <Select value={reviewStatus} onValueChange={(value) => setReviewStatus(value as ReviewAction)}>
+            <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+              Decision
+            </label>
+            <Select
+              value={reviewStatus}
+              onValueChange={(value) => setReviewStatus(value as ReviewAction)}
+            >
               <SelectTrigger className="rounded-xl">
                 <SelectValue />
               </SelectTrigger>
@@ -659,7 +901,9 @@ export default function AdminDocuments() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-foreground font-body">Admin notes</label>
+            <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+              Admin notes
+            </label>
             <Textarea
               value={reviewNotes}
               onChange={(event) => setReviewNotes(event.target.value)}
@@ -670,7 +914,9 @@ export default function AdminDocuments() {
 
           {reviewStatus === "rejected" ? (
             <div>
-              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Rejection reason</label>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+                Rejection reason
+              </label>
               <Textarea
                 value={rejectionReason}
                 onChange={(event) => setRejectionReason(event.target.value)}
@@ -681,10 +927,21 @@ export default function AdminDocuments() {
           ) : null}
 
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsReviewDialogOpen(false)} disabled={savingReview}>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setIsReviewDialogOpen(false)}
+              disabled={savingReview}
+            >
               Cancel
             </Button>
-            <Button type="button" className="rounded-xl" onClick={() => void saveReview()} disabled={savingReview}>
+            <Button
+              type="button"
+              className="rounded-xl"
+              onClick={() => void saveReview()}
+              disabled={savingReview}
+            >
               {savingReview ? "Saving..." : "Save Review"}
             </Button>
           </div>
