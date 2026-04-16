@@ -11,6 +11,39 @@ import { sendProofOfPaymentUploadedNotification } from "@/lib/paymentNotificatio
 import { formatCaseReference } from "@/lib/practitionerAssignments";
 import { openInvoicePdf } from "@/lib/invoicePdf";
 
+type PractitionerBankProfile = {
+  profile_id: string;
+  bank_account_holder_name: string | null;
+  bank_name: string | null;
+  bank_branch_name: string | null;
+  bank_branch_code: string | null;
+  bank_account_number: string | null;
+  bank_account_type: string | null;
+  vat_number: string | null;
+  profiles?: {
+    full_name?: string | null;
+  } | null;
+};
+
+function formatPractitionerBankDetails(profile: PractitionerBankProfile | null) {
+  if (!profile) {
+    return null;
+  }
+
+  const accountHolder = profile.bank_account_holder_name || profile.profiles?.full_name || "";
+  const lines = [
+    accountHolder && `Account Holder: ${accountHolder}`,
+    profile.bank_name && `Bank: ${profile.bank_name}`,
+    profile.bank_branch_name && `Branch: ${profile.bank_branch_name}`,
+    profile.bank_branch_code && `Branch Code: ${profile.bank_branch_code}`,
+    profile.bank_account_number && `Account Number: ${profile.bank_account_number}`,
+    profile.bank_account_type && `Account Type: ${profile.bank_account_type}`,
+    profile.vat_number && `VAT Number: ${profile.vat_number}`,
+  ].filter(Boolean);
+
+  return lines.length ? lines.join("\n") : null;
+}
+
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
 }
@@ -54,7 +87,7 @@ export default function Invoices() {
     queryFn: async () => {
       const { data } = await supabase
         .from("invoices")
-        .select("*, created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
+        .select("*, cases(case_title, assigned_consultant_id), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
         .eq("client_id", client!.id)
         .order("created_at", { ascending: false });
       return data ?? [];
@@ -62,8 +95,52 @@ export default function Invoices() {
     enabled: !!client,
   });
 
+  const practitionerIds = Array.from(new Set(
+    (invoices ?? [])
+      .flatMap((invoice) => [invoice.created_by, invoice.cases?.assigned_consultant_id])
+      .filter((value): value is string => Boolean(value)),
+  ));
+
+  const { data: practitionerProfiles } = useQuery({
+    queryKey: ["invoice-practitioner-bank-profiles", practitionerIds.join(",")],
+    queryFn: async () => {
+      if (!practitionerIds.length) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from("practitioner_profiles")
+        .select("profile_id, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, profiles!practitioner_profiles_profile_id_fkey(full_name)")
+        .in("profile_id", practitionerIds);
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as PractitionerBankProfile[];
+    },
+    enabled: practitionerIds.length > 0,
+  });
+
+  const practitionerProfileMap = new Map((practitionerProfiles ?? []).map((profile) => [profile.profile_id, profile]));
+
   const selectedInvoice = invoices?.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
   const disclaimerText = "Payment is made directly to the practitioner. Acapolite Consulting is not responsible for payment processing or payment disputes.";
+
+  const getInvoiceBankDetails = (invoice: NonNullable<typeof selectedInvoice>) => {
+    if (invoice.practitioner_bank_details?.trim()) {
+      return invoice.practitioner_bank_details;
+    }
+
+    const assignedPractitionerId = invoice.cases?.assigned_consultant_id || null;
+    const createdByPractitioner = invoice.created_by || null;
+    const profile =
+      (assignedPractitionerId ? practitionerProfileMap.get(assignedPractitionerId) : null)
+      || (createdByPractitioner ? practitionerProfileMap.get(createdByPractitioner) : null)
+      || null;
+
+    return formatPractitionerBankDetails(profile);
+  };
 
   useEffect(() => {
     setProofReference(selectedInvoice?.payment_reference || "");
@@ -302,7 +379,7 @@ export default function Invoices() {
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Practitioner Banking Details</p>
               <div className="rounded-2xl border border-border p-4">
                 <p className="font-body text-foreground whitespace-pre-wrap">
-                  {selectedInvoice.practitioner_bank_details || "Banking details will be provided by the practitioner."}
+                  {getInvoiceBankDetails(selectedInvoice) || "Banking details will be provided by the practitioner."}
                 </p>
               </div>
             </div>

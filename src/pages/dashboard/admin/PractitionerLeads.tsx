@@ -199,6 +199,35 @@ export default function PractitionerLeads() {
   const formatCategoryList = (categories: Enums<"service_request_category">[]) =>
     categories.map((category) => categoryLabelMap.get(category) || formatServiceRequestLabel(category)).join(", ");
 
+  const formatRequestDate = (value: string) =>
+    new Date(value).toLocaleDateString("en-ZA", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+  const formatRequestTime = (value: string) =>
+    new Date(value).toLocaleTimeString("en-ZA", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  const formatFileSize = (value: number | null) => {
+    if (!value || value <= 0) {
+      return "Size not available";
+    }
+
+    if (value >= 1024 * 1024) {
+      return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    if (value >= 1024) {
+      return `${Math.round(value / 1024)} KB`;
+    }
+
+    return `${value} B`;
+  };
+
   const filteredRequests = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
     const servicesOffered = new Set(practitionerProfile?.services_offered ?? []);
@@ -704,52 +733,177 @@ export default function PractitionerLeads() {
       >
         {selectedRequest ? (
           <div className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Service Needed</p>
-                <p className="mt-2 text-sm text-foreground font-body">
-                  {formatServiceList(resolveServiceList(selectedRequest))}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground font-body">
-                  Categories: {formatCategoryList(resolveCategoryList(selectedRequest)) || "Not specified"}
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Details</p>
+                {hasApprovedAccess ? (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Full Name</p>
+                      <p className="mt-1 text-sm text-foreground font-body">{selectedRequest.full_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Client Type</p>
+                      <p className="mt-1 text-sm text-foreground font-body">{formatServiceRequestLabel(selectedRequest.client_type)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Email Address</p>
+                      <p className="mt-1 text-sm text-foreground font-body break-all">{selectedRequest.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Phone Number</p>
+                      <p className="mt-1 text-sm text-foreground font-body">{selectedRequest.phone || "Not provided"}</p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Province</p>
+                      <p className="mt-1 text-sm text-foreground font-body">{selectedRequest.province || "Not provided"}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-sm text-muted-foreground font-body">Full name hidden until you unlock this lead.</p>
+                    <p className="text-sm text-muted-foreground font-body">Phone number, email address, and province will appear after unlock.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Request Details</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Request ID</p>
+                    <p className="mt-1 text-sm font-mono text-foreground">{selectedRequest.id}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Credit Cost</p>
+                    <p className="mt-1 text-sm text-foreground font-body">
+                      {getServiceRequestCreditCost(selectedRequest.service_needed)} credit
+                      {getServiceRequestCreditCost(selectedRequest.service_needed) === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Service Category</p>
+                    <p className="mt-1 text-sm text-foreground font-body">{formatCategoryList(resolveCategoryList(selectedRequest)) || "Not specified"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Services Needed</p>
+                    <p className="mt-1 text-sm text-foreground font-body">{formatServiceList(resolveServiceList(selectedRequest)) || "Not specified"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Priority Level</p>
+                    <p className="mt-1 text-sm text-foreground font-body">{formatServiceRequestLabel(selectedRequest.priority_level)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Status</p>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestStatusClass(selectedRequest.status)}`}>
+                        {formatServiceRequestLabel(selectedRequest.status)}
+                      </Badge>
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestRiskClass(selectedRequest.risk_indicator)}`}>
+                        {formatServiceRequestLabel(selectedRequest.risk_indicator)} risk
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Date Requested</p>
+                    <p className="mt-1 text-sm text-foreground font-body">{formatRequestDate(selectedRequest.created_at)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Time Requested</p>
+                    <p className="mt-1 text-sm text-foreground font-body">{formatRequestTime(selectedRequest.created_at)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Request Description</p>
+                {hasApprovedAccess ? (
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">
+                    {selectedRequest.description || "No description was provided with this request."}
+                  </p>
+                ) : (
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground font-body">
+                    Unlock this lead to view the full client description and request background.
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Supporting Notes</p>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">
+                  {hasApprovedAccess
+                    ? "No additional supporting notes were submitted with this request."
+                    : "Unlock this lead to review the complete request profile."}
                 </p>
               </div>
-              <div className="rounded-2xl border border-border bg-accent/20 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Credit Cost</p>
-                <p className="mt-2 text-sm text-foreground font-body">
-                  {getServiceRequestCreditCost(selectedRequest.service_needed)} credit
-                  {getServiceRequestCreditCost(selectedRequest.service_needed) === 1 ? "" : "s"}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+                  {selectedRequest.client_type === "individual"
+                    ? formatServiceRequestLabel(selectedRequest.identity_document_type || "id_number")
+                    : "Company Registration Number"}
+                </p>
+                <p className="mt-3 text-sm text-foreground font-body">
+                  {hasApprovedAccess
+                    ? (selectedRequest.client_type === "individual"
+                      ? selectedRequest.id_number || "Not provided"
+                      : selectedRequest.company_registration_number || "Not provided")
+                    : "Unlock this lead to view submitted identity or registration details."}
                 </p>
               </div>
-              <div className="rounded-2xl border border-border bg-accent/20 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Contact</p>
+
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">SARS Debt And Returns</p>
                 {hasApprovedAccess ? (
                   <>
-                    <p className="mt-2 text-sm text-foreground font-body">{selectedRequest.email}</p>
-                    <p className="mt-1 text-sm text-muted-foreground font-body">{selectedRequest.phone}</p>
+                    <p className="mt-3 text-sm text-foreground font-body">
+                      Debt: R {Number(selectedRequest.sars_debt_amount || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground font-body">
+                      Returns Filed: {selectedRequest.returns_filed ? "Yes" : "No"}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {getServiceRequestIssueFlags({
+                        hasDebtFlag: selectedRequest.has_debt_flag,
+                        missingReturnsFlag: selectedRequest.missing_returns_flag,
+                        missingDocumentsFlag: selectedRequest.missing_documents_flag,
+                      }).length ? getServiceRequestIssueFlags({
+                        hasDebtFlag: selectedRequest.has_debt_flag,
+                        missingReturnsFlag: selectedRequest.missing_returns_flag,
+                        missingDocumentsFlag: selectedRequest.missing_documents_flag,
+                      }).map((flag) => (
+                        <span key={flag} className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">{flag}</span>
+                      )) : (
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">No active issue flags</span>
+                      )}
+                    </div>
                   </>
                 ) : (
-                  <>
-                    <p className="mt-2 text-sm text-muted-foreground font-body">Hidden - Unlock to View</p>
-                    <p className="mt-1 text-sm text-muted-foreground font-body">Hidden - Unlock to View</p>
-                  </>
+                  <p className="mt-3 text-sm text-muted-foreground font-body">
+                    Unlock this lead to view the client tax indicators, debt amount, and return status.
+                  </p>
                 )}
               </div>
             </div>
 
             <div className="rounded-2xl border border-border bg-card p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Description</p>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">{selectedRequest.description}</p>
-            </div>
-
-            <div className="rounded-2xl border border-border bg-card p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Supporting Documents</p>
               <div className="mt-4 space-y-3">
-                {selectedDocuments.length ? selectedDocuments.map((document) => (
+                {hasApprovedAccess ? (selectedDocuments.length ? selectedDocuments.map((document) => (
                   <div key={document.id} className="flex flex-col gap-3 rounded-2xl border border-border bg-background/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground font-body">{document.file_name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground font-body">{document.mime_type || "Unknown file type"}</p>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground font-body">{document.title || document.file_name}</p>
+                      <p className="text-xs text-muted-foreground font-body">{document.file_name}</p>
+                      <p className="text-xs text-muted-foreground font-body">
+                        {document.mime_type || "Unknown file type"} | {formatFileSize(document.file_size)}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-body">
+                        Uploaded {formatRequestDate(document.uploaded_at)} at {formatRequestTime(document.uploaded_at)}
+                      </p>
                     </div>
                     <Button type="button" variant="outline" className="rounded-xl" onClick={() => void openDocument(document.file_path)}>
                       Open File
@@ -758,6 +912,10 @@ export default function PractitionerLeads() {
                   </div>
                 )) : (
                   <p className="text-sm text-muted-foreground font-body">No documents were uploaded for this lead.</p>
+                )) : (
+                  <p className="text-sm text-muted-foreground font-body">
+                    Unlock this lead to view and open any supporting documents uploaded by the client.
+                  </p>
                 )}
               </div>
             </div>

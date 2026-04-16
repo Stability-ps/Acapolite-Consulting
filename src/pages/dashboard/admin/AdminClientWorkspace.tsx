@@ -850,6 +850,41 @@ export default function AdminClientWorkspace() {
       return;
     }
 
+    const selectedCase = clientCases?.find((caseItem) => caseItem.id === invoiceForm.case_id) ?? null;
+    const practitionerId =
+      selectedCase?.assigned_consultant_id
+      || clientDetails?.assigned_consultant_id
+      || (role === "consultant" ? user?.id ?? null : null);
+
+    let practitionerBankDetails: string | null = null;
+
+    if (practitionerId) {
+      const { data: bankProfile, error: bankProfileError } = await supabase
+        .from("practitioner_profiles")
+        .select("bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, profiles!practitioner_profiles_profile_id_fkey(full_name)")
+        .eq("profile_id", practitionerId)
+        .maybeSingle();
+
+      if (bankProfileError) {
+        toast.error(bankProfileError.message);
+        setCreatingInvoice(false);
+        return;
+      }
+
+      const accountHolder = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
+      const lines = [
+        accountHolder && `Account Holder: ${accountHolder}`,
+        bankProfile?.bank_name && `Bank: ${bankProfile.bank_name}`,
+        bankProfile?.bank_branch_name && `Branch: ${bankProfile.bank_branch_name}`,
+        bankProfile?.bank_branch_code && `Branch Code: ${bankProfile.bank_branch_code}`,
+        bankProfile?.bank_account_number && `Account Number: ${bankProfile.bank_account_number}`,
+        bankProfile?.bank_account_type && `Account Type: ${bankProfile.bank_account_type}`,
+        bankProfile?.vat_number && `VAT Number: ${bankProfile.vat_number}`,
+      ].filter(Boolean);
+
+      practitionerBankDetails = lines.length ? lines.join("\n") : null;
+    }
+
     const nowIso = new Date().toISOString();
     const payload: TablesInsert<"invoices"> = {
       client_id: selectedClientId,
@@ -863,6 +898,7 @@ export default function AdminClientWorkspace() {
       status: invoiceForm.status,
       due_date: invoiceForm.due_date || null,
       created_by: user?.id ?? null,
+      practitioner_bank_details: practitionerBankDetails,
     };
     if (invoiceForm.status === "issued") {
       payload.sent_at = nowIso;
