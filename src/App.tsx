@@ -35,6 +35,7 @@ import Cases from "./pages/dashboard/Cases";
 import Documents from "./pages/dashboard/Documents";
 import Invoices from "./pages/dashboard/Invoices";
 import Messages from "./pages/dashboard/Messages";
+import Notifications from "./pages/dashboard/Notifications";
 import Deadlines from "./pages/dashboard/Deadlines";
 import SettingsPage from "./pages/dashboard/Settings";
 import AdminClients from "./pages/dashboard/admin/AdminClients";
@@ -42,6 +43,7 @@ import AdminCases from "./pages/dashboard/admin/AdminCases";
 import AdminInvoices from "./pages/dashboard/admin/AdminInvoices";
 import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
 import AdminMessages from "./pages/dashboard/admin/AdminMessages";
+import AdminNotifications from "./pages/dashboard/admin/AdminNotifications";
 import AdminClientWorkspace from "./pages/dashboard/admin/AdminClientWorkspace";
 import AdminUsers from "./pages/dashboard/admin/AdminUsers";
 import AdminServiceRequests from "./pages/dashboard/admin/AdminServiceRequests";
@@ -59,7 +61,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
@@ -84,6 +86,7 @@ const App = () => (
 
               <Route element={<RequireRole allowedRoles={["client"]} />}>
                 <Route path="client" element={<DashboardOverview />} />
+                <Route path="client/notifications" element={<Notifications />} />
                 <Route path="client/requests" element={<ServiceRequests />} />
                 <Route path="client/cases" element={<Cases />} />
                 <Route path="client/documents" element={<Documents />} />
@@ -97,6 +100,7 @@ const App = () => (
               <Route element={<RequireRole allowedRoles={["admin", "consultant"]} />}>
                 <Route element={<RequireStaffPermission permission="can_view_overview" />}>
                   <Route path="staff" element={<StaffOverviewRouter />} />
+                  <Route path="staff/notifications" element={<AdminNotifications />} />
                 </Route>
                 <Route element={<RequireRole allowedRoles={["consultant"]} />}>
                   <Route path="staff/profile" element={<PractitionerProfile />} />

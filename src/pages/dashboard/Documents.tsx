@@ -10,6 +10,7 @@ import { useClientRecord } from "@/hooks/useClientRecord";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { sendClientDocumentUploadConfirmation, sendClientDocumentUploadNotification } from "@/lib/documentUploadNotifications";
 import { logSystemActivity } from "@/lib/systemActivityLog";
+import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 
 const documentTypeOptions = [
   "IRP5",
@@ -53,6 +54,7 @@ async function uploadDocumentFile(file: File, userId: string, clientId: string) 
 }
 
 export default function Documents() {
+  useNotificationSectionRead("documents");
   const { user, profile, role } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();

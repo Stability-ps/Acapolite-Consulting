@@ -5,6 +5,7 @@ import type { Enums, TablesInsert, TablesUpdate } from "@/integrations/supabase/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Search } from "lucide-react";
 import { toast } from "sonner";
@@ -62,8 +63,33 @@ type PractitionerBankProfile = {
   bank_account_number: string | null;
   bank_account_type: string | null;
   vat_number: string | null;
+  banking_verification_status: string;
+  banking_verified_at: string | null;
+  banking_verified_by: string | null;
   profiles?: { full_name?: string | null } | null;
 };
+
+function getBankingVerificationLabel(status?: string | null) {
+  switch (status) {
+    case "verified":
+      return "Verified";
+    case "rejected":
+      return "Rejected";
+    default:
+      return "Pending Verification";
+  }
+}
+
+function getBankingVerificationBadgeClass(status?: string | null) {
+  switch (status) {
+    case "verified":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "rejected":
+      return "border-red-200 bg-red-50 text-red-700";
+    default:
+      return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+}
 
 function getClientName(invoice: StaffInvoice) {
   return (
@@ -180,7 +206,7 @@ export default function AdminInvoices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("practitioner_profiles")
-        .select("profile_id, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, profiles!practitioner_profiles_profile_id_fkey(full_name)")
+        .select("profile_id, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, banking_verification_status, banking_verified_at, banking_verified_by, profiles!practitioner_profiles_profile_id_fkey(full_name)")
         .order("profile_id", { ascending: true });
       if (error) {
         throw error;
@@ -288,6 +314,22 @@ export default function AdminInvoices() {
   const resolveBankProfile = () => {
     const practitionerId = resolvePractitionerId();
     if (!practitionerId) return null;
+    return practitionerProfileMap.get(practitionerId) ?? null;
+  };
+
+  const resolveInvoiceBankProfile = (invoice: StaffInvoice | null) => {
+    if (!invoice) {
+      return null;
+    }
+
+    const selectedCase = (cases ?? []).find((caseItem: { id: string; assigned_consultant_id?: string | null }) => caseItem.id === invoice.case_id);
+    const selectedClient = (clients ?? []).find((client: { id: string; assigned_consultant_id?: string | null }) => client.id === invoice.client_id);
+    const practitionerId = selectedCase?.assigned_consultant_id || selectedClient?.assigned_consultant_id || null;
+
+    if (!practitionerId) {
+      return null;
+    }
+
     return practitionerProfileMap.get(practitionerId) ?? null;
   };
 
@@ -480,6 +522,11 @@ export default function AdminInvoices() {
 
     if (!bankProfile || !hasCompleteBanking) {
       toast.error("Practitioner banking details are incomplete. Update the banking profile before creating an invoice.");
+      return;
+    }
+
+    if (bankProfile.banking_verification_status !== "verified") {
+      toast.error("Practitioner banking details must be verified by admin before creating an invoice.");
       return;
     }
 
@@ -938,6 +985,18 @@ export default function AdminInvoices() {
 
             <div>
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Practitioner Banking Details</label>
+              {(() => {
+                const bankProfile = resolveInvoiceBankProfile(selectedInvoice);
+                if (!bankProfile) {
+                  return null;
+                }
+
+                return (
+                  <Badge className={`mb-2 rounded-full border px-3 py-1 text-xs font-semibold ${getBankingVerificationBadgeClass(bankProfile.banking_verification_status)}`}>
+                    {getBankingVerificationLabel(bankProfile.banking_verification_status)}
+                  </Badge>
+                );
+              })()}
               <div className="rounded-2xl border border-border p-4">
                 <p className="font-body text-foreground whitespace-pre-wrap">
                   {selectedInvoice.practitioner_bank_details || "Banking details were not captured on this invoice."}

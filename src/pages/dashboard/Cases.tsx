@@ -14,6 +14,7 @@ import { RatingStars } from "@/components/dashboard/RatingStars";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { formatCaseReference } from "@/lib/practitionerAssignments";
+import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 
 const caseTypeOptions = [
   "individual_tax_return",
@@ -76,6 +77,7 @@ function parseRequestMessage(messageText?: string | null) {
 }
 
 export default function Cases() {
+  useNotificationSectionRead("cases");
   const { user } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();

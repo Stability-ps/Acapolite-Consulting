@@ -7,12 +7,14 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
+import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 
 function getSenderLabel(isOwnMessage: boolean) {
   return isOwnMessage ? "You" : "Acapolite Consulting";
 }
 
 export default function Messages() {
+  useNotificationSectionRead("messages");
   const { user } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();

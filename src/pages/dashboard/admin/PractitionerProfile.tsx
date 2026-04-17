@@ -14,6 +14,28 @@ import { RatingStars } from "@/components/dashboard/RatingStars";
 import { serviceNeededOptions } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, normalizeServicesOffered } from "@/lib/practitionerMarketplace";
 
+function getBankingVerificationBadgeClass(status?: string | null) {
+  switch (status) {
+    case "verified":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "rejected":
+      return "border-red-200 bg-red-50 text-red-700";
+    default:
+      return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+}
+
+function getBankingVerificationLabel(status?: string | null) {
+  switch (status) {
+    case "verified":
+      return "Verified";
+    case "rejected":
+      return "Rejected";
+    default:
+      return "Pending Admin Review";
+  }
+}
+
 const initialPractitionerForm: PractitionerProfileFormState = {
   businessName: "",
   registrationNumber: "",
@@ -233,6 +255,15 @@ export default function PractitionerProfile() {
                 <p className="mt-3 text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Availability</p>
                 <p className="mt-2 text-sm font-semibold text-foreground">
                   {formatAvailabilityLabel(form.availabilityStatus)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/20 p-4 sm:col-span-2">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">Banking Details</p>
+                <Badge className={`mt-3 rounded-full border px-3 py-1 text-xs font-semibold ${getBankingVerificationBadgeClass(practitionerProfile?.banking_verification_status)}`}>
+                  {getBankingVerificationLabel(practitionerProfile?.banking_verification_status)}
+                </Badge>
+                <p className="mt-3 text-sm text-muted-foreground font-body">
+                  Banking details must be reviewed and verified by the Acapolite admin team before they are used on invoices.
                 </p>
               </div>
             </div>

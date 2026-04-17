@@ -10,6 +10,7 @@ import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { sendClientMessageNotification } from "@/lib/clientMessageNotifications";
 import { formatCaseReference } from "@/lib/practitionerAssignments";
 import { useSearchParams } from "react-router-dom";
+import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 
 type ConversationRecord = {
   id: string;
@@ -75,6 +76,7 @@ function getConversationTags(conversation: ConversationRecord) {
 }
 
 export default function AdminMessages() {
+  useNotificationSectionRead("messages");
   const { user, role, profile, hasStaffPermission } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();

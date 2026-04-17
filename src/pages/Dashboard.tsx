@@ -6,6 +6,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { dashboardDescriptionByRole, dashboardTitleByRole } from "@/lib/portal";
 import { AnimatePresence, motion } from "framer-motion";
 import { PanelLeft } from "lucide-react";
+import { NotificationBell } from "@/components/dashboard/NotificationBell";
 
 export default function Dashboard() {
   const { user, loading, role } = useAuth();
@@ -30,15 +31,18 @@ export default function Dashboard() {
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-border/70 bg-white/78 px-4 py-3 backdrop-blur-xl sm:px-6">
-            <div className="dashboard-page flex items-start gap-4">
-              <SidebarTrigger className="mt-1 mr-0 h-11 w-auto gap-2 rounded-full border border-primary/30 bg-primary px-4 text-primary-foreground shadow-[0_12px_26px_rgba(15,23,42,0.25)] hover:bg-primary/95">
-                <PanelLeft className="h-5 w-5" />
-                <span className="text-sm font-semibold tracking-wide sm:hidden">Menu</span>
-              </SidebarTrigger>
-              <div>
-                <h2 className="font-display text-xl font-semibold text-foreground">{title}</h2>
-                <p className="text-sm text-muted-foreground font-body">{description}</p>
+            <div className="dashboard-page flex items-start justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <SidebarTrigger className="mt-1 mr-0 h-11 w-auto gap-2 rounded-full border border-primary/30 bg-primary px-4 text-primary-foreground shadow-[0_12px_26px_rgba(15,23,42,0.25)] hover:bg-primary/95">
+                  <PanelLeft className="h-5 w-5" />
+                  <span className="text-sm font-semibold tracking-wide sm:hidden">Menu</span>
+                </SidebarTrigger>
+                <div>
+                  <h2 className="font-display text-xl font-semibold text-foreground">{title}</h2>
+                  <p className="text-sm text-muted-foreground font-body">{description}</p>
+                </div>
               </div>
+              <NotificationBell />
             </div>
           </header>
           <main className="flex-1 overflow-auto px-4 py-5 sm:px-6 sm:py-6">

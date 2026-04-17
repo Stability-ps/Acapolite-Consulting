@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Upload, X } from "lucide-react";
 import { toast } from "sonner";
@@ -20,10 +21,35 @@ type PractitionerBankProfile = {
   bank_account_number: string | null;
   bank_account_type: string | null;
   vat_number: string | null;
+  banking_verification_status: string;
+  banking_verified_at: string | null;
+  banking_verified_by: string | null;
   profiles?: {
     full_name?: string | null;
   } | null;
 };
+
+function getBankingVerificationLabel(status?: string | null) {
+  switch (status) {
+    case "verified":
+      return "Verified";
+    case "rejected":
+      return "Rejected";
+    default:
+      return "Pending Verification";
+  }
+}
+
+function getBankingVerificationBadgeClass(status?: string | null) {
+  switch (status) {
+    case "verified":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "rejected":
+      return "border-red-200 bg-red-50 text-red-700";
+    default:
+      return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+}
 
 function formatPractitionerBankDetails(profile: PractitionerBankProfile | null) {
   if (!profile) {
@@ -110,7 +136,7 @@ export default function Invoices() {
 
       const { data, error } = await supabase
         .from("practitioner_profiles")
-        .select("profile_id, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, profiles!practitioner_profiles_profile_id_fkey(full_name)")
+        .select("profile_id, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, banking_verification_status, banking_verified_at, banking_verified_by, profiles!practitioner_profiles_profile_id_fkey(full_name)")
         .in("profile_id", practitionerIds);
 
       if (error) {
@@ -140,6 +166,17 @@ export default function Invoices() {
       || null;
 
     return formatPractitionerBankDetails(profile);
+  };
+
+  const getInvoiceBankProfile = (invoice: NonNullable<typeof selectedInvoice>) => {
+    const assignedPractitionerId = invoice.cases?.assigned_consultant_id || null;
+    const createdByPractitioner = invoice.created_by || null;
+
+    return (
+      (assignedPractitionerId ? practitionerProfileMap.get(assignedPractitionerId) : null)
+      || (createdByPractitioner ? practitionerProfileMap.get(createdByPractitioner) : null)
+      || null
+    );
   };
 
   useEffect(() => {
@@ -377,6 +414,18 @@ export default function Invoices() {
 
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Practitioner Banking Details</p>
+              {(() => {
+                const bankProfile = getInvoiceBankProfile(selectedInvoice);
+                if (!bankProfile) {
+                  return null;
+                }
+
+                return (
+                  <Badge className={`mb-2 rounded-full border px-3 py-1 text-xs font-semibold ${getBankingVerificationBadgeClass(bankProfile.banking_verification_status)}`}>
+                    {getBankingVerificationLabel(bankProfile.banking_verification_status)}
+                  </Badge>
+                );
+              })()}
               <div className="rounded-2xl border border-border p-4">
                 <p className="font-body text-foreground whitespace-pre-wrap">
                   {getInvoiceBankDetails(selectedInvoice) || "Banking details will be provided by the practitioner."}

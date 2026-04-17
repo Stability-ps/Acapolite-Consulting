@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { serviceCategoryOptions, serviceNeededOptions, formatServiceRequestLabel, getServiceRequestRiskClass, getServiceRequestStatusClass } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, getResponseStatusClass } from "@/lib/practitionerMarketplace";
 import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
+import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 
 type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
@@ -26,6 +27,7 @@ type PractitionerReview = Tables<"practitioner_reviews">;
 type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
 
 export default function ClientServiceRequests() {
+  useNotificationSectionRead("requests");
   const { user } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();
@@ -586,7 +588,10 @@ export default function ClientServiceRequests() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Assignment Controls</p>
                     <p className="mt-2 text-sm text-muted-foreground font-body">
-                      You can change practitioners within {changeWindowHours} hours of assignment, before major work begins.
+                      You may request a practitioner change within {changeWindowHours} hours of assignment, before major work begins.
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground font-body">
+                      All change requests must be reviewed and approved by the Acapolite Admin Team. Changes are not automatic.
                     </p>
                     {changeWindowLabel ? (
                       <p className="mt-1 text-xs text-muted-foreground font-body">

@@ -12,6 +12,7 @@ import type { Tables, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router-dom";
 import PractitionerLeads from "./PractitionerLeads";
+import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 import {
   formatServiceRequestLabel,
   getServiceRequestIssueFlags,
@@ -32,6 +33,7 @@ type PractitionerProfile = Tables<"practitioner_profiles">;
 type PractitionerUser = Tables<"profiles">;
 
 export default function AdminServiceRequests() {
+  useNotificationSectionRead("requests");
   const { role } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();

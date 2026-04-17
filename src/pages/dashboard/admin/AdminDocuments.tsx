@@ -28,6 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database, Enums } from "@/integrations/supabase/types";
 import { openInvoicePdf } from "@/lib/invoicePdf";
 import { logSystemActivity } from "@/lib/systemActivityLog";
+import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 
 type DocumentStatus = Enums<"document_status">;
 type InvoiceStatus = Enums<"invoice_status">;
@@ -319,6 +320,7 @@ function buildPractitionerVerificationItems(
 }
 
 export default function AdminDocuments() {
+  useNotificationSectionRead("documents");
   const queryClient = useQueryClient();
   const { user, role, hasStaffPermission } = useAuth();
   const {

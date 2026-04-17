@@ -18,6 +18,7 @@ import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssign
 import { sendCaseStatusChangedNotification } from "@/lib/caseStatusNotifications";
 import { sendCaseCreatedNotification } from "@/lib/caseCreatedNotifications";
 import { logSystemActivity } from "@/lib/systemActivityLog";
+import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 
 const statusOptions: Enums<"case_status">[] = [
   "new",
@@ -71,6 +72,7 @@ type CaseRecord = {
 };
 
 export default function AdminCases() {
+  useNotificationSectionRead("cases");
   const queryClient = useQueryClient();
   const { user, role, hasStaffPermission, isConsultant } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();

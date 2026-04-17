@@ -930,6 +930,16 @@ export default function PractitionerLeads() {
                 </p>
               </div>
 
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Assignment Changes</p>
+                <p className="mt-2 text-sm text-foreground font-body">
+                  Clients may request to change their assigned practitioner only after admin authorization.
+                </p>
+                <p className="mt-2 text-sm text-foreground font-body">
+                  Once a practitioner has been selected, changes are not automatic and must be approved by the Acapolite Admin Team.
+                </p>
+              </div>
+
               {!hasApprovedAccess ? (
                 <div className="rounded-2xl border border-dashed border-border bg-accent/10 p-4">
                   <p className="text-sm text-muted-foreground font-body">
