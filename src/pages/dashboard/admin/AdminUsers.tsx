@@ -39,6 +39,8 @@ import {
 } from "@/components/dashboard/PractitionerProfileFields";
 import { PractitionerDocumentsSection } from "@/components/dashboard/PractitionerDocumentsSection";
 import { PractitionerProfileMissingFields } from "@/components/dashboard/PractitionerProfileMissingFields";
+import { AdminCreditControls } from "@/components/dashboard/AdminCreditControls";
+import { CreditHistory } from "@/components/dashboard/CreditHistory";
 import {
   formatAvailabilityLabel,
   getAvailabilityBadgeClass,
@@ -827,6 +829,21 @@ export default function AdminUsers() {
 
       if (error) throw error;
       return (data ?? null) as PractitionerProfile | null;
+    },
+    enabled: !!selectedStaffId,
+  });
+
+  const { data: selectedPractitionerCreditAccount } = useQuery({
+    queryKey: ["staff-user-credit-account", selectedStaffId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_credit_accounts")
+        .select("*")
+        .eq("profile_id", selectedStaffId!)
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data ?? null) as any;
     },
     enabled: !!selectedStaffId,
   });
@@ -2333,6 +2350,18 @@ export default function AdminUsers() {
                     void quickRefreshStaffBoard(selectedStaffUser?.id);
                   }}
                 />
+
+                <AdminCreditControls
+                  practitionerId={selectedStaffUser?.id ?? null}
+                  creditAccount={selectedPractitionerCreditAccount}
+                  isAdmin={true}
+                  onCreditsChanged={() => {
+                    void quickRefreshStaffBoard(selectedStaffUser?.id);
+                  }}
+                />
+
+                <CreditHistory practitionerId={selectedStaffUser?.id ?? null} />
+
                 <PractitionerProfileFields
                   value={editPractitionerProfile}
                   onChange={setEditPractitionerProfile}
