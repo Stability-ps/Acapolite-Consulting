@@ -37,6 +37,8 @@ import {
   PractitionerProfileFields,
   type PractitionerProfileFormState,
 } from "@/components/dashboard/PractitionerProfileFields";
+import { PractitionerDocumentsSection } from "@/components/dashboard/PractitionerDocumentsSection";
+import { PractitionerProfileMissingFields } from "@/components/dashboard/PractitionerProfileMissingFields";
 import {
   formatAvailabilityLabel,
   getAvailabilityBadgeClass,
@@ -195,6 +197,47 @@ function hasCompleteBankingDetails(profile?: PractitionerProfile | null) {
   );
 }
 
+function getVerificationDocumentStatus(
+  totalRequired?: number | null,
+  approvedRequired?: number | null,
+  pendingRequired?: number | null,
+  rejectedRequired?: number | null,
+) {
+  if (!totalRequired) {
+    return { status: "no_docs", label: "No documents uploaded", ready: false };
+  }
+
+  if ((rejectedRequired ?? 0) > 0) {
+    return {
+      status: "has_rejected",
+      label: `${rejectedRequired} document(s) rejected`,
+      ready: false,
+    };
+  }
+
+  if ((approvedRequired ?? 0) === totalRequired) {
+    return {
+      status: "all_approved",
+      label: "All required documents approved",
+      ready: true,
+    };
+  }
+
+  if ((pendingRequired ?? 0) > 0) {
+    return {
+      status: "pending",
+      label: `${pendingRequired} document(s) pending review`,
+      ready: false,
+    };
+  }
+
+  return {
+    status: "incomplete",
+    label: `${approvedRequired ?? 0} of ${totalRequired} approved`,
+    ready: false,
+  };
+}
+
 function isPractitionerProfileIncomplete(profile?: PractitionerProfile | null) {
   if (!profile) return true;
 
@@ -310,6 +353,7 @@ export default function AdminUsers() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [savingChanges, setSavingChanges] = useState(false);
   const [quickAction, setQuickAction] = useState<{
     id: string | null;
     type: "verify" | "verify-banking" | "toggle-active" | null;
@@ -1128,6 +1172,32 @@ export default function AdminUsers() {
     }
 
     setQuickAction({ id: card.staffUser.id, type: "verify" });
+
+    // Check if all required documents are approved
+    const { data: docSummary, error: docError } = await supabase
+      .from("practitioner_document_summary")
+      .select("*")
+      .eq("practitioner_profile_id", card.staffUser.id)
+      .maybeSingle();
+
+    if (docError) {
+      toast.error("Failed to check verification documents");
+      setQuickAction({ id: null, type: null });
+      return;
+    }
+
+    // Check if there are any pending required documents
+    if (
+      !docSummary ||
+      !docSummary.total_required_docs ||
+      docSummary.approved_required_docs !== docSummary.total_required_docs
+    ) {
+      toast.error(
+        "All required verification documents must be approved before marking practitioner as verified.",
+      );
+      setQuickAction({ id: null, type: null });
+      return;
+    }
 
     const { error } = await supabase.from("practitioner_profiles").upsert({
       profile_id: card.staffUser.id,
@@ -2131,6 +2201,78 @@ export default function AdminUsers() {
                     availability, services, and internal notes.
                   </p>
                 </div>
+                <div className="rounded-2xl border border-border bg-emerald-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-emerald-700 font-body font-semibold">
+                        Verification Status
+                      </p>
+                      <p className="mt-2 text-sm text-emerald-700 font-body">
+                        Mark this practitioner as verified once all required
+                        documents are approved and profile is complete.
+                      </p>
+                    </div>
+                    <Badge
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                        selectedPractitionerProfile?.is_verified
+                          ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                          : "border-amber-300 bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {selectedPractitionerProfile?.is_verified
+                        ? "Verified"
+                        : "Not Verified"}
+                    </Badge>
+                  </div>
+                  <Button
+                    type="button"
+                    className={`mt-3 rounded-lg w-full sm:w-auto ${
+                      selectedPractitionerProfile?.is_verified
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
+                    onClick={async () => {
+                      if (!selectedPractitionerProfile) return;
+                      setSavingChanges(true);
+                      try {
+                        const newStatus =
+                          !selectedPractitionerProfile.is_verified;
+                        const { error } = await supabase
+                          .from("practitioner_profiles")
+                          .update({ is_verified: newStatus })
+                          .eq(
+                            "profile_id",
+                            selectedPractitionerProfile.profile_id,
+                          );
+
+                        if (error) throw error;
+                        toast.success(
+                          newStatus
+                            ? "Practitioner marked as verified"
+                            : "Practitioner marked as unverified",
+                        );
+                        void quickRefreshStaffBoard(
+                          selectedPractitionerProfile.profile_id,
+                        );
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to update verification status",
+                        );
+                      } finally {
+                        setSavingChanges(false);
+                      }
+                    }}
+                    disabled={savingChanges}
+                  >
+                    {savingChanges
+                      ? "Updating..."
+                      : selectedPractitionerProfile?.is_verified
+                        ? "Mark as Unverified"
+                        : "Mark as Verified"}
+                  </Button>
+                </div>
                 <div className="rounded-2xl border border-border bg-accent/20 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -2179,6 +2321,18 @@ export default function AdminUsers() {
                     ) : null}
                   </div>
                 </div>
+
+                <PractitionerProfileMissingFields
+                  profile={selectedPractitionerProfile}
+                />
+
+                <PractitionerDocumentsSection
+                  practitionerId={selectedStaffUser?.id}
+                  isAdmin={true}
+                  onDocumentsChange={() => {
+                    void quickRefreshStaffBoard(selectedStaffUser?.id);
+                  }}
+                />
                 <PractitionerProfileFields
                   value={editPractitionerProfile}
                   onChange={setEditPractitionerProfile}

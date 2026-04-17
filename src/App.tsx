@@ -49,6 +49,7 @@ import AdminUsers from "./pages/dashboard/admin/AdminUsers";
 import AdminServiceRequests from "./pages/dashboard/admin/AdminServiceRequests";
 import PractitionerProfile from "./pages/dashboard/admin/PractitionerProfile";
 import PractitionerCredits from "./pages/dashboard/admin/PractitionerCredits";
+import PractitionerDocumentsUploadPage from "./pages/dashboard/admin/PractitionerDocumentsUploadPage";
 import AdminActivityLog from "./pages/dashboard/admin/AdminActivityLog";
 import TaxCoachAIStaff from "./pages/dashboard/admin/TaxCoachAIStaff";
 import NotFound from "./pages/NotFound";
@@ -61,7 +62,9 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <BrowserRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
@@ -70,67 +73,151 @@ const App = () => (
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/refund-policy" element={<RefundPolicy />} />
             <Route path="/disclaimer" element={<Disclaimer />} />
-            <Route path="/practitioner-guidelines" element={<PractitionerGuidelines />} />
+            <Route
+              path="/practitioner-guidelines"
+              element={<PractitionerGuidelines />}
+            />
             <Route path="/cookie-policy" element={<CookiePolicy />} />
-            <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+            <Route
+              path="/terms-and-conditions"
+              element={<TermsAndConditions />}
+            />
             <Route path="/faq" element={<Faq />} />
             <Route path="/trust-safety" element={<TrustSafety />} />
             <Route path="/our-services" element={<OurServices />} />
-            <Route path="/how-acapolite-works" element={<HowAcapoliteWorks />} />
+            <Route
+              path="/how-acapolite-works"
+              element={<HowAcapoliteWorks />}
+            />
             <Route path="/contact-us" element={<ContactUs />} />
             <Route path="/help-center" element={<HelpCenter />} />
             <Route path="/about-us" element={<AboutUs />} />
-            <Route path="/request-tax-assistance" element={<RequestTaxAssistance />} />
+            <Route
+              path="/request-tax-assistance"
+              element={<RequestTaxAssistance />}
+            />
             <Route path="/dashboard" element={<Dashboard />}>
               <Route index element={<DashboardIndexRedirect />} />
 
               <Route element={<RequireRole allowedRoles={["client"]} />}>
                 <Route path="client" element={<DashboardOverview />} />
-                <Route path="client/notifications" element={<Notifications />} />
+                <Route
+                  path="client/notifications"
+                  element={<Notifications />}
+                />
                 <Route path="client/requests" element={<ServiceRequests />} />
                 <Route path="client/cases" element={<Cases />} />
                 <Route path="client/documents" element={<Documents />} />
                 <Route path="client/invoices" element={<Invoices />} />
                 <Route path="client/messages" element={<Messages />} />
                 <Route path="client/deadlines" element={<Deadlines />} />
-                <Route path="client/tax-coach-ai" element={<TaxCoachAIClient />} />
+                <Route
+                  path="client/tax-coach-ai"
+                  element={<TaxCoachAIClient />}
+                />
                 <Route path="client/settings" element={<SettingsPage />} />
               </Route>
 
-              <Route element={<RequireRole allowedRoles={["admin", "consultant"]} />}>
-                <Route element={<RequireStaffPermission permission="can_view_overview" />}>
+              <Route
+                element={<RequireRole allowedRoles={["admin", "consultant"]} />}
+              >
+                <Route
+                  element={
+                    <RequireStaffPermission permission="can_view_overview" />
+                  }
+                >
                   <Route path="staff" element={<StaffOverviewRouter />} />
-                  <Route path="staff/notifications" element={<AdminNotifications />} />
+                  <Route
+                    path="staff/notifications"
+                    element={<AdminNotifications />}
+                  />
                 </Route>
                 <Route element={<RequireRole allowedRoles={["consultant"]} />}>
-                  <Route path="staff/profile" element={<PractitionerProfile />} />
-                  <Route path="staff/credits" element={<PractitionerCredits />} />
+                  <Route
+                    path="staff/profile"
+                    element={<PractitionerProfile />}
+                  />
+                  <Route
+                    path="staff/verification-documents"
+                    element={<PractitionerDocumentsUploadPage />}
+                  />
+                  <Route
+                    path="staff/credits"
+                    element={<PractitionerCredits />}
+                  />
                 </Route>
-                <Route element={<RequireStaffPermission permission="can_view_clients" />}>
+                <Route
+                  element={
+                    <RequireStaffPermission permission="can_view_clients" />
+                  }
+                >
                   <Route path="staff/clients" element={<AdminClients />} />
                 </Route>
-                <Route element={<RequireStaffPermission permission="can_view_clients" />}>
-                  <Route path="staff/service-requests" element={<AdminServiceRequests />} />
+                <Route
+                  element={
+                    <RequireStaffPermission permission="can_view_clients" />
+                  }
+                >
+                  <Route
+                    path="staff/service-requests"
+                    element={<AdminServiceRequests />}
+                  />
                 </Route>
-                <Route element={<RequireStaffPermission permission="can_view_client_workspace" />}>
-                  <Route path="staff/client-workspace" element={<AdminClientWorkspace />} />
+                <Route
+                  element={
+                    <RequireStaffPermission permission="can_view_client_workspace" />
+                  }
+                >
+                  <Route
+                    path="staff/client-workspace"
+                    element={<AdminClientWorkspace />}
+                  />
                 </Route>
-                <Route element={<RequireStaffPermission permission="can_view_cases" />}>
+                <Route
+                  element={
+                    <RequireStaffPermission permission="can_view_cases" />
+                  }
+                >
                   <Route path="staff/cases" element={<AdminCases />} />
                 </Route>
-                <Route element={<RequireStaffPermission permission="can_view_documents" />}>
+                <Route
+                  element={
+                    <RequireStaffPermission permission="can_view_documents" />
+                  }
+                >
                   <Route path="staff/documents" element={<AdminDocuments />} />
                 </Route>
-                <Route element={<RequireStaffPermission permission="can_view_invoices" />}>
+                <Route
+                  element={
+                    <RequireStaffPermission permission="can_view_invoices" />
+                  }
+                >
                   <Route path="staff/invoices" element={<AdminInvoices />} />
                 </Route>
-                <Route element={<RequireStaffPermission permission="can_view_messages" />}>
+                <Route
+                  element={
+                    <RequireStaffPermission permission="can_view_messages" />
+                  }
+                >
                   <Route path="staff/messages" element={<AdminMessages />} />
                 </Route>
-                <Route element={<RequireStaffPermission permission="can_view_overview" />}>
-                  <Route path="staff/activity-log" element={<AdminActivityLog />} />
-                  <Route path="staff/tax-coach-ai" element={<TaxCoachAIStaff />} />
-                  <Route path="staff/external-tools" element={<StaffExternalToolsRouter />} />
+                <Route
+                  element={
+                    <RequireStaffPermission permission="can_view_overview" />
+                  }
+                >
+                  <Route
+                    path="staff/activity-log"
+                    element={<AdminActivityLog />}
+                  />
+                  <Route
+                    path="staff/tax-coach-ai"
+                    element={<TaxCoachAIStaff />}
+                  />
+                  <Route
+                    path="staff/external-tools"
+                    element={<StaffExternalToolsRouter />}
+                  />
                 </Route>
               </Route>
 
