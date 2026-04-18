@@ -4,7 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Paperclip } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -47,9 +53,11 @@ async function uploadRequestFile(file: File, userId: string, clientId: string) {
   let lastError: string | null = null;
 
   for (const filePath of candidatePaths) {
-    const { error } = await supabase.storage.from("documents").upload(filePath, file, {
-      upsert: false,
-    });
+    const { error } = await supabase.storage
+      .from("documents")
+      .upload(filePath, file, {
+        upsert: false,
+      });
 
     if (!error) {
       return filePath;
@@ -67,11 +75,30 @@ function extractRequestTitle(subject?: string | null) {
 }
 
 function parseRequestMessage(messageText?: string | null) {
-  const lines = (messageText ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
-  const title = lines.find((line) => line.startsWith("Title:"))?.replace("Title:", "").trim() || "";
-  const type = lines.find((line) => line.startsWith("Type:"))?.replace("Type:", "").trim() || "";
-  const description = lines.find((line) => line.startsWith("Description:"))?.replace("Description:", "").trim() || "";
-  const attachment = lines.find((line) => line.startsWith("Attachment:"))?.replace("Attachment:", "").trim() || "";
+  const lines = (messageText ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const title =
+    lines
+      .find((line) => line.startsWith("Title:"))
+      ?.replace("Title:", "")
+      .trim() || "";
+  const type =
+    lines
+      .find((line) => line.startsWith("Type:"))
+      ?.replace("Type:", "")
+      .trim() || "";
+  const description =
+    lines
+      .find((line) => line.startsWith("Description:"))
+      ?.replace("Description:", "")
+      .trim() || "";
+  const attachment =
+    lines
+      .find((line) => line.startsWith("Attachment:"))
+      ?.replace("Attachment:", "")
+      .trim() || "";
 
   return { title, type, description, attachment };
 }
@@ -83,7 +110,9 @@ export default function Cases() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
+    null,
+  );
   const [isRequestCaseOpen, setIsRequestCaseOpen] = useState(false);
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
@@ -103,7 +132,9 @@ export default function Cases() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
-        .select("*, assigned_consultant:profiles!cases_assigned_consultant_id_fkey(full_name, email)")
+        .select(
+          "*, assigned_consultant:profiles!cases_assigned_consultant_id_fkey(full_name, email)",
+        )
         .eq("client_id", client!.id)
         .order("last_activity_at", { ascending: false });
 
@@ -172,7 +203,9 @@ export default function Cases() {
     enabled: !!selectedCaseId,
   });
 
-  const selectedCaseConversationIds = (selectedCaseConversations ?? []).map((conversation) => conversation.id);
+  const selectedCaseConversationIds = (selectedCaseConversations ?? []).map(
+    (conversation) => conversation.id,
+  );
   const primaryCaseConversationId = selectedCaseConversations?.[0]?.id ?? "";
 
   const { data: selectedCaseMessages } = useQuery({
@@ -190,11 +223,18 @@ export default function Cases() {
     enabled: selectedCaseConversationIds.length > 0,
   });
 
-  const selectedCase = cases?.find((caseItem) => caseItem.id === selectedCaseId) ?? null;
-  const selectedRequest = requestConversations?.find((request) => request.id === selectedRequestId) ?? null;
-  const requestSummary = parseRequestMessage(selectedRequestMessages?.[0]?.message_text);
+  const selectedCase =
+    cases?.find((caseItem) => caseItem.id === selectedCaseId) ?? null;
+  const selectedRequest =
+    requestConversations?.find((request) => request.id === selectedRequestId) ??
+    null;
+  const requestSummary = parseRequestMessage(
+    selectedRequestMessages?.[0]?.message_text,
+  );
   const canReviewSelectedCase = Boolean(
-    selectedCase?.assigned_consultant_id && selectedCase && ["resolved", "closed"].includes(selectedCase.status),
+    selectedCase?.assigned_consultant_id &&
+    selectedCase &&
+    ["resolved", "closed"].includes(selectedCase.status),
   );
 
   useEffect(() => {
@@ -213,9 +253,10 @@ export default function Cases() {
 
     const markMessagesAsRead = async () => {
       const unreadIncomingMessages = selectedCaseMessages.filter(
-        (message) => message.sender_profile_id !== user?.id
-          && ["admin", "consultant"].includes(message.sender_type)
-          && !message.is_read,
+        (message) =>
+          message.sender_profile_id !== user?.id &&
+          ["admin", "consultant"].includes(message.sender_type) &&
+          !message.is_read,
       );
 
       if (!unreadIncomingMessages.length) return;
@@ -231,14 +272,24 @@ export default function Cases() {
         .in("id", unreadIds);
 
       if (!error) {
-        queryClient.invalidateQueries({ queryKey: ["case-messages", selectedCaseConversationIds] });
+        queryClient.invalidateQueries({
+          queryKey: ["case-messages", selectedCaseConversationIds],
+        });
         queryClient.invalidateQueries({ queryKey: ["client-unread-messages"] });
-        queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] });
+        queryClient.invalidateQueries({
+          queryKey: ["sidebar-unread-messages"],
+        });
       }
     };
 
     void markMessagesAsRead();
-  }, [queryClient, selectedCaseConversationIds, selectedCaseId, selectedCaseMessages, user?.id]);
+  }, [
+    queryClient,
+    selectedCaseConversationIds,
+    selectedCaseId,
+    selectedCaseMessages,
+    user?.id,
+  ]);
 
   const resetRequestForm = () => {
     setRequestForm({
@@ -254,14 +305,22 @@ export default function Cases() {
 
   const statusColor = (status: string) => {
     switch (status) {
-      case "new": return "bg-blue-100 text-blue-700 border-blue-200";
-      case "in_progress": return "bg-yellow-100 text-yellow-700 border-yellow-200";
-      case "under_review": return "bg-purple-100 text-purple-700 border-purple-200";
-      case "awaiting_client_documents": return "bg-orange-100 text-orange-700 border-orange-200";
-      case "awaiting_sars_response": return "bg-sky-100 text-sky-700 border-sky-200";
-      case "resolved": return "bg-green-100 text-green-700 border-green-200";
-      case "closed": return "bg-muted text-muted-foreground border-border";
-      default: return "bg-muted text-muted-foreground border-border";
+      case "new":
+        return "bg-blue-100 text-blue-700 border-blue-200";
+      case "in_progress":
+        return "bg-yellow-100 text-yellow-700 border-yellow-200";
+      case "under_review":
+        return "bg-purple-100 text-purple-700 border-purple-200";
+      case "awaiting_client_documents":
+        return "bg-orange-100 text-orange-700 border-orange-200";
+      case "awaiting_sars_response":
+        return "bg-sky-100 text-sky-700 border-sky-200";
+      case "resolved":
+        return "bg-green-100 text-green-700 border-green-200";
+      case "closed":
+        return "bg-muted text-muted-foreground border-border";
+      default:
+        return "bg-muted text-muted-foreground border-border";
     }
   };
 
@@ -283,7 +342,11 @@ export default function Cases() {
 
     try {
       if (attachmentFile) {
-        uploadedFilePath = await uploadRequestFile(attachmentFile, user.id, client.id);
+        uploadedFilePath = await uploadRequestFile(
+          attachmentFile,
+          user.id,
+          client.id,
+        );
 
         const { data: documentRow, error: documentError } = await supabase
           .from("documents")
@@ -305,7 +368,9 @@ export default function Cases() {
           if (uploadedFilePath) {
             await supabase.storage.from("documents").remove([uploadedFilePath]);
           }
-          throw new Error(documentError?.message || "Unable to save the attachment.");
+          throw new Error(
+            documentError?.message || "Unable to save the attachment.",
+          );
         }
 
         uploadedDocumentId = documentRow.id;
@@ -324,7 +389,9 @@ export default function Cases() {
         .single();
 
       if (conversationError || !conversation) {
-        throw new Error(conversationError?.message || "Unable to create your request.");
+        throw new Error(
+          conversationError?.message || "Unable to create your request.",
+        );
       }
 
       const requestMessage = [
@@ -349,21 +416,32 @@ export default function Cases() {
         throw new Error(messageError.message);
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["case-requests", client.id] });
-      await queryClient.invalidateQueries({ queryKey: ["conversations", client.id] });
+      await queryClient.invalidateQueries({
+        queryKey: ["case-requests", client.id],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["conversations", client.id],
+      });
       setSubmittingRequest(false);
       setIsRequestCaseOpen(false);
       resetRequestForm();
       toast.success("Your new case request was sent to Acapolite.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to send your case request.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to send your case request.";
       toast.error(message);
       setSubmittingRequest(false);
     }
   };
 
   const savePractitionerReview = async () => {
-    if (!client || !selectedCase?.assigned_consultant_id || !canReviewSelectedCase) {
+    if (
+      !client ||
+      !selectedCase?.assigned_consultant_id ||
+      !canReviewSelectedCase
+    ) {
       toast.error("This case is not ready for a practitioner review yet.");
       return;
     }
@@ -394,8 +472,14 @@ export default function Cases() {
       return;
     }
 
-    toast.success(selectedReview ? "Practitioner review updated." : "Practitioner review submitted.");
-    await queryClient.invalidateQueries({ queryKey: ["case-practitioner-review", client.id, selectedCase.id] });
+    toast.success(
+      selectedReview
+        ? "Practitioner review updated."
+        : "Practitioner review submitted.",
+    );
+    await queryClient.invalidateQueries({
+      queryKey: ["case-practitioner-review", client.id, selectedCase.id],
+    });
   };
 
   const sendCaseReply = async () => {
@@ -421,7 +505,10 @@ export default function Cases() {
           .single();
 
         if (conversationError || !conversation) {
-          throw new Error(conversationError?.message || "Unable to start the case conversation.");
+          throw new Error(
+            conversationError?.message ||
+              "Unable to start the case conversation.",
+          );
         }
 
         conversationId = conversation.id;
@@ -441,14 +528,21 @@ export default function Cases() {
       setCaseReply("");
       toast.success("Case message sent.");
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["case-conversations", selectedCase.id] }),
+        queryClient.invalidateQueries({
+          queryKey: ["case-conversations", selectedCase.id],
+        }),
         queryClient.invalidateQueries({ queryKey: ["case-messages"] }),
         queryClient.invalidateQueries({ queryKey: ["messages"] }),
-        queryClient.invalidateQueries({ queryKey: ["conversations", client.id] }),
+        queryClient.invalidateQueries({
+          queryKey: ["conversations", client.id],
+        }),
         queryClient.invalidateQueries({ queryKey: ["cases", client.id] }),
       ]);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to send your case message.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to send your case message.";
       toast.error(message);
     } finally {
       setSendingCaseReply(false);
@@ -459,28 +553,45 @@ export default function Cases() {
     <div>
       <div className="flex items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="font-display text-2xl font-bold text-foreground mb-1">My Cases</h1>
-          <p className="text-muted-foreground font-body text-sm">Track all your tax cases and submit new case requests to Acapolite.</p>
+          <h1 className="font-display text-2xl font-bold text-foreground mb-1">
+            My Cases
+          </h1>
+          <p className="text-muted-foreground font-body text-sm">
+            Track all your tax cases and submit new case requests to Acapolite.
+          </p>
         </div>
-        <Button className="rounded-xl" disabled={!client} onClick={() => setIsRequestCaseOpen(true)}>
+        <Button
+          className="rounded-xl"
+          disabled={!client}
+          onClick={() => setIsRequestCaseOpen(true)}
+        >
           Request New Case
         </Button>
       </div>
 
       {!client ? (
         <div className="bg-card rounded-xl border border-border p-12 text-center">
-          <p className="text-muted-foreground font-body">Your client record is not ready yet. Acapolite staff can complete it for you.</p>
+          <p className="text-muted-foreground font-body">
+            Your client record is not ready yet. Acapolite staff can complete it
+            for you.
+          </p>
         </div>
       ) : (
         <div className="space-y-8">
           <section>
             <div className="mb-4">
-              <h2 className="font-display text-xl font-semibold text-foreground">Active Cases</h2>
-              <p className="text-muted-foreground font-body text-sm">These are the formal cases already opened for your account.</p>
+              <h2 className="font-display text-xl font-semibold text-foreground">
+                Active Cases
+              </h2>
+              <p className="text-muted-foreground font-body text-sm">
+                These are the formal cases already opened for your account.
+              </p>
             </div>
 
             {isLoading ? (
-              <div className="text-muted-foreground font-body">Loading cases...</div>
+              <div className="text-muted-foreground font-body">
+                Loading cases...
+              </div>
             ) : cases && cases.length > 0 ? (
               <div className="space-y-4">
                 {cases.map((caseItem) => (
@@ -492,36 +603,71 @@ export default function Cases() {
                   >
                     <div className="flex items-start justify-between mb-3 gap-4">
                       <div>
-                        <h3 className="font-display text-lg font-semibold text-foreground">{caseItem.case_title}</h3>
+                        <h3 className="font-display text-lg font-semibold text-foreground">
+                          {caseItem.case_title}
+                        </h3>
                         <p className="text-sm text-muted-foreground font-body">
-                          {caseItem.case_number} {caseItem.sars_case_reference ? `• SARS Ref: ${caseItem.sars_case_reference}` : ""}
+                          {caseItem.case_number}{" "}
+                          {caseItem.sars_case_reference
+                            ? `• SARS Ref: ${caseItem.sars_case_reference}`
+                            : ""}
                         </p>
                       </div>
-                      <Badge variant="outline" className={statusColor(caseItem.status)}>
+                      <Badge
+                        variant="outline"
+                        className={statusColor(caseItem.status)}
+                      >
                         {caseItem.status.replace(/_/g, " ")}
                       </Badge>
                     </div>
-                    {caseItem.description && <p className="text-sm text-muted-foreground font-body mb-3">{caseItem.description}</p>}
+                    {caseItem.description && (
+                      <p className="text-sm text-muted-foreground font-body mb-3">
+                        {caseItem.description}
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-4 text-xs text-muted-foreground font-body">
                       <span>Type: {caseItem.case_type.replace(/_/g, " ")}</span>
                       <span>Priority: {caseItem.priority}</span>
-                      <span>Opened: {new Date(caseItem.opened_at).toLocaleDateString()}</span>
-                      <span>Last activity: {new Date(caseItem.last_activity_at).toLocaleDateString()}</span>
+                      {caseItem.assigned_consultant ? (
+                        <span>
+                          Assigned:{" "}
+                          {caseItem.assigned_consultant.full_name ||
+                            caseItem.assigned_consultant.email}
+                        </span>
+                      ) : null}
+                      <span>
+                        Opened:{" "}
+                        {new Date(caseItem.opened_at).toLocaleDateString()}
+                      </span>
+                      <span>
+                        Last activity:{" "}
+                        {new Date(
+                          caseItem.last_activity_at,
+                        ).toLocaleDateString()}
+                      </span>
                     </div>
                   </button>
                 ))}
               </div>
             ) : (
               <div className="bg-card rounded-xl border border-border p-12 text-center">
-                <p className="text-muted-foreground font-body">No cases yet. Use `Request New Case` if you need Acapolite to open one for you.</p>
+                <p className="text-muted-foreground font-body">
+                  No cases yet. Use `Request New Case` if you need Acapolite to
+                  open one for you.
+                </p>
               </div>
             )}
           </section>
 
           <section>
             <div className="mb-4">
-              <h2 className="font-display text-xl font-semibold text-foreground">Requested Cases</h2>
-              <p className="text-muted-foreground font-body text-sm">These are your submitted requests waiting for Acapolite to review and open.</p>
+              <h2 className="font-display text-xl font-semibold text-foreground">
+                Requested Cases
+              </h2>
+              <p className="text-muted-foreground font-body text-sm">
+                These are your submitted requests waiting for Acapolite to
+                review and open.
+              </p>
             </div>
 
             {requestConversations && requestConversations.length > 0 ? (
@@ -535,22 +681,32 @@ export default function Cases() {
                   >
                     <div className="flex items-start justify-between gap-4 mb-2">
                       <div>
-                        <h3 className="font-display text-lg font-semibold text-foreground">{extractRequestTitle(request.subject)}</h3>
-                        <p className="text-sm text-muted-foreground font-body">Submitted {new Date(request.created_at).toLocaleDateString()}</p>
+                        <h3 className="font-display text-lg font-semibold text-foreground">
+                          {extractRequestTitle(request.subject)}
+                        </h3>
+                        <p className="text-sm text-muted-foreground font-body">
+                          Submitted{" "}
+                          {new Date(request.created_at).toLocaleDateString()}
+                        </p>
                       </div>
-                      <span className={`text-xs font-semibold px-3 py-1 rounded-full font-body ${request.is_closed ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                      <span
+                        className={`text-xs font-semibold px-3 py-1 rounded-full font-body ${request.is_closed ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}
+                      >
                         {request.is_closed ? "Handled" : "Submitted"}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground font-body">
-                      Open this request to review the details and attachment you sent.
+                      Open this request to review the details and attachment you
+                      sent.
                     </p>
                   </button>
                 ))}
               </div>
             ) : (
               <div className="bg-card rounded-xl border border-border p-12 text-center">
-                <p className="text-muted-foreground font-body">No requested cases yet.</p>
+                <p className="text-muted-foreground font-body">
+                  No requested cases yet.
+                </p>
               </div>
             )}
           </section>
@@ -571,7 +727,10 @@ export default function Cases() {
         {selectedCase ? (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center gap-3">
-              <Badge variant="outline" className={statusColor(selectedCase.status)}>
+              <Badge
+                variant="outline"
+                className={statusColor(selectedCase.status)}
+              >
                 {selectedCase.status.replace(/_/g, " ")}
               </Badge>
               <span className="text-sm font-body text-muted-foreground">
@@ -581,59 +740,118 @@ export default function Cases() {
 
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Case Number</p>
-                <p className="font-body text-foreground">{selectedCase.case_number || formatCaseReference(selectedCase.id)}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                  Case Number
+                </p>
+                <p className="font-body text-foreground">
+                  {selectedCase.case_number ||
+                    formatCaseReference(selectedCase.id)}
+                </p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">SARS Reference</p>
-                <p className="font-body text-foreground">{selectedCase.sars_case_reference || "Not assigned yet"}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                  SARS Reference
+                </p>
+                <p className="font-body text-foreground">
+                  {selectedCase.sars_case_reference || "Not assigned yet"}
+                </p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Priority</p>
-                <p className="font-body text-foreground">{selectedCase.priority}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                  Assigned Practitioner
+                </p>
+                <p className="font-body text-foreground">
+                  {selectedCase.assigned_consultant?.full_name ||
+                    selectedCase.assigned_consultant?.email ||
+                    "Not assigned yet"}
+                </p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Opened</p>
-                <p className="font-body text-foreground">{new Date(selectedCase.opened_at).toLocaleDateString()}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                  Priority
+                </p>
+                <p className="font-body text-foreground">
+                  {selectedCase.priority}
+                </p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Due Date</p>
-                <p className="font-body text-foreground">{selectedCase.due_date ? new Date(selectedCase.due_date).toLocaleDateString() : "No due date set"}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                  Opened
+                </p>
+                <p className="font-body text-foreground">
+                  {new Date(selectedCase.opened_at).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                  Due Date
+                </p>
+                <p className="font-body text-foreground">
+                  {selectedCase.due_date
+                    ? new Date(selectedCase.due_date).toLocaleDateString()
+                    : "No due date set"}
+                </p>
               </div>
             </div>
 
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Description</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                Description
+              </p>
               <div className="rounded-2xl border border-border p-4">
-                <p className="font-body text-foreground">{selectedCase.description || "No additional case description yet."}</p>
+                <p className="font-body text-foreground">
+                  {selectedCase.description ||
+                    "No additional case description yet."}
+                </p>
               </div>
             </div>
 
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Case Communication</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                Case Communication
+              </p>
               <div className="rounded-2xl border border-border overflow-hidden">
                 <div className="max-h-[320px] space-y-4 overflow-y-auto p-4">
-                  {selectedCaseMessages?.length ? selectedCaseMessages.map((message) => {
-                    const isOwnMessage = message.sender_profile_id === user?.id;
+                  {selectedCaseMessages?.length ? (
+                    selectedCaseMessages.map((message) => {
+                      const isOwnMessage =
+                        message.sender_profile_id === user?.id;
 
-                    return (
-                      <div key={message.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[84%] rounded-3xl px-4 py-3 ${
-                          isOwnMessage ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
-                        }`}>
-                          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] opacity-75">
-                            {isOwnMessage ? "You" : message.sender_type === "consultant" ? "Practitioner" : "Acapolite"}
-                          </p>
-                          <p className="text-sm font-body whitespace-pre-wrap">{message.message_text}</p>
-                          <p className={`mt-3 text-xs ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                            {new Date(message.created_at).toLocaleString()}
-                          </p>
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[84%] rounded-3xl px-4 py-3 ${
+                              isOwnMessage
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-foreground"
+                            }`}
+                          >
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] opacity-75">
+                              {isOwnMessage
+                                ? "You"
+                                : message.sender_type === "consultant"
+                                  ? "Practitioner"
+                                  : "Acapolite"}
+                            </p>
+                            <p className="text-sm font-body whitespace-pre-wrap">
+                              {message.message_text}
+                            </p>
+                            <p
+                              className={`mt-3 text-xs ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+                            >
+                              {new Date(message.created_at).toLocaleString()}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  }) : (
+                      );
+                    })
+                  ) : (
                     <p className="text-sm text-muted-foreground font-body">
-                      No messages on this case yet. When Acapolite or your practitioner updates this case, it will appear here.
+                      No messages on this case yet. When Acapolite or your
+                      practitioner updates this case, it will appear here.
                     </p>
                   )}
                 </div>
@@ -644,7 +862,11 @@ export default function Cases() {
                       onChange={(event) => setCaseReply(event.target.value)}
                       placeholder={`Reply on ${selectedCase.case_number || formatCaseReference(selectedCase.id)}...`}
                       className="flex-1 rounded-xl"
-                      onKeyDown={(event) => event.key === "Enter" && !event.shiftKey && sendCaseReply()}
+                      onKeyDown={(event) =>
+                        event.key === "Enter" &&
+                        !event.shiftKey &&
+                        sendCaseReply()
+                      }
                     />
                     <Button
                       type="button"
@@ -661,20 +883,29 @@ export default function Cases() {
 
             {selectedCase.assigned_consultant_id ? (
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Practitioner Review</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                  Practitioner Review
+                </p>
                 <div className="rounded-2xl border border-border p-4 space-y-4">
                   {canReviewSelectedCase ? (
                     <>
                       <div>
                         <p className="font-body text-foreground">
-                          Rate {selectedCase.assigned_consultant?.full_name || "your practitioner"} for this completed case.
+                          Rate{" "}
+                          {selectedCase.assigned_consultant?.full_name ||
+                            "your practitioner"}{" "}
+                          for this completed case.
                         </p>
                         <p className="text-sm text-muted-foreground font-body mt-1">
-                          Your rating helps improve practitioner quality and marketplace trust.
+                          Your rating helps improve practitioner quality and
+                          marketplace trust.
                         </p>
                       </div>
 
-                      <RatingStars value={reviewRating} onChange={setReviewRating} />
+                      <RatingStars
+                        value={reviewRating}
+                        onChange={setReviewRating}
+                      />
 
                       <Textarea
                         value={reviewText}
@@ -684,8 +915,17 @@ export default function Cases() {
                       />
 
                       <div className="flex justify-end">
-                        <Button type="button" className="rounded-xl" onClick={savePractitionerReview} disabled={savingReview}>
-                          {savingReview ? "Saving..." : selectedReview ? "Update Review" : "Submit Review"}
+                        <Button
+                          type="button"
+                          className="rounded-xl"
+                          onClick={savePractitionerReview}
+                          disabled={savingReview}
+                        >
+                          {savingReview
+                            ? "Saving..."
+                            : selectedReview
+                              ? "Update Review"
+                              : "Submit Review"}
                         </Button>
                       </div>
                     </>
@@ -706,40 +946,67 @@ export default function Cases() {
         onOpenChange={(open) => {
           if (!open) setSelectedRequestId(null);
         }}
-        title={selectedRequest ? extractRequestTitle(selectedRequest.subject) : "Requested Case"}
+        title={
+          selectedRequest
+            ? extractRequestTitle(selectedRequest.subject)
+            : "Requested Case"
+        }
         description="Review the request you sent to Acapolite before the formal case is opened."
       >
         {selectedRequest ? (
           <div className="space-y-6">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Submitted</p>
-                <p className="font-body text-foreground">{new Date(selectedRequest.created_at).toLocaleString()}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                  Submitted
+                </p>
+                <p className="font-body text-foreground">
+                  {new Date(selectedRequest.created_at).toLocaleString()}
+                </p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Status</p>
-                <p className="font-body text-foreground">{selectedRequest.is_closed ? "Handled by Acapolite" : "Waiting for review"}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                  Status
+                </p>
+                <p className="font-body text-foreground">
+                  {selectedRequest.is_closed
+                    ? "Handled by Acapolite"
+                    : "Waiting for review"}
+                </p>
               </div>
             </div>
 
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Requested Type</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                Requested Type
+              </p>
               <div className="rounded-2xl border border-border p-4">
-                <p className="font-body text-foreground">{requestSummary.type || "Not specified"}</p>
+                <p className="font-body text-foreground">
+                  {requestSummary.type || "Not specified"}
+                </p>
               </div>
             </div>
 
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Description</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                Description
+              </p>
               <div className="rounded-2xl border border-border p-4">
-                <p className="font-body text-foreground whitespace-pre-wrap">{requestSummary.description || "No description available."}</p>
+                <p className="font-body text-foreground whitespace-pre-wrap">
+                  {requestSummary.description || "No description available."}
+                </p>
               </div>
             </div>
 
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Attachment</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
+                Attachment
+              </p>
               <div className="rounded-2xl border border-border p-4">
-                <p className="font-body text-foreground">{requestSummary.attachment || "No attachment was uploaded for this request."}</p>
+                <p className="font-body text-foreground">
+                  {requestSummary.attachment ||
+                    "No attachment was uploaded for this request."}
+                </p>
               </div>
             </div>
           </div>
@@ -759,20 +1026,31 @@ export default function Cases() {
       >
         <div className="space-y-5">
           <div>
-            <label className="block text-sm font-semibold text-foreground font-body mb-2">Case Title</label>
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">
+              Case Title
+            </label>
             <Input
               value={requestForm.case_title}
-              onChange={(event) => setRequestForm((current) => ({ ...current, case_title: event.target.value }))}
+              onChange={(event) =>
+                setRequestForm((current) => ({
+                  ...current,
+                  case_title: event.target.value,
+                }))
+              }
               placeholder="Example: 2026 provisional tax submission"
               className="rounded-xl"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-foreground font-body mb-2">Case Type</label>
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">
+              Case Type
+            </label>
             <Select
               value={requestForm.case_type}
-              onValueChange={(value) => setRequestForm((current) => ({ ...current, case_type: value }))}
+              onValueChange={(value) =>
+                setRequestForm((current) => ({ ...current, case_type: value }))
+              }
             >
               <SelectTrigger className="w-full rounded-xl">
                 <SelectValue />
@@ -788,29 +1066,42 @@ export default function Cases() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-foreground font-body mb-2">Description</label>
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">
+              Description
+            </label>
             <Textarea
               value={requestForm.description}
-              onChange={(event) => setRequestForm((current) => ({ ...current, description: event.target.value }))}
+              onChange={(event) =>
+                setRequestForm((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
+              }
               placeholder="Describe the SARS issue, filing need, deadline, or service you want Acapolite to open."
               className="rounded-xl"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-foreground font-body mb-2">Optional Attachment</label>
+            <label className="block text-sm font-semibold text-foreground font-body mb-2">
+              Optional Attachment
+            </label>
             <div className="rounded-2xl border border-dashed border-border bg-accent/30 p-4">
               <Input
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                onChange={(event) =>
+                  setAttachmentFile(event.target.files?.[0] ?? null)
+                }
                 accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
               />
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="font-body text-sm text-foreground">
-                    {attachmentFile ? attachmentFile.name : "Attach a file if you want Acapolite to review it with the request"}
+                    {attachmentFile
+                      ? attachmentFile.name
+                      : "Attach a file if you want Acapolite to review it with the request"}
                   </p>
                   <p className="font-body text-xs text-muted-foreground mt-1">
                     Accepted: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX
@@ -842,7 +1133,12 @@ export default function Cases() {
             >
               Cancel
             </Button>
-            <Button type="button" className="rounded-xl" onClick={submitCaseRequest} disabled={submittingRequest}>
+            <Button
+              type="button"
+              className="rounded-xl"
+              onClick={submitCaseRequest}
+              disabled={submittingRequest}
+            >
               {submittingRequest ? "Sending..." : "Send Request"}
             </Button>
           </div>
