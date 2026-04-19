@@ -107,6 +107,7 @@ export default function RequestTaxAssistance() {
       email: completedRequestDetails.email,
       phone: completedRequestDetails.phone,
       province: completedRequestDetails.province,
+      id_number: completedRequestDetails.idNumber,
       source: "service-request",
     });
     const timer = window.setTimeout(() => {
@@ -420,6 +421,7 @@ export default function RequestTaxAssistance() {
         email: requestEmail,
         phone: requestPhone,
         province: form.province.trim(),
+        idNumber: form.client_type === "individual" ? form.id_number.trim() : "",
       });
       setFiles([]);
     } catch (error) {

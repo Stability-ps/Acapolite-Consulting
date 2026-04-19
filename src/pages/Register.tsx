@@ -55,6 +55,7 @@ export default function Register() {
     lastName: "",
     phone: "",
     province: "",
+    idNumber: "",
   });
   const [practitionerForm, setPractitionerForm] = useState({
     firstName: "",
@@ -110,12 +111,13 @@ export default function Register() {
     const emailParam = params.get("email")?.trim() ?? "";
     const phoneParam = params.get("phone")?.trim() ?? "";
     const provinceParam = params.get("province")?.trim() ?? "";
+    const idNumberParam = params.get("id_number")?.trim() ?? "";
 
     if (roleParam === "consultant" || roleParam === "practitioner") {
       setAccountType("practitioner");
     }
 
-    if (!fullName && !emailParam && !phoneParam && !provinceParam) {
+    if (!fullName && !emailParam && !phoneParam && !provinceParam && !idNumberParam) {
       setPrefillApplied(true);
       return;
     }
@@ -132,6 +134,7 @@ export default function Register() {
       lastName: current.lastName || lastName || current.lastName,
       phone: current.phone || phoneParam || current.phone,
       province: current.province || provinceParam || current.province,
+      idNumber: current.idNumber || idNumberParam || current.idNumber,
     }));
 
     setPrefillApplied(true);
@@ -220,7 +223,8 @@ export default function Register() {
         !clientForm.firstName.trim() ||
         !clientForm.lastName.trim() ||
         !clientForm.phone.trim() ||
-        !clientForm.province.trim()
+        !clientForm.province.trim() ||
+        !clientForm.idNumber.trim()
       ) {
         toast.error("Please complete all required client fields.");
         return;
@@ -295,7 +299,7 @@ export default function Register() {
             id_number:
               accountType === "practitioner"
                 ? practitionerForm.idNumber.trim()
-                : null,
+                : clientForm.idNumber.trim(),
             tax_practitioner_number:
               accountType === "practitioner"
                 ? practitionerForm.taxPractitionerNumber.trim()
@@ -558,31 +562,51 @@ export default function Register() {
               />
             </div>
             {accountType === "client" ? (
-              <div>
-                <Label htmlFor="client-province" className="font-body">
-                  Province
-                </Label>
-                <Select
-                  value={clientForm.province}
-                  onValueChange={(value) =>
-                    setClientForm((current) => ({
-                      ...current,
-                      province: value,
-                    }))
-                  }
-                >
-                  <SelectTrigger id="client-province" className="mt-1.5">
-                    <SelectValue placeholder="Select province" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {provinces.map((province) => (
-                      <SelectItem key={province} value={province}>
-                        {province}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div>
+                  <Label htmlFor="client-id-number" className="font-body">
+                    ID Number
+                  </Label>
+                  <Input
+                    id="client-id-number"
+                    value={clientForm.idNumber}
+                    onChange={(event) =>
+                      setClientForm((current) => ({
+                        ...current,
+                        idNumber: event.target.value,
+                      }))
+                    }
+                    required
+                    className="mt-1.5"
+                    placeholder="ID Number"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="client-province" className="font-body">
+                    Province
+                  </Label>
+                  <Select
+                    value={clientForm.province}
+                    onValueChange={(value) =>
+                      setClientForm((current) => ({
+                        ...current,
+                        province: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="client-province" className="mt-1.5">
+                      <SelectValue placeholder="Select province" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {provinces.map((province) => (
+                        <SelectItem key={province} value={province}>
+                          {province}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             ) : null}
             {accountType === "practitioner" ? (
               <>

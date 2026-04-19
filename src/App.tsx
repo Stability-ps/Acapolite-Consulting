@@ -37,6 +37,7 @@ import Invoices from "./pages/dashboard/Invoices";
 import Messages from "./pages/dashboard/Messages";
 import Notifications from "./pages/dashboard/Notifications";
 import Deadlines from "./pages/dashboard/Deadlines";
+import AdminDeadlines from "./pages/dashboard/admin/AdminDeadlines";
 import SettingsPage from "./pages/dashboard/Settings";
 import AdminClients from "./pages/dashboard/admin/AdminClients";
 import AdminCases from "./pages/dashboard/admin/AdminCases";
@@ -131,6 +132,7 @@ const App = () => (
                     path="staff/notifications"
                     element={<AdminNotifications />}
                   />
+                  <Route path="staff/deadlines" element={<AdminDeadlines />} />
                 </Route>
                 <Route element={<RequireRole allowedRoles={["consultant"]} />}>
                   <Route

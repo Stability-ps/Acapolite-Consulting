@@ -91,7 +91,12 @@ type DueAlert = {
 
 function getClientName(
   record:
-    | { company_name?: string | null; first_name?: string | null; last_name?: string | null; client_code?: string | null }
+    | {
+        company_name?: string | null;
+        first_name?: string | null;
+        last_name?: string | null;
+        client_code?: string | null;
+      }
     | null
     | undefined,
 ) {
@@ -113,7 +118,11 @@ function formatCurrency(value: number) {
 
 export default function AdminOverview() {
   const { isAdmin, hasStaffPermission } = useAuth();
-  const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
+  const {
+    accessibleClientIds,
+    hasRestrictedClientScope,
+    isLoadingAccessibleClientIds,
+  } = useAccessibleClientIds();
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
 
   const { data: stats } = useQuery({
@@ -122,7 +131,10 @@ export default function AdminOverview() {
       if (hasRestrictedClientScope) {
         return null;
       }
-      const { data } = await supabase.from("admin_dashboard_summary").select("*").single();
+      const { data } = await supabase
+        .from("admin_dashboard_summary")
+        .select("*")
+        .single();
       return data;
     },
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
@@ -145,7 +157,9 @@ export default function AdminOverview() {
       if (hasRestrictedClientScope && !accessibleClientIds?.length) {
         return [];
       }
-      let query = supabase.from("cases").select("status, created_at, closed_at");
+      let query = supabase
+        .from("cases")
+        .select("status, created_at, closed_at");
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
         query = query.in("client_id", accessibleClientIds);
       }
@@ -163,7 +177,9 @@ export default function AdminOverview() {
       }
       let query = supabase
         .from("clients")
-        .select("id, client_code, client_type, company_name, sars_outstanding_debt, returns_filed, first_name, last_name, created_at, profiles!clients_profile_id_fkey(full_name, email)")
+        .select(
+          "id, client_code, client_type, company_name, sars_outstanding_debt, returns_filed, first_name, last_name, created_at, profiles!clients_profile_id_fkey(full_name, email)",
+        )
         .order("created_at", { ascending: false })
         .limit(5);
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -199,7 +215,9 @@ export default function AdminOverview() {
       }
       let query = supabase
         .from("documents")
-        .select("id, title, category, uploaded_at, status, clients(company_name, first_name, last_name, client_code)")
+        .select(
+          "id, title, category, uploaded_at, status, clients(company_name, first_name, last_name, client_code)",
+        )
         .order("uploaded_at", { ascending: false })
         .limit(5);
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -233,7 +251,9 @@ export default function AdminOverview() {
       if (hasRestrictedClientScope && !accessibleClientIds?.length) {
         return [];
       }
-      let query = supabase.from("invoices").select("id, client_id, status, balance_due, total_amount, created_at");
+      let query = supabase
+        .from("invoices")
+        .select("id, client_id, status, balance_due, total_amount, created_at");
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
         query = query.in("client_id", accessibleClientIds);
       }
@@ -251,7 +271,9 @@ export default function AdminOverview() {
       }
       let query = supabase
         .from("clients")
-        .select("id, client_code, client_type, company_name, sars_outstanding_debt, returns_filed, first_name, last_name");
+        .select(
+          "id, client_code, client_type, company_name, sars_outstanding_debt, returns_filed, first_name, last_name",
+        );
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
         query = query.in("id", accessibleClientIds);
       }
@@ -267,7 +289,9 @@ export default function AdminOverview() {
       if (hasRestrictedClientScope && !accessibleClientIds?.length) {
         return [];
       }
-      let query = supabase.from("document_requests").select("client_id, is_required, is_fulfilled");
+      let query = supabase
+        .from("document_requests")
+        .select("client_id, is_required, is_fulfilled");
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
         query = query.in("client_id", accessibleClientIds);
       }
@@ -285,7 +309,9 @@ export default function AdminOverview() {
       }
       let query = supabase
         .from("alerts")
-        .select("id, title, alert_at, alert_type, clients(company_name, first_name, last_name, client_code)")
+        .select(
+          "id, title, alert_at, alert_type, clients(company_name, first_name, last_name, client_code)",
+        )
         .eq("status", "active")
         .order("alert_at", { ascending: true })
         .limit(5);
@@ -308,7 +334,10 @@ export default function AdminOverview() {
         .from("alerts")
         .select("id")
         .eq("status", "active")
-        .lte("alert_at", new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)).toISOString());
+        .lte(
+          "alert_at",
+          new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        );
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
         query = query.in("client_id", accessibleClientIds);
       }
@@ -327,10 +356,15 @@ export default function AdminOverview() {
 
       let conversationQuery = supabase.from("conversations").select("id");
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
-        conversationQuery = conversationQuery.in("client_id", accessibleClientIds);
+        conversationQuery = conversationQuery.in(
+          "client_id",
+          accessibleClientIds,
+        );
       }
       const { data: conversationRows } = await conversationQuery;
-      const conversationIds = (conversationRows ?? []).map((conversation) => conversation.id);
+      const conversationIds = (conversationRows ?? []).map(
+        (conversation) => conversation.id,
+      );
       if (!conversationIds.length) {
         return [];
       }
@@ -346,18 +380,68 @@ export default function AdminOverview() {
   });
 
   const cards = [
-    { label: "Total Clients", value: hasRestrictedClientScope ? (riskClients?.length ?? 0) : (stats?.total_clients ?? 0), icon: Users, link: "/dashboard/staff/clients", permission: "can_view_clients" as const },
-    { label: "Pending Reviews", value: hasRestrictedClientScope ? ((documentRows ?? []).filter((document) => ["uploaded", "pending_review"].includes(document.status)).length) : (stats?.pending_reviews ?? 0), icon: Upload, link: "/dashboard/staff/documents", permission: "can_view_documents" as const },
-    { label: "Unpaid Invoices", value: hasRestrictedClientScope ? ((invoiceRows ?? []).filter((invoice) => ["issued", "partially_paid", "overdue"].includes(invoice.status) && Number(invoice.balance_due || 0) > 0).length) : (stats?.unpaid_invoices ?? 0), icon: Receipt, link: "/dashboard/staff/invoices", permission: "can_view_invoices" as const },
-    { label: "Unread Messages", value: hasRestrictedClientScope ? (unreadMessages?.length ?? 0) : (stats?.unread_messages ?? 0), icon: MessageSquare, link: "/dashboard/staff/messages", permission: "can_view_messages" as const },
-    { label: "Reminders Due", value: hasRestrictedClientScope ? (reminderAlerts?.length ?? 0) : (stats?.reminders_due ?? 0), icon: Bell, link: "/dashboard/staff", permission: "can_view_overview" as const },
+    {
+      label: "Total Clients",
+      value: hasRestrictedClientScope
+        ? (riskClients?.length ?? 0)
+        : (stats?.total_clients ?? 0),
+      icon: Users,
+      link: "/dashboard/staff/clients",
+      permission: "can_view_clients" as const,
+    },
+    {
+      label: "Pending Reviews",
+      value: hasRestrictedClientScope
+        ? (documentRows ?? []).filter((document) =>
+            ["uploaded", "pending_review"].includes(document.status),
+          ).length
+        : (stats?.pending_reviews ?? 0),
+      icon: Upload,
+      link: "/dashboard/staff/documents",
+      permission: "can_view_documents" as const,
+    },
+    {
+      label: "Unpaid Invoices",
+      value: hasRestrictedClientScope
+        ? (invoiceRows ?? []).filter(
+            (invoice) =>
+              ["issued", "partially_paid", "overdue"].includes(
+                invoice.status,
+              ) && Number(invoice.balance_due || 0) > 0,
+          ).length
+        : (stats?.unpaid_invoices ?? 0),
+      icon: Receipt,
+      link: "/dashboard/staff/invoices",
+      permission: "can_view_invoices" as const,
+    },
+    {
+      label: "Unread Messages",
+      value: hasRestrictedClientScope
+        ? (unreadMessages?.length ?? 0)
+        : (stats?.unread_messages ?? 0),
+      icon: MessageSquare,
+      link: "/dashboard/staff/messages",
+      permission: "can_view_messages" as const,
+    },
+    {
+      label: "Reminders Due",
+      value: hasRestrictedClientScope
+        ? (reminderAlerts?.length ?? 0)
+        : (stats?.reminders_due ?? 0),
+      icon: Bell,
+      link: "/dashboard/staff/deadlines",
+      permission: "can_view_overview" as const,
+    },
   ].filter((card) => isAdmin || hasStaffPermission(card.permission));
 
   const casePipeline = useMemo(() => {
-    const counts = (caseRows ?? []).reduce<Record<string, number>>((accumulator, row) => {
-      accumulator[row.status] = (accumulator[row.status] ?? 0) + 1;
-      return accumulator;
-    }, {});
+    const counts = (caseRows ?? []).reduce<Record<string, number>>(
+      (accumulator, row) => {
+        accumulator[row.status] = (accumulator[row.status] ?? 0) + 1;
+        return accumulator;
+      },
+      {},
+    );
 
     const orderedStatuses = [
       "new",
@@ -369,7 +453,10 @@ export default function AdminOverview() {
       "closed",
     ];
 
-    const maxValue = Math.max(...orderedStatuses.map((status) => counts[status] ?? 0), 1);
+    const maxValue = Math.max(
+      ...orderedStatuses.map((status) => counts[status] ?? 0),
+      1,
+    );
 
     return orderedStatuses.map((status) => ({
       status,
@@ -398,15 +485,21 @@ export default function AdminOverview() {
 
   const reportingSnapshot = useMemo(() => {
     const now = new Date();
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const monthStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
     const monthStartIso = monthStart.toISOString();
 
-    const paidInvoicesThisMonth = (invoiceRows ?? []).filter((invoice) =>
-      invoice.status === "paid"
-      && invoice.created_at
-      && invoice.created_at >= monthStartIso
+    const paidInvoicesThisMonth = (invoiceRows ?? []).filter(
+      (invoice) =>
+        invoice.status === "paid" &&
+        invoice.created_at &&
+        invoice.created_at >= monthStartIso,
     );
-    const monthlyRevenue = paidInvoicesThisMonth.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+    const monthlyRevenue = paidInvoicesThisMonth.reduce(
+      (sum, invoice) => sum + Number(invoice.total_amount || 0),
+      0,
+    );
 
     const completedCasesThisMonth = (caseRows ?? []).filter((caseRow) => {
       if (!["resolved", "closed"].includes(caseRow.status)) {
@@ -416,10 +509,13 @@ export default function AdminOverview() {
       return Boolean(closedAt && closedAt >= monthStartIso);
     }).length;
 
-    const clientGrowth = (clientGrowthRows ?? []).filter((client) => client.created_at >= monthStartIso).length;
-    const outstandingInvoices = (invoiceRows ?? []).filter((invoice) =>
-      ["issued", "partially_paid", "overdue"].includes(invoice.status)
-      && Number(invoice.balance_due || 0) > 0
+    const clientGrowth = (clientGrowthRows ?? []).filter(
+      (client) => client.created_at >= monthStartIso,
+    ).length;
+    const outstandingInvoices = (invoiceRows ?? []).filter(
+      (invoice) =>
+        ["issued", "partially_paid", "overdue"].includes(invoice.status) &&
+        Number(invoice.balance_due || 0) > 0,
     ).length;
 
     return {
@@ -430,28 +526,36 @@ export default function AdminOverview() {
     };
   }, [caseRows, clientGrowthRows, invoiceRows]);
 
-
   const attentionClients = useMemo(() => {
     const outstandingInvoicesByClient = new Map<string, number>();
     const outstandingRequestsByClient = new Map<string, number>();
 
     for (const invoice of invoiceRows ?? []) {
-      const isOutstanding = ["issued", "partially_paid", "overdue"].includes(invoice.status) && Number(invoice.balance_due || 0) > 0;
+      const isOutstanding =
+        ["issued", "partially_paid", "overdue"].includes(invoice.status) &&
+        Number(invoice.balance_due || 0) > 0;
       if (!isOutstanding) continue;
-      outstandingInvoicesByClient.set(invoice.client_id, (outstandingInvoicesByClient.get(invoice.client_id) ?? 0) + 1);
+      outstandingInvoicesByClient.set(
+        invoice.client_id,
+        (outstandingInvoicesByClient.get(invoice.client_id) ?? 0) + 1,
+      );
     }
 
     for (const request of riskRequests ?? []) {
       const isOutstanding = request.is_required && !request.is_fulfilled;
       if (!isOutstanding) continue;
-      outstandingRequestsByClient.set(request.client_id, (outstandingRequestsByClient.get(request.client_id) ?? 0) + 1);
+      outstandingRequestsByClient.set(
+        request.client_id,
+        (outstandingRequestsByClient.get(request.client_id) ?? 0) + 1,
+      );
     }
 
     return (riskClients ?? [])
       .map((client) => {
         const warningSummary = getClientWarningSummary(client, {
           outstandingInvoices: outstandingInvoicesByClient.get(client.id) ?? 0,
-          outstandingDocumentRequests: outstandingRequestsByClient.get(client.id) ?? 0,
+          outstandingDocumentRequests:
+            outstandingRequestsByClient.get(client.id) ?? 0,
         });
 
         return {
@@ -461,8 +565,12 @@ export default function AdminOverview() {
       })
       .filter((client) => client.warningSummary.hasIssues)
       .sort((left, right) => {
-        if (right.warningSummary.issueCount !== left.warningSummary.issueCount) {
-          return right.warningSummary.issueCount - left.warningSummary.issueCount;
+        if (
+          right.warningSummary.issueCount !== left.warningSummary.issueCount
+        ) {
+          return (
+            right.warningSummary.issueCount - left.warningSummary.issueCount
+          );
         }
 
         return right.warningSummary.debtAmount - left.warningSummary.debtAmount;
@@ -480,7 +588,8 @@ export default function AdminOverview() {
           Acapolite operations at a glance
         </h1>
         <p className="mt-3 max-w-3xl text-sm text-muted-foreground font-body sm:text-base">
-          Monitor client growth, case movement, document intake, billing pressure, and follow-up workload from one admin view.
+          Monitor client growth, case movement, document intake, billing
+          pressure, and follow-up workload from one admin view.
         </p>
       </section>
 
@@ -495,8 +604,12 @@ export default function AdminOverview() {
               <card.icon className="h-5 w-5 text-primary" />
               <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
             </div>
-            <p className="font-display text-4xl font-bold leading-none text-foreground">{card.value}</p>
-            <p className="mt-3 text-sm text-muted-foreground font-body">{card.label}</p>
+            <p className="font-display text-4xl font-bold leading-none text-foreground">
+              {card.value}
+            </p>
+            <p className="mt-3 text-sm text-muted-foreground font-body">
+              {card.label}
+            </p>
           </Link>
         ))}
       </section>
@@ -505,215 +618,311 @@ export default function AdminOverview() {
         <div className="mb-5 flex items-center gap-3">
           <TrendingUp className="h-5 w-5 text-primary" />
           <div>
-            <h2 className="font-display text-xl font-semibold text-foreground">Reporting Overview</h2>
-            <p className="text-sm text-muted-foreground font-body">Business performance metrics for scaling decisions.</p>
+            <h2 className="font-display text-xl font-semibold text-foreground">
+              Reporting Overview
+            </h2>
+            <p className="text-sm text-muted-foreground font-body">
+              Business performance metrics for scaling decisions.
+            </p>
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-border bg-accent/30 p-5">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Monthly Revenue</p>
-            <p className="font-display text-2xl text-foreground">{formatCurrency(reportingSnapshot.monthlyRevenue)}</p>
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+              Monthly Revenue
+            </p>
+            <p className="font-display text-2xl text-foreground">
+              {formatCurrency(reportingSnapshot.monthlyRevenue)}
+            </p>
           </div>
           <div className="rounded-2xl border border-border bg-accent/30 p-5">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Cases Completed</p>
-            <p className="font-display text-2xl text-foreground">{reportingSnapshot.completedCasesThisMonth}</p>
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+              Cases Completed
+            </p>
+            <p className="font-display text-2xl text-foreground">
+              {reportingSnapshot.completedCasesThisMonth}
+            </p>
           </div>
           <div className="rounded-2xl border border-border bg-accent/30 p-5">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Growth</p>
-            <p className="font-display text-2xl text-foreground">{reportingSnapshot.clientGrowth}</p>
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+              Client Growth
+            </p>
+            <p className="font-display text-2xl text-foreground">
+              {reportingSnapshot.clientGrowth}
+            </p>
           </div>
           <div className="rounded-2xl border border-border bg-accent/30 p-5">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Outstanding Invoices</p>
-            <p className="font-display text-2xl text-foreground">{reportingSnapshot.outstandingInvoices}</p>
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+              Outstanding Invoices
+            </p>
+            <p className="font-display text-2xl text-foreground">
+              {reportingSnapshot.outstandingInvoices}
+            </p>
           </div>
         </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        {(isAdmin || hasStaffPermission("can_view_cases")) ? (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-          <div className="mb-5 flex items-center gap-3">
-            <FolderKanban className="h-5 w-5 text-primary" />
-            <div>
-              <h2 className="font-display text-xl font-semibold text-foreground">Case Pipeline Analysis</h2>
-              <p className="text-sm text-muted-foreground font-body">See where the current workload is clustering.</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {casePipeline.map((item) => (
-              <div key={item.status}>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium capitalize text-foreground font-body">
-                    {formatLabel(item.status)}
-                  </p>
-                  <span className="text-sm text-muted-foreground font-body">{item.count}</span>
-                </div>
-                <div className="h-2 rounded-full bg-accent/60">
-                  <div
-                    className="h-2 rounded-full bg-primary transition-all"
-                    style={{ width: item.width }}
-                  />
-                </div>
+        {isAdmin || hasStaffPermission("can_view_cases") ? (
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+            <div className="mb-5 flex items-center gap-3">
+              <FolderKanban className="h-5 w-5 text-primary" />
+              <div>
+                <h2 className="font-display text-xl font-semibold text-foreground">
+                  Case Pipeline Analysis
+                </h2>
+                <p className="text-sm text-muted-foreground font-body">
+                  See where the current workload is clustering.
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-        ) : null}
+            </div>
 
-        {(isAdmin || hasStaffPermission("can_view_invoices")) ? (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-          <div className="mb-5 flex items-center gap-3">
-            <Wallet className="h-5 w-5 text-primary" />
-            <div>
-              <h2 className="font-display text-xl font-semibold text-foreground">Finance Snapshot</h2>
-              <p className="text-sm text-muted-foreground font-body">Track current billing pressure.</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-border bg-accent/30 p-4">
-              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Outstanding Balance</p>
-              <p className="font-display text-2xl text-foreground">{formatCurrency(financeSnapshot.outstandingBalance)}</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-accent/30 p-4">
-              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Overdue Exposure</p>
-              <p className="font-display text-2xl text-foreground">{formatCurrency(financeSnapshot.overdueBalance)}</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-accent/30 p-4">
-              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Paid Invoices</p>
-              <p className="font-display text-2xl text-foreground">{financeSnapshot.paidInvoices}</p>
-            </div>
-          </div>
-        </div>
-        ) : null}
-      </section>
-
-      {(isAdmin || hasStaffPermission("can_view_clients") || hasStaffPermission("can_view_client_workspace")) ? (
-      <section className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-card">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <div>
-              <h2 className="font-display text-xl font-semibold text-red-700">Attention Needed</h2>
-              <p className="text-sm text-red-700/80 font-body">Problem accounts with debt, unfiled returns, or outstanding billing and document issues.</p>
-            </div>
-          </div>
-          <Link to="/dashboard/staff/clients" className="text-sm font-semibold text-red-700 hover:underline">
-            Open clients
-          </Link>
-        </div>
-
-        {attentionClients.length > 0 ? (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {attentionClients.map((client) => (
-              <Link
-                key={client.id}
-                to={`/dashboard/staff/client-workspace?clientId=${client.id}`}
-                className="rounded-2xl border border-red-200 bg-white p-4 transition-shadow hover:shadow-elevated"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-body font-semibold text-foreground">{getClientName(client)}</p>
-                    <p className="mt-1 text-xs text-muted-foreground font-body">
-                      {getClientTypeLabel(client.client_type)}{client.client_code ? ` • ${client.client_code}` : ""}
+            <div className="space-y-4">
+              {casePipeline.map((item) => (
+                <div key={item.status}>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium capitalize text-foreground font-body">
+                      {formatLabel(item.status)}
                     </p>
-                  </div>
-                  <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-                    {client.warningSummary.issueCount} issues
-                  </span>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {client.warningSummary.reasons.map((reason) => (
-                    <span key={reason} className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                      {reason}
+                    <span className="text-sm text-muted-foreground font-body">
+                      {item.count}
                     </span>
-                  ))}
+                  </div>
+                  <div className="h-2 rounded-full bg-accent/60">
+                    <div
+                      className="h-2 rounded-full bg-primary transition-all"
+                      style={{ width: item.width }}
+                    />
+                  </div>
                 </div>
-              </Link>
-            ))}
+              ))}
+            </div>
           </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-red-200 bg-white p-8 text-center">
-            <p className="text-sm text-red-700/80 font-body">No client accounts are currently flagged for urgent attention.</p>
+        ) : null}
+
+        {isAdmin || hasStaffPermission("can_view_invoices") ? (
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+            <div className="mb-5 flex items-center gap-3">
+              <Wallet className="h-5 w-5 text-primary" />
+              <div>
+                <h2 className="font-display text-xl font-semibold text-foreground">
+                  Finance Snapshot
+                </h2>
+                <p className="text-sm text-muted-foreground font-body">
+                  Track current billing pressure.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+                  Outstanding Balance
+                </p>
+                <p className="font-display text-2xl text-foreground">
+                  {formatCurrency(financeSnapshot.outstandingBalance)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+                  Overdue Exposure
+                </p>
+                <p className="font-display text-2xl text-foreground">
+                  {formatCurrency(financeSnapshot.overdueBalance)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+                  Paid Invoices
+                </p>
+                <p className="font-display text-2xl text-foreground">
+                  {financeSnapshot.paidInvoices}
+                </p>
+              </div>
+            </div>
           </div>
-        )}
+        ) : null}
       </section>
+
+      {isAdmin ||
+      hasStaffPermission("can_view_clients") ||
+      hasStaffPermission("can_view_client_workspace") ? (
+        <section className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-card">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              <div>
+                <h2 className="font-display text-xl font-semibold text-red-700">
+                  Attention Needed
+                </h2>
+                <p className="text-sm text-red-700/80 font-body">
+                  Problem accounts with debt, unfiled returns, or outstanding
+                  billing and document issues.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/dashboard/staff/clients"
+              className="text-sm font-semibold text-red-700 hover:underline"
+            >
+              Open clients
+            </Link>
+          </div>
+
+          {attentionClients.length > 0 ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {attentionClients.map((client) => (
+                <Link
+                  key={client.id}
+                  to={`/dashboard/staff/client-workspace?clientId=${client.id}`}
+                  className="rounded-2xl border border-red-200 bg-white p-4 transition-shadow hover:shadow-elevated"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-body font-semibold text-foreground">
+                        {getClientName(client)}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground font-body">
+                        {getClientTypeLabel(client.client_type)}
+                        {client.client_code ? ` • ${client.client_code}` : ""}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                      {client.warningSummary.issueCount} issues
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {client.warningSummary.reasons.map((reason) => (
+                      <span
+                        key={reason}
+                        className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700"
+                      >
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-red-200 bg-white p-8 text-center">
+              <p className="text-sm text-red-700/80 font-body">
+                No client accounts are currently flagged for urgent attention.
+              </p>
+            </div>
+          )}
+        </section>
       ) : null}
 
-
       <section className="grid gap-6 xl:grid-cols-3">
-        {(isAdmin || hasStaffPermission("can_view_clients")) ? (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Users className="h-5 w-5 text-primary" />
-              <div>
-                <h2 className="font-display text-xl font-semibold text-foreground">Recent Clients</h2>
-                <p className="text-sm text-muted-foreground font-body">Latest onboarding activity.</p>
+        {isAdmin || hasStaffPermission("can_view_clients") ? (
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Users className="h-5 w-5 text-primary" />
+                <div>
+                  <h2 className="font-display text-xl font-semibold text-foreground">
+                    Recent Clients
+                  </h2>
+                  <p className="text-sm text-muted-foreground font-body">
+                    Latest onboarding activity.
+                  </p>
+                </div>
               </div>
+              <Link
+                to="/dashboard/staff/clients"
+                className="text-sm font-semibold text-primary hover:underline"
+              >
+                View all
+              </Link>
             </div>
-            <Link to="/dashboard/staff/clients" className="text-sm font-semibold text-primary hover:underline">
-              View all
-            </Link>
-          </div>
 
-          <div className="space-y-3">
-            {recentClients && recentClients.length > 0 ? recentClients.map((client) => (
-              <div key={client.id} className="rounded-xl border border-border p-4">
-                <p className="font-body font-medium text-foreground">{getClientName(client)}</p>
-                <p className="mt-1 text-xs text-muted-foreground font-body">
-                  {client.profiles?.email || "No email"}{client.client_code ? ` • ${client.client_code}` : ""}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground font-body">
-                  {getClientTypeLabel(client.client_type)} • {client.returns_filed ? "Returns filed" : "Returns not filed"}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground font-body">
-                  Added {new Date(client.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            )) : (
-              <div className="rounded-xl border border-dashed border-border p-8 text-center">
-                <p className="text-sm text-muted-foreground font-body">No recent client activity yet.</p>
-              </div>
-            )}
+            <div className="space-y-3">
+              {recentClients && recentClients.length > 0 ? (
+                recentClients.map((client) => (
+                  <div
+                    key={client.id}
+                    className="rounded-xl border border-border p-4"
+                  >
+                    <p className="font-body font-medium text-foreground">
+                      {getClientName(client)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground font-body">
+                      {client.profiles?.email || "No email"}
+                      {client.client_code ? ` • ${client.client_code}` : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground font-body">
+                      {getClientTypeLabel(client.client_type)} •{" "}
+                      {client.returns_filed
+                        ? "Returns filed"
+                        : "Returns not filed"}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground font-body">
+                      Added {new Date(client.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-border p-8 text-center">
+                  <p className="text-sm text-muted-foreground font-body">
+                    No recent client activity yet.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         ) : null}
 
-        {(isAdmin || hasStaffPermission("can_view_documents")) ? (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Upload className="h-5 w-5 text-primary" />
-              <div>
-                <h2 className="font-display text-xl font-semibold text-foreground">Latest Uploads</h2>
-                <p className="text-sm text-muted-foreground font-body">Fresh document intake for review.</p>
+        {isAdmin || hasStaffPermission("can_view_documents") ? (
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Upload className="h-5 w-5 text-primary" />
+                <div>
+                  <h2 className="font-display text-xl font-semibold text-foreground">
+                    Latest Uploads
+                  </h2>
+                  <p className="text-sm text-muted-foreground font-body">
+                    Fresh document intake for review.
+                  </p>
+                </div>
               </div>
+              <Link
+                to="/dashboard/staff/documents"
+                className="text-sm font-semibold text-primary hover:underline"
+              >
+                Review
+              </Link>
             </div>
-            <Link to="/dashboard/staff/documents" className="text-sm font-semibold text-primary hover:underline">
-              Review
-            </Link>
-          </div>
 
-          <div className="space-y-3">
-            {recentDocuments && recentDocuments.length > 0 ? recentDocuments.map((document) => (
-              <div key={document.id} className="rounded-xl border border-border p-4">
-                <p className="font-body font-medium text-foreground">{document.category || document.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground font-body">
-                  {getClientName(document.clients)} • {formatLabel(document.status)}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground font-body">
-                  Uploaded {new Date(document.uploaded_at).toLocaleString()}
-                </p>
-              </div>
-            )) : (
-              <div className="rounded-xl border border-dashed border-border p-8 text-center">
-                <p className="text-sm text-muted-foreground font-body">No uploads to review right now.</p>
-              </div>
-            )}
+            <div className="space-y-3">
+              {recentDocuments && recentDocuments.length > 0 ? (
+                recentDocuments.map((document) => (
+                  <div
+                    key={document.id}
+                    className="rounded-xl border border-border p-4"
+                  >
+                    <p className="font-body font-medium text-foreground">
+                      {document.category || document.title}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground font-body">
+                      {getClientName(document.clients)} •{" "}
+                      {formatLabel(document.status)}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground font-body">
+                      Uploaded {new Date(document.uploaded_at).toLocaleString()}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-border p-8 text-center">
+                  <p className="text-sm text-muted-foreground font-body">
+                    No uploads to review right now.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         ) : null}
 
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
@@ -721,26 +930,40 @@ export default function AdminOverview() {
             <div className="flex items-center gap-3">
               <Clock3 className="h-5 w-5 text-primary" />
               <div>
-                <h2 className="font-display text-xl font-semibold text-foreground">Upcoming Reminders</h2>
-                <p className="text-sm text-muted-foreground font-body">Deadlines that need attention soon.</p>
+                <h2 className="font-display text-xl font-semibold text-foreground">
+                  Upcoming Reminders
+                </h2>
+                <p className="text-sm text-muted-foreground font-body">
+                  Deadlines that need attention soon.
+                </p>
               </div>
             </div>
           </div>
 
           <div className="space-y-3">
-            {dueAlerts && dueAlerts.length > 0 ? dueAlerts.map((alert) => (
-              <div key={alert.id} className="rounded-xl border border-border p-4">
-                <p className="font-body font-medium text-foreground">{alert.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground font-body">
-                  {getClientName(alert.clients)} • {formatLabel(alert.alert_type)}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground font-body">
-                  Due {new Date(alert.alert_at).toLocaleDateString()}
-                </p>
-              </div>
-            )) : (
+            {dueAlerts && dueAlerts.length > 0 ? (
+              dueAlerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className="rounded-xl border border-border p-4"
+                >
+                  <p className="font-body font-medium text-foreground">
+                    {alert.title}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground font-body">
+                    {getClientName(alert.clients)} •{" "}
+                    {formatLabel(alert.alert_type)}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground font-body">
+                    Due {new Date(alert.alert_at).toLocaleDateString()}
+                  </p>
+                </div>
+              ))
+            ) : (
               <div className="rounded-xl border border-dashed border-border p-8 text-center">
-                <p className="text-sm text-muted-foreground font-body">No active reminders are due soon.</p>
+                <p className="text-sm text-muted-foreground font-body">
+                  No active reminders are due soon.
+                </p>
               </div>
             )}
           </div>
