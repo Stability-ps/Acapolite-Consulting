@@ -76,6 +76,10 @@ export default function Register() {
     bankConfirmation: null as File | null,
   });
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Creating account...");
+  const [pendingPractitionerUserId, setPendingPractitionerUserId] = useState<
+    string | null
+  >(null);
   const { dashboardPath, loading: authLoading, user } = useAuth();
   const location = useLocation();
   const [prefillApplied, setPrefillApplied] = useState(false);
@@ -117,7 +121,13 @@ export default function Register() {
       setAccountType("practitioner");
     }
 
-    if (!fullName && !emailParam && !phoneParam && !provinceParam && !idNumberParam) {
+    if (
+      !fullName &&
+      !emailParam &&
+      !phoneParam &&
+      !provinceParam &&
+      !idNumberParam
+    ) {
       setPrefillApplied(true);
       return;
     }
@@ -140,7 +150,7 @@ export default function Register() {
     setPrefillApplied(true);
   }, [location.search, prefillApplied]);
 
-  const uploadPractitionerDocuments = async (userId: string) => {
+  const completePractitionerSignup = async (userId: string) => {
     if (
       !practitionerDocuments.idCopy ||
       !practitionerDocuments.certificate ||
@@ -150,56 +160,50 @@ export default function Register() {
       throw new Error("Please upload all required verification documents.");
     }
 
-    const uploads = [
-      { file: practitionerDocuments.idCopy, key: "id-copy" },
+    const formData = new FormData();
+    formData.append("userId", userId);
+    formData.append("email", email.trim());
+    formData.append("fullName", `${practitionerForm.firstName.trim()} ${practitionerForm.lastName.trim()}`.trim());
+    formData.append("phone", practitionerForm.phone.trim());
+    formData.append("idNumber", practitionerForm.idNumber.trim());
+    formData.append(
+      "taxPractitionerNumber",
+      practitionerForm.taxPractitionerNumber.trim(),
+    );
+    formData.append(
+      "professionalBody",
+      practitionerForm.professionalBody === "Other"
+        ? practitionerForm.professionalBodyOther.trim()
+        : practitionerForm.professionalBody.trim(),
+    );
+    formData.append("yearsExperience", practitionerForm.yearsExperience.trim());
+    formData.append("city", practitionerForm.city.trim());
+    formData.append("province", practitionerForm.province.trim());
+    formData.append("idCopy", practitionerDocuments.idCopy);
+    formData.append("certificate", practitionerDocuments.certificate);
+    formData.append("proofOfAddress", practitionerDocuments.proofOfAddress);
+    formData.append("bankConfirmation", practitionerDocuments.bankConfirmation);
+
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/complete-practitioner-signup`,
       {
-        file: practitionerDocuments.certificate,
-        key: "practitioner-certificate",
+        method: "POST",
+        headers: {
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: formData,
       },
-      { file: practitionerDocuments.proofOfAddress, key: "proof-of-address" },
-      {
-        file: practitionerDocuments.bankConfirmation,
-        key: "bank-confirmation-letter",
-      },
-    ];
-
-    const uploadResults = await Promise.all(
-      uploads.map(async ({ file, key }) => {
-        const filePath = `practitioner-verifications/${userId}/${key}-${Date.now()}-${file.name}`;
-        const { error } = await supabase.storage
-          .from("documents")
-          .upload(filePath, file, { upsert: false });
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        return { key, filePath };
-      }),
     );
 
-    const updates: Record<string, string> = {};
-    uploadResults.forEach((result) => {
-      if (result.key === "id-copy") updates.id_document_path = result.filePath;
-      if (result.key === "practitioner-certificate")
-        updates.certificate_document_path = result.filePath;
-      if (result.key === "proof-of-address")
-        updates.proof_of_address_path = result.filePath;
-      if (result.key === "bank-confirmation-letter")
-        updates.bank_confirmation_document_path = result.filePath;
-    });
+    const result = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null;
 
-    const { error } = await supabase
-      .from("practitioner_profiles")
-      .update({
-        ...updates,
-        verification_status: "pending",
-        verification_submitted_at: new Date().toISOString(),
-      })
-      .eq("profile_id", userId);
-
-    if (error) {
-      throw new Error(error.message);
+    if (!response.ok) {
+      throw new Error(
+        result?.error ||
+          "Practitioner verification documents could not be saved.",
+      );
     }
   };
 
@@ -261,6 +265,7 @@ export default function Register() {
     }
 
     setLoading(true);
+    setLoadingMessage("Creating account...");
     try {
       const signupRole =
         accountType === "practitioner" ? "consultant" : "client";
@@ -276,60 +281,75 @@ export default function Register() {
           ? practitionerForm.professionalBodyOther.trim()
           : practitionerForm.professionalBody.trim();
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            role: signupRole,
-            account_type: signupRoleLabel,
-            first_name:
-              accountType === "practitioner"
-                ? practitionerForm.firstName.trim()
-                : clientForm.firstName.trim(),
-            last_name:
-              accountType === "practitioner"
-                ? practitionerForm.lastName.trim()
-                : clientForm.lastName.trim(),
-            phone:
-              accountType === "practitioner"
-                ? practitionerForm.phone.trim()
-                : clientForm.phone.trim(),
-            id_number:
-              accountType === "practitioner"
-                ? practitionerForm.idNumber.trim()
-                : clientForm.idNumber.trim(),
-            tax_practitioner_number:
-              accountType === "practitioner"
-                ? practitionerForm.taxPractitionerNumber.trim()
-                : null,
-            registration_number: null,
-            professional_body:
-              accountType === "practitioner" ? resolvedProfessionalBody : null,
-            years_of_experience:
-              accountType === "practitioner"
-                ? practitionerForm.yearsExperience.trim()
-                : null,
-            city:
-              accountType === "practitioner"
-                ? practitionerForm.city.trim()
-                : null,
-            province:
-              accountType === "practitioner"
-                ? practitionerForm.province.trim()
-                : clientForm.province.trim(),
+      let data:
+        | Awaited<ReturnType<typeof supabase.auth.signUp>>["data"]
+        | null = null;
+
+      if (!pendingPractitionerUserId) {
+        const signUpResult = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              role: signupRole,
+              account_type: signupRoleLabel,
+              first_name:
+                accountType === "practitioner"
+                  ? practitionerForm.firstName.trim()
+                  : clientForm.firstName.trim(),
+              last_name:
+                accountType === "practitioner"
+                  ? practitionerForm.lastName.trim()
+                  : clientForm.lastName.trim(),
+              phone:
+                accountType === "practitioner"
+                  ? practitionerForm.phone.trim()
+                  : clientForm.phone.trim(),
+              id_number:
+                accountType === "practitioner"
+                  ? practitionerForm.idNumber.trim()
+                  : clientForm.idNumber.trim(),
+              tax_practitioner_number:
+                accountType === "practitioner"
+                  ? practitionerForm.taxPractitionerNumber.trim()
+                  : null,
+              registration_number: null,
+              professional_body:
+                accountType === "practitioner"
+                  ? resolvedProfessionalBody
+                  : null,
+              years_of_experience:
+                accountType === "practitioner"
+                  ? practitionerForm.yearsExperience.trim()
+                  : null,
+              city:
+                accountType === "practitioner"
+                  ? practitionerForm.city.trim()
+                  : null,
+              province:
+                accountType === "practitioner"
+                  ? practitionerForm.province.trim()
+                  : clientForm.province.trim(),
+            },
+            emailRedirectTo: `${getAppBaseUrl()}/login`,
           },
-          emailRedirectTo: `${getAppBaseUrl()}/login`,
-        },
-      });
+        });
 
-      if (error) {
-        toast.error(error.message);
-        return;
+        data = signUpResult.data;
+
+        if (signUpResult.error) {
+          toast.error(signUpResult.error.message);
+          return;
+        }
       }
+      const createdUserId =
+        pendingPractitionerUserId ??
+        data?.user?.id ??
+        data?.session?.user?.id ??
+        null;
 
-      if (data.user?.id) {
+      if (!pendingPractitionerUserId && data?.user?.id) {
         const profilePayload = {
           profileId: data.user.id,
           email,
@@ -369,23 +389,26 @@ export default function Register() {
         });
       }
 
+      if (createdUserId && accountType === "practitioner") {
+        setPendingPractitionerUserId(createdUserId);
+        setLoadingMessage("Saving practitioner profile and uploading documents...");
+        await completePractitionerSignup(createdUserId);
+        setPendingPractitionerUserId(null);
+      }
+
       if (accountType === "practitioner") {
-        toast.success("Practitioner account created. Pending verification.");
+        toast.success("Practitioner account created and documents submitted.");
       } else {
         toast.success("Account created successfully.");
       }
 
-      if (data.session?.user?.id && accountType === "practitioner") {
-        await uploadPractitionerDocuments(data.session.user.id);
-      }
-
-      if (!data.session && accountType === "practitioner") {
+      if (!data?.session && accountType === "practitioner") {
         toast.success(
-          "Verification email sent. After verifying, sign in to upload your practitioner documents.",
+          "Verification email sent. Check your inbox to confirm your account.",
         );
       }
 
-      if (data.session) {
+      if (data?.session) {
         await supabase.auth.signOut();
       }
 
@@ -916,7 +939,7 @@ export default function Register() {
               disabled={!canSubmit}
               className="w-full py-5 text-base font-semibold rounded-xl"
             >
-              {loading ? "Creating account..." : "Create Account"}
+              {loading ? loadingMessage : "Create Account"}
             </Button>
           </form>
         </div>

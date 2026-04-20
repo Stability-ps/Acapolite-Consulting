@@ -156,7 +156,7 @@ function formatCurrency(value: number) {
 }
 
 export default function AdminClients() {
-  const { user, hasStaffPermission } = useAuth();
+  const { user, role, hasStaffPermission } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -172,6 +172,7 @@ export default function AdminClients() {
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageClients = hasStaffPermission("can_manage_clients");
+  const canShowClientCreationControls = role === "admin" && canManageClients;
   const canManageInvoices = hasStaffPermission("can_manage_invoices");
   const canViewClientWorkspace = hasStaffPermission("can_view_client_workspace");
   const canViewInvoices = hasStaffPermission("can_view_invoices");
@@ -625,7 +626,7 @@ export default function AdminClients() {
               className="rounded-xl pl-9"
             />
           </div>
-          {canManageClients ? (
+          {canShowClientCreationControls ? (
             <>
               <Button
                 type="button"
@@ -715,7 +716,7 @@ export default function AdminClients() {
       )}
 
       <DashboardItemDialog
-        open={isCreateOpen}
+        open={canShowClientCreationControls && isCreateOpen}
         onOpenChange={(open) => {
           setIsCreateOpen(open);
           if (!open) resetCreateForm();

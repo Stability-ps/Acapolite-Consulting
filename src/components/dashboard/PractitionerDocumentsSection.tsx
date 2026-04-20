@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -113,13 +113,196 @@ export function PractitionerDocumentsSection({
     },
   });
 
-  const pendingDocs = (documents ?? []).filter(
+  const { data: legacyProfile } = useQuery({
+    queryKey: ["practitioner-verification-profile", practitionerId],
+    queryFn: async () => {
+      if (!practitionerId) return null;
+
+      const { data, error } = await supabase
+        .from("practitioner_profiles")
+        .select(
+          "verification_status, verification_submitted_at, id_document_path, certificate_document_path, proof_of_address_path, bank_confirmation_document_path",
+        )
+        .eq("profile_id", practitionerId)
+        .maybeSingle();
+
+      if (error) {
+        toast.error("Failed to load practitioner profile documents");
+        throw error;
+      }
+
+      return data;
+    },
+    enabled: !!practitionerId,
+  });
+
+  const mergedDocuments = useMemo(() => {
+    const existingDocuments = documents ?? [];
+    const existingTypes = new Set(existingDocuments.map((doc) => doc.document_type));
+
+    if (!legacyProfile) {
+      return existingDocuments;
+    }
+
+    const fallbackStatus =
+      legacyProfile.verification_status === "verified"
+        ? "approved"
+        : legacyProfile.verification_status === "rejected"
+          ? "rejected"
+          : "pending_review";
+
+    const fallbackUploadedAt =
+      legacyProfile.verification_submitted_at ?? new Date().toISOString();
+
+    const fallbackDocuments: VerificationDocument[] = [
+      {
+        id: `legacy-id-copy-${practitionerId}`,
+        practitioner_profile_id: practitionerId,
+        document_type: "id_copy",
+        display_name: "ID Copy",
+        file_path: legacyProfile.id_document_path ?? "",
+        file_size: null,
+        mime_type: null,
+        status: fallbackStatus,
+        uploaded_at: fallbackUploadedAt,
+        reviewed_at: null,
+        reviewed_by: null,
+        rejection_reason: null,
+        admin_notes: "Recovered from practitioner signup upload.",
+        is_required: true,
+        created_at: fallbackUploadedAt,
+        updated_at: fallbackUploadedAt,
+      },
+      {
+        id: `legacy-certificate-${practitionerId}`,
+        practitioner_profile_id: practitionerId,
+        document_type: "tax_registration_certificate",
+        display_name: "Tax Practitioner Registration Certificate",
+        file_path: legacyProfile.certificate_document_path ?? "",
+        file_size: null,
+        mime_type: null,
+        status: fallbackStatus,
+        uploaded_at: fallbackUploadedAt,
+        reviewed_at: null,
+        reviewed_by: null,
+        rejection_reason: null,
+        admin_notes: "Recovered from practitioner signup upload.",
+        is_required: true,
+        created_at: fallbackUploadedAt,
+        updated_at: fallbackUploadedAt,
+      },
+      {
+        id: `legacy-proof-of-address-${practitionerId}`,
+        practitioner_profile_id: practitionerId,
+        document_type: "proof_of_address",
+        display_name: "Proof of Address",
+        file_path: legacyProfile.proof_of_address_path ?? "",
+        file_size: null,
+        mime_type: null,
+        status: fallbackStatus,
+        uploaded_at: fallbackUploadedAt,
+        reviewed_at: null,
+        reviewed_by: null,
+        rejection_reason: null,
+        admin_notes: "Recovered from practitioner signup upload.",
+        is_required: true,
+        created_at: fallbackUploadedAt,
+        updated_at: fallbackUploadedAt,
+      },
+      {
+        id: `legacy-bank-confirmation-${practitionerId}`,
+        practitioner_profile_id: practitionerId,
+        document_type: "bank_confirmation_letter",
+        display_name: "Bank Confirmation Letter",
+        file_path: legacyProfile.bank_confirmation_document_path ?? "",
+        file_size: null,
+        mime_type: null,
+        status: fallbackStatus,
+        uploaded_at: fallbackUploadedAt,
+        reviewed_at: null,
+        reviewed_by: null,
+        rejection_reason: null,
+        admin_notes: "Recovered from practitioner signup upload.",
+        is_required: true,
+        created_at: fallbackUploadedAt,
+        updated_at: fallbackUploadedAt,
+      },
+    ].filter(
+      (doc) => Boolean(doc.file_path) && !existingTypes.has(doc.document_type),
+    );
+
+    return [...existingDocuments, ...fallbackDocuments];
+  }, [documents, legacyProfile, practitionerId]);
+
+  const pendingDocs = mergedDocuments.filter(
     (d) => d.status === "pending_review",
   );
-  const approvedDocs = (documents ?? []).filter((d) => d.status === "approved");
-  const rejectedDocs = (documents ?? []).filter((d) => d.status === "rejected");
+  const approvedDocs = mergedDocuments.filter((d) => d.status === "approved");
+  const rejectedDocs = mergedDocuments.filter((d) => d.status === "rejected");
+
+  const ensurePersistedDocument = async (docId: string) => {
+    const targetDocument = mergedDocuments.find((doc) => doc.id === docId);
+
+    if (!targetDocument) {
+      throw new Error("Document not found.");
+    }
+
+    if (!docId.startsWith("legacy-")) {
+      return docId;
+    }
+
+    const { data, error } = await supabase
+      .from("practitioner_verification_documents")
+      .insert({
+        practitioner_profile_id: targetDocument.practitioner_profile_id,
+        document_type: targetDocument.document_type,
+        display_name: targetDocument.display_name,
+        file_path: targetDocument.file_path,
+        file_size: targetDocument.file_size,
+        mime_type: targetDocument.mime_type,
+        status: "pending_review",
+        is_required: targetDocument.is_required,
+        uploaded_at: targetDocument.uploaded_at,
+        admin_notes: targetDocument.admin_notes,
+      })
+      .select("id")
+      .single();
+
+    if (error && !error.message.toLowerCase().includes("duplicate")) {
+      throw error;
+    }
+
+    if (data?.id) {
+      return data.id;
+    }
+
+    const { data: existingDocument, error: existingError } = await supabase
+      .from("practitioner_verification_documents")
+      .select("id")
+      .eq("practitioner_profile_id", targetDocument.practitioner_profile_id)
+      .eq("document_type", targetDocument.document_type)
+      .eq("file_path", targetDocument.file_path)
+      .maybeSingle();
+
+    if (existingError || !existingDocument?.id) {
+      throw existingError || new Error("Unable to persist practitioner document.");
+    }
+
+    return existingDocument.id;
+  };
 
   const approveDocument = async (docId: string) => {
+    let persistedDocumentId = docId;
+
+    try {
+      persistedDocumentId = await ensurePersistedDocument(docId);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to prepare document",
+      );
+      return;
+    }
+
     const { error } = await supabase
       .from("practitioner_verification_documents")
       .update({
@@ -127,7 +310,7 @@ export function PractitionerDocumentsSection({
         reviewed_at: new Date().toISOString(),
         reviewed_by: (await supabase.auth.getUser()).data.user?.id,
       })
-      .eq("id", docId);
+      .eq("id", persistedDocumentId);
 
     if (error) {
       toast.error("Failed to approve document");
@@ -148,6 +331,17 @@ export function PractitionerDocumentsSection({
       return;
     }
 
+    let persistedDocumentId = docId;
+
+    try {
+      persistedDocumentId = await ensurePersistedDocument(docId);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to prepare document",
+      );
+      return;
+    }
+
     const { error } = await supabase
       .from("practitioner_verification_documents")
       .update({
@@ -156,7 +350,7 @@ export function PractitionerDocumentsSection({
         reviewed_at: new Date().toISOString(),
         reviewed_by: (await supabase.auth.getUser()).data.user?.id,
       })
-      .eq("id", docId);
+      .eq("id", persistedDocumentId);
 
     if (error) {
       toast.error("Failed to reject document");
@@ -179,7 +373,7 @@ export function PractitionerDocumentsSection({
   const downloadDocument = async (filePath: string, fileName: string) => {
     try {
       const { data } = await supabase.storage
-        .from("practitioner-verifications")
+        .from("documents")
         .download(filePath);
 
       const url = URL.createObjectURL(data);
@@ -315,6 +509,8 @@ export function PractitionerDocumentsSection({
           <div className="space-y-2">
             {requiredDocs?.map((doc) => {
               const uploadedDoc = documents?.find(
+                (d) => d.document_type === doc.type,
+              ) ?? mergedDocuments.find(
                 (d) => d.document_type === doc.type,
               );
               const isApproved = uploadedDoc?.status === "approved";
