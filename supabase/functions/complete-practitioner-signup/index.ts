@@ -295,6 +295,9 @@ Deno.serve(async (request) => {
         .from("practitioner_profiles")
         .upsert({
           profile_id: userId,
+          business_type: "individual",
+          business_name: null,
+          registration_number: null,
           id_number: idNumber,
           tax_practitioner_number: taxPractitionerNumber,
           professional_body: professionalBody,
@@ -306,6 +309,8 @@ Deno.serve(async (request) => {
           verification_status: "pending",
           verification_submitted_at: new Date().toISOString(),
           is_verified: false,
+          is_vat_registered: false,
+          vat_number: null,
           ...profileUpdates,
         });
 

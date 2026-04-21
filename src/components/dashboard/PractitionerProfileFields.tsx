@@ -7,6 +7,7 @@ import { serviceCategoryMap, serviceCategoryOptions, serviceNeededOptions } from
 import { practitionerAvailabilityOptions } from "@/lib/practitionerMarketplace";
 
 export type PractitionerProfileFormState = {
+  businessType: "individual" | "company";
   businessName: string;
   registrationNumber: string;
   yearsOfExperience: string;
@@ -20,6 +21,7 @@ export type PractitionerProfileFormState = {
   bankBranchCode: string;
   bankAccountNumber: string;
   bankAccountType: string;
+  isVatRegistered: boolean;
   vatNumber: string;
 };
 
@@ -56,28 +58,53 @@ export function PractitionerProfileFields({
   };
 
   const serviceLabelMap = new Map(serviceNeededOptions.map((service) => [service.value, service.label]));
+  const isRegisteredCompany = value.businessType === "company";
 
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Business Name</label>
-          <Input
-            value={value.businessName}
-            onChange={(event) => onChange({ ...value, businessName: event.target.value })}
-            placeholder="Acapolite Practitioner Services"
-            className="rounded-xl"
-          />
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Business Type</label>
+          <Select
+            value={value.businessType}
+            onValueChange={(next) => onChange({
+              ...value,
+              businessType: next as PractitionerProfileFormState["businessType"],
+              businessName: next === "company" ? value.businessName : "",
+              registrationNumber: next === "company" ? value.registrationNumber : "",
+            })}
+          >
+            <SelectTrigger className="w-full rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="individual">Individual Practitioner (Sole Proprietor)</SelectItem>
+              <SelectItem value="company">Registered Company / Firm</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <div>
-          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Registration Number</label>
-          <Input
-            value={value.registrationNumber}
-            onChange={(event) => onChange({ ...value, registrationNumber: event.target.value })}
-            placeholder="Professional registration number"
-            className="rounded-xl"
-          />
-        </div>
+        {isRegisteredCompany ? (
+          <>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company / Firm Name</label>
+              <Input
+                value={value.businessName}
+                onChange={(event) => onChange({ ...value, businessName: event.target.value })}
+                placeholder="Acapolite Practitioner Services"
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Registration Number</label>
+              <Input
+                value={value.registrationNumber}
+                onChange={(event) => onChange({ ...value, registrationNumber: event.target.value })}
+                placeholder="Company or firm registration number"
+                className="rounded-xl"
+              />
+            </div>
+          </>
+        ) : null}
         <div>
           <label className="mb-2 block text-sm font-semibold text-foreground font-body">Years of Experience</label>
           <Input
@@ -185,14 +212,35 @@ export function PractitionerProfileFields({
             </SelectContent>
           </Select>
         </div>
-        <div className="sm:col-span-2">
-          <label className="mb-2 block text-sm font-semibold text-foreground font-body">VAT Number (Optional)</label>
-          <Input
-            value={value.vatNumber}
-            onChange={(event) => onChange({ ...value, vatNumber: event.target.value })}
-            placeholder="VAT number"
-            className="rounded-xl"
-          />
+        <div className="sm:col-span-2 rounded-2xl border border-border p-4">
+          <label className="flex items-start gap-3">
+            <Checkbox
+              checked={value.isVatRegistered}
+              onCheckedChange={(checked) => onChange({
+                ...value,
+                isVatRegistered: checked === true,
+                vatNumber: checked === true ? value.vatNumber : "",
+              })}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-foreground font-body">I am VAT Registered</span>
+              <span className="mt-1 block text-sm text-muted-foreground font-body">
+                VAT is optional. Only add a VAT number if this practitioner is registered for VAT.
+              </span>
+            </span>
+          </label>
+          {value.isVatRegistered ? (
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">VAT Number</label>
+              <Input
+                value={value.vatNumber}
+                onChange={(event) => onChange({ ...value, vatNumber: event.target.value })}
+                placeholder="VAT number"
+                className="rounded-xl"
+              />
+            </div>
+          ) : null}
         </div>
       </div>
 

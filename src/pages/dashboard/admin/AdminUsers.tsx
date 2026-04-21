@@ -87,6 +87,7 @@ type StaffCardRecord = {
   availabilityStatus: PractitionerAvailability | null;
   registrationNumber: string;
   businessName: string;
+  businessType: "individual" | "company";
   needsAttention: boolean;
   isReadyForWork: boolean;
 };
@@ -122,6 +123,7 @@ const initialEditForm: EditStaffFormState = {
 };
 
 const initialPractitionerProfileForm: PractitionerProfileFormState = {
+  businessType: "individual",
   businessName: "",
   registrationNumber: "",
   yearsOfExperience: "0",
@@ -135,6 +137,7 @@ const initialPractitionerProfileForm: PractitionerProfileFormState = {
   bankBranchCode: "",
   bankAccountNumber: "",
   bankAccountType: "",
+  isVatRegistered: false,
   vatNumber: "",
 };
 
@@ -243,9 +246,11 @@ function getVerificationDocumentStatus(
 function isPractitionerProfileIncomplete(profile?: PractitionerProfile | null) {
   if (!profile) return true;
 
+  const isRegisteredCompany = profile.business_type === "company";
+
   return (
-    !profile.business_name?.trim() ||
-    !profile.registration_number?.trim() ||
+    (isRegisteredCompany &&
+      (!profile.business_name?.trim() || !profile.registration_number?.trim())) ||
     !profile.services_offered?.length
   );
 }
@@ -615,6 +620,7 @@ export default function AdminUsers() {
         availabilityStatus,
         registrationNumber: practitionerProfile?.registration_number || "",
         businessName: practitionerProfile?.business_name || "",
+        businessType: practitionerProfile?.business_type === "company" ? "company" : "individual",
         needsAttention,
         isReadyForWork,
       } satisfies StaffCardRecord;
@@ -645,6 +651,9 @@ export default function AdminUsers() {
           getRoleLabel(card.role),
           card.registrationNumber,
           card.businessName,
+          card.businessType === "company"
+            ? "registered company firm"
+            : "individual sole proprietor",
           card.isVerified
             ? "verified verified practitioner"
             : "not verified unverified missing verification",
@@ -890,6 +899,10 @@ export default function AdminUsers() {
     }
 
     setEditPractitionerProfile({
+      businessType:
+        selectedPractitionerProfile?.business_type === "company"
+          ? "company"
+          : "individual",
       businessName: selectedPractitionerProfile?.business_name || "",
       registrationNumber:
         selectedPractitionerProfile?.registration_number || "",
@@ -910,6 +923,9 @@ export default function AdminUsers() {
       bankBranchCode: selectedPractitionerProfile?.bank_branch_code || "",
       bankAccountNumber: selectedPractitionerProfile?.bank_account_number || "",
       bankAccountType: selectedPractitionerProfile?.bank_account_type || "",
+      isVatRegistered:
+        selectedPractitionerProfile?.is_vat_registered ??
+        Boolean(selectedPractitionerProfile?.vat_number),
       vatNumber: selectedPractitionerProfile?.vat_number || "",
     });
   }, [selectedPractitionerProfile, selectedStaffUser]);
@@ -965,8 +981,11 @@ export default function AdminUsers() {
 
     const { error } = await supabase.from("practitioner_profiles").upsert({
       profile_id: profileId,
-      business_name: values.businessName.trim() || null,
-      registration_number: values.registrationNumber.trim() || null,
+      business_type: values.businessType,
+      business_name:
+        values.businessType === "company" ? values.businessName.trim() || null : null,
+      registration_number:
+        values.businessType === "company" ? values.registrationNumber.trim() || null : null,
       years_of_experience: Number.isNaN(yearsOfExperience)
         ? 0
         : Math.max(0, yearsOfExperience),
@@ -980,7 +999,8 @@ export default function AdminUsers() {
       bank_branch_code: values.bankBranchCode.trim() || null,
       bank_account_number: values.bankAccountNumber.trim() || null,
       bank_account_type: values.bankAccountType.trim() || null,
-      vat_number: values.vatNumber.trim() || null,
+      is_vat_registered: values.isVatRegistered,
+      vat_number: values.isVatRegistered ? values.vatNumber.trim() || null : null,
     });
 
     return error;
@@ -1630,10 +1650,11 @@ export default function AdminUsers() {
                       </p>
                       {isPractitioner ? (
                         <p className="mt-1 text-sm text-muted-foreground font-body">
-                          {card.businessName || "No business name"}
-                          {card.registrationNumber
-                            ? ` | ${card.registrationNumber}`
-                            : " | No registration number"}
+                          {card.businessType === "company"
+                            ? `${card.businessName || "No company / firm name"} | ${
+                                card.registrationNumber || "No registration number"
+                              }`
+                            : "Individual Practitioner (Sole Proprietor)"}
                         </p>
                       ) : null}
                     </div>

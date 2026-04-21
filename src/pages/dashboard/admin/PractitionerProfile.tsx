@@ -50,6 +50,7 @@ function getBankingVerificationLabel(status?: string | null) {
 }
 
 const initialPractitionerForm: PractitionerProfileFormState = {
+  businessType: "individual",
   businessName: "",
   registrationNumber: "",
   yearsOfExperience: "0",
@@ -63,6 +64,7 @@ const initialPractitionerForm: PractitionerProfileFormState = {
   bankBranchCode: "",
   bankAccountNumber: "",
   bankAccountType: "",
+  isVatRegistered: false,
   vatNumber: "",
 };
 
@@ -70,10 +72,11 @@ type PractitionerReview = Tables<"practitioner_reviews">;
 
 function getProfileCompletion(form: PractitionerProfileFormState) {
   const checks = [
-    Boolean(form.businessName.trim()),
-    Boolean(form.registrationNumber.trim()),
+    form.businessType === "individual" || Boolean(form.businessName.trim()),
+    form.businessType === "individual" || Boolean(form.registrationNumber.trim()),
     Number(form.yearsOfExperience || 0) > 0,
     form.servicesOffered.length > 0,
+    !form.isVatRegistered || Boolean(form.vatNumber.trim()),
   ];
 
   const completed = checks.filter(Boolean).length;
@@ -130,6 +133,8 @@ export default function PractitionerProfile() {
     }
 
     setForm({
+      businessType:
+        practitionerProfile.business_type === "company" ? "company" : "individual",
       businessName: practitionerProfile.business_name || "",
       registrationNumber: practitionerProfile.registration_number || "",
       yearsOfExperience: String(practitionerProfile.years_of_experience ?? 0),
@@ -147,6 +152,8 @@ export default function PractitionerProfile() {
       bankBranchCode: practitionerProfile.bank_branch_code || "",
       bankAccountNumber: practitionerProfile.bank_account_number || "",
       bankAccountType: practitionerProfile.bank_account_type || "",
+      isVatRegistered:
+        practitionerProfile.is_vat_registered ?? Boolean(practitionerProfile.vat_number),
       vatNumber: practitionerProfile.vat_number || "",
     });
   }, [practitionerProfile, profile?.full_name]);
@@ -178,8 +185,9 @@ export default function PractitionerProfile() {
     const years = Number(form.yearsOfExperience || 0);
     const { error } = await supabase.from("practitioner_profiles").upsert({
       profile_id: user.id,
-      business_name: form.businessName.trim() || null,
-      registration_number: form.registrationNumber.trim() || null,
+      business_type: form.businessType,
+      business_name: form.businessType === "company" ? form.businessName.trim() || null : null,
+      registration_number: form.businessType === "company" ? form.registrationNumber.trim() || null : null,
       years_of_experience: Number.isNaN(years) ? 0 : Math.max(0, years),
       availability_status: form.availabilityStatus,
       is_verified: practitionerProfile?.is_verified ?? false,
@@ -191,7 +199,8 @@ export default function PractitionerProfile() {
       bank_branch_code: form.bankBranchCode.trim() || null,
       bank_account_number: form.bankAccountNumber.trim() || null,
       bank_account_type: form.bankAccountType.trim() || null,
-      vat_number: form.vatNumber.trim() || null,
+      is_vat_registered: form.isVatRegistered,
+      vat_number: form.isVatRegistered ? form.vatNumber.trim() || null : null,
     });
 
     setSaving(false);
@@ -335,26 +344,32 @@ export default function PractitionerProfile() {
                 Completion checklist
               </p>
               <div className="mt-3 space-y-2 text-sm font-body">
-                <p
-                  className={
-                    form.businessName.trim()
-                      ? "text-foreground"
-                      : "text-muted-foreground"
-                  }
-                >
-                  {form.businessName.trim() ? "Complete" : "Missing"} business
-                  name
+                <p className="text-foreground">
+                  Complete business type: {form.businessType === "company" ? "Registered company / firm" : "Individual practitioner"}
                 </p>
-                <p
-                  className={
-                    form.registrationNumber.trim()
-                      ? "text-foreground"
-                      : "text-muted-foreground"
-                  }
-                >
-                  {form.registrationNumber.trim() ? "Complete" : "Missing"}{" "}
-                  registration number
-                </p>
+                {form.businessType === "company" ? (
+                  <>
+                    <p
+                      className={
+                        form.businessName.trim()
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {form.businessName.trim() ? "Complete" : "Missing"} company / firm name
+                    </p>
+                    <p
+                      className={
+                        form.registrationNumber.trim()
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {form.registrationNumber.trim() ? "Complete" : "Missing"}{" "}
+                      company registration number
+                    </p>
+                  </>
+                ) : null}
                 <p
                   className={
                     Number(form.yearsOfExperience || 0) > 0

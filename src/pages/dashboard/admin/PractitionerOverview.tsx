@@ -119,11 +119,13 @@ function getProfileCompletion(profile?: PractitionerProfile | null) {
     return 0;
   }
 
+  const isRegisteredCompany = profile.business_type === "company";
   const checks = [
-    Boolean(profile.business_name?.trim()),
-    Boolean(profile.registration_number?.trim()),
+    !isRegisteredCompany || Boolean(profile.business_name?.trim()),
+    !isRegisteredCompany || Boolean(profile.registration_number?.trim()),
     Number(profile.years_of_experience || 0) > 0,
     Boolean(profile.services_offered?.length),
+    !profile.is_vat_registered || Boolean(profile.vat_number?.trim()),
   ];
 
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);

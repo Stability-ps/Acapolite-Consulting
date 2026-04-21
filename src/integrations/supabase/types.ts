@@ -108,6 +108,7 @@ export type Database = {
       practitioner_profiles: {
         Row: {
           profile_id: string;
+          business_type: string;
           business_name: string | null;
           registration_number: string | null;
           id_number: string | null;
@@ -121,6 +122,7 @@ export type Database = {
           bank_branch_code: string | null;
           bank_account_number: string | null;
           bank_account_type: string | null;
+          is_vat_registered: boolean;
           vat_number: string | null;
           banking_verification_status: string;
           banking_verified_at: string | null;
@@ -141,6 +143,7 @@ export type Database = {
         };
         Insert: {
           profile_id: string;
+          business_type?: string;
           business_name?: string | null;
           registration_number?: string | null;
           id_number?: string | null;
@@ -154,6 +157,7 @@ export type Database = {
           bank_branch_code?: string | null;
           bank_account_number?: string | null;
           bank_account_type?: string | null;
+          is_vat_registered?: boolean;
           vat_number?: string | null;
           banking_verification_status?: string;
           banking_verified_at?: string | null;
@@ -174,6 +178,7 @@ export type Database = {
         };
         Update: {
           profile_id?: string;
+          business_type?: string;
           business_name?: string | null;
           registration_number?: string | null;
           id_number?: string | null;
@@ -187,6 +192,7 @@ export type Database = {
           bank_branch_code?: string | null;
           bank_account_number?: string | null;
           bank_account_type?: string | null;
+          is_vat_registered?: boolean;
           vat_number?: string | null;
           banking_verification_status?: string;
           banking_verified_at?: string | null;

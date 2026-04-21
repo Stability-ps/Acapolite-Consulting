@@ -11,28 +11,31 @@ interface PractitionerProfileMissingFieldsProps {
 function getMissingFields(profile?: PractitionerProfile | null) {
   if (!profile) {
     return [
-      { field: "Business Name", status: "missing" },
-      { field: "Registration Number", status: "missing" },
+      { field: "Business Type", status: "missing" },
       { field: "Services Offered", status: "missing" },
       { field: "Years of Experience", status: "missing" },
       { field: "Availability Status", status: "missing" },
       { field: "Banking Information", status: "missing" },
-      { field: "VAT Number", status: "missing" },
     ];
   }
 
   const missingFields = [];
+  const businessType = profile.business_type === "company" ? "company" : "individual";
 
-  if (!profile.business_name?.trim()) {
-    missingFields.push({ field: "Business Name", status: "missing" });
-  } else {
-    missingFields.push({ field: "Business Name", status: "complete" });
-  }
+  missingFields.push({ field: "Business Type", status: "complete" });
 
-  if (!profile.registration_number?.trim()) {
-    missingFields.push({ field: "Registration Number", status: "missing" });
-  } else {
-    missingFields.push({ field: "Registration Number", status: "complete" });
+  if (businessType === "company") {
+    if (!profile.business_name?.trim()) {
+      missingFields.push({ field: "Company / Firm Name", status: "missing" });
+    } else {
+      missingFields.push({ field: "Company / Firm Name", status: "complete" });
+    }
+
+    if (!profile.registration_number?.trim()) {
+      missingFields.push({ field: "Company Registration Number", status: "missing" });
+    } else {
+      missingFields.push({ field: "Company Registration Number", status: "complete" });
+    }
   }
 
   if (!profile.services_offered?.length) {
@@ -65,10 +68,12 @@ function getMissingFields(profile?: PractitionerProfile | null) {
     missingFields.push({ field: "Banking Information", status: "complete" });
   }
 
-  if (!profile.vat_number?.trim()) {
-    missingFields.push({ field: "VAT Number", status: "missing" });
-  } else {
-    missingFields.push({ field: "VAT Number", status: "complete" });
+  if (profile.is_vat_registered) {
+    if (!profile.vat_number?.trim()) {
+      missingFields.push({ field: "VAT Number", status: "missing" });
+    } else {
+      missingFields.push({ field: "VAT Number", status: "complete" });
+    }
   }
 
   return missingFields;
