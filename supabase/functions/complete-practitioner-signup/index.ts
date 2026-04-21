@@ -94,8 +94,9 @@ Deno.serve(async (request) => {
     });
 
     const formData = await request.formData();
-    const userId = trimString(formData.get("userId"));
+    let userId = trimString(formData.get("userId"));
     const email = normalizeEmail(trimString(formData.get("email")));
+    const password = trimString(formData.get("password"));
     const fullName = trimString(formData.get("fullName"));
     const phone = trimString(formData.get("phone"));
     const idNumber = trimString(formData.get("idNumber"));
@@ -108,7 +109,6 @@ Deno.serve(async (request) => {
     const province = trimString(formData.get("province"));
 
     if (
-      !userId ||
       !email ||
       !fullName ||
       !idNumber ||
@@ -124,32 +124,90 @@ Deno.serve(async (request) => {
       );
     }
 
-    const {
-      data: { user },
-      error: authError,
-    } = await adminClient.auth.admin.getUserById(userId);
+    let createdUserId: string | null = null;
 
-    if (authError || !user) {
-      return jsonResponse(
-        request,
-        { error: "Practitioner account could not be verified." },
-        404,
-      );
-    }
+    if (!userId) {
+      if (!password || password.length < 8) {
+        return jsonResponse(
+          request,
+          { error: "Password must be at least 8 characters long." },
+          400,
+        );
+      }
 
-    const createdAt = Date.parse(user.created_at ?? "");
-    const isRecentSignup =
-      Number.isFinite(createdAt) &&
-      Date.now() - createdAt <= 1000 * 60 * 30;
-    const userEmail = normalizeEmail(user.email ?? "");
-    const userRole = String(user.user_metadata?.role ?? "").toLowerCase();
+      const { data: existingProfile } = await adminClient
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
 
-    if (!isRecentSignup || userEmail !== email || userRole !== "consultant") {
-      return jsonResponse(
-        request,
-        { error: "This practitioner signup request is no longer valid." },
-        403,
-      );
+      if (existingProfile) {
+        return jsonResponse(
+          request,
+          { error: "An account with this email already exists." },
+          400,
+        );
+      }
+
+      const { data: createdUserData, error: createUserError } =
+        await adminClient.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: fullName,
+            phone,
+            role: "consultant",
+            account_type: "practitioner",
+            id_number: idNumber,
+            tax_practitioner_number: taxPractitionerNumber,
+            professional_body: professionalBody,
+            years_of_experience: Number.isFinite(yearsExperience)
+              ? String(Math.max(0, yearsExperience))
+              : "0",
+            city,
+            province,
+          },
+        });
+
+      if (createUserError || !createdUserData.user) {
+        return jsonResponse(
+          request,
+          { error: createUserError?.message || "Unable to create practitioner account." },
+          400,
+        );
+      }
+
+      userId = createdUserData.user.id;
+      createdUserId = userId;
+    } else {
+      const {
+        data: { user },
+        error: authError,
+      } = await adminClient.auth.admin.getUserById(userId);
+
+      if (authError || !user) {
+        return jsonResponse(
+          request,
+          { error: "Practitioner account could not be verified." },
+          404,
+        );
+      }
+
+      const createdAt = Date.parse(user.created_at ?? "");
+      const isRecentSignup =
+        Number.isFinite(createdAt) &&
+        Date.now() - createdAt <= 1000 * 60 * 30;
+      const userEmail = normalizeEmail(user.email ?? "");
+      const userRole = String(user.user_metadata?.role ?? "").toLowerCase();
+
+      if (!isRecentSignup || userEmail !== email || userRole !== "consultant") {
+        return jsonResponse(
+          request,
+          { error: "This practitioner signup request is no longer valid." },
+          403,
+        );
+      }
     }
 
     const uploadedFiles = ["idCopy", "certificate", "proofOfAddress", "bankConfirmation"]
@@ -164,6 +222,10 @@ Deno.serve(async (request) => {
       .filter((item): item is { file: File; config: NonNullable<ReturnType<typeof documentConfig>> } => Boolean(item));
 
     if (uploadedFiles.length !== 4) {
+      if (createdUserId) {
+        await adminClient.auth.admin.deleteUser(createdUserId);
+      }
+
       return jsonResponse(
         request,
         { error: "All practitioner verification documents are required." },
@@ -171,7 +233,7 @@ Deno.serve(async (request) => {
       );
     }
 
-    await adminClient.from("profiles").upsert({
+    const { error: profileUpsertError } = await adminClient.from("profiles").upsert({
       id: userId,
       email,
       full_name: fullName,
@@ -179,6 +241,14 @@ Deno.serve(async (request) => {
       role: "consultant",
       is_active: true,
     });
+
+    if (profileUpsertError) {
+      if (createdUserId) {
+        await adminClient.auth.admin.deleteUser(createdUserId);
+      }
+
+      return jsonResponse(request, { error: profileUpsertError.message }, 400);
+    }
 
     const uploadedPaths: string[] = [];
     const profileUpdates: Record<string, string> = {};
@@ -247,14 +317,40 @@ Deno.serve(async (request) => {
       if (documentsError) {
         throw new Error(documentsError.message);
       }
+
+      const { count: savedDocuments, error: countError } = await adminClient
+        .from("practitioner_verification_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("practitioner_profile_id", userId)
+        .in("document_type", [
+          "id_copy",
+          "tax_registration_certificate",
+          "proof_of_address",
+          "bank_confirmation_letter",
+        ]);
+
+      if (countError) {
+        throw new Error(countError.message);
+      }
+
+      if ((savedDocuments ?? 0) < 4) {
+        throw new Error(
+          "Practitioner signup did not save all required verification documents.",
+        );
+      }
     } catch (error) {
       if (uploadedPaths.length) {
         await adminClient.storage.from("documents").remove(uploadedPaths);
       }
+
+      if (createdUserId) {
+        await adminClient.auth.admin.deleteUser(createdUserId);
+      }
+
       throw error;
     }
 
-    return jsonResponse(request, { success: true }, 200);
+    return jsonResponse(request, { success: true, userId, savedDocuments: 4 }, 200);
   } catch (error) {
     const message =
       error instanceof Error

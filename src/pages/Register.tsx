@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -150,7 +150,27 @@ export default function Register() {
     setPrefillApplied(true);
   }, [location.search, prefillApplied]);
 
-  const completePractitionerSignup = async (userId: string) => {
+  const practitionerSignupFunctionUrl =
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/complete-practitioner-signup`;
+  const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+  const ensurePractitionerSignupFunctionReady = async () => {
+    const response = await fetch(practitionerSignupFunctionUrl, {
+      method: "OPTIONS",
+      headers: {
+        apikey: supabasePublishableKey,
+        Authorization: `Bearer ${supabasePublishableKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        "Practitioner document upload service is not available. Please deploy the complete-practitioner-signup function before creating practitioner accounts.",
+      );
+    }
+  };
+
+  const completePractitionerSignup = async (userId?: string) => {
     if (
       !practitionerDocuments.idCopy ||
       !practitionerDocuments.certificate ||
@@ -161,8 +181,11 @@ export default function Register() {
     }
 
     const formData = new FormData();
-    formData.append("userId", userId);
+    if (userId) {
+      formData.append("userId", userId);
+    }
     formData.append("email", email.trim());
+    formData.append("password", password);
     formData.append("fullName", `${practitionerForm.firstName.trim()} ${practitionerForm.lastName.trim()}`.trim());
     formData.append("phone", practitionerForm.phone.trim());
     formData.append("idNumber", practitionerForm.idNumber.trim());
@@ -185,24 +208,31 @@ export default function Register() {
     formData.append("bankConfirmation", practitionerDocuments.bankConfirmation);
 
     const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/complete-practitioner-signup`,
+      practitionerSignupFunctionUrl,
       {
         method: "POST",
         headers: {
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          apikey: supabasePublishableKey,
+          Authorization: `Bearer ${supabasePublishableKey}`,
         },
         body: formData,
       },
     );
 
     const result = (await response.json().catch(() => null)) as
-      | { error?: string }
+      | { error?: string; savedDocuments?: number }
       | null;
 
     if (!response.ok) {
       throw new Error(
         result?.error ||
           "Practitioner verification documents could not be saved.",
+      );
+    }
+
+    if ((result?.savedDocuments ?? 0) < 4) {
+      throw new Error(
+        "Practitioner signup did not save all required documents. Please try again before leaving this page.",
       );
     }
   };
@@ -267,6 +297,20 @@ export default function Register() {
     setLoading(true);
     setLoadingMessage("Creating account...");
     try {
+      if (accountType === "practitioner") {
+        const fullName =
+          `${practitionerForm.firstName.trim()} ${practitionerForm.lastName.trim()}`.trim();
+
+        setLoadingMessage("Checking practitioner upload service...");
+        await ensurePractitionerSignupFunctionReady();
+        setLoadingMessage("Creating practitioner account and uploading documents...");
+        await completePractitionerSignup();
+
+        toast.success("Practitioner account created and documents submitted for admin review.");
+        window.location.replace("/login");
+        return;
+      }
+
       const signupRole =
         accountType === "practitioner" ? "consultant" : "client";
       const signupRoleLabel =
@@ -286,6 +330,12 @@ export default function Register() {
         | null = null;
 
       if (!pendingPractitionerUserId) {
+        if (accountType === "practitioner") {
+          setLoadingMessage("Checking practitioner upload service...");
+          await ensurePractitionerSignupFunctionReady();
+          setLoadingMessage("Creating account...");
+        }
+
         const signUpResult = await supabase.auth.signUp({
           email,
           password,
@@ -937,9 +987,18 @@ export default function Register() {
             <Button
               type="submit"
               disabled={!canSubmit}
-              className="w-full py-5 text-base font-semibold rounded-xl"
+              className="min-h-12 w-full rounded-xl px-4 py-3 text-sm font-semibold sm:text-base"
             >
-              {loading ? loadingMessage : "Create Account"}
+              {loading ? (
+                <span className="flex w-full items-center justify-center gap-2 leading-snug">
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                  <span className="max-w-[16rem] truncate">
+                    {loadingMessage}
+                  </span>
+                </span>
+              ) : (
+                "Create Account"
+              )}
             </Button>
           </form>
         </div>

@@ -508,11 +508,10 @@ export function PractitionerDocumentsSection({
           </p>
           <div className="space-y-2">
             {requiredDocs?.map((doc) => {
-              const uploadedDoc = documents?.find(
-                (d) => d.document_type === doc.type,
-              ) ?? mergedDocuments.find(
+              const uploadedDoc = mergedDocuments.find(
                 (d) => d.document_type === doc.type,
               );
+              const isMissing = !uploadedDoc;
               const isApproved = uploadedDoc?.status === "approved";
               const isRejected = uploadedDoc?.status === "rejected";
 
@@ -526,6 +525,8 @@ export function PractitionerDocumentsSection({
                       <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                     ) : isRejected ? (
                       <XCircle className="h-5 w-5 text-red-600" />
+                    ) : isMissing ? (
+                      <FileText className="h-4 w-4 text-muted-foreground" />
                     ) : (
                       <Clock3 className="h-5 w-5 text-amber-600" />
                     )}
@@ -533,12 +534,21 @@ export function PractitionerDocumentsSection({
                   <span className="flex-1 text-sm font-medium">
                     {doc.label}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="hidden text-xs text-muted-foreground">
                     {isApproved
                       ? "✓ Approved"
                       : isRejected
                         ? "✗ Rejected"
                         : "Pending"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {isMissing
+                      ? "Missing"
+                      : isApproved
+                        ? "Approved"
+                        : isRejected
+                          ? "Rejected"
+                          : "Pending Review"}
                   </span>
                 </div>
               );
