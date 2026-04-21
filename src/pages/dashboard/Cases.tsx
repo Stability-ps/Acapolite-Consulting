@@ -353,6 +353,9 @@ export default function Cases() {
           .insert({
             client_id: client.id,
             uploaded_by: user.id,
+            sender_profile_id: user.id,
+            recipient_profile_id: client.profile_id,
+            visibility: "shared",
             title: `Case Request Attachment - ${requestForm.case_title.trim()}`,
             file_name: attachmentFile.name,
             file_path: uploadedFilePath,

@@ -239,7 +239,7 @@ Deno.serve(async (request) => {
       full_name: fullName,
       phone: phone || null,
       role: "consultant",
-      is_active: true,
+      is_active: false,
     });
 
     if (profileUpsertError) {

@@ -64,8 +64,11 @@ type StaffDocumentRow = {
   file_path: string;
   mime_type: string | null;
   file_size: number | null;
-  client_id: string;
+  client_id: string | null;
   case_id: string | null;
+  recipient_profile_id: string | null;
+  sender_profile_id: string | null;
+  visibility: string;
   uploaded_at: string;
   status: DocumentStatus;
   category: string | null;
@@ -368,7 +371,7 @@ export default function AdminDocuments() {
       let query = supabase
         .from("documents")
         .select(
-          "id, title, file_name, file_path, mime_type, file_size, client_id, case_id, uploaded_at, status, category, rejection_reason, notes, clients(id, company_name, first_name, last_name, client_code, assigned_consultant_id, profile_id, profiles!clients_profile_id_fkey(full_name, email)), linked_case:cases!documents_case_id_fkey(id, case_title, case_number, assigned_consultant_id)",
+          "id, title, file_name, file_path, mime_type, file_size, client_id, case_id, recipient_profile_id, sender_profile_id, visibility, uploaded_at, status, category, rejection_reason, notes, clients(id, company_name, first_name, last_name, client_code, assigned_consultant_id, profile_id, profiles!clients_profile_id_fkey(full_name, email)), linked_case:cases!documents_case_id_fkey(id, case_title, case_number, assigned_consultant_id)",
         )
         .order("uploaded_at", { ascending: false });
 
@@ -385,18 +388,25 @@ export default function AdminDocuments() {
 
   const { data: practitionerProfiles, isLoading: loadingPractitionerProfiles } =
     useQuery({
-      queryKey: ["staff-practitioner-verification-documents"],
+      queryKey: ["staff-practitioner-verification-documents", role, user?.id],
       queryFn: async () => {
-        const { data, error } = await supabase
+        let query = supabase
           .from("practitioner_profiles")
           .select(
             "profile_id, business_name, verification_status, verification_submitted_at, id_document_path, certificate_document_path, proof_of_address_path, bank_confirmation_document_path, internal_notes, is_verified, profiles!practitioner_profiles_profile_id_fkey(full_name, email)",
           )
           .order("updated_at", { ascending: false });
 
+        if (role !== "admin" && user?.id) {
+          query = query.eq("profile_id", user.id);
+        }
+
+        const { data, error } = await query;
+
         if (error) throw error;
         return (data ?? []) as PractitionerVerificationRow[];
       },
+      enabled: role === "admin" || !!user?.id,
     });
 
   const { data: invoices, isLoading: loadingInvoices } = useQuery({
@@ -649,6 +659,16 @@ export default function AdminDocuments() {
 
         if (error) {
           throw error;
+        }
+
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .update({ is_active: reviewStatus === "approved" })
+          .eq("id", selectedItem.practitionerProfileId)
+          .eq("role", "consultant");
+
+        if (profileError) {
+          throw profileError;
         }
       } else if (selectedItem.documentId) {
         const update: Database["public"]["Tables"]["documents"]["Update"] = {

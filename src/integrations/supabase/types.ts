@@ -244,7 +244,7 @@ export type Database = {
         Row: {
           id: string;
           practitioner_profile_id: string;
-          client_id: string;
+          client_id: string | null;
           case_id: string;
           rating: number;
           review_text: string | null;
@@ -254,7 +254,7 @@ export type Database = {
         Insert: {
           id?: string;
           practitioner_profile_id: string;
-          client_id: string;
+          client_id?: string | null;
           case_id: string;
           rating: number;
           review_text?: string | null;
@@ -264,7 +264,7 @@ export type Database = {
         Update: {
           id?: string;
           practitioner_profile_id?: string;
-          client_id?: string;
+          client_id?: string | null;
           case_id?: string;
           rating?: number;
           review_text?: string | null;
@@ -643,6 +643,9 @@ export type Database = {
           case_id: string | null;
           document_request_id: string | null;
           uploaded_by: string;
+          recipient_profile_id: string | null;
+          sender_profile_id: string | null;
+          visibility: string;
           title: string;
           file_name: string;
           file_path: string;
@@ -664,6 +667,9 @@ export type Database = {
           case_id?: string | null;
           document_request_id?: string | null;
           uploaded_by: string;
+          recipient_profile_id?: string | null;
+          sender_profile_id?: string | null;
+          visibility?: string;
           title: string;
           file_name: string;
           file_path: string;
@@ -685,6 +691,9 @@ export type Database = {
           case_id?: string | null;
           document_request_id?: string | null;
           uploaded_by?: string;
+          recipient_profile_id?: string | null;
+          sender_profile_id?: string | null;
+          visibility?: string;
           title?: string;
           file_name?: string;
           file_path?: string;

@@ -126,6 +126,9 @@ export default function Documents() {
       const { data: documentRow, error: dbError } = await supabase.from("documents").insert({
         client_id: client.id,
         uploaded_by: user.id,
+        sender_profile_id: user.id,
+        recipient_profile_id: client.profile_id,
+        visibility: "shared",
         title: documentType,
         file_name: selectedFile.name,
         file_path: filePath,

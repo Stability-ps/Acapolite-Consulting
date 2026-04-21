@@ -1225,12 +1225,25 @@ export default function AdminUsers() {
       availability_status:
         card.practitionerProfile?.availability_status ?? "available",
       is_verified: true,
+      verification_status: "verified",
       internal_notes: card.practitionerProfile?.internal_notes ?? null,
       services_offered: card.practitionerProfile?.services_offered ?? [],
     });
 
     if (error) {
       toast.error(error.message);
+      setQuickAction({ id: null, type: null });
+      return;
+    }
+
+    const { error: activationError } = await supabase
+      .from("profiles")
+      .update({ is_active: true })
+      .eq("id", card.staffUser.id)
+      .eq("role", "consultant");
+
+    if (activationError) {
+      toast.error(activationError.message);
       setQuickAction({ id: null, type: null });
       return;
     }
@@ -2256,13 +2269,27 @@ export default function AdminUsers() {
                           !selectedPractitionerProfile.is_verified;
                         const { error } = await supabase
                           .from("practitioner_profiles")
-                          .update({ is_verified: newStatus })
+                          .update({
+                            is_verified: newStatus,
+                            verification_status: newStatus
+                              ? "verified"
+                              : "pending",
+                          })
                           .eq(
                             "profile_id",
                             selectedPractitionerProfile.profile_id,
                           );
 
                         if (error) throw error;
+
+                        const { error: profileError } = await supabase
+                          .from("profiles")
+                          .update({ is_active: newStatus })
+                          .eq("id", selectedPractitionerProfile.profile_id)
+                          .eq("role", "consultant");
+
+                        if (profileError) throw profileError;
+
                         toast.success(
                           newStatus
                             ? "Practitioner marked as verified"

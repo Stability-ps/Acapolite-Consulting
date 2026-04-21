@@ -557,31 +557,35 @@ export function PractitionerDocumentsSection({
         </div>
 
         {isAdmin && (
-          <div className="mb-6 rounded-2xl border border-border bg-blue-50 p-4">
-            <div className="mb-4 flex items-center gap-2">
-              <FileUp className="h-5 w-5 text-blue-600" />
-              <h4 className="font-semibold text-blue-900">
+          <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/80 p-4 sm:p-5">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+                <FileUp className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+              <h4 className="font-semibold text-blue-950">
                 Admin Document Upload
               </h4>
+                <p className="mt-1 text-sm leading-6 text-blue-800">
+                  Upload documents on behalf of this practitioner if they sent
+                  them via email or other means.
+                </p>
+              </div>
             </div>
-            <p className="mb-4 text-sm text-blue-800">
-              Upload documents on behalf of this practitioner if they sent them
-              via email or other means.
-            </p>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               {/* Required Documents Upload */}
               <div>
                 <p className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-blue-900">
                   Required Documents
                 </p>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 xl:grid-cols-2">
                   {REQUIRED_DOCUMENT_TYPES.map((docType) => (
                     <div
                       key={docType}
-                      className="rounded-lg border border-blue-200 bg-white p-3"
+                      className="flex min-h-[154px] flex-col rounded-2xl border border-blue-200 bg-white p-4 shadow-sm"
                     >
-                      <label className="mb-2 block text-xs font-medium text-foreground">
+                      <label className="mb-3 block min-h-8 text-sm font-semibold leading-4 text-foreground">
                         {DOCUMENT_TYPE_LABELS[docType]}
                       </label>
                       <input
@@ -601,17 +605,17 @@ export function PractitionerDocumentsSection({
                                 ? ".doc,.docx"
                                 : t,
                         ).join(",")}
-                        className="mb-2 block w-full text-xs file:mr-3 file:rounded-lg file:border file:border-blue-300 file:bg-blue-50 file:px-3 file:py-1 file:text-xs file:font-medium file:text-blue-700"
+                        className="block w-full rounded-xl border border-blue-100 bg-blue-50/40 px-2 py-2 text-xs text-slate-700 file:mr-3 file:rounded-lg file:border file:border-blue-300 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700"
                       />
-                      {selectedAdminFiles[docType] && (
-                        <div className="mb-2 text-xs text-foreground">
-                          {selectedAdminFiles[docType]!.name}
-                        </div>
-                      )}
+                      <div className="mt-2 min-h-5 truncate text-xs text-muted-foreground">
+                        {selectedAdminFiles[docType]
+                          ? selectedAdminFiles[docType]!.name
+                          : "No file selected"}
+                      </div>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="w-full rounded-lg text-xs"
+                        className="mt-auto w-full rounded-xl border-blue-200 text-xs font-semibold text-blue-800 hover:bg-blue-50"
                         onClick={() => {
                           const file = selectedAdminFiles[docType];
                           if (file) {
@@ -645,13 +649,13 @@ export function PractitionerDocumentsSection({
                 <p className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-blue-900">
                   Optional Documents
                 </p>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 xl:grid-cols-2">
                   {OPTIONAL_DOCUMENT_TYPES.map((docType) => (
                     <div
                       key={docType}
-                      className="rounded-lg border border-blue-200 bg-white p-3"
+                      className="flex min-h-[154px] flex-col rounded-2xl border border-blue-200 bg-white p-4 shadow-sm"
                     >
-                      <label className="mb-2 block text-xs font-medium text-foreground">
+                      <label className="mb-3 block min-h-8 text-sm font-semibold leading-4 text-foreground">
                         {DOCUMENT_TYPE_LABELS[docType]}
                       </label>
                       <input
@@ -671,17 +675,17 @@ export function PractitionerDocumentsSection({
                                 ? ".doc,.docx"
                                 : t,
                         ).join(",")}
-                        className="mb-2 block w-full text-xs file:mr-3 file:rounded-lg file:border file:border-blue-300 file:bg-blue-50 file:px-3 file:py-1 file:text-xs file:font-medium file:text-blue-700"
+                        className="block w-full rounded-xl border border-blue-100 bg-blue-50/40 px-2 py-2 text-xs text-slate-700 file:mr-3 file:rounded-lg file:border file:border-blue-300 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700"
                       />
-                      {selectedAdminFiles[docType] && (
-                        <div className="mb-2 text-xs text-foreground">
-                          {selectedAdminFiles[docType]!.name}
-                        </div>
-                      )}
+                      <div className="mt-2 min-h-5 truncate text-xs text-muted-foreground">
+                        {selectedAdminFiles[docType]
+                          ? selectedAdminFiles[docType]!.name
+                          : "No file selected"}
+                      </div>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="w-full rounded-lg text-xs"
+                        className="mt-auto w-full rounded-xl border-blue-200 text-xs font-semibold text-blue-800 hover:bg-blue-50"
                         onClick={() => {
                           const file = selectedAdminFiles[docType];
                           if (file) {
