@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, Paperclip } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -44,6 +44,85 @@ const provinces = [
   "North West",
   "Northern Cape",
 ];
+
+type SignupFileUploadFieldProps = {
+  id: string;
+  label: string;
+  file: File | null;
+  required?: boolean;
+  helperText?: string;
+  onChange: (file: File | null) => void;
+};
+
+function SignupFileUploadField({
+  id,
+  label,
+  file,
+  required = false,
+  helperText,
+  onChange,
+}: SignupFileUploadFieldProps) {
+  return (
+    <div>
+      <Label htmlFor={id} className="font-body">
+        {label}
+        {required ? (
+          <span className="ml-1 text-red-500">*</span>
+        ) : (
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            Optional
+          </span>
+        )}
+      </Label>
+      {helperText ? (
+        <p className="mt-1 text-xs text-muted-foreground font-body">
+          {helperText}
+        </p>
+      ) : null}
+      <input
+        id={id}
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png"
+        required={required}
+        className="sr-only"
+        onChange={(event) => onChange(event.target.files?.[0] || null)}
+      />
+      <label
+        htmlFor={id}
+        className={`mt-2 flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm font-body transition-colors ${
+          file
+            ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+            : "border-dashed border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-accent/50"
+        }`}
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          {file ? (
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+          ) : (
+            <Paperclip className="h-5 w-5 shrink-0" />
+          )}
+          <span className="min-w-0">
+            <span className="block font-semibold text-foreground">
+              {file ? "File attached" : "Choose file"}
+            </span>
+            <span className="block truncate text-xs">
+              {file ? file.name : "PDF, JPG, JPEG, or PNG"}
+            </span>
+          </span>
+        </span>
+        <span
+          className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+            file
+              ? "bg-emerald-600 text-white"
+              : "bg-primary/10 text-primary"
+          }`}
+        >
+          {file ? "Change" : "Browse"}
+        </span>
+      </label>
+    </div>
+  );
+}
 
 export default function Register() {
   const [accountType, setAccountType] = useState<AccountType>("client");
@@ -972,80 +1051,54 @@ export default function Register() {
                 <p className="text-xs text-muted-foreground font-body">
                   Required now: ID Copy, Practitioner Certificate, and Proof of Address. You can upload your Bank Confirmation Letter later from your dashboard.
                 </p>
-                <div>
-                  <Label htmlFor="id-copy" className="font-body">
-                    ID Copy
-                  </Label>
-                  <Input
-                    id="id-copy"
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    required
-                    className="mt-1.5"
-                    onChange={(event) =>
-                      setPractitionerDocuments((current) => ({
-                        ...current,
-                        idCopy: event.target.files?.[0] || null,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="certificate" className="font-body">
-                    Practitioner Certificate
-                  </Label>
-                  <Input
-                    id="certificate"
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    required
-                    className="mt-1.5"
-                    onChange={(event) =>
-                      setPractitionerDocuments((current) => ({
-                        ...current,
-                        certificate: event.target.files?.[0] || null,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="proof-of-address" className="font-body">
-                    Proof of Address
-                  </Label>
-                  <Input
-                    id="proof-of-address"
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    required
-                    className="mt-1.5"
-                    onChange={(event) =>
-                      setPractitionerDocuments((current) => ({
-                        ...current,
-                        proofOfAddress: event.target.files?.[0] || null,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="bank-confirmation" className="font-body">
-                    Bank Confirmation Letter
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      Optional, can be uploaded later
-                    </span>
-                  </Label>
-                  <Input
-                    id="bank-confirmation"
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    className="mt-1.5"
-                    onChange={(event) =>
-                      setPractitionerDocuments((current) => ({
-                        ...current,
-                        bankConfirmation: event.target.files?.[0] || null,
-                      }))
-                    }
-                  />
-                </div>
+                <SignupFileUploadField
+                  id="id-copy"
+                  label="ID Copy"
+                  file={practitionerDocuments.idCopy}
+                  required
+                  onChange={(file) =>
+                    setPractitionerDocuments((current) => ({
+                      ...current,
+                      idCopy: file,
+                    }))
+                  }
+                />
+                <SignupFileUploadField
+                  id="certificate"
+                  label="Practitioner Certificate"
+                  file={practitionerDocuments.certificate}
+                  required
+                  onChange={(file) =>
+                    setPractitionerDocuments((current) => ({
+                      ...current,
+                      certificate: file,
+                    }))
+                  }
+                />
+                <SignupFileUploadField
+                  id="proof-of-address"
+                  label="Proof of Address"
+                  file={practitionerDocuments.proofOfAddress}
+                  required
+                  onChange={(file) =>
+                    setPractitionerDocuments((current) => ({
+                      ...current,
+                      proofOfAddress: file,
+                    }))
+                  }
+                />
+                <SignupFileUploadField
+                  id="bank-confirmation"
+                  label="Bank Confirmation Letter"
+                  file={practitionerDocuments.bankConfirmation}
+                  helperText="Optional, can be uploaded later from your dashboard."
+                  onChange={(file) =>
+                    setPractitionerDocuments((current) => ({
+                      ...current,
+                      bankConfirmation: file,
+                    }))
+                  }
+                />
               </div>
             ) : null}
             <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
