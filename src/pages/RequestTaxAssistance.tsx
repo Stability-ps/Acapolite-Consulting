@@ -70,6 +70,7 @@ export default function RequestTaxAssistance() {
     client_type: "individual" as ClientType,
     identity_document_type: "id_number" as IdentityDocumentType,
     id_number: "",
+    company_name: "",
     company_registration_number: "",
     service_categories: [
       "individual_tax",
@@ -99,6 +100,7 @@ export default function RequestTaxAssistance() {
       client_type: "individual",
       identity_document_type: "id_number",
       id_number: "",
+      company_name: "",
       company_registration_number: "",
       service_categories: ["individual_tax"],
       service_needed_list: ["individual_personal_income_tax_returns"],
@@ -347,10 +349,12 @@ export default function RequestTaxAssistance() {
       return;
     }
 
-    if (
-      form.client_type === "company" &&
-      !form.company_registration_number.trim()
-    ) {
+    if (form.client_type === "company" && !form.company_name.trim()) {
+      toast.error("Please enter the company name.");
+      return;
+    }
+
+    if (form.client_type === "company" && !form.company_registration_number.trim()) {
       toast.error("Please enter the company registration number.");
       return;
     }
@@ -381,6 +385,8 @@ export default function RequestTaxAssistance() {
               : null,
           id_number:
             form.client_type === "individual" ? form.id_number.trim() : null,
+          company_name:
+            form.client_type === "company" ? form.company_name.trim() : null,
           company_registration_number:
             form.client_type === "company"
               ? form.company_registration_number.trim()
@@ -778,6 +784,8 @@ export default function RequestTaxAssistance() {
                           : "id_number",
                       id_number:
                         value === "individual" ? current.id_number : "",
+                      company_name:
+                        value === "company" ? current.company_name : "",
                       company_registration_number:
                         value === "company"
                           ? current.company_registration_number
@@ -865,23 +873,42 @@ export default function RequestTaxAssistance() {
                   </div>
                 </>
               ) : (
-                <div className="sm:col-span-2">
-                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                    Company Registration Number
-                  </label>
-                  <Input
-                    value={form.company_registration_number}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        company_registration_number: event.target.value,
-                      }))
-                    }
-                    placeholder="Company Registration Number"
-                    className="rounded-xl"
-                    required
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+                      Company Name
+                    </label>
+                    <Input
+                      value={form.company_name}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          company_name: event.target.value,
+                        }))
+                      }
+                      placeholder="Registered company name"
+                      className="rounded-xl"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+                      Company Registration Number
+                    </label>
+                    <Input
+                      value={form.company_registration_number}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          company_registration_number: event.target.value,
+                        }))
+                      }
+                      placeholder="Company Registration Number"
+                      className="rounded-xl"
+                      required
+                    />
+                  </div>
+                </>
               )}
             </div>
 

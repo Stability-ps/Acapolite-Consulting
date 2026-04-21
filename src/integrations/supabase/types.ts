@@ -1022,6 +1022,7 @@ export type Database = {
           client_type: Database["public"]["Enums"]["service_request_client_type"];
           identity_document_type: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number: string | null;
+          company_name: string | null;
           company_registration_number: string | null;
           service_category: Database["public"]["Enums"]["service_request_category"];
           service_categories: Database["public"]["Enums"]["service_request_category"][] | null;
@@ -1055,6 +1056,7 @@ export type Database = {
           client_type: Database["public"]["Enums"]["service_request_client_type"];
           identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
+          company_name?: string | null;
           company_registration_number?: string | null;
           service_category: Database["public"]["Enums"]["service_request_category"];
           service_categories?: Database["public"]["Enums"]["service_request_category"][] | null;
@@ -1088,6 +1090,7 @@ export type Database = {
           client_type?: Database["public"]["Enums"]["service_request_client_type"];
           identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
+          company_name?: string | null;
           company_registration_number?: string | null;
           service_category?: Database["public"]["Enums"]["service_request_category"];
           service_categories?: Database["public"]["Enums"]["service_request_category"][] | null;

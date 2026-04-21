@@ -210,7 +210,9 @@ Deno.serve(async (request) => {
       }
     }
 
-    const uploadedFiles = ["idCopy", "certificate", "proofOfAddress", "bankConfirmation"]
+    const requiredDocumentKeys = ["idCopy", "certificate", "proofOfAddress"];
+    const optionalDocumentKeys = ["bankConfirmation"];
+    const uploadedFiles = [...requiredDocumentKeys, ...optionalDocumentKeys]
       .map((key) => {
         const file = formData.get(key);
         const config = documentConfig(key);
@@ -221,14 +223,18 @@ Deno.serve(async (request) => {
       })
       .filter((item): item is { file: File; config: NonNullable<ReturnType<typeof documentConfig>> } => Boolean(item));
 
-    if (uploadedFiles.length !== 4) {
+    const uploadedRequiredCount = uploadedFiles.filter(({ config }) =>
+      requiredDocumentKeys.some((key) => documentConfig(key)?.documentType === config.documentType)
+    ).length;
+
+    if (uploadedRequiredCount !== requiredDocumentKeys.length) {
       if (createdUserId) {
         await adminClient.auth.admin.deleteUser(createdUserId);
       }
 
       return jsonResponse(
         request,
-        { error: "All practitioner verification documents are required." },
+        { error: "ID Copy, Practitioner Certificate, and Proof of Address are required." },
         400,
       );
     }
@@ -280,7 +286,7 @@ Deno.serve(async (request) => {
           file_size: file.size,
           mime_type: file.type || null,
           status: "pending_review",
-          is_required: true,
+          is_required: config.documentType !== "bank_confirmation_letter",
           uploaded_at: new Date().toISOString(),
         });
       }
@@ -326,14 +332,13 @@ Deno.serve(async (request) => {
           "id_copy",
           "tax_registration_certificate",
           "proof_of_address",
-          "bank_confirmation_letter",
         ]);
 
       if (countError) {
         throw new Error(countError.message);
       }
 
-      if ((savedDocuments ?? 0) < 4) {
+      if ((savedDocuments ?? 0) < 3) {
         throw new Error(
           "Practitioner signup did not save all required verification documents.",
         );
@@ -350,7 +355,7 @@ Deno.serve(async (request) => {
       throw error;
     }
 
-    return jsonResponse(request, { success: true, userId, savedDocuments: 4 }, 200);
+    return jsonResponse(request, { success: true, userId, savedDocuments: uploadedFiles.length }, 200);
   } catch (error) {
     const message =
       error instanceof Error

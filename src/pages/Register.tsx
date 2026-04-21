@@ -19,6 +19,7 @@ import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { getAppBaseUrl } from "@/lib/siteUrl";
 
 type AccountType = "client" | "practitioner";
+type ClientAccountType = "individual" | "company";
 
 const professionalBodies = [
   "SAIT",
@@ -51,11 +52,14 @@ export default function Register() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [clientForm, setClientForm] = useState({
+    clientType: "individual" as ClientAccountType,
     firstName: "",
     lastName: "",
     phone: "",
     province: "",
     idNumber: "",
+    companyName: "",
+    companyRegistrationNumber: "",
   });
   const [practitionerForm, setPractitionerForm] = useState({
     firstName: "",
@@ -174,8 +178,7 @@ export default function Register() {
     if (
       !practitionerDocuments.idCopy ||
       !practitionerDocuments.certificate ||
-      !practitionerDocuments.proofOfAddress ||
-      !practitionerDocuments.bankConfirmation
+      !practitionerDocuments.proofOfAddress
     ) {
       throw new Error("Please upload all required verification documents.");
     }
@@ -205,7 +208,9 @@ export default function Register() {
     formData.append("idCopy", practitionerDocuments.idCopy);
     formData.append("certificate", practitionerDocuments.certificate);
     formData.append("proofOfAddress", practitionerDocuments.proofOfAddress);
-    formData.append("bankConfirmation", practitionerDocuments.bankConfirmation);
+    if (practitionerDocuments.bankConfirmation) {
+      formData.append("bankConfirmation", practitionerDocuments.bankConfirmation);
+    }
 
     const response = await fetch(
       practitionerSignupFunctionUrl,
@@ -257,10 +262,22 @@ export default function Register() {
         !clientForm.firstName.trim() ||
         !clientForm.lastName.trim() ||
         !clientForm.phone.trim() ||
-        !clientForm.province.trim() ||
-        !clientForm.idNumber.trim()
+        !clientForm.province.trim()
       ) {
         toast.error("Please complete all required client fields.");
+        return;
+      }
+
+      if (clientForm.clientType === "individual" && !clientForm.idNumber.trim()) {
+        toast.error("Please enter the client ID number.");
+        return;
+      }
+
+      if (
+        clientForm.clientType === "company" &&
+        (!clientForm.companyName.trim() || !clientForm.companyRegistrationNumber.trim())
+      ) {
+        toast.error("Please enter the company name and registration number.");
         return;
       }
     }
@@ -286,8 +303,7 @@ export default function Register() {
       if (
         !practitionerDocuments.idCopy ||
         !practitionerDocuments.certificate ||
-        !practitionerDocuments.proofOfAddress ||
-        !practitionerDocuments.bankConfirmation
+        !practitionerDocuments.proofOfAddress
       ) {
         toast.error("Please upload all required verification documents.");
         return;
@@ -359,7 +375,19 @@ export default function Register() {
               id_number:
                 accountType === "practitioner"
                   ? practitionerForm.idNumber.trim()
-                  : clientForm.idNumber.trim(),
+                  : clientForm.clientType === "individual"
+                    ? clientForm.idNumber.trim()
+                    : null,
+              client_type:
+                accountType === "client" ? clientForm.clientType : null,
+              organization_name:
+                accountType === "client" && clientForm.clientType === "company"
+                  ? clientForm.companyName.trim()
+                  : null,
+              company_registration_number:
+                accountType === "client" && clientForm.clientType === "company"
+                  ? clientForm.companyRegistrationNumber.trim()
+                  : null,
               tax_practitioner_number:
                 accountType === "practitioner"
                   ? practitionerForm.taxPractitionerNumber.trim()
@@ -637,6 +665,72 @@ export default function Register() {
             {accountType === "client" ? (
               <>
                 <div>
+                  <Label htmlFor="client-type" className="font-body">
+                    Individual or Company
+                  </Label>
+                  <Select
+                    value={clientForm.clientType}
+                    onValueChange={(value) =>
+                      setClientForm((current) => ({
+                        ...current,
+                        clientType: value as ClientAccountType,
+                        idNumber: value === "individual" ? current.idNumber : "",
+                        companyName: value === "company" ? current.companyName : "",
+                        companyRegistrationNumber:
+                          value === "company" ? current.companyRegistrationNumber : "",
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="client-type" className="mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individual">Individual</SelectItem>
+                      <SelectItem value="company">Company</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {clientForm.clientType === "company" ? (
+                  <>
+                    <div>
+                      <Label htmlFor="client-company-name" className="font-body">
+                        Company Name
+                      </Label>
+                      <Input
+                        id="client-company-name"
+                        value={clientForm.companyName}
+                        onChange={(event) =>
+                          setClientForm((current) => ({
+                            ...current,
+                            companyName: event.target.value,
+                          }))
+                        }
+                        required
+                        className="mt-1.5"
+                        placeholder="Registered company name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="client-company-registration" className="font-body">
+                        Company Registration Number
+                      </Label>
+                      <Input
+                        id="client-company-registration"
+                        value={clientForm.companyRegistrationNumber}
+                        onChange={(event) =>
+                          setClientForm((current) => ({
+                            ...current,
+                            companyRegistrationNumber: event.target.value,
+                          }))
+                        }
+                        required
+                        className="mt-1.5"
+                        placeholder="Company Registration Number"
+                      />
+                    </div>
+                  </>
+                ) : (
+                <div>
                   <Label htmlFor="client-id-number" className="font-body">
                     ID Number
                   </Label>
@@ -654,6 +748,7 @@ export default function Register() {
                     placeholder="ID Number"
                   />
                 </div>
+                )}
                 <div>
                   <Label htmlFor="client-province" className="font-body">
                     Province
@@ -874,6 +969,9 @@ export default function Register() {
                 <p className="text-sm font-semibold text-foreground font-body">
                   Verification Documents
                 </p>
+                <p className="text-xs text-muted-foreground font-body">
+                  Required now: ID Copy, Practitioner Certificate, and Proof of Address. You can upload your Bank Confirmation Letter later from your dashboard.
+                </p>
                 <div>
                   <Label htmlFor="id-copy" className="font-body">
                     ID Copy
@@ -931,12 +1029,14 @@ export default function Register() {
                 <div>
                   <Label htmlFor="bank-confirmation" className="font-body">
                     Bank Confirmation Letter
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      Optional, can be uploaded later
+                    </span>
                   </Label>
                   <Input
                     id="bank-confirmation"
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
-                    required
                     className="mt-1.5"
                     onChange={(event) =>
                       setPractitionerDocuments((current) => ({
