@@ -30,6 +30,12 @@ type ServiceRequestDocument = Tables<"service_request_documents">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
 type PractitionerCreditAccount = Tables<"practitioner_credit_accounts">;
 type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
+const MAX_LEAD_RESPONSES = 4;
+
+function formatLeadResponseCount(count: number) {
+  const safeCount = Math.min(count, MAX_LEAD_RESPONSES);
+  return `${safeCount} responded`;
+}
 
 export default function PractitionerLeads() {
   const { user } = useAuth();
@@ -115,6 +121,19 @@ export default function PractitionerLeads() {
     enabled: !!user,
   });
 
+  const { data: allResponses } = useQuery({
+    queryKey: ["practitioner-lead-response-counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_request_responses")
+        .select("id, service_request_id");
+
+      if (error) throw error;
+      return (data ?? []) as Pick<ServiceRequestResponse, "id" | "service_request_id">[];
+    },
+    enabled: !!user,
+  });
+
   const { data: accessRequests } = useQuery({
     queryKey: ["practitioner-lead-access-requests", user?.id],
     queryFn: async () => {
@@ -161,6 +180,16 @@ export default function PractitionerLeads() {
     () => new Map((responses ?? []).map((response) => [response.service_request_id, response])),
     [responses],
   );
+
+  const responseCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+
+    for (const response of allResponses ?? []) {
+      map.set(response.service_request_id, (map.get(response.service_request_id) ?? 0) + 1);
+    }
+
+    return map;
+  }, [allResponses]);
 
   const accessRequestMap = useMemo(
     () => new Map((accessRequests ?? []).map((request) => [request.service_request_id, request])),
@@ -285,11 +314,13 @@ export default function PractitionerLeads() {
     || requests?.find((request) => request.id === selectedRequestId)
     || null;
   const selectedResponse = selectedRequest ? responseMap.get(selectedRequest.id) ?? null : null;
+  const selectedResponseCount = selectedRequest ? responseCountMap.get(selectedRequest.id) ?? 0 : 0;
+  const selectedResponseLimitReached = !selectedResponse && selectedResponseCount >= MAX_LEAD_RESPONSES;
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
   const selectedAccessRequest = selectedRequest ? accessRequestMap.get(selectedRequest.id) ?? null : null;
   const availableCredits = creditAccount?.balance ?? 0;
   const hasApprovedAccess = Boolean(selectedResponse || selectedAccessRequest?.status === "approved");
-  const canSendNewResponse = Boolean(selectedResponse || selectedAccessRequest?.status === "approved");
+  const canSendNewResponse = Boolean(selectedResponse || selectedAccessRequest?.status === "approved") && !selectedResponseLimitReached;
 
   useEffect(() => {
     if (!leadIdFromQuery || !(requests ?? []).some((request) => request.id === leadIdFromQuery)) {
@@ -334,6 +365,11 @@ export default function PractitionerLeads() {
       return;
     }
 
+    if (selectedResponseLimitReached) {
+      toast.error("Response limit reached.");
+      return;
+    }
+
     setSavingResponse(true);
 
     const payload = {
@@ -372,6 +408,7 @@ export default function PractitionerLeads() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", user.id] }),
       queryClient.invalidateQueries({ queryKey: ["practitioner-own-lead-responses", user.id] }),
+      queryClient.invalidateQueries({ queryKey: ["practitioner-lead-response-counts"] }),
       queryClient.invalidateQueries({ queryKey: ["practitioner-visible-leads", user.id] }),
       queryClient.invalidateQueries({ queryKey: ["practitioner-lead-access-requests", user.id] }),
     ]);
@@ -380,6 +417,13 @@ export default function PractitionerLeads() {
 
   const requestLeadAccess = async (request: ServiceRequest) => {
     if (!user?.id) return;
+    const responseCount = responseCountMap.get(request.id) ?? 0;
+
+    if (responseCount >= MAX_LEAD_RESPONSES && !responseMap.has(request.id)) {
+      toast.error("Response limit reached.");
+      return;
+    }
+
     setRequestingAccessId(request.id);
 
     try {
@@ -646,6 +690,8 @@ export default function PractitionerLeads() {
         <div className="space-y-4">
           {filteredRequests.map((request) => {
             const ownResponse = responseMap.get(request.id);
+            const responseCount = responseCountMap.get(request.id) ?? 0;
+            const responseLimitReached = !ownResponse && responseCount >= MAX_LEAD_RESPONSES;
             const flags = getServiceRequestIssueFlags({
               hasDebtFlag: request.has_debt_flag,
               missingReturnsFlag: request.missing_returns_flag,
@@ -678,6 +724,13 @@ export default function PractitionerLeads() {
                           {formatServiceRequestLabel(ownResponse.response_status)}
                         </Badge>
                       ) : null}
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                        responseLimitReached
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : "border-sky-200 bg-sky-50 text-sky-700"
+                      }`}>
+                        {formatLeadResponseCount(responseCount)}
+                      </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground font-body">
                       {formatServiceList(resolveServiceList(request))}
@@ -686,6 +739,9 @@ export default function PractitionerLeads() {
                       Cost: {creditCost} credit{creditCost === 1 ? "" : "s"}
                     </p>
                     <p className="line-clamp-2 text-sm text-foreground font-body">{request.description}</p>
+                    {responseLimitReached ? (
+                      <p className="text-sm font-semibold text-red-700 font-body">Response limit reached</p>
+                    ) : null}
                     <div className="flex flex-wrap gap-2">
                       {flags.length ? flags.map((flag) => (
                         <Badge key={flag} className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
@@ -780,6 +836,17 @@ export default function PractitionerLeads() {
                       {getServiceRequestCreditCost(selectedRequest.service_needed)} credit
                       {getServiceRequestCreditCost(selectedRequest.service_needed) === 1 ? "" : "s"}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Responses</p>
+                    <p className={`mt-1 text-sm font-semibold font-body ${
+                      selectedResponseLimitReached ? "text-red-700" : "text-foreground"
+                    }`}>
+                      {formatLeadResponseCount(selectedResponseCount)}
+                    </p>
+                    {selectedResponseLimitReached ? (
+                      <p className="mt-1 text-xs font-semibold text-red-700 font-body">Response limit reached</p>
+                    ) : null}
                   </div>
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Service Category</p>
@@ -924,7 +991,9 @@ export default function PractitionerLeads() {
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Credit Status</p>
                 <p className="mt-2 text-sm text-foreground font-body">
-                  {selectedResponse
+                  {selectedResponseLimitReached
+                    ? "Response limit reached. This lead already has the maximum number of practitioner responses."
+                    : selectedResponse
                     ? "Updating this existing response will not deduct another credit."
                     : "Credits are deducted immediately when you unlock this lead."}
                 </p>
@@ -974,6 +1043,8 @@ export default function PractitionerLeads() {
                     <SendHorizonal className="mr-2 h-4 w-4" />
                     {savingResponse
                       ? "Saving..."
+                      : selectedResponseLimitReached
+                        ? "Response limit reached"
                       : selectedResponse
                         ? "Update Response"
                         : "Respond to Lead"}
@@ -983,9 +1054,11 @@ export default function PractitionerLeads() {
                     type="button"
                     className="rounded-xl"
                     onClick={() => void requestLeadAccess(selectedRequest)}
-                    disabled={requestingAccessId === selectedRequest.id || selectedAccessRequest?.status === "approved"}
+                    disabled={selectedResponseLimitReached || requestingAccessId === selectedRequest.id || selectedAccessRequest?.status === "approved"}
                   >
-                    {selectedAccessRequest?.status === "approved"
+                    {selectedResponseLimitReached
+                      ? "Response limit reached"
+                      : selectedAccessRequest?.status === "approved"
                       ? "Unlocked"
                       : requestingAccessId === selectedRequest.id
                         ? "Unlocking..."
