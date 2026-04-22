@@ -20,6 +20,7 @@ import {
 import { useState } from "react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
+import { usePractitionerVerificationGate } from "@/hooks/usePractitionerVerificationGate";
 import type { StaffPermissionKey } from "@/lib/staffPermissions";
 import { toast } from "sonner";
 import {
@@ -62,6 +63,7 @@ const consultantItems = [
   { title: "Overview", url: "/dashboard/staff", icon: Shield, permission: "can_view_overview" as StaffPermissionKey },
   { title: "Notifications", url: "/dashboard/staff/notifications", icon: Bell, permission: "can_view_overview" as StaffPermissionKey },
   { title: "My Profile", url: "/dashboard/staff/profile", icon: BriefcaseBusiness },
+  { title: "Verification Docs", url: "/dashboard/staff/verification-documents", icon: Upload },
   { title: "Credits", url: "/dashboard/staff/credits", icon: Coins },
   { title: "Clients", url: "/dashboard/staff/clients", icon: Users, permission: "can_view_clients" as StaffPermissionKey },
   { title: "Service Requests", url: "/dashboard/staff/service-requests", icon: ClipboardList, permission: "can_view_clients" as StaffPermissionKey },
@@ -78,6 +80,7 @@ export function AppSidebar() {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const { role, signOut, user, hasStaffPermission } = useAuth();
+  const { isPendingVerification } = usePractitionerVerificationGate();
   const [signingOut, setSigningOut] = useState(false);
   const { unreadBySection } = useNotifications();
 
@@ -85,7 +88,9 @@ export function AppSidebar() {
     ? clientItems
     : role === "admin"
       ? adminItems
-      : consultantItems.filter((item) => !item.permission || hasStaffPermission(item.permission));
+      : isPendingVerification
+        ? consultantItems.filter((item) => item.url === "/dashboard/staff/profile" || item.url === "/dashboard/staff/verification-documents")
+        : consultantItems.filter((item) => !item.permission || hasStaffPermission(item.permission));
 
   const groupLabel = role === "client" ? "Client Menu" : role === "consultant" ? "Practitioner Tools" : "Staff Tools";
 

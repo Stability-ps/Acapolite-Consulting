@@ -1118,6 +1118,25 @@ export default function AdminUsers() {
       return;
     }
 
+    if (editForm.role === "consultant") {
+      const { error: practitionerStatusError } = await supabase
+        .from("practitioner_profiles")
+        .update({
+          verification_status: editForm.isActive
+            ? editPractitionerProfile.isVerified
+              ? "verified"
+              : "pending"
+            : "suspended",
+        })
+        .eq("profile_id", selectedStaffUser.id);
+
+      if (practitionerStatusError) {
+        toast.error(practitionerStatusError.message);
+        setIsSaving(false);
+        return;
+      }
+    }
+
     const permissionsToSave =
       editForm.role === "admin"
         ? fullStaffPermissions
@@ -1323,6 +1342,26 @@ export default function AdminUsers() {
       toast.error(error.message);
       setQuickAction({ id: null, type: null });
       return;
+    }
+
+    if (card.role === "consultant") {
+      const nextIsActive = !card.staffUser.is_active;
+      const { error: practitionerStatusError } = await supabase
+        .from("practitioner_profiles")
+        .update({
+          verification_status: nextIsActive
+            ? card.isVerified
+              ? "verified"
+              : "pending"
+            : "suspended",
+        })
+        .eq("profile_id", card.staffUser.id);
+
+      if (practitionerStatusError) {
+        toast.error(practitionerStatusError.message);
+        setQuickAction({ id: null, type: null });
+        return;
+      }
     }
 
     toast.success(
