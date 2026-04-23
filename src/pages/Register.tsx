@@ -21,6 +21,8 @@ import { getAppBaseUrl } from "@/lib/siteUrl";
 type AccountType = "client" | "practitioner";
 type ClientAccountType = "individual" | "company";
 
+const SA_ID_NUMBER_LENGTH = 13;
+
 const professionalBodies = [
   "SAIT",
   "SAICA",
@@ -122,6 +124,10 @@ function SignupFileUploadField({
       </label>
     </div>
   );
+}
+
+function normalizeIdNumber(value: string) {
+  return value.replace(/\D/g, "").slice(0, SA_ID_NUMBER_LENGTH);
 }
 
 export default function Register() {
@@ -353,6 +359,14 @@ export default function Register() {
       }
 
       if (
+        clientForm.clientType === "individual" &&
+        clientForm.idNumber.trim().length !== SA_ID_NUMBER_LENGTH
+      ) {
+        toast.error("Client ID number must be exactly 13 digits.");
+        return;
+      }
+
+      if (
         clientForm.clientType === "company" &&
         (!clientForm.companyName.trim() || !clientForm.companyRegistrationNumber.trim())
       ) {
@@ -385,6 +399,11 @@ export default function Register() {
         !practitionerDocuments.proofOfAddress
       ) {
         toast.error("Please upload all required verification documents.");
+        return;
+      }
+
+      if (practitionerForm.idNumber.trim().length !== SA_ID_NUMBER_LENGTH) {
+        toast.error("Practitioner ID number must be exactly 13 digits.");
         return;
       }
     }
@@ -819,10 +838,12 @@ export default function Register() {
                     onChange={(event) =>
                       setClientForm((current) => ({
                         ...current,
-                        idNumber: event.target.value,
+                        idNumber: normalizeIdNumber(event.target.value),
                       }))
                     }
                     required
+                    inputMode="numeric"
+                    maxLength={SA_ID_NUMBER_LENGTH}
                     className="mt-1.5"
                     placeholder="ID Number"
                   />
@@ -867,10 +888,12 @@ export default function Register() {
                     onChange={(event) =>
                       setPractitionerForm((current) => ({
                         ...current,
-                        idNumber: event.target.value,
+                        idNumber: normalizeIdNumber(event.target.value),
                       }))
                     }
                     required
+                    inputMode="numeric"
+                    maxLength={SA_ID_NUMBER_LENGTH}
                     className="mt-1.5"
                     placeholder="ID Number"
                   />

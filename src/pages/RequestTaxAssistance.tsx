@@ -867,7 +867,7 @@ export default function RequestTaxAssistance() {
                     />
                     <p className="mt-2 text-xs text-muted-foreground font-body">
                       {form.identity_document_type === "id_number"
-                        ? `${form.id_number.length}/13 digits`
+                        ? "Enter your 13-digit South African ID number."
                         : "Enter the passport number exactly as it appears on the document."}
                     </p>
                   </div>
