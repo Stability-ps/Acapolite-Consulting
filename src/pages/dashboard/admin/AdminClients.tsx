@@ -163,7 +163,9 @@ export default function AdminClients() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isAssigningCodes, setIsAssigningCodes] = useState(false);
   const [formState, setFormState] = useState<NewClientFormState>(initialFormState);
   const [isUpdatingReturnStatus, setIsUpdatingReturnStatus] = useState(false);
@@ -412,6 +414,34 @@ export default function AdminClients() {
   const resetCreateForm = () => {
     setFormState(initialFormState);
     setIsCreating(false);
+    setIsSavingEdit(false);
+  };
+
+  const loadClientIntoForm = (client: StaffClient) => {
+    setFormState({
+      email: client.profiles?.email || "",
+      password: "",
+      fullName: client.profiles?.full_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || client.company_name || "",
+      phone: client.profiles?.phone || "",
+      clientType: client.client_type === "company" ? "company" : "individual",
+      companyName: client.company_name || "",
+      companyRegistrationNumber: client.company_registration_number || "",
+      firstName: client.first_name || "",
+      lastName: client.last_name || "",
+      taxNumber: client.tax_number || "",
+      sarsReferenceNumber: client.sars_reference_number || "",
+      idNumber: client.id_number || "",
+      sarsOutstandingDebt: String(client.sars_outstanding_debt ?? 0),
+      returnsFiled: client.returns_filed,
+      clientCode: client.client_code || "",
+      addressLine1: client.address_line_1 || "",
+      addressLine2: client.address_line_2 || "",
+      city: client.city || "",
+      province: client.province || "",
+      postalCode: client.postal_code || "",
+      country: client.country || "South Africa",
+      notes: client.notes || "",
+    });
   };
 
   const createClient = async () => {
@@ -565,6 +595,74 @@ export default function AdminClients() {
       queryClient.invalidateQueries({ queryKey: ["staff-client-risk-document-requests"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-overview-risk-clients"] }),
     ]);
+  };
+
+  const saveClientEdits = async () => {
+    if (!selectedClient || !canManageClients) {
+      toast.error("This practitioner profile cannot update client records.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+
+    const resolvedFullName = formState.fullName.trim()
+      || [formState.firstName.trim(), formState.lastName.trim()].filter(Boolean).join(" ")
+      || formState.companyName.trim()
+      || selectedClient.profiles?.full_name
+      || "";
+
+    const nameParts = splitFullName(resolvedFullName);
+    const firstName = formState.firstName.trim() || nameParts.firstName;
+    const lastName = formState.lastName.trim() || nameParts.lastName;
+
+    const { error: profileUpdateError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: resolvedFullName || null,
+        phone: formState.phone.trim() || null,
+      })
+      .eq("id", selectedClient.profile_id);
+
+    if (profileUpdateError) {
+      toast.error(profileUpdateError.message);
+      setIsSavingEdit(false);
+      return;
+    }
+
+    const { error: clientUpdateError } = await supabase
+      .from("clients")
+      .update({
+        client_type: formState.clientType,
+        company_registration_number: formState.clientType === "company" ? formState.companyRegistrationNumber.trim() || null : null,
+        first_name: firstName || null,
+        last_name: lastName || null,
+        company_name: formState.clientType === "company" ? formState.companyName.trim() || null : null,
+        tax_number: formState.taxNumber.trim() || null,
+        sars_reference_number: formState.sarsReferenceNumber.trim() || null,
+        id_number: formState.clientType === "individual" ? formState.idNumber.trim() || null : null,
+        sars_outstanding_debt: Number(formState.sarsOutstandingDebt || 0),
+        returns_filed: formState.returnsFiled,
+        client_code: formState.clientCode.trim() || selectedClient.client_code || generateClientCode(selectedClient.id),
+        address_line_1: formState.addressLine1.trim() || null,
+        address_line_2: formState.addressLine2.trim() || null,
+        city: formState.city.trim() || null,
+        province: formState.province.trim() || null,
+        postal_code: formState.postalCode.trim() || null,
+        country: formState.country.trim() || "South Africa",
+        notes: formState.notes.trim() || null,
+      })
+      .eq("id", selectedClient.id);
+
+    if (clientUpdateError) {
+      toast.error(clientUpdateError.message);
+      setIsSavingEdit(false);
+      return;
+    }
+
+    toast.success("Client details updated.");
+    setIsSavingEdit(false);
+    setIsEditOpen(false);
+    await refreshClientViews();
   };
 
   const assignMissingClientCodes = async () => {
@@ -920,6 +1018,23 @@ export default function AdminClients() {
                     <div className="w-full">
                       <p className="font-body text-sm font-semibold text-red-700">Attention needed on this client account</p>
                       <div className="mt-3 space-y-3">
+                        {canManageClients ? (
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="rounded-lg"
+                              onClick={() => {
+                                loadClientIntoForm(selectedClient);
+                                setIsEditOpen(true);
+                              }}
+                            >
+                              Edit Client Details
+                            </Button>
+                          </div>
+                        ) : null}
+
                         {warningSummary.debtAmount > 0 ? (
                           <div className="rounded-xl border border-red-100 bg-white px-3 py-3 text-sm font-medium text-red-700">
                             SARS debt outstanding
@@ -1082,6 +1197,159 @@ export default function AdminClients() {
                 </Button>
               </div>
             ) : null}
+          </div>
+        ) : null}
+      </DashboardItemDialog>
+
+      <DashboardItemDialog
+        open={!!selectedClient && isEditOpen}
+        onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) {
+            resetCreateForm();
+          }
+        }}
+        title="Edit Client Details"
+        description="Update this client profile to resolve warnings and keep the record accurate."
+      >
+        {selectedClient ? (
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Full Name</label>
+                <Input value={formState.fullName} onChange={(event) => updateForm("fullName", event.target.value)} placeholder="Client full name" className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Phone</label>
+                <Input value={formState.phone} onChange={(event) => updateForm("phone", event.target.value)} placeholder="+27 ..." className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Type</label>
+                <Select value={formState.clientType} onValueChange={(value) => updateForm("clientType", value as NewClientFormState["clientType"])}>
+                  <SelectTrigger className="w-full rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="individual">Individual</SelectItem>
+                    <SelectItem value="company">Company</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">First Name</label>
+                <Input value={formState.firstName} onChange={(event) => updateForm("firstName", event.target.value)} placeholder="First name" className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Last Name</label>
+                <Input value={formState.lastName} onChange={(event) => updateForm("lastName", event.target.value)} placeholder="Last name" className="rounded-xl" />
+              </div>
+
+              {formState.clientType === "company" ? (
+                <>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Name</label>
+                    <Input value={formState.companyName} onChange={(event) => updateForm("companyName", event.target.value)} placeholder="Company name" className="rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Registration Number</label>
+                    <Input value={formState.companyRegistrationNumber} onChange={(event) => updateForm("companyRegistrationNumber", event.target.value)} placeholder="Registration number" className="rounded-xl" />
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
+                  <Input value={formState.idNumber} onChange={(event) => updateForm("idNumber", event.target.value)} placeholder="ID number" className="rounded-xl" />
+                </div>
+              )}
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Tax Number</label>
+                <Input value={formState.taxNumber} onChange={(event) => updateForm("taxNumber", event.target.value)} placeholder="Tax number" className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Reference</label>
+                <Input value={formState.sarsReferenceNumber} onChange={(event) => updateForm("sarsReferenceNumber", event.target.value)} placeholder="SARS reference number" className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Outstanding / Debt</label>
+                <Input value={formState.sarsOutstandingDebt} onChange={(event) => updateForm("sarsOutstandingDebt", event.target.value)} type="number" min="0" step="0.01" placeholder="0.00" className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Code</label>
+                <Input value={formState.clientCode} onChange={(event) => updateForm("clientCode", event.target.value)} placeholder="Client code" className="rounded-xl" />
+              </div>
+
+              <div className="sm:col-span-2 rounded-2xl border border-border bg-accent/30 p-4">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="edit-returns-filed"
+                    checked={formState.returnsFiled}
+                    onCheckedChange={(checked) => updateForm("returnsFiled", checked === true)}
+                  />
+                  <label htmlFor="edit-returns-filed" className="text-sm font-semibold text-foreground font-body">
+                    Returns filed
+                  </label>
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Address Line 1</label>
+                <Input value={formState.addressLine1} onChange={(event) => updateForm("addressLine1", event.target.value)} placeholder="Street address" className="rounded-xl" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Address Line 2</label>
+                <Input value={formState.addressLine2} onChange={(event) => updateForm("addressLine2", event.target.value)} placeholder="Apartment, suite, building" className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">City</label>
+                <Input value={formState.city} onChange={(event) => updateForm("city", event.target.value)} placeholder="City" className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Province</label>
+                <Select value={formState.province} onValueChange={(value) => updateForm("province", value)}>
+                  <SelectTrigger className="w-full rounded-xl">
+                    <SelectValue placeholder="Select province" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {provinces.map((province) => (
+                      <SelectItem key={province} value={province}>
+                        {province}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Postal Code</label>
+                <Input value={formState.postalCode} onChange={(event) => updateForm("postalCode", event.target.value)} placeholder="Postal code" className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Country</label>
+                <Input value={formState.country} onChange={(event) => updateForm("country", event.target.value)} placeholder="Country" className="rounded-xl" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">Notes</label>
+                <Textarea value={formState.notes} onChange={(event) => updateForm("notes", event.target.value)} placeholder="Internal notes" className="rounded-xl" />
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => {
+                  setIsEditOpen(false);
+                  resetCreateForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="button" className="rounded-xl" onClick={saveClientEdits} disabled={isSavingEdit}>
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
           </div>
         ) : null}
       </DashboardItemDialog>
