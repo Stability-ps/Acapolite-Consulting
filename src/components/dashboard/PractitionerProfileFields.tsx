@@ -7,6 +7,15 @@ import { serviceCategoryMap, serviceCategoryOptions, serviceNeededOptions } from
 import { practitionerAvailabilityOptions } from "@/lib/practitionerMarketplace";
 
 export type PractitionerProfileFormState = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  idNumber: string;
+  taxPractitionerNumber: string;
+  professionalBody: string;
+  city: string;
+  province: string;
   businessType: "individual" | "company";
   businessName: string;
   registrationNumber: string;
@@ -62,6 +71,97 @@ export function PractitionerProfileFields({
 
   return (
     <div className="space-y-5">
+      <div className="rounded-2xl border border-border bg-accent/20 p-4">
+        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Personal Details</p>
+        <p className="mt-2 text-sm text-muted-foreground font-body">
+          Keep your personal and registration details accurate so Acapolite can verify and present your practitioner profile correctly.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">First Name</label>
+          <Input
+            value={value.firstName}
+            onChange={(event) => onChange({ ...value, firstName: event.target.value })}
+            placeholder="First name"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Last Name</label>
+          <Input
+            value={value.lastName}
+            onChange={(event) => onChange({ ...value, lastName: event.target.value })}
+            placeholder="Last name"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Email</label>
+          <Input
+            value={value.email}
+            onChange={(event) => onChange({ ...value, email: event.target.value })}
+            placeholder="Email address"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Phone Number</label>
+          <Input
+            value={value.phone}
+            onChange={(event) => onChange({ ...value, phone: event.target.value })}
+            placeholder="+27 ..."
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
+          <Input
+            value={value.idNumber}
+            onChange={(event) => onChange({ ...value, idNumber: event.target.value })}
+            placeholder="ID number"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Tax Practitioner Number</label>
+          <Input
+            value={value.taxPractitionerNumber}
+            onChange={(event) => onChange({ ...value, taxPractitionerNumber: event.target.value })}
+            placeholder="Tax practitioner number"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Professional Body</label>
+          <Input
+            value={value.professionalBody}
+            onChange={(event) => onChange({ ...value, professionalBody: event.target.value })}
+            placeholder="Professional body"
+            className="rounded-xl"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">City</label>
+          <Input
+            value={value.city}
+            onChange={(event) => onChange({ ...value, city: event.target.value })}
+            placeholder="City"
+            className="rounded-xl"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Province</label>
+          <Input
+            value={value.province}
+            onChange={(event) => onChange({ ...value, province: event.target.value })}
+            placeholder="Province"
+            className="rounded-xl"
+          />
+        </div>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-2 block text-sm font-semibold text-foreground font-body">Business Type</label>

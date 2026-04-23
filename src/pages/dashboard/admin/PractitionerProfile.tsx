@@ -50,6 +50,15 @@ function getBankingVerificationLabel(status?: string | null) {
 }
 
 const initialPractitionerForm: PractitionerProfileFormState = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  idNumber: "",
+  taxPractitionerNumber: "",
+  professionalBody: "",
+  city: "",
+  province: "",
   businessType: "individual",
   businessName: "",
   registrationNumber: "",
@@ -72,6 +81,14 @@ type PractitionerReview = Tables<"practitioner_reviews">;
 
 function getProfileCompletion(form: PractitionerProfileFormState) {
   const checks = [
+    Boolean(form.firstName.trim()),
+    Boolean(form.lastName.trim()),
+    Boolean(form.phone.trim()),
+    Boolean(form.idNumber.trim()),
+    Boolean(form.taxPractitionerNumber.trim()),
+    Boolean(form.professionalBody.trim()),
+    Boolean(form.city.trim()),
+    Boolean(form.province.trim()),
     form.businessType === "individual" || Boolean(form.businessName.trim()),
     form.businessType === "individual" || Boolean(form.registrationNumber.trim()),
     Number(form.yearsOfExperience || 0) > 0,
@@ -128,11 +145,28 @@ export default function PractitionerProfile() {
 
   useEffect(() => {
     if (!practitionerProfile) {
-      setForm(initialPractitionerForm);
+      const nameParts = (profile?.full_name || "").trim().split(/\s+/).filter(Boolean);
+      setForm({
+        ...initialPractitionerForm,
+        firstName: nameParts[0] || "",
+        lastName: nameParts.slice(1).join(" "),
+        email: profile?.email || user?.email || "",
+        phone: profile?.phone || "",
+      });
       return;
     }
 
+    const nameParts = (profile?.full_name || "").trim().split(/\s+/).filter(Boolean);
     setForm({
+      firstName: nameParts[0] || "",
+      lastName: nameParts.slice(1).join(" "),
+      email: profile?.email || user?.email || "",
+      phone: profile?.phone || "",
+      idNumber: practitionerProfile.id_number || "",
+      taxPractitionerNumber: practitionerProfile.tax_practitioner_number || "",
+      professionalBody: practitionerProfile.professional_body || "",
+      city: practitionerProfile.city || "",
+      province: practitionerProfile.province || "",
       businessType:
         practitionerProfile.business_type === "company" ? "company" : "individual",
       businessName: practitionerProfile.business_name || "",
@@ -156,7 +190,7 @@ export default function PractitionerProfile() {
         practitionerProfile.is_vat_registered ?? Boolean(practitionerProfile.vat_number),
       vatNumber: practitionerProfile.vat_number || "",
     });
-  }, [practitionerProfile, profile?.full_name]);
+  }, [practitionerProfile, profile?.email, profile?.full_name, profile?.phone, user?.email]);
 
   const completion = useMemo(() => getProfileCompletion(form), [form]);
   const serviceLabels = useMemo(() => {
@@ -182,9 +216,30 @@ export default function PractitionerProfile() {
 
     setSaving(true);
 
+    const fullName = [form.firstName.trim(), form.lastName.trim()].filter(Boolean).join(" ").trim();
     const years = Number(form.yearsOfExperience || 0);
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: fullName || null,
+        email: form.email.trim().toLowerCase() || null,
+        phone: form.phone.trim() || null,
+      })
+      .eq("id", user.id);
+
+    if (profileError) {
+      setSaving(false);
+      toast.error(profileError.message);
+      return;
+    }
+
     const { error } = await supabase.from("practitioner_profiles").upsert({
       profile_id: user.id,
+      id_number: form.idNumber.trim() || null,
+      tax_practitioner_number: form.taxPractitionerNumber.trim() || null,
+      professional_body: form.professionalBody.trim() || null,
+      city: form.city.trim() || null,
+      province: form.province.trim() || null,
       business_type: form.businessType,
       business_name: form.businessType === "company" ? form.businessName.trim() || null : null,
       registration_number: form.businessType === "company" ? form.registrationNumber.trim() || null : null,
@@ -370,6 +425,65 @@ export default function PractitionerProfile() {
                     </p>
                   </>
                 ) : null}
+                <p
+                  className={
+                    form.firstName.trim() && form.lastName.trim()
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {form.firstName.trim() && form.lastName.trim()
+                    ? "Complete"
+                    : "Missing"}{" "}
+                  first and last name
+                </p>
+                <p
+                  className={
+                    form.phone.trim()
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {form.phone.trim() ? "Complete" : "Missing"} phone number
+                </p>
+                <p
+                  className={
+                    form.idNumber.trim()
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {form.idNumber.trim() ? "Complete" : "Missing"} ID number
+                </p>
+                <p
+                  className={
+                    form.taxPractitionerNumber.trim()
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {form.taxPractitionerNumber.trim() ? "Complete" : "Missing"} tax practitioner number
+                </p>
+                <p
+                  className={
+                    form.professionalBody.trim()
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {form.professionalBody.trim() ? "Complete" : "Missing"} professional body
+                </p>
+                <p
+                  className={
+                    form.city.trim() && form.province.trim()
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {form.city.trim() && form.province.trim()
+                    ? "Complete"
+                    : "Missing"} city and province
+                </p>
                 <p
                   className={
                     Number(form.yearsOfExperience || 0) > 0
