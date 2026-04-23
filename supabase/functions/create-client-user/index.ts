@@ -98,8 +98,8 @@ Deno.serve(async (request) => {
       return jsonResponse(request, { error: callerProfileError.message }, 400);
     }
 
-    if (callerProfile?.role !== "admin") {
-      return jsonResponse(request, { error: "Only Acapolite admins can create client accounts." }, 403);
+    if (callerProfile?.role !== "admin" && callerProfile?.role !== "consultant") {
+      return jsonResponse(request, { error: "Only Acapolite staff can create client accounts." }, 403);
     }
 
     const payload = (await request.json()) as CreateClientUserPayload;

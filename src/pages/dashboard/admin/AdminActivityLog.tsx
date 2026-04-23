@@ -41,6 +41,12 @@ const actionLabels: Record<string, string> = {
   invoice_marked_paid: "Invoice marked as paid",
 };
 
+const roleLabels: Record<string, string> = {
+  admin: "Admin",
+  consultant: "Practitioner",
+  client: "Client",
+};
+
 const actionOptions = [
   { value: "all", label: "All Activity" },
   { value: "case_status_updated", label: "Case Updated" },
@@ -56,6 +62,82 @@ const actionOptions = [
 
 function getActorLabel(record: ActivityLogRecord) {
   return record.actor?.full_name || record.actor?.email || record.actor_profile_id || "System";
+}
+
+function getRoleLabel(role?: string | null) {
+  if (!role) return "System";
+  return roleLabels[role] || role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function formatActivityTime(value: string) {
+  const date = new Date(value);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} min ago`;
+  }
+
+  if (diffHours < 24) {
+    return `${diffHours} hr${diffHours === 1 ? "" : "s"} ago`;
+  }
+
+  if (diffDays < 7) {
+    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  }
+
+  return date.toLocaleString();
+}
+
+function toSentenceCase(value?: string | null) {
+  const text = value?.replace(/_/g, " ").trim() || "";
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function getActivitySentence(record: ActivityLogRecord, targetDetails?: TargetDetails | null) {
+  const actor = getActorLabel(record);
+  const targetLabel = targetDetails?.label || toSentenceCase(record.target_type) || "item";
+  const targetNote = targetDetails?.sublabel ? ` for ${targetDetails.sublabel}` : "";
+  const metadata = record.metadata ?? {};
+
+  switch (record.action) {
+    case "invoice_created":
+      return `${actor} created ${targetLabel}${targetNote}.`;
+    case "invoice_sent":
+      return `${actor} sent ${targetLabel}${targetNote}.`;
+    case "invoice_marked_paid":
+      return `${actor} marked ${targetLabel}${targetNote} as paid.`;
+    case "document_uploaded":
+      return `${actor} uploaded ${targetLabel}${targetNote}.`;
+    case "document_approved":
+      return `${actor} approved ${targetLabel}${targetNote}.`;
+    case "document_rejected":
+      return `${actor} rejected ${targetLabel}${targetNote}.`;
+    case "document_missing_requested":
+      return `${actor} requested follow-up information for ${targetLabel}${targetNote}.`;
+    case "case_status_updated": {
+      const previousStatus = typeof metadata.previousStatus === "string" ? toSentenceCase(metadata.previousStatus) : "";
+      const newStatus = typeof metadata.newStatus === "string" ? toSentenceCase(metadata.newStatus) : "";
+
+      if (previousStatus && newStatus) {
+        return `${actor} changed ${targetLabel}${targetNote} from ${previousStatus.toLowerCase()} to ${newStatus.toLowerCase()}.`;
+      }
+
+      return `${actor} updated ${targetLabel}${targetNote}.`;
+    }
+    case "case_assignment_updated":
+      return `${actor} updated the practitioner assignment for ${targetLabel}${targetNote}.`;
+    default:
+      return `${actor} completed ${toSentenceCase(record.action).toLowerCase()} on ${targetLabel}${targetNote}.`;
+  }
 }
 
 function formatClientName(client?: {
@@ -212,7 +294,7 @@ export default function AdminActivityLog() {
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">System Activity Log</h1>
           <p className="text-muted-foreground font-body text-sm">
-            Compliance-focused log of case updates, document activity, and invoice events.
+            Read recent staff activity as a simple timeline of what happened, who did it, and when.
           </p>
         </div>
         <div className="relative w-full max-w-sm">
@@ -220,7 +302,7 @@ export default function AdminActivityLog() {
           <Input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search by actor, role, or action..."
+            placeholder="Search by person, role, or activity..."
             className="rounded-xl pl-9"
           />
         </div>
@@ -251,27 +333,22 @@ export default function AdminActivityLog() {
               onClick={() => setSelectedLogId(record.id)}
               className="w-full text-left rounded-xl border border-border bg-card p-5 shadow-card transition-all hover:shadow-elevated hover:border-primary/30"
             >
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
                 <div>
-                  <p className="text-sm font-semibold text-foreground font-body">
-                    {actionLabels[record.action] || record.action.replace(/_/g, " ")}
+                  <p className="text-sm font-semibold text-foreground font-body leading-6">
+                    {getActivitySentence(record)}
                   </p>
-                  <p className="text-xs text-muted-foreground font-body">
-                    {getActorLabel(record)}{" • "}{record.actor_role}
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    {getRoleLabel(record.actor_role)}
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground font-body">
-                  {new Date(record.created_at).toLocaleString()}
+                <p className="text-xs text-muted-foreground font-body whitespace-nowrap">
+                  {formatActivityTime(record.created_at)}
                 </p>
               </div>
               <div className="text-xs text-muted-foreground font-body">
-                Target: {record.target_type.replace(/_/g, " ")}
+                {new Date(record.created_at).toLocaleDateString()} at {new Date(record.created_at).toLocaleTimeString()}
               </div>
-              {record.metadata ? (
-                <div className="mt-3 rounded-lg border border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground font-body">
-                  <pre className="whitespace-pre-wrap">{JSON.stringify(record.metadata, null, 2)}</pre>
-                </div>
-              ) : null}
             </button>
           ))}
         </div>
@@ -289,10 +366,16 @@ export default function AdminActivityLog() {
           if (!open) setSelectedLogId(null);
         }}
         title={selectedLog ? (actionLabels[selectedLog.action] || selectedLog.action.replace(/_/g, " ")) : "Activity Details"}
-        description="Review the full activity payload and reference IDs for compliance."
+        description="Review the activity summary and supporting details."
       >
         {selectedLog ? (
           <div className="space-y-4">
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <p className="text-sm font-semibold text-foreground font-body leading-6">
+                {getActivitySentence(selectedLog, targetDisplay)}
+              </p>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Actor</p>
@@ -300,7 +383,7 @@ export default function AdminActivityLog() {
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Role</p>
-                <p className="font-body text-foreground">{selectedLog.actor_role}</p>
+                <p className="font-body text-foreground">{getRoleLabel(selectedLog.actor_role)}</p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Target</p>
@@ -321,7 +404,7 @@ export default function AdminActivityLog() {
 
             {selectedLog.metadata ? (
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Details</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Technical Details</p>
                 <div className="rounded-2xl border border-border bg-muted/30 p-4 text-xs text-muted-foreground font-body">
                   <pre className="whitespace-pre-wrap">{JSON.stringify(selectedLog.metadata, null, 2)}</pre>
                 </div>

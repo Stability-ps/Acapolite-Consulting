@@ -31,6 +31,15 @@ export function useAccessibleClientIds() {
         throw assignedCasesError;
       }
 
+      const { data: createdClients, error: createdClientsError } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("created_by", user.id);
+
+      if (createdClientsError) {
+        throw createdClientsError;
+      }
+
       const clientIds = new Set<string>();
 
       for (const client of assignedClients ?? []) {
@@ -42,6 +51,12 @@ export function useAccessibleClientIds() {
       for (const caseItem of assignedCases ?? []) {
         if (caseItem.client_id) {
           clientIds.add(caseItem.client_id);
+        }
+      }
+
+      for (const client of createdClients ?? []) {
+        if (client.id) {
+          clientIds.add(client.id);
         }
       }
 

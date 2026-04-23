@@ -42,7 +42,7 @@ export const defaultConsultantPermissions: StaffPermissionValues = {
   assigned_clients_only: true,
   can_view_overview: true,
   can_view_clients: true,
-  can_manage_clients: false,
+  can_manage_clients: true,
   can_view_client_workspace: true,
   can_view_cases: true,
   can_manage_cases: true,

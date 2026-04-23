@@ -171,8 +171,8 @@ export default function AdminClients() {
   const [showInvoiceWarningActions, setShowInvoiceWarningActions] = useState(false);
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
-  const canManageClients = hasStaffPermission("can_manage_clients");
-  const canShowClientCreationControls = role === "admin" && canManageClients;
+  const canManageClients = role === "consultant" || hasStaffPermission("can_manage_clients");
+  const canShowClientCreationControls = canManageClients;
   const canManageInvoices = hasStaffPermission("can_manage_invoices");
   const canViewClientWorkspace = hasStaffPermission("can_view_client_workspace");
   const canViewInvoices = hasStaffPermission("can_view_invoices");
@@ -537,6 +537,7 @@ export default function AdminClients() {
       postal_code: formState.postalCode.trim() || null,
       country: formState.country.trim() || "South Africa",
       notes: formState.notes.trim() || null,
+      assigned_consultant_id: role === "consultant" ? user?.id ?? null : null,
       created_by: user?.id ?? null,
     };
 
@@ -612,7 +613,7 @@ export default function AdminClients() {
               ? "View and monitor only the client accounts assigned to this consultant profile."
               : practitionerFilterId
                 ? "Review the client accounts assigned to this practitioner."
-                : "Manage client profiles, open full records, and add new clients from existing portal accounts."}
+                : "Manage client profiles, open full records, and add new clients manually for clients already working with this practitioner."}
           </p>
         </div>
 
