@@ -11,31 +11,31 @@ export type PractitionerCreditPackage = {
 export const practitionerCreditPackages: PractitionerCreditPackage[] = [
   {
     code: "starter",
-    name: "Starter Package",
-    credits: 10,
-    amountZar: 250,
-    description: "A starter bundle for testing the marketplace with a solid response runway.",
+    name: "Starter Pack",
+    credits: 5,
+    amountZar: 149,
+    description: "A lightweight top-up for unlocking and responding to new leads.",
   },
   {
     code: "professional",
-    name: "Professional Package",
-    credits: 25,
-    amountZar: 600,
-    description: "A balanced pack for practitioners responding to multiple leads each week.",
+    name: "Growth Pack",
+    credits: 15,
+    amountZar: 349,
+    description: "A balanced package for practitioners actively responding each week.",
   },
   {
     code: "business",
-    name: "Business Package",
-    credits: 50,
-    amountZar: 1100,
-    description: "Best value for practitioners who respond to leads at scale.",
+    name: "Pro Pack",
+    credits: 35,
+    amountZar: 699,
+    description: "High-volume credits for practitioners working the marketplace consistently.",
   },
   {
     code: "enterprise",
-    name: "Enterprise Package",
+    name: "Enterprise Pack",
     credits: 100,
     amountZar: 2000,
-    description: "Enterprise volume for high-performing practitioners and teams.",
+    description: "Reserved for future enterprise billing workflows.",
   },
 ];
 
@@ -50,23 +50,23 @@ export type PractitionerSubscriptionPlan = {
 export const practitionerSubscriptionPlans: PractitionerSubscriptionPlan[] = [
   {
     code: "starter",
-    name: "Starter Plan",
+    name: "Basic",
     priceZar: 299,
-    creditsPerMonth: 15,
+    creditsPerMonth: 10,
     features: ["Verified Badge", "Standard Listing"],
   },
   {
     code: "professional",
-    name: "Professional Plan",
-    priceZar: 499,
+    name: "Standard",
+    priceZar: 599,
     creditsPerMonth: 25,
     features: ["Verified Badge", "Priority Listing", "Featured Profile"],
   },
   {
     code: "business",
-    name: "Business Plan",
-    priceZar: 899,
-    creditsPerMonth: 50,
+    name: "Premium",
+    priceZar: 999,
+    creditsPerMonth: 60,
     features: ["Verified Badge", "Priority Listing", "Featured Profile", "Highlighted Profile"],
   },
 ];
@@ -99,49 +99,13 @@ export function submitHostedPayment(paymentUrl: string, fields: Record<string, s
 }
 
 export async function purchasePractitionerCredits(packageCode: string) {
-  const { data, error } = await supabase.functions.invoke("create-practitioner-credit-checkout", {
-    body: { packageCode },
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  if (data && typeof data === "object" && "error" in data && typeof data.error === "string") {
-    throw new Error(data.error);
-  }
-
-  return data as {
-    success: boolean;
-    mode: "fake" | "payfast_sandbox" | "payfast_live";
-    purchaseId: string;
-    credits?: number;
-    balance?: number | null;
-    paymentUrl?: string;
-    fields?: Record<string, string>;
-  };
+  void packageCode;
+  throw new Error("Legacy PayFast credit checkout has been retired. Use the Paystack billing flow.");
 }
 
 export async function startPractitionerSubscription(planCode: string) {
-  const { data, error } = await supabase.functions.invoke("create-practitioner-subscription-checkout", {
-    body: { planCode },
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  if (data && typeof data === "object" && "error" in data && typeof data.error === "string") {
-    throw new Error(data.error);
-  }
-
-  return data as {
-    success: boolean;
-    mode: "fake" | "payfast_sandbox" | "payfast_live";
-    subscriptionId?: string;
-    paymentUrl?: string;
-    fields?: Record<string, string>;
-  };
+  void planCode;
+  throw new Error("Legacy PayFast subscription checkout has been retired. Use the Paystack billing flow.");
 }
 
 export function getServiceRequestCreditCost(serviceNeeded: string) {

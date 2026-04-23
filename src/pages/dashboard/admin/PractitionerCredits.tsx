@@ -5,16 +5,10 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
+import { CREDIT_PACKAGES, SUBSCRIPTION_PLANS, usePaystack } from "@/hooks/usePaystack";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  formatZarCurrency,
-  practitionerCreditPackages,
-  practitionerSubscriptionPlans,
-  purchasePractitionerCredits,
-  startPractitionerSubscription,
-  submitHostedPayment,
-} from "@/lib/practitionerCredits";
+import { formatZarCurrency } from "@/lib/practitionerCredits";
 
 type PractitionerCreditAccount = Tables<"practitioner_credit_accounts">;
 type PractitionerCreditTransaction = Tables<"practitioner_credit_transactions">;
@@ -25,6 +19,7 @@ type PractitionerSubscription = Tables<"practitioner_subscriptions">;
 export default function PractitionerCredits() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { buyCredits: startPaystackCreditPurchase, subscribe: startPaystackSubscription, cancelSubscription: cancelPaystackSubscription, loading: paystackLoading } = usePaystack();
   const [buyingPackageCode, setBuyingPackageCode] = useState<string | null>(null);
   const [startingSubscriptionCode, setStartingSubscriptionCode] = useState<string | null>(null);
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
@@ -76,19 +71,6 @@ export default function PractitionerCredits() {
     enabled: !!user,
   });
 
-  const { data: subscriptionPlans } = useQuery({
-    queryKey: ["practitioner-subscription-plans"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("practitioner_subscription_plans")
-        .select("*")
-        .order("price_zar", { ascending: true });
-
-      if (error) throw error;
-      return (data ?? []) as PractitionerSubscriptionPlan[];
-    },
-  });
-
   const { data: activeSubscription } = useQuery({
     queryKey: ["practitioner-active-subscription", user?.id],
     queryFn: async () => {
@@ -113,26 +95,24 @@ export default function PractitionerCredits() {
     used: creditAccount?.total_used_credits ?? 0,
   }), [creditAccount?.total_purchased_credits, creditAccount?.total_used_credits]);
 
+  const activeSubscriptionPlan = useMemo(
+    () => SUBSCRIPTION_PLANS.find((plan) => plan.code === activeSubscription?.plan_code) ?? null,
+    [activeSubscription?.plan_code],
+  );
+
   const buyCredits = async (packageCode: string) => {
     setBuyingPackageCode(packageCode);
 
     try {
-      const result = await purchasePractitionerCredits(packageCode);
+      const selectedPackage = CREDIT_PACKAGES.find((pkg) => pkg.code === packageCode);
 
-      if (result.mode === "fake") {
-        toast.success(`Added ${result.credits ?? 0} credits. New balance: ${result.balance ?? creditBalance}.`);
-      } else if (result.paymentUrl && result.fields) {
-        submitHostedPayment(result.paymentUrl, result.fields);
-        return;
-      } else {
-        toast.error("Unable to start the credit checkout.");
+      if (!selectedPackage) {
+        throw new Error("Selected credit package was not found.");
       }
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["practitioner-credit-transactions", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["practitioner-credit-purchases", user?.id] }),
-      ]);
+      await startPaystackCreditPurchase(selectedPackage);
+
+      toast.success("Paystack checkout opened. Complete the payment to add credits.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to purchase credits.";
       toast.error(message);
@@ -145,23 +125,15 @@ export default function PractitionerCredits() {
     setStartingSubscriptionCode(planCode);
 
     try {
-      const result = await startPractitionerSubscription(planCode);
+      const selectedPlan = SUBSCRIPTION_PLANS.find((plan) => plan.code === planCode);
 
-      if (result.mode === "fake") {
-        toast.success("Subscription activated. Monthly credits have been added.");
-      } else if (result.paymentUrl && result.fields) {
-        submitHostedPayment(result.paymentUrl, result.fields);
-        return;
-      } else {
-        toast.error("Unable to start the subscription checkout.");
+      if (!selectedPlan) {
+        throw new Error("Selected subscription plan was not found.");
       }
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["practitioner-credit-transactions", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["practitioner-credit-purchases", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["practitioner-active-subscription", user?.id] }),
-      ]);
+      await startPaystackSubscription(selectedPlan);
+
+      toast.success("Paystack subscription checkout opened.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to start the subscription.";
       toast.error(message);
@@ -179,15 +151,7 @@ export default function PractitionerCredits() {
     setCancellingSubscription(true);
 
     try {
-      const { error } = await supabase.rpc("cancel_practitioner_subscription", {
-        p_subscription_id: activeSubscription.id,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      toast.success("Subscription cancelled.");
+      await cancelPaystackSubscription(activeSubscription.id);
       await queryClient.invalidateQueries({ queryKey: ["practitioner-active-subscription", user?.id] });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to cancel the subscription.";
@@ -230,28 +194,28 @@ export default function PractitionerCredits() {
           <div>
             <h2 className="font-display text-2xl text-foreground">Buy Credits</h2>
             <p className="mt-2 text-sm text-muted-foreground font-body">
-              Packages are priced in ZAR and can be purchased as often as you need.
+              Packages are priced in ZAR and open a secure Paystack checkout when selected.
             </p>
           </div>
           <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-            ZAR only
+            Paystack
           </Badge>
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-3">
-          {practitionerCreditPackages.map((pkg) => (
+          {CREDIT_PACKAGES.map((pkg) => (
             <div key={pkg.code} className="rounded-2xl border border-border p-5">
               <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">{pkg.name}</p>
               <p className="mt-3 font-display text-3xl text-foreground">{pkg.credits} credits</p>
-              <p className="mt-2 text-sm font-semibold text-primary font-body">{formatZarCurrency(pkg.amountZar)}</p>
+              <p className="mt-2 text-sm font-semibold text-primary font-body">{formatZarCurrency(pkg.price_zar)}</p>
               <p className="mt-3 text-sm text-muted-foreground font-body">{pkg.description}</p>
               <Button
                 type="button"
                 className="mt-5 w-full rounded-xl"
                 onClick={() => void buyCredits(pkg.code)}
-                disabled={buyingPackageCode === pkg.code}
+                disabled={buyingPackageCode === pkg.code || paystackLoading}
               >
-                {buyingPackageCode === pkg.code ? "Processing..." : "Buy Package"}
+                {buyingPackageCode === pkg.code ? "Opening Payment..." : "Buy Credits"}
               </Button>
             </div>
           ))}
@@ -263,11 +227,11 @@ export default function PractitionerCredits() {
           <div>
             <h2 className="font-display text-2xl text-foreground">Monthly Subscription Plans</h2>
             <p className="mt-2 text-sm text-muted-foreground font-body">
-              Subscriptions renew monthly and add credits automatically on each renewal.
+              Subscriptions renew monthly and start through secure Paystack billing.
             </p>
           </div>
           <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-            ZAR / month
+            Paystack Recurring
           </Badge>
         </div>
 
@@ -277,7 +241,7 @@ export default function PractitionerCredits() {
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-foreground font-body">
-                  Current plan: {activeSubscription.plan_code.toUpperCase()}
+                  Current plan: {(activeSubscriptionPlan?.name ?? activeSubscription.plan_code).toUpperCase()}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground font-body">
                   Next renewal {new Date(activeSubscription.next_renewal_at).toLocaleDateString()}
@@ -297,46 +261,31 @@ export default function PractitionerCredits() {
         ) : null}
 
         <div className="mt-5 grid gap-4 xl:grid-cols-3">
-          {(subscriptionPlans?.length ? subscriptionPlans : practitionerSubscriptionPlans).map((plan) => {
-            const features = "features" in plan ? plan.features : [];
-            const creditsPerMonth = "credits_per_month" in plan ? plan.credits_per_month : plan.creditsPerMonth;
-            const priceZar = "price_zar" in plan ? Number(plan.price_zar) : plan.priceZar;
-            const hasPriorityListing = "includes_priority_listing" in plan ? plan.includes_priority_listing : plan.features?.includes("Priority Listing");
-            const hasFeaturedProfile = "includes_featured_profile" in plan ? plan.includes_featured_profile : plan.features?.includes("Featured Profile");
-            const hasHighlightedProfile = "includes_highlighted_profile" in plan ? plan.includes_highlighted_profile : plan.features?.includes("Highlighted Profile");
+          {SUBSCRIPTION_PLANS.map((plan) => {
             const isCurrentPlan = activeSubscription?.plan_code === plan.code;
 
             return (
             <div key={plan.code} className="rounded-2xl border border-border p-5">
               <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">{plan.name}</p>
-              <p className="mt-3 font-display text-3xl text-foreground">{creditsPerMonth} credits</p>
+              <p className="mt-3 font-display text-3xl text-foreground">{plan.credits_per_month} credits</p>
               <p className="mt-2 text-sm font-semibold text-primary font-body">
-                {formatZarCurrency(priceZar)}
+                {formatZarCurrency(plan.price_zar)}
               </p>
               <div className="mt-3 space-y-2 text-sm text-muted-foreground font-body">
-                {features.length
-                  ? features.map((feature) => (
+                {plan.features.map((feature) => (
                     <p key={feature}>{feature}</p>
-                  ))
-                  : (
-                    <>
-                      <p>Verified Badge</p>
-                      <p>{hasPriorityListing ? "Priority Listing" : "Standard Listing"}</p>
-                      {hasFeaturedProfile ? <p>Featured Profile</p> : null}
-                      {hasHighlightedProfile ? <p>Highlighted Profile</p> : null}
-                    </>
-                  )}
+                  ))}
               </div>
               <Button
                 type="button"
                 className="mt-5 w-full rounded-xl"
                 onClick={() => void subscribeToPlan(plan.code)}
-                disabled={startingSubscriptionCode === plan.code || isCurrentPlan}
+                disabled={startingSubscriptionCode === plan.code || isCurrentPlan || paystackLoading}
               >
                 {isCurrentPlan
                   ? "Current Plan"
                   : startingSubscriptionCode === plan.code
-                    ? "Processing..."
+                    ? "Opening Payment..."
                     : activeSubscription
                       ? "Switch Plan"
                       : "Subscribe"}

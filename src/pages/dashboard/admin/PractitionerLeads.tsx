@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { CREDIT_PACKAGES, usePaystack } from "@/hooks/usePaystack";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ import {
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
 import { getResponseStatusClass } from "@/lib/practitionerMarketplace";
-import { getServiceRequestCreditCost, purchasePractitionerCredits } from "@/lib/practitionerCredits";
+import { getServiceRequestCreditCost } from "@/lib/practitionerCredits";
 import { sendLeadUnlockedNotification } from "@/lib/leadUnlockNotifications";
 
 type ServiceRequest = Tables<"service_requests">;
@@ -38,6 +39,7 @@ function formatLeadResponseCount(count: number) {
 }
 
 export default function PractitionerLeads() {
+  const { buyCredits } = usePaystack();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -462,15 +464,8 @@ export default function PractitionerLeads() {
     setStartingQuickPurchase(true);
 
     try {
-      const result = await purchasePractitionerCredits("starter");
-
-      if (result.mode !== "fake") {
-        toast.error("Quick purchase is only available while credit checkout is in test mode.");
-        return;
-      }
-
-      toast.success(`Starter package added. Balance: ${result.balance ?? availableCredits}.`);
-      await queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", user?.id] });
+      await buyCredits(CREDIT_PACKAGES[0]);
+      toast.success("Starter Paystack checkout opened.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to add starter credits.";
       toast.error(message);

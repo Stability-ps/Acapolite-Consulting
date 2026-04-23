@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, MessageSquare, SendHorizonal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import type { Enums, TablesInsert } from "@/integrations/supabase/types";
+import type { Enums, Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
@@ -71,12 +71,18 @@ type CaseRecord = {
   } | null;
 };
 
+type ConversationRecord = Tables<"conversations">;
+type MessageRecord = Tables<"messages">;
+
 export default function AdminCases() {
   useNotificationSectionRead("cases");
   const queryClient = useQueryClient();
   const { user, role, hasStaffPermission, isConsultant } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [caseReply, setCaseReply] = useState("");
+  const [sendingCaseReply, setSendingCaseReply] = useState(false);
   const [creating, setCreating] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [form, setForm] = useState({
@@ -93,6 +99,7 @@ export default function AdminCases() {
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageCases = hasStaffPermission("can_manage_cases");
   const canAssignConsultants = canManageCases && !isConsultant;
+  const canReplyMessages = hasStaffPermission("can_reply_messages");
 
   const { data: cases, isLoading } = useQuery({
     queryKey: ["staff-cases", accessibleClientIdsKey],
@@ -208,6 +215,40 @@ export default function AdminCases() {
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
   });
 
+  const { data: selectedCaseConversations } = useQuery({
+    queryKey: ["staff-case-conversations", selectedCaseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("*")
+        .eq("case_id", selectedCaseId!)
+        .order("last_message_at", { ascending: false })
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as ConversationRecord[];
+    },
+    enabled: !!selectedCaseId,
+  });
+
+  const selectedCaseConversationIds = (selectedCaseConversations ?? []).map((conversation) => conversation.id);
+  const primaryCaseConversationId = selectedCaseConversations?.[0]?.id ?? "";
+
+  const { data: selectedCaseMessages } = useQuery({
+    queryKey: ["staff-case-messages", selectedCaseConversationIds],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .in("conversation_id", selectedCaseConversationIds)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as MessageRecord[];
+    },
+    enabled: selectedCaseConversationIds.length > 0,
+  });
+
   const clientOptions = useMemo(
     () =>
       (clients ?? []).map((client) => ({
@@ -277,6 +318,10 @@ export default function AdminCases() {
     const targetPriority = priorityFilter === "high" ? 1 : priorityFilter === "medium" ? 2 : 3;
     return (cases ?? []).filter((caseItem) => caseItem.priority === targetPriority);
   }, [cases, priorityFilter]);
+
+  const selectedCase = filteredCases.find((caseItem) => caseItem.id === selectedCaseId)
+    || cases?.find((caseItem) => caseItem.id === selectedCaseId)
+    || null;
 
   const notifyAssignedConsultant = async (params: {
     caseId: string;
@@ -534,6 +579,67 @@ export default function AdminCases() {
     queryClient.invalidateQueries({ queryKey: ["staff-cases"] });
   };
 
+  const sendCaseReply = async () => {
+    if (!canReplyMessages) {
+      toast.error("This staff profile cannot reply to case messages.");
+      return;
+    }
+
+    if (!selectedCase || !user || !caseReply.trim()) {
+      return;
+    }
+
+    setSendingCaseReply(true);
+
+    try {
+      let conversationId = primaryCaseConversationId;
+
+      if (!conversationId) {
+        const { data: conversation, error: conversationError } = await supabase
+          .from("conversations")
+          .insert({
+            client_id: selectedCase.client_id,
+            case_id: selectedCase.id,
+            subject: `${selectedCase.case_title} - ${selectedCase.case_type.replace(/_/g, " ")}`,
+            created_by: user.id,
+          })
+          .select("id")
+          .single();
+
+        if (conversationError || !conversation) {
+          throw new Error(conversationError?.message || "Unable to start the case conversation.");
+        }
+
+        conversationId = conversation.id;
+      }
+
+      const { error } = await supabase.from("messages").insert({
+        conversation_id: conversationId,
+        sender_profile_id: user.id,
+        sender_type: role === "consultant" ? "consultant" : "admin",
+        message_text: caseReply.trim(),
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setCaseReply("");
+      toast.success("Case message sent.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["staff-case-conversations", selectedCase.id] }),
+        queryClient.invalidateQueries({ queryKey: ["staff-case-messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["staff-conversations"] }),
+        queryClient.invalidateQueries({ queryKey: ["staff-messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send this case message.");
+    } finally {
+      setSendingCaseReply(false);
+    }
+  };
+
   const statusColor = (status: string) => {
     switch (status) {
       case "new": return "bg-blue-100 text-blue-700";
@@ -635,6 +741,16 @@ export default function AdminCases() {
                   {caseItem.clients?.client_code ? `Client code: ${caseItem.clients.client_code}` : "No client code"}
                 </div>
                 <div className="flex items-center gap-3 flex-wrap justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() => setSelectedCaseId(caseItem.id)}
+                  >
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Open Case
+                  </Button>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground font-body">Update status:</span>
                     {canManageCases ? (
@@ -686,6 +802,122 @@ export default function AdminCases() {
           ))}
         </div>
       )}
+
+      <DashboardItemDialog
+        open={Boolean(selectedCase)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedCaseId(null);
+            setCaseReply("");
+          }
+        }}
+        title={selectedCase?.case_title || "Case"}
+        description={selectedCase ? "Review this case and keep all related communication inside this case thread." : undefined}
+      >
+        {selectedCase ? (
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Case Details</p>
+                <p className="mt-2 text-sm font-semibold text-foreground font-body">{selectedCase.case_type.replace(/_/g, " ")}</p>
+                <p className="mt-1 text-sm text-muted-foreground font-body">
+                  Status: {selectedCase.status.replace(/_/g, " ")}
+                  {selectedCase.due_date ? ` | Due ${new Date(selectedCase.due_date).toLocaleDateString()}` : ""}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client</p>
+                <p className="mt-2 text-sm font-semibold text-foreground font-body">
+                  {selectedCase.clients?.company_name || [selectedCase.clients?.first_name, selectedCase.clients?.last_name].filter(Boolean).join(" ") || selectedCase.clients?.client_code || "Client"}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground font-body">
+                  Assigned practitioner: {selectedCase.assigned_consultant?.full_name || selectedCase.assigned_consultant?.email || "Unassigned"}
+                </p>
+              </div>
+            </div>
+
+            {selectedCase.description ? (
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Description</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground font-body">{selectedCase.description}</p>
+              </div>
+            ) : null}
+
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="border-b border-border bg-accent/20 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Case Messages</p>
+                <p className="mt-1 text-sm text-muted-foreground font-body">
+                  Only communication linked to this case appears here.
+                </p>
+              </div>
+              <div className="max-h-[380px] space-y-3 overflow-y-auto p-4">
+                {selectedCaseMessages?.length ? (
+                  selectedCaseMessages.map((message) => {
+                    const isOwnMessage = message.sender_profile_id === user?.id;
+
+                    return (
+                      <div key={message.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[84%] rounded-3xl px-4 py-3 ${
+                          isOwnMessage ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                        }`}>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] opacity-75">
+                            {isOwnMessage
+                              ? "You"
+                              : message.sender_type === "client"
+                                ? "Client"
+                                : message.sender_type === "consultant"
+                                  ? "Practitioner"
+                                  : "Admin"}
+                          </p>
+                          <p className="whitespace-pre-wrap text-sm font-body">{message.message_text}</p>
+                          <p className={`mt-3 text-xs ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                            {new Date(message.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-muted-foreground font-body">
+                    No messages on this case yet. Start the case-specific thread below.
+                  </p>
+                )}
+              </div>
+              <div className="border-t border-border p-4">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Input
+                    value={caseReply}
+                    onChange={(event) => setCaseReply(event.target.value)}
+                    placeholder="Reply inside this case..."
+                    className="flex-1 rounded-xl"
+                    disabled={!canReplyMessages}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendCaseReply();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    className="rounded-xl"
+                    onClick={() => void sendCaseReply()}
+                    disabled={!canReplyMessages || sendingCaseReply || !caseReply.trim()}
+                  >
+                    <SendHorizonal className="mr-2 h-4 w-4" />
+                    {sendingCaseReply ? "Sending..." : "Send"}
+                  </Button>
+                </div>
+                {!canReplyMessages ? (
+                  <p className="mt-2 text-xs text-muted-foreground font-body">
+                    This staff profile can view case communication but cannot reply.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </DashboardItemDialog>
 
       <DashboardItemDialog
         open={isCreateModalOpen}
