@@ -515,7 +515,12 @@ export type Database = {
       };
       clients: {
         Row: {
+          archive_notes: string | null;
+          archive_reason: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
           id: string;
+          is_archived: boolean;
           profile_id: string;
           client_type: string;
           company_registration_number: string | null;
@@ -541,7 +546,12 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          archive_notes?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
           id?: string;
+          is_archived?: boolean;
           profile_id: string;
           client_type?: string;
           company_registration_number?: string | null;
@@ -567,7 +577,12 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          archive_notes?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
           id?: string;
+          is_archived?: boolean;
           profile_id?: string;
           client_type?: string;
           company_registration_number?: string | null;
@@ -596,7 +611,12 @@ export type Database = {
       };
       cases: {
         Row: {
+          archive_notes: string | null;
+          archive_reason: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
           id: string;
+          is_archived: boolean;
           client_id: string;
           assigned_consultant_id: string | null;
           case_number: string;
@@ -615,7 +635,12 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          archive_notes?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
           id?: string;
+          is_archived?: boolean;
           client_id: string;
           assigned_consultant_id?: string | null;
           case_number?: string;
@@ -634,7 +659,12 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          archive_notes?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
           id?: string;
+          is_archived?: boolean;
           client_id?: string;
           assigned_consultant_id?: string | null;
           case_number?: string;
@@ -1032,8 +1062,13 @@ export type Database = {
       };
       service_requests: {
         Row: {
+          archive_notes: string | null;
+          archive_reason: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
           id: string;
           full_name: string;
+          is_archived: boolean;
           email: string;
           phone: string;
           province: string | null;
@@ -1066,8 +1101,13 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          archive_notes?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
           id?: string;
           full_name: string;
+          is_archived?: boolean;
           email: string;
           phone: string;
           province?: string | null;
@@ -1100,8 +1140,13 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          archive_notes?: string | null;
+          archive_reason?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
           id?: string;
           full_name?: string;
+          is_archived?: boolean;
           email?: string;
           phone?: string;
           province?: string | null;
@@ -1431,7 +1476,16 @@ export type Database = {
       alert_status: "active" | "acknowledged" | "resolved" | "dismissed";
       invoice_status: "draft" | "issued" | "partially_paid" | "paid" | "overdue" | "cancelled";
       payment_status: "pending" | "paid" | "failed" | "cancelled";
-      service_request_status: "new" | "viewed" | "responded" | "assigned" | "closed";
+      service_request_status:
+        | "new"
+        | "viewed"
+        | "responded"
+        | "assigned"
+        | "in_progress"
+        | "waiting_response"
+        | "dead_lead"
+        | "converted_to_client"
+        | "closed";
       service_request_client_type: "individual" | "company";
       service_request_identity_document_type: "id_number" | "passport_number";
       service_request_category: "individual_tax" | "business_tax" | "accounting" | "business_support";
@@ -1590,7 +1644,17 @@ export const Constants = {
       alert_status: ["active", "acknowledged", "resolved", "dismissed"],
       invoice_status: ["draft", "issued", "partially_paid", "paid", "overdue", "cancelled"],
       payment_status: ["pending", "paid", "failed", "cancelled"],
-      service_request_status: ["new", "viewed", "responded", "assigned", "closed"],
+      service_request_status: [
+        "new",
+        "viewed",
+        "responded",
+        "assigned",
+        "in_progress",
+        "waiting_response",
+        "dead_lead",
+        "converted_to_client",
+        "closed",
+      ],
       service_request_client_type: ["individual", "company"],
       service_request_identity_document_type: ["id_number", "passport_number"],
       service_request_category: ["individual_tax", "business_tax", "accounting", "business_support"],

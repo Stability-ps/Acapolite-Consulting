@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { Tables, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router-dom";
@@ -45,12 +46,17 @@ export default function AdminServiceRequests() {
   const [clientTypeFilter, setClientTypeFilter] = useState<string>("all");
   const [assignmentFilter, setAssignmentFilter] = useState<string>("all");
   const [issueFilter, setIssueFilter] = useState<string>("all");
+  const [leadView, setLeadView] = useState<"active" | "archived">("active");
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [assigningRequestId, setAssigningRequestId] = useState<string | null>(null);
   const [selectedPractitionerId, setSelectedPractitionerId] = useState<string>("");
   const [convertingRequestId, setConvertingRequestId] = useState<string | null>(null);
+  const [leadArchiveReason, setLeadArchiveReason] = useState<string>("inactive");
+  const [leadArchiveNotes, setLeadArchiveNotes] = useState("");
+  const [archivingLeadId, setArchivingLeadId] = useState<string | null>(null);
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
   const leadIdFromQuery = searchParams.get("leadId");
 
   if (role === "consultant") {
@@ -228,6 +234,14 @@ export default function AdminServiceRequests() {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
     return (requests ?? []).filter((request) => {
+      if (leadView === "active" && request.is_archived) {
+        return false;
+      }
+
+      if (leadView === "archived" && !request.is_archived) {
+        return false;
+      }
+
       const issueFlags = getServiceRequestIssueFlags({
         hasDebtFlag: request.has_debt_flag,
         missingReturnsFlag: request.missing_returns_flag,
@@ -285,6 +299,7 @@ export default function AdminServiceRequests() {
     assignmentFilter,
     clientTypeFilter,
     issueFilter,
+    leadView,
     practitionerMap,
     priorityFilter,
     requests,
@@ -302,6 +317,8 @@ export default function AdminServiceRequests() {
 
   useEffect(() => {
     setSelectedPractitionerId(selectedRequest?.assigned_practitioner_id ?? "");
+    setLeadArchiveReason(selectedRequest?.archive_reason ?? "inactive");
+    setLeadArchiveNotes(selectedRequest?.archive_notes ?? "");
   }, [selectedRequest?.assigned_practitioner_id]);
 
   useEffect(() => {
@@ -317,9 +334,10 @@ export default function AdminServiceRequests() {
 
     return {
       total: rows.length,
-      open: rows.filter((request) => request.status !== "closed").length,
+      active: rows.filter((request) => !request.is_archived).length,
+      archived: rows.filter((request) => request.is_archived).length,
       highRisk: rows.filter((request) => request.risk_indicator === "high").length,
-      assigned: rows.filter((request) => request.status === "assigned").length,
+      deadLeads: rows.filter((request) => request.status === "dead_lead").length,
     };
   }, [requests]);
 
@@ -358,6 +376,11 @@ export default function AdminServiceRequests() {
     if (status === "responded") updates.responded_at = timestamp;
     if (status === "assigned") updates.assigned_at = timestamp;
     if (status === "closed") updates.closed_at = timestamp;
+    if (status === "dead_lead") {
+      updates.is_archived = true;
+      updates.archived_at = timestamp;
+      updates.archived_by = user?.id ?? null;
+    }
 
     const { error } = await supabase
       .from("service_requests")
@@ -372,6 +395,76 @@ export default function AdminServiceRequests() {
 
     toast.success("Service request updated.");
     setUpdatingStatus(null);
+    await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
+  };
+
+  const archiveLead = async (requestId: string) => {
+    setArchivingLeadId(requestId);
+    const { error } = await supabase
+      .from("service_requests")
+      .update({
+        status: "dead_lead",
+        is_archived: true,
+        archived_at: new Date().toISOString(),
+        archived_by: user?.id ?? null,
+        archive_reason: leadArchiveReason,
+        archive_notes: leadArchiveNotes.trim() || null,
+      })
+      .eq("id", requestId);
+
+    setArchivingLeadId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Lead moved to archive.");
+    await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
+  };
+
+  const restoreLead = async (requestId: string) => {
+    setArchivingLeadId(requestId);
+    const { error } = await supabase
+      .from("service_requests")
+      .update({
+        status: "waiting_response",
+        is_archived: false,
+        archived_at: null,
+        archived_by: null,
+        archive_reason: null,
+        archive_notes: null,
+      })
+      .eq("id", requestId);
+
+    setArchivingLeadId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Lead restored to the active list.");
+    await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
+  };
+
+  const deleteArchivedLead = async (requestId: string) => {
+    setDeletingLeadId(requestId);
+    const { error } = await supabase
+      .from("service_requests")
+      .delete()
+      .eq("id", requestId)
+      .eq("is_archived", true);
+
+    setDeletingLeadId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Archived dead lead deleted permanently.");
+    setSelectedRequestId(null);
     await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
   };
 
@@ -462,6 +555,26 @@ export default function AdminServiceRequests() {
       </div>
 
       <div className="mb-8 rounded-2xl border border-border bg-card p-4 shadow-card">
+        <div className="mb-4 flex flex-wrap items-center gap-3 border-b border-border pb-4">
+          <Button
+            type="button"
+            size="sm"
+            variant={leadView === "active" ? "default" : "outline"}
+            className="rounded-full"
+            onClick={() => setLeadView("active")}
+          >
+            Active Leads
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={leadView === "archived" ? "default" : "outline"}
+            className="rounded-full"
+            onClick={() => setLeadView("archived")}
+          >
+            Archived Leads
+          </Button>
+        </div>
         <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
           <div className="relative xl:col-span-2">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -582,16 +695,16 @@ export default function AdminServiceRequests() {
           <p className="font-display text-3xl text-foreground">{requestMetrics.total}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Open Leads</p>
-          <p className="font-display text-3xl text-foreground">{requestMetrics.open}</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Active Leads</p>
+          <p className="font-display text-3xl text-foreground">{requestMetrics.active}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">High Risk</p>
           <p className="font-display text-3xl text-red-700">{requestMetrics.highRisk}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Assigned</p>
-          <p className="font-display text-3xl text-foreground">{requestMetrics.assigned}</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Archived / Dead</p>
+          <p className="font-display text-3xl text-foreground">{requestMetrics.archived}</p>
         </div>
       </div>
 
@@ -661,6 +774,11 @@ export default function AdminServiceRequests() {
                         ? `Assigned to ${practitionerMap.get(request.assigned_practitioner_id)?.user.full_name || "practitioner"}`
                         : "Not assigned yet"}
                     </span>
+                    {request.is_archived ? (
+                      <span className="text-xs text-red-600 font-body">
+                        Archived{request.archive_reason ? ` · ${formatServiceRequestLabel(request.archive_reason)}` : ""}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </button>
@@ -713,6 +831,11 @@ export default function AdminServiceRequests() {
                 </Select>
                 {updatingStatus === selectedRequest.id ? (
                   <p className="mt-2 text-xs text-muted-foreground font-body">Saving status...</p>
+                ) : null}
+                {selectedRequest.is_archived ? (
+                  <p className="mt-2 text-xs text-red-600 font-body">
+                    Archived{selectedRequest.archive_reason ? ` · ${formatServiceRequestLabel(selectedRequest.archive_reason)}` : ""}
+                  </p>
                 ) : null}
               </div>
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
@@ -769,6 +892,89 @@ export default function AdminServiceRequests() {
               <div className="rounded-2xl border border-border p-4">
                 <p className="whitespace-pre-wrap font-body text-foreground">{selectedRequest.description}</p>
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-border p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-3">Lead Archive Controls</p>
+              {selectedRequest.is_archived ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground font-body">
+                    This lead is archived and removed from active lead management.
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-xl border border-border bg-accent/20 p-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-1">Archive Reason</p>
+                      <p className="text-sm text-foreground font-body">{formatServiceRequestLabel(selectedRequest.archive_reason || "other")}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-accent/20 p-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-1">Archive Notes</p>
+                      <p className="text-sm text-foreground font-body">{selectedRequest.archive_notes || "No notes added."}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => void restoreLead(selectedRequest.id)}
+                      disabled={archivingLeadId === selectedRequest.id}
+                    >
+                      {archivingLeadId === selectedRequest.id ? "Restoring..." : "Restore Lead"}
+                    </Button>
+                    {role === "admin" ? (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="rounded-xl"
+                        onClick={() => void deleteArchivedLead(selectedRequest.id)}
+                        disabled={deletingLeadId === selectedRequest.id}
+                      >
+                        {deletingLeadId === selectedRequest.id ? "Deleting..." : "Delete Permanently"}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="mb-2 text-sm font-semibold text-foreground font-body">Archive reason</p>
+                      <Select value={leadArchiveReason} onValueChange={setLeadArchiveReason}>
+                        <SelectTrigger className="w-full rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="declined">Declined</SelectItem>
+                          <SelectItem value="duplicate">Duplicate</SelectItem>
+                          <SelectItem value="spam">Spam</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-sm font-semibold text-foreground font-body">Archive notes</p>
+                      <Textarea
+                        value={leadArchiveNotes}
+                        onChange={(event) => setLeadArchiveNotes(event.target.value)}
+                        placeholder="Add a short note about why this lead is no longer active."
+                        className="min-h-[96px] rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => void archiveLead(selectedRequest.id)}
+                      disabled={archivingLeadId === selectedRequest.id}
+                    >
+                      {archivingLeadId === selectedRequest.id ? "Archiving..." : "Mark as Dead Lead"}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">

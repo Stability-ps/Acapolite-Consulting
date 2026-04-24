@@ -29,6 +29,10 @@ const provinces = [
 const SA_ID_NUMBER_LENGTH = 13;
 
 type StaffClient = {
+  archive_notes: string | null;
+  archive_reason: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
   id: string;
   created_by: string | null;
   client_type: string;
@@ -48,6 +52,7 @@ type StaffClient = {
   province: string | null;
   postal_code: string | null;
   country: string | null;
+  is_archived: boolean;
   notes: string | null;
   created_at: string;
   profiles?: {
@@ -181,12 +186,16 @@ export default function AdminClients() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [clientView, setClientView] = useState<"active" | "archived">("active");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isAssigningCodes, setIsAssigningCodes] = useState(false);
+  const [archivingClientId, setArchivingClientId] = useState<string | null>(null);
   const [formState, setFormState] = useState<NewClientFormState>(initialFormState);
+  const [clientArchiveReason, setClientArchiveReason] = useState<string>("inactive");
+  const [clientArchiveNotes, setClientArchiveNotes] = useState("");
   const [isUpdatingReturnStatus, setIsUpdatingReturnStatus] = useState(false);
   const [updatingInvoiceId, setUpdatingInvoiceId] = useState<string | null>(null);
   const [showInvoiceWarningActions, setShowInvoiceWarningActions] = useState(false);
@@ -294,12 +303,15 @@ export default function AdminClients() {
 
   const filteredClients = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
+    const scopedClients = (clients ?? []).filter((client) =>
+      clientView === "active" ? !client.is_archived : client.is_archived,
+    );
 
     if (!normalizedSearch) {
-      return (clients ?? []).filter((client) => !practitionerFilterId || client.assigned_consultant?.id === practitionerFilterId);
+      return scopedClients.filter((client) => !practitionerFilterId || client.assigned_consultant?.id === practitionerFilterId);
     }
 
-    return (clients ?? []).filter((client) => {
+    return scopedClients.filter((client) => {
       const name = getClientName(client).toLowerCase();
       const email = (client.profiles?.email || "").toLowerCase();
       const phone = (client.profiles?.phone || "").toLowerCase();
@@ -319,7 +331,7 @@ export default function AdminClients() {
         )
       );
     });
-  }, [clients, practitionerFilterId, searchQuery]);
+  }, [clientView, clients, practitionerFilterId, searchQuery]);
 
   const selectedClient = filteredClients.find((client) => client.id === selectedClientId)
     || clients?.find((client) => client.id === selectedClientId)
@@ -329,6 +341,11 @@ export default function AdminClients() {
   useEffect(() => {
     setShowInvoiceWarningActions(false);
   }, [selectedClientId]);
+
+  useEffect(() => {
+    setClientArchiveReason(selectedClient?.archive_reason || "inactive");
+    setClientArchiveNotes(selectedClient?.archive_notes || "");
+  }, [selectedClient?.archive_notes, selectedClient?.archive_reason]);
 
   const { data: selectedClientOutstandingInvoices } = useQuery({
     queryKey: ["staff-client-warning-invoices", selectedClientId],
@@ -740,6 +757,62 @@ export default function AdminClients() {
     await queryClient.invalidateQueries({ queryKey: ["staff-clients"] });
   };
 
+  const archiveClient = async () => {
+    if (!selectedClient || !canEditSelectedClient) {
+      toast.error("This practitioner profile cannot archive this client.");
+      return;
+    }
+
+    setArchivingClientId(selectedClient.id);
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        is_archived: true,
+        archived_at: new Date().toISOString(),
+        archived_by: user?.id ?? null,
+        archive_reason: clientArchiveReason,
+        archive_notes: clientArchiveNotes.trim() || null,
+      })
+      .eq("id", selectedClient.id);
+    setArchivingClientId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Client archived.");
+    await refreshClientViews();
+  };
+
+  const restoreClient = async () => {
+    if (!selectedClient || !canEditSelectedClient) {
+      toast.error("This practitioner profile cannot restore this client.");
+      return;
+    }
+
+    setArchivingClientId(selectedClient.id);
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        is_archived: false,
+        archived_at: null,
+        archived_by: null,
+        archive_reason: null,
+        archive_notes: null,
+      })
+      .eq("id", selectedClient.id);
+    setArchivingClientId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Client restored.");
+    await refreshClientViews();
+  };
+
   return (
     <div>
       <div className="mb-8 flex items-start justify-between gap-4">
@@ -782,6 +855,27 @@ export default function AdminClients() {
             </>
           ) : null}
         </div>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          size="sm"
+          variant={clientView === "active" ? "default" : "outline"}
+          className="rounded-full"
+          onClick={() => setClientView("active")}
+        >
+          View All Clients
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={clientView === "archived" ? "default" : "outline"}
+          className="rounded-full"
+          onClick={() => setClientView("archived")}
+        >
+          Archived Clients
+        </Button>
       </div>
 
       {practitionerFilterId ? (
@@ -827,7 +921,11 @@ export default function AdminClients() {
                     <td className="p-4 text-sm text-muted-foreground font-body">{client.tax_number || "-"}</td>
                     <td className="p-4 text-sm text-muted-foreground font-body">{client.client_code || "-"}</td>
                     <td className="p-4 text-sm font-body">
-                      {warningSummary?.hasIssues ? (
+                      {client.is_archived ? (
+                        <span className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">
+                          Archived
+                        </span>
+                      ) : warningSummary?.hasIssues ? (
                         <span className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
                           <AlertTriangle className="h-3.5 w-3.5" />
                           {warningSummary.issueCount} warning{warningSummary.issueCount === 1 ? "" : "s"}
@@ -1167,6 +1265,11 @@ export default function AdminClients() {
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Type</p>
                 <p className="font-body text-foreground">{getClientTypeLabel(selectedClient.client_type)}</p>
+                {selectedClient.is_archived ? (
+                  <p className="mt-2 text-xs text-red-600 font-body">
+                    Archived{selectedClient.archive_reason ? ` · ${selectedClient.archive_reason}` : ""}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Email</p>
@@ -1232,6 +1335,77 @@ export default function AdminClients() {
                 <p className="whitespace-pre-wrap font-body text-foreground">{selectedClient.notes || "No internal notes yet."}</p>
               </div>
             </div>
+
+            {canEditSelectedClient ? (
+              <div className="rounded-2xl border border-border p-4">
+                <p className="mb-3 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Archive Controls</p>
+                {selectedClient.is_archived ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground font-body">
+                      This client is archived and hidden from the active client list.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-xl border border-border bg-accent/20 p-3">
+                        <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Archive Reason</p>
+                        <p className="text-sm text-foreground font-body">{selectedClient.archive_reason || "Not provided"}</p>
+                      </div>
+                      <div className="rounded-xl border border-border bg-accent/20 p-3">
+                        <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Archive Notes</p>
+                        <p className="text-sm text-foreground font-body">{selectedClient.archive_notes || "No notes added."}</p>
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={restoreClient}
+                        disabled={archivingClientId === selectedClient.id}
+                      >
+                        {archivingClientId === selectedClient.id ? "Restoring..." : "Restore Client"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-foreground font-body">Archive Reason</label>
+                      <Select value={clientArchiveReason} onValueChange={setClientArchiveReason}>
+                        <SelectTrigger className="w-full rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="duplicate">Duplicate</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-foreground font-body">Archive Notes</label>
+                      <Textarea
+                        value={clientArchiveNotes}
+                        onChange={(event) => setClientArchiveNotes(event.target.value)}
+                        placeholder="Optional notes for why this client was archived."
+                        className="min-h-[96px] rounded-xl"
+                      />
+                    </div>
+                    <div className="sm:col-span-2 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={archiveClient}
+                        disabled={archivingClientId === selectedClient.id}
+                      >
+                        {archivingClientId === selectedClient.id ? "Archiving..." : "Archive Client"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             {canEditSelectedClient || canViewClientWorkspace ? (
               <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">

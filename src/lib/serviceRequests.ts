@@ -85,6 +85,10 @@ export const serviceRequestStatusOptions: { value: Enums<"service_request_status
   { value: "viewed", label: "Viewed" },
   { value: "responded", label: "Responded" },
   { value: "assigned", label: "Assigned" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "waiting_response", label: "Waiting Response" },
+  { value: "dead_lead", label: "Dead Lead" },
+  { value: "converted_to_client", label: "Converted to Client" },
   { value: "closed", label: "Closed" },
 ];
 
@@ -103,10 +107,18 @@ export function getServiceRequestStatusClass(status?: string | null) {
   switch (status) {
     case "closed":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "converted_to_client":
+      return "border-teal-200 bg-teal-50 text-teal-700";
     case "assigned":
       return "border-sky-200 bg-sky-50 text-sky-700";
+    case "in_progress":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
+    case "waiting_response":
+      return "border-orange-200 bg-orange-50 text-orange-700";
     case "responded":
       return "border-violet-200 bg-violet-50 text-violet-700";
+    case "dead_lead":
+      return "border-red-200 bg-red-50 text-red-700";
     case "viewed":
       return "border-amber-200 bg-amber-50 text-amber-700";
     default:

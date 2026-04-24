@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, MessageSquare, SendHorizonal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,7 +49,12 @@ type ConsultantOption = {
 };
 
 type CaseRecord = {
+  archive_notes: string | null;
+  archive_reason: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
   id: string;
+  is_archived: boolean;
   client_id: string;
   case_title: string;
   case_type: string;
@@ -81,9 +86,13 @@ export default function AdminCases() {
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [caseView, setCaseView] = useState<"active" | "archived">("active");
   const [caseReply, setCaseReply] = useState("");
   const [sendingCaseReply, setSendingCaseReply] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [archivingCaseId, setArchivingCaseId] = useState<string | null>(null);
+  const [caseArchiveReason, setCaseArchiveReason] = useState<string>("inactive");
+  const [caseArchiveNotes, setCaseArchiveNotes] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [form, setForm] = useState({
     client_id: "",
@@ -311,17 +320,28 @@ export default function AdminCases() {
   }, [riskClients, riskInvoices, riskRequests]);
 
   const filteredCases = useMemo(() => {
+    const scopedCases = (cases ?? []).filter((caseItem) =>
+      caseView === "active" ? !caseItem.is_archived : caseItem.is_archived,
+    );
+
     if (priorityFilter === "all") {
-      return cases ?? [];
+      return scopedCases;
     }
 
     const targetPriority = priorityFilter === "high" ? 1 : priorityFilter === "medium" ? 2 : 3;
-    return (cases ?? []).filter((caseItem) => caseItem.priority === targetPriority);
-  }, [cases, priorityFilter]);
+    return scopedCases.filter((caseItem) => caseItem.priority === targetPriority);
+  }, [caseView, cases, priorityFilter]);
 
   const selectedCase = filteredCases.find((caseItem) => caseItem.id === selectedCaseId)
     || cases?.find((caseItem) => caseItem.id === selectedCaseId)
     || null;
+
+  const canArchiveSelectedCase = canManageCases && Boolean(selectedCase);
+
+  useEffect(() => {
+    setCaseArchiveReason(selectedCase?.archive_reason || "inactive");
+    setCaseArchiveNotes(selectedCase?.archive_notes || "");
+  }, [selectedCase?.archive_notes, selectedCase?.archive_reason]);
 
   const notifyAssignedConsultant = async (params: {
     caseId: string;
@@ -640,6 +660,62 @@ export default function AdminCases() {
     }
   };
 
+  const archiveCase = async () => {
+    if (!selectedCase || !canManageCases) {
+      toast.error("This consultant profile cannot archive this case.");
+      return;
+    }
+
+    setArchivingCaseId(selectedCase.id);
+    const { error } = await supabase
+      .from("cases")
+      .update({
+        is_archived: true,
+        archived_at: new Date().toISOString(),
+        archived_by: user?.id ?? null,
+        archive_reason: caseArchiveReason,
+        archive_notes: caseArchiveNotes.trim() || null,
+      })
+      .eq("id", selectedCase.id);
+    setArchivingCaseId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Case archived.");
+    await queryClient.invalidateQueries({ queryKey: ["staff-cases"] });
+  };
+
+  const restoreCase = async () => {
+    if (!selectedCase || !canManageCases) {
+      toast.error("This consultant profile cannot restore this case.");
+      return;
+    }
+
+    setArchivingCaseId(selectedCase.id);
+    const { error } = await supabase
+      .from("cases")
+      .update({
+        is_archived: false,
+        archived_at: null,
+        archived_by: null,
+        archive_reason: null,
+        archive_notes: null,
+      })
+      .eq("id", selectedCase.id);
+    setArchivingCaseId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Case restored.");
+    await queryClient.invalidateQueries({ queryKey: ["staff-cases"] });
+  };
+
   const statusColor = (status: string) => {
     switch (status) {
       case "new": return "bg-blue-100 text-blue-700";
@@ -666,6 +742,27 @@ export default function AdminCases() {
             Create Case
           </Button>
         ) : null}
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          size="sm"
+          variant={caseView === "active" ? "default" : "outline"}
+          className="rounded-full"
+          onClick={() => setCaseView("active")}
+        >
+          Active Cases
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={caseView === "archived" ? "default" : "outline"}
+          className="rounded-full"
+          onClick={() => setCaseView("archived")}
+        >
+          Archived Cases
+        </Button>
       </div>
 
       {isLoading || isLoadingAccessibleClientIds ? (
@@ -729,6 +826,11 @@ export default function AdminCases() {
                   {caseItem.status.replace(/_/g, " ")}
                 </Badge>
               </div>
+              {caseItem.is_archived ? (
+                <div className="mb-3 inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">
+                  Archived{caseItem.archive_reason ? ` · ${caseItem.archive_reason}` : ""}
+                </div>
+              ) : null}
               {caseItem.description && <p className="text-sm text-muted-foreground font-body mb-4">{caseItem.description}</p>}
               {clientIssueMap.get(caseItem.client_id)?.hasIssues ? (
                 <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
@@ -840,6 +942,77 @@ export default function AdminCases() {
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Description</p>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-foreground font-body">{selectedCase.description}</p>
+              </div>
+            ) : null}
+
+            {canArchiveSelectedCase ? (
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-3">Case Archive Controls</p>
+                {selectedCase.is_archived ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground font-body">
+                      This case is archived and hidden from the active case list.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-xl border border-border bg-accent/20 p-3">
+                        <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Archive Reason</p>
+                        <p className="text-sm text-foreground font-body">{selectedCase.archive_reason || "Not provided"}</p>
+                      </div>
+                      <div className="rounded-xl border border-border bg-accent/20 p-3">
+                        <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Archive Notes</p>
+                        <p className="text-sm text-foreground font-body">{selectedCase.archive_notes || "No notes added."}</p>
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={restoreCase}
+                        disabled={archivingCaseId === selectedCase.id}
+                      >
+                        {archivingCaseId === selectedCase.id ? "Restoring..." : "Restore Case"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-foreground font-body">Archive Reason</label>
+                      <Select value={caseArchiveReason} onValueChange={setCaseArchiveReason}>
+                        <SelectTrigger className="w-full rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="duplicate">Duplicate</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-foreground font-body">Archive Notes</label>
+                      <Textarea
+                        value={caseArchiveNotes}
+                        onChange={(event) => setCaseArchiveNotes(event.target.value)}
+                        placeholder="Optional notes for why this case was archived."
+                        className="min-h-[96px] rounded-xl"
+                      />
+                    </div>
+                    <div className="sm:col-span-2 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={archiveCase}
+                        disabled={archivingCaseId === selectedCase.id}
+                      >
+                        {archivingCaseId === selectedCase.id ? "Archiving..." : "Archive Case"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
 
