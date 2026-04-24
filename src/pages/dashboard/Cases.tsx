@@ -19,6 +19,7 @@ import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog"
 import { RatingStars } from "@/components/dashboard/RatingStars";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 import { formatCaseReference } from "@/lib/practitionerAssignments";
 import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 
@@ -108,6 +109,7 @@ export default function Cases() {
   const { user } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
@@ -225,6 +227,7 @@ export default function Cases() {
 
   const selectedCase =
     cases?.find((caseItem) => caseItem.id === selectedCaseId) ?? null;
+  const caseIdFromQuery = searchParams.get("caseId");
   const selectedRequest =
     requestConversations?.find((request) => request.id === selectedRequestId) ??
     null;
@@ -236,6 +239,14 @@ export default function Cases() {
     selectedCase &&
     ["resolved", "closed"].includes(selectedCase.status),
   );
+
+  useEffect(() => {
+    if (!caseIdFromQuery || !(cases ?? []).some((caseItem) => caseItem.id === caseIdFromQuery)) {
+      return;
+    }
+
+    setSelectedCaseId(caseIdFromQuery);
+  }, [caseIdFromQuery, cases]);
 
   useEffect(() => {
     if (!selectedReview) {
@@ -722,6 +733,11 @@ export default function Cases() {
           if (!open) {
             setSelectedCaseId(null);
             setCaseReply("");
+            if (caseIdFromQuery) {
+              const next = new URLSearchParams(searchParams);
+              next.delete("caseId");
+              setSearchParams(next, { replace: true });
+            }
           }
         }}
         title={selectedCase?.case_title ?? "Case Details"}

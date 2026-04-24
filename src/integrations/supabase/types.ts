@@ -417,6 +417,60 @@ export type Database = {
         };
         Relationships: [];
       };
+      practitioner_change_requests: {
+        Row: {
+          id: string;
+          service_request_id: string;
+          case_id: string | null;
+          client_profile_id: string;
+          current_practitioner_profile_id: string;
+          requested_by: string;
+          reason: string | null;
+          practitioner_response: string | null;
+          practitioner_responded_at: string | null;
+          status: string;
+          admin_response: string | null;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          service_request_id: string;
+          case_id?: string | null;
+          client_profile_id: string;
+          current_practitioner_profile_id: string;
+          requested_by: string;
+          reason?: string | null;
+          practitioner_response?: string | null;
+          practitioner_responded_at?: string | null;
+          status?: string;
+          admin_response?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          service_request_id?: string;
+          case_id?: string | null;
+          client_profile_id?: string;
+          current_practitioner_profile_id?: string;
+          requested_by?: string;
+          reason?: string | null;
+          practitioner_response?: string | null;
+          practitioner_responded_at?: string | null;
+          status?: string;
+          admin_response?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       practitioner_subscription_plans: {
         Row: {
           code: string;
@@ -1435,6 +1489,21 @@ export type Database = {
         Args: {
           p_request_id: string;
           p_reason?: string | null;
+        };
+        Returns: boolean;
+      };
+      review_practitioner_change_request: {
+        Args: {
+          p_change_request_id: string;
+          p_decision: string;
+          p_admin_response?: string | null;
+        };
+        Returns: boolean;
+      };
+      submit_practitioner_change_response: {
+        Args: {
+          p_change_request_id: string;
+          p_response: string;
         };
         Returns: boolean;
       };

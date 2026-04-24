@@ -25,6 +25,7 @@ type PractitionerProfile = Tables<"practitioner_profiles">;
 type Profile = Tables<"profiles">;
 type PractitionerReview = Tables<"practitioner_reviews">;
 type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
+type PractitionerChangeRequest = Tables<"practitioner_change_requests">;
 
 export default function ClientServiceRequests() {
   useNotificationSectionRead("requests");
@@ -90,6 +91,23 @@ export default function ClientServiceRequests() {
 
       if (error) throw error;
       return (data ?? []) as ServiceRequestAccessRequest[];
+    },
+    enabled: requestIds.length > 0,
+  });
+
+  const { data: practitionerChangeRequests } = useQuery({
+    queryKey: ["client-practitioner-change-requests", requestIds],
+    queryFn: async () => {
+      if (!requestIds.length) return [] as PractitionerChangeRequest[];
+
+      const { data, error } = await supabase
+        .from("practitioner_change_requests")
+        .select("*")
+        .in("service_request_id", requestIds)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as PractitionerChangeRequest[];
     },
     enabled: requestIds.length > 0,
   });
@@ -238,6 +256,9 @@ export default function ClientServiceRequests() {
     categories.map((category) => categoryLabelMap.get(category) || formatServiceRequestLabel(category)).join(", ");
 
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
+  const selectedChangeRequest = selectedRequest
+    ? (practitionerChangeRequests ?? []).find((changeRequest) => changeRequest.service_request_id === selectedRequest.id) ?? null
+    : null;
   const selectedResponses = selectedRequest ? responsesByRequest.get(selectedRequest.id) ?? [] : [];
   const selectedServiceLabel = selectedRequest
     ? formatServiceList(resolveServiceList(selectedRequest))
@@ -253,6 +274,7 @@ export default function ClientServiceRequests() {
   const canChangePractitioner = Boolean(
     selectedRequest?.assigned_practitioner_id
     && selectedRequest?.assigned_at
+    && selectedChangeRequest?.status !== "pending"
     && Date.now() - new Date(selectedRequest.assigned_at).getTime() <= changeWindowMs,
   );
   const changeWindowLabel = selectedRequest?.assigned_at
@@ -394,12 +416,13 @@ export default function ClientServiceRequests() {
       return;
     }
 
-    toast.success("Practitioner unassigned. You can now select another response.");
+    toast.success("Your request was submitted to admin for review.");
     setIsChangePractitionerOpen(false);
     setChangeReason("");
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["client-service-requests", user?.email] }),
       queryClient.invalidateQueries({ queryKey: ["client-service-request-responses", requestIds] }),
+      queryClient.invalidateQueries({ queryKey: ["client-practitioner-change-requests", requestIds] }),
     ]);
   };
 
@@ -605,6 +628,21 @@ export default function ClientServiceRequests() {
                         Change window ends {changeWindowLabel}.
                       </p>
                     ) : null}
+                    {selectedChangeRequest?.status === "pending" ? (
+                      <p className="mt-2 text-sm text-amber-700 font-body">
+                        Your change request is pending admin review. The current practitioner remains assigned until admin decides.
+                      </p>
+                    ) : null}
+                    {selectedChangeRequest?.status === "approved" ? (
+                      <p className="mt-2 text-sm text-emerald-700 font-body">
+                        Your change request was approved. You may now select another practitioner response.
+                      </p>
+                    ) : null}
+                    {selectedChangeRequest?.status === "rejected" ? (
+                      <p className="mt-2 text-sm text-rose-700 font-body">
+                        Your change request was not approved. The current practitioner remains assigned.
+                      </p>
+                    ) : null}
                   </div>
                   <Button
                     type="button"
@@ -613,12 +651,14 @@ export default function ClientServiceRequests() {
                     onClick={() => setIsChangePractitionerOpen(true)}
                     disabled={!canChangePractitioner}
                   >
-                    Change Practitioner
+                    {selectedChangeRequest?.status === "pending" ? "Awaiting Admin Review" : "Change Practitioner"}
                   </Button>
                 </div>
                 {!canChangePractitioner ? (
                   <p className="mt-3 text-xs text-muted-foreground font-body">
-                    This request is past the change window or already in progress. Contact support if you still need help.
+                    {selectedChangeRequest?.status === "pending"
+                      ? "You cannot choose another practitioner until admin reviews this request."
+                      : "This request is past the change window or already in progress. Contact support if you still need help."}
                   </p>
                 ) : null}
               </div>
@@ -979,12 +1019,12 @@ export default function ClientServiceRequests() {
         open={isChangePractitionerOpen}
         onOpenChange={setIsChangePractitionerOpen}
         title="Change Practitioner"
-        description="Confirm that you want to unassign the current practitioner and return this request to the marketplace."
+        description="Submit a change request for admin review. Your current practitioner stays assigned until admin approves."
       >
         <div className="space-y-4">
           <div className="rounded-2xl border border-border bg-accent/20 p-4">
             <p className="text-sm text-muted-foreground font-body">
-              This will remove the current practitioner and reopen the request so you can select another response. Please share a brief reason for the change.
+              This request goes to admin first. The assigned practitioner will also be notified and may submit their response before admin makes a decision.
             </p>
           </div>
           <div>

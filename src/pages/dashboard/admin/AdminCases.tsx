@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 import type { Enums, Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
@@ -78,10 +79,12 @@ type CaseRecord = {
 
 type ConversationRecord = Tables<"conversations">;
 type MessageRecord = Tables<"messages">;
+type PractitionerChangeRequestRecord = Tables<"practitioner_change_requests">;
 
 export default function AdminCases() {
   useNotificationSectionRead("cases");
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, role, hasStaffPermission, isConsultant } = useAuth();
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -93,6 +96,10 @@ export default function AdminCases() {
   const [archivingCaseId, setArchivingCaseId] = useState<string | null>(null);
   const [caseArchiveReason, setCaseArchiveReason] = useState<string>("inactive");
   const [caseArchiveNotes, setCaseArchiveNotes] = useState("");
+  const [changeRequestResponse, setChangeRequestResponse] = useState("");
+  const [adminChangeDecisionNote, setAdminChangeDecisionNote] = useState("");
+  const [submittingChangeResponseId, setSubmittingChangeResponseId] = useState<string | null>(null);
+  const [reviewingChangeRequestId, setReviewingChangeRequestId] = useState<string | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [form, setForm] = useState({
     client_id: "",
@@ -106,6 +113,7 @@ export default function AdminCases() {
   });
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
+  const caseIdFromQuery = searchParams.get("caseId");
   const canManageCases = hasStaffPermission("can_manage_cases");
   const canAssignConsultants = canManageCases && !isConsultant;
   const canReplyMessages = hasStaffPermission("can_reply_messages");
@@ -258,6 +266,21 @@ export default function AdminCases() {
     enabled: selectedCaseConversationIds.length > 0,
   });
 
+  const { data: selectedCaseChangeRequests } = useQuery({
+    queryKey: ["staff-case-change-requests", selectedCaseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_change_requests")
+        .select("*")
+        .eq("case_id", selectedCaseId!)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as PractitionerChangeRequestRecord[];
+    },
+    enabled: !!selectedCaseId,
+  });
+
   const clientOptions = useMemo(
     () =>
       (clients ?? []).map((client) => ({
@@ -335,13 +358,27 @@ export default function AdminCases() {
   const selectedCase = filteredCases.find((caseItem) => caseItem.id === selectedCaseId)
     || cases?.find((caseItem) => caseItem.id === selectedCaseId)
     || null;
+  const selectedCaseChangeRequest = selectedCaseChangeRequests?.[0] ?? null;
 
   const canArchiveSelectedCase = canManageCases && Boolean(selectedCase);
+
+  useEffect(() => {
+    if (!caseIdFromQuery || !(cases ?? []).some((caseItem) => caseItem.id === caseIdFromQuery)) {
+      return;
+    }
+
+    setSelectedCaseId(caseIdFromQuery);
+  }, [caseIdFromQuery, cases]);
 
   useEffect(() => {
     setCaseArchiveReason(selectedCase?.archive_reason || "inactive");
     setCaseArchiveNotes(selectedCase?.archive_notes || "");
   }, [selectedCase?.archive_notes, selectedCase?.archive_reason]);
+
+  useEffect(() => {
+    setChangeRequestResponse(selectedCaseChangeRequest?.practitioner_response || "");
+    setAdminChangeDecisionNote(selectedCaseChangeRequest?.admin_response || "");
+  }, [selectedCaseChangeRequest?.admin_response, selectedCaseChangeRequest?.practitioner_response]);
 
   const notifyAssignedConsultant = async (params: {
     caseId: string;
@@ -716,6 +753,52 @@ export default function AdminCases() {
     await queryClient.invalidateQueries({ queryKey: ["staff-cases"] });
   };
 
+  const submitChangeRequestResponse = async () => {
+    if (!selectedCaseChangeRequest) {
+      return;
+    }
+
+    setSubmittingChangeResponseId(selectedCaseChangeRequest.id);
+    const { error } = await supabase.rpc("submit_practitioner_change_response", {
+      p_change_request_id: selectedCaseChangeRequest.id,
+      p_response: changeRequestResponse.trim(),
+    });
+    setSubmittingChangeResponseId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Your response was sent to admin for review.");
+    await queryClient.invalidateQueries({ queryKey: ["staff-case-change-requests", selectedCaseId] });
+  };
+
+  const reviewChangeRequest = async (decision: "approved" | "rejected") => {
+    if (!selectedCaseChangeRequest) {
+      return;
+    }
+
+    setReviewingChangeRequestId(selectedCaseChangeRequest.id);
+    const { error } = await supabase.rpc("review_practitioner_change_request", {
+      p_change_request_id: selectedCaseChangeRequest.id,
+      p_decision: decision,
+      p_admin_response: adminChangeDecisionNote.trim() || null,
+    });
+    setReviewingChangeRequestId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success(decision === "approved" ? "Change request approved." : "Change request rejected.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-case-change-requests", selectedCaseId] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-cases"] }),
+    ]);
+  };
+
   const statusColor = (status: string) => {
     switch (status) {
       case "new": return "bg-blue-100 text-blue-700";
@@ -911,6 +994,11 @@ export default function AdminCases() {
           if (!open) {
             setSelectedCaseId(null);
             setCaseReply("");
+            if (caseIdFromQuery) {
+              const next = new URLSearchParams(searchParams);
+              next.delete("caseId");
+              setSearchParams(next, { replace: true });
+            }
           }
         }}
         title={selectedCase?.case_title || "Case"}
@@ -942,6 +1030,87 @@ export default function AdminCases() {
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Description</p>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-foreground font-body">{selectedCase.description}</p>
+              </div>
+            ) : null}
+
+            {selectedCaseChangeRequest ? (
+              <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-3">Practitioner Change Request</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-border bg-accent/20 p-3">
+                    <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Status</p>
+                    <p className="text-sm text-foreground font-body">{selectedCaseChangeRequest.status.replace(/_/g, " ")}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-accent/20 p-3">
+                    <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Requested</p>
+                    <p className="text-sm text-foreground font-body">{new Date(selectedCaseChangeRequest.created_at).toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-border bg-accent/20 p-3">
+                    <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Reason</p>
+                    <p className="text-sm text-foreground font-body">{selectedCaseChangeRequest.reason || "No reason provided."}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-accent/20 p-3">
+                    <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioner Response</p>
+                    <p className="text-sm text-foreground font-body">{selectedCaseChangeRequest.practitioner_response || "No practitioner response yet."}</p>
+                  </div>
+                </div>
+
+                {role === "consultant"
+                && user?.id === selectedCaseChangeRequest.current_practitioner_profile_id
+                && selectedCaseChangeRequest.status === "pending" ? (
+                  <div className="mt-4 space-y-3">
+                    <label className="block text-sm font-semibold text-foreground font-body">Your response for admin</label>
+                    <Textarea
+                      value={changeRequestResponse}
+                      onChange={(event) => setChangeRequestResponse(event.target.value)}
+                      placeholder="Share your response or explanation for admin review."
+                      className="min-h-[110px] rounded-xl"
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        className="rounded-xl"
+                        onClick={submitChangeRequestResponse}
+                        disabled={submittingChangeResponseId === selectedCaseChangeRequest.id || !changeRequestResponse.trim()}
+                      >
+                        {submittingChangeResponseId === selectedCaseChangeRequest.id ? "Submitting..." : "Submit Response"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {role === "admin" && selectedCaseChangeRequest.status === "pending" ? (
+                  <div className="mt-4 space-y-3">
+                    <label className="block text-sm font-semibold text-foreground font-body">Admin decision notes</label>
+                    <Textarea
+                      value={adminChangeDecisionNote}
+                      onChange={(event) => setAdminChangeDecisionNote(event.target.value)}
+                      placeholder="Optional notes for the final decision."
+                      className="min-h-[110px] rounded-xl"
+                    />
+                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => void reviewChangeRequest("rejected")}
+                        disabled={reviewingChangeRequestId === selectedCaseChangeRequest.id}
+                      >
+                        {reviewingChangeRequestId === selectedCaseChangeRequest.id ? "Saving..." : "Reject Request"}
+                      </Button>
+                      <Button
+                        type="button"
+                        className="rounded-xl"
+                        onClick={() => void reviewChangeRequest("approved")}
+                        disabled={reviewingChangeRequestId === selectedCaseChangeRequest.id}
+                      >
+                        {reviewingChangeRequestId === selectedCaseChangeRequest.id ? "Saving..." : "Approve Request"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
