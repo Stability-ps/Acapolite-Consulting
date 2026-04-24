@@ -14,8 +14,12 @@ export type PractitionerProfileFormState = {
   idNumber: string;
   taxPractitionerNumber: string;
   professionalBody: string;
+  professionalTitle: string;
   city: string;
   province: string;
+  profileSummary: string;
+  languagesSpoken: string;
+  showRegistrationNumber: boolean;
   businessType: "individual" | "company";
   businessName: string;
   registrationNumber: string;
@@ -143,6 +147,15 @@ export function PractitionerProfileFields({
           />
         </div>
         <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Professional Title</label>
+          <Input
+            value={value.professionalTitle}
+            onChange={(event) => onChange({ ...value, professionalTitle: event.target.value })}
+            placeholder="Tax Practitioner, Senior Tax Consultant..."
+            className="rounded-xl"
+          />
+        </div>
+        <div>
           <label className="mb-2 block text-sm font-semibold text-foreground font-body">City</label>
           <Input
             value={value.city}
@@ -216,6 +229,24 @@ export function PractitionerProfileFields({
             className="rounded-xl"
           />
         </div>
+        <div className="sm:col-span-2">
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Languages Spoken</label>
+          <Input
+            value={value.languagesSpoken}
+            onChange={(event) => onChange({ ...value, languagesSpoken: event.target.value })}
+            placeholder="English, isiZulu, Afrikaans"
+            className="rounded-xl"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-2 block text-sm font-semibold text-foreground font-body">Profile Summary / Bio</label>
+          <Textarea
+            value={value.profileSummary}
+            onChange={(event) => onChange({ ...value, profileSummary: event.target.value })}
+            placeholder="Briefly describe your experience, specialties, and the type of clients you help."
+            className="min-h-[120px] rounded-xl"
+          />
+        </div>
         <div>
           <label className="mb-2 block text-sm font-semibold text-foreground font-body">Availability</label>
           <Select
@@ -234,6 +265,23 @@ export function PractitionerProfileFields({
             </SelectContent>
           </Select>
         </div>
+        {isRegisteredCompany ? (
+          <div className="sm:col-span-2 rounded-2xl border border-border p-4">
+            <label className="flex items-start gap-3">
+              <Checkbox
+                checked={value.showRegistrationNumber}
+                onCheckedChange={(checked) => onChange({ ...value, showRegistrationNumber: checked === true })}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-foreground font-body">Show Registration Number To Clients</span>
+                <span className="mt-1 block text-sm text-muted-foreground font-body">
+                  Turn this on if you want your company or firm registration number to be visible in the client-facing practitioner profile.
+                </span>
+              </span>
+            </label>
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-border bg-accent/20 p-4">

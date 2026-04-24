@@ -114,8 +114,12 @@ export type Database = {
           id_number: string | null;
           tax_practitioner_number: string | null;
           professional_body: string | null;
+          professional_title: string | null;
           city: string | null;
           province: string | null;
+          profile_summary: string | null;
+          languages_spoken: string[];
+          show_registration_number: boolean;
           bank_account_holder_name: string | null;
           bank_name: string | null;
           bank_branch_name: string | null;
@@ -149,8 +153,12 @@ export type Database = {
           id_number?: string | null;
           tax_practitioner_number?: string | null;
           professional_body?: string | null;
+          professional_title?: string | null;
           city?: string | null;
           province?: string | null;
+          profile_summary?: string | null;
+          languages_spoken?: string[];
+          show_registration_number?: boolean;
           bank_account_holder_name?: string | null;
           bank_name?: string | null;
           bank_branch_name?: string | null;
@@ -184,8 +192,12 @@ export type Database = {
           id_number?: string | null;
           tax_practitioner_number?: string | null;
           professional_body?: string | null;
+          professional_title?: string | null;
           city?: string | null;
           province?: string | null;
+          profile_summary?: string | null;
+          languages_spoken?: string[];
+          show_registration_number?: boolean;
           bank_account_holder_name?: string | null;
           bank_name?: string | null;
           bank_branch_name?: string | null;

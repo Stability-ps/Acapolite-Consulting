@@ -126,6 +126,10 @@ const initialPractitionerProfileForm: PractitionerProfileFormState = {
   businessType: "individual",
   businessName: "",
   registrationNumber: "",
+  professionalTitle: "",
+  profileSummary: "",
+  languagesSpoken: "",
+  showRegistrationNumber: false,
   yearsOfExperience: "0",
   availabilityStatus: "available",
   isVerified: false,
@@ -906,6 +910,10 @@ export default function AdminUsers() {
       businessName: selectedPractitionerProfile?.business_name || "",
       registrationNumber:
         selectedPractitionerProfile?.registration_number || "",
+      professionalTitle: selectedPractitionerProfile?.professional_title || "",
+      profileSummary: selectedPractitionerProfile?.profile_summary || "",
+      languagesSpoken: (selectedPractitionerProfile?.languages_spoken ?? []).join(", "),
+      showRegistrationNumber: selectedPractitionerProfile?.show_registration_number ?? false,
       yearsOfExperience: String(
         selectedPractitionerProfile?.years_of_experience ?? 0,
       ),
@@ -986,6 +994,13 @@ export default function AdminUsers() {
         values.businessType === "company" ? values.businessName.trim() || null : null,
       registration_number:
         values.businessType === "company" ? values.registrationNumber.trim() || null : null,
+      professional_title: values.professionalTitle.trim() || null,
+      profile_summary: values.profileSummary.trim() || null,
+      languages_spoken: values.languagesSpoken
+        .split(",")
+        .map((language) => language.trim())
+        .filter(Boolean),
+      show_registration_number: values.showRegistrationNumber,
       years_of_experience: Number.isNaN(yearsOfExperience)
         ? 0
         : Math.max(0, yearsOfExperience),

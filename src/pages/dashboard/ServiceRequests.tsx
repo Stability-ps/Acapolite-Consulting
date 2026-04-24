@@ -266,6 +266,13 @@ export default function ClientServiceRequests() {
     return "Responds within 48 hours";
   };
 
+  const getPractitionerDisplayName = (practitionerUser?: Profile | null, practitionerProfile?: PractitionerProfile | null) =>
+    practitionerProfile?.business_name || practitionerUser?.full_name || "Practitioner";
+
+  const getPractitionerSubtitle = (practitionerProfile?: PractitionerProfile | null) =>
+    practitionerProfile?.professional_title
+      || (practitionerProfile?.business_name ? "Verified Tax Practice" : "Tax Practitioner");
+
   const selectPractitioner = async (responseId: string) => {
     if (!client) {
       toast.error("You need an active client portal profile before selecting a practitioner.");
@@ -683,7 +690,7 @@ export default function ClientServiceRequests() {
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-display text-xl text-foreground">
-                            {practitionerUser?.full_name || practitionerProfile?.business_name || "Practitioner"}
+                            {getPractitionerDisplayName(practitionerUser, practitionerProfile)}
                           </h3>
                           {practitionerProfile?.is_verified ? (
                             <Badge className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
@@ -707,9 +714,12 @@ export default function ClientServiceRequests() {
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground font-body">
                           <span className="inline-flex items-center gap-2">
                             <BriefcaseBusiness className="h-4 w-4" />
-                            {practitionerProfile?.business_name || "Independent Practitioner"}
+                            {getPractitionerSubtitle(practitionerProfile)}
                           </span>
                           <span>{practitionerProfile?.years_of_experience ?? 0} years experience</span>
+                          <span>
+                            {[practitionerProfile?.city, practitionerProfile?.province].filter(Boolean).join(", ") || "Location not specified"}
+                          </span>
                           <span className="inline-flex items-center gap-2">
                             <Clock className="h-4 w-4" />
                             {responseTimeLabel(practitionerProfile)}
@@ -730,6 +740,13 @@ export default function ClientServiceRequests() {
                           <div className="rounded-2xl border border-border bg-card p-4">
                             <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Service Pitch</p>
                             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">{response.service_pitch}</p>
+                          </div>
+                        ) : null}
+
+                        {practitionerProfile?.profile_summary ? (
+                          <div className="rounded-2xl border border-border bg-card p-4">
+                            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Profile Summary</p>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">{practitionerProfile.profile_summary}</p>
                           </div>
                         ) : null}
 
@@ -807,10 +824,10 @@ export default function ClientServiceRequests() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioner</p>
                     <h3 className="mt-2 font-display text-2xl text-foreground">
-                      {practitionerUser?.full_name || practitionerProfile?.business_name || "Practitioner"}
+                      {getPractitionerDisplayName(practitionerUser, practitionerProfile)}
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground font-body">
-                      {practitionerProfile?.business_name || "Independent Practitioner"}
+                      {getPractitionerSubtitle(practitionerProfile)}
                     </p>
                   </div>
                   <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${practitionerProfile?.is_verified ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
@@ -819,7 +836,15 @@ export default function ClientServiceRequests() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practice Name</p>
+                  <p className="mt-2 text-sm text-foreground font-body">{practitionerProfile?.business_name || "Independent Practitioner"}</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Professional Title</p>
+                  <p className="mt-2 text-sm text-foreground font-body">{practitionerProfile?.professional_title || "Tax Practitioner"}</p>
+                </div>
                 <div className="rounded-2xl border border-border bg-accent/20 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Experience</p>
                   <p className="mt-2 text-sm text-foreground font-body">{practitionerProfile?.years_of_experience ?? 0} years</p>
@@ -833,10 +858,22 @@ export default function ClientServiceRequests() {
                   <p className="mt-2 text-sm text-foreground font-body">{practitionerProfile?.professional_body || "Not specified"}</p>
                 </div>
                 <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Registration Number</p>
+                  <p className="mt-2 text-sm text-foreground font-body">
+                    {practitionerProfile?.show_registration_number && practitionerProfile?.registration_number
+                      ? practitionerProfile.registration_number
+                      : "Available on request"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Location</p>
                   <p className="mt-2 text-sm text-foreground font-body">
                     {[practitionerProfile?.city, practitionerProfile?.province].filter(Boolean).join(", ") || "Not specified"}
                   </p>
+                </div>
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Availability</p>
+                  <p className="mt-2 text-sm text-foreground font-body">{formatAvailabilityLabel(practitionerProfile?.availability_status)}</p>
                 </div>
               </div>
 
@@ -850,6 +887,22 @@ export default function ClientServiceRequests() {
                     {practitionerProfile?.is_verified ? "Verified documents and credentials" : "Verification in progress"}
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Profile Summary / Bio</p>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">
+                  {practitionerProfile?.profile_summary || "No profile summary has been added yet."}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Languages Spoken</p>
+                <p className="mt-3 text-sm text-foreground font-body">
+                  {(practitionerProfile?.languages_spoken ?? []).length
+                    ? practitionerProfile?.languages_spoken.join(", ")
+                    : "Not specified"}
+                </p>
               </div>
 
               <div className="rounded-2xl border border-border bg-card p-4">
