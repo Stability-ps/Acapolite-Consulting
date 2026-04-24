@@ -26,6 +26,8 @@ const provinces = [
   "Northern Cape",
 ];
 
+const SA_ID_NUMBER_LENGTH = 13;
+
 type StaffClient = {
   id: string;
   created_by: string | null;
@@ -150,6 +152,10 @@ function splitFullName(fullName: string) {
 function generateClientCode(seed: string) {
   const compactSeed = seed.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   return `CL-${compactSeed.slice(-6)}`;
+}
+
+function normalizeIdNumber(value: string) {
+  return value.replace(/\D/g, "").slice(0, SA_ID_NUMBER_LENGTH);
 }
 
 function formatCurrency(value: number) {
@@ -471,6 +477,16 @@ export default function AdminClients() {
       return;
     }
 
+    if (
+      formState.clientType === "individual" &&
+      formState.idNumber.trim() &&
+      formState.idNumber.trim().length !== SA_ID_NUMBER_LENGTH
+    ) {
+      toast.error("Client ID number must be exactly 13 digits.");
+      setIsCreating(false);
+      return;
+    }
+
     setIsCreating(true);
 
     const requestedFullName = formState.fullName.trim()
@@ -614,6 +630,15 @@ export default function AdminClients() {
   const saveClientEdits = async () => {
     if (!selectedClient || !canManageClients || !canEditSelectedClient) {
       toast.error("This practitioner profile cannot update client records.");
+      return;
+    }
+
+    if (
+      formState.clientType === "individual" &&
+      formState.idNumber.trim() &&
+      formState.idNumber.trim().length !== SA_ID_NUMBER_LENGTH
+    ) {
+      toast.error("Client ID number must be exactly 13 digits.");
       return;
     }
 
@@ -905,7 +930,14 @@ export default function AdminClients() {
             ) : (
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
-                <Input value={formState.idNumber} onChange={(event) => updateForm("idNumber", event.target.value)} placeholder="ID number" className="rounded-xl" />
+                <Input
+                  value={formState.idNumber}
+                  onChange={(event) => updateForm("idNumber", normalizeIdNumber(event.target.value))}
+                  placeholder="ID number"
+                  className="rounded-xl"
+                  inputMode="numeric"
+                  maxLength={SA_ID_NUMBER_LENGTH}
+                />
               </div>
             )}
 
@@ -1288,7 +1320,14 @@ export default function AdminClients() {
               ) : (
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-foreground font-body">ID Number</label>
-                  <Input value={formState.idNumber} onChange={(event) => updateForm("idNumber", event.target.value)} placeholder="ID number" className="rounded-xl" />
+                  <Input
+                    value={formState.idNumber}
+                    onChange={(event) => updateForm("idNumber", normalizeIdNumber(event.target.value))}
+                    placeholder="ID number"
+                    className="rounded-xl"
+                    inputMode="numeric"
+                    maxLength={SA_ID_NUMBER_LENGTH}
+                  />
                 </div>
               )}
 
