@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { WebPushPrompt } from "@/components/dashboard/WebPushPrompt";
 import { useNotifications, type NotificationSection } from "@/hooks/useNotifications";
 
 type FilterValue = "all" | "unread" | NotificationSection;
@@ -90,6 +91,10 @@ export default function Notifications() {
             </Button>
           </div>
         </div>
+      </div>
+
+      <div className="mb-8">
+        <WebPushPrompt />
       </div>
 
       {isLoading ? (
