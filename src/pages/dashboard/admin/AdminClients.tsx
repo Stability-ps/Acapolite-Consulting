@@ -28,6 +28,7 @@ const provinces = [
 
 type StaffClient = {
   id: string;
+  created_by: string | null;
   client_type: string;
   company_registration_number: string | null;
   first_name: string | null;
@@ -153,6 +154,18 @@ function generateClientCode(seed: string) {
 
 function formatCurrency(value: number) {
   return `R ${Number(value || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function canEditClientRecord(client: StaffClient | null, role: string | null, userId?: string) {
+  if (!client) {
+    return false;
+  }
+
+  if (role === "consultant") {
+    return client.created_by === (userId ?? null);
+  }
+
+  return true;
 }
 
 export default function AdminClients() {
@@ -305,6 +318,7 @@ export default function AdminClients() {
   const selectedClient = filteredClients.find((client) => client.id === selectedClientId)
     || clients?.find((client) => client.id === selectedClientId)
     || null;
+  const canEditSelectedClient = canEditClientRecord(selectedClient, role, user?.id);
 
   useEffect(() => {
     setShowInvoiceWarningActions(false);
@@ -598,7 +612,7 @@ export default function AdminClients() {
   };
 
   const saveClientEdits = async () => {
-    if (!selectedClient || !canManageClients) {
+    if (!selectedClient || !canManageClients || !canEditSelectedClient) {
       toast.error("This practitioner profile cannot update client records.");
       return;
     }
@@ -1018,7 +1032,7 @@ export default function AdminClients() {
                     <div className="w-full">
                       <p className="font-body text-sm font-semibold text-red-700">Attention needed on this client account</p>
                       <div className="mt-3 space-y-3">
-                        {canManageClients ? (
+                        {canManageClients && canEditSelectedClient ? (
                           <div className="flex justify-end">
                             <Button
                               type="button"
@@ -1187,14 +1201,29 @@ export default function AdminClients() {
               </div>
             </div>
 
-            {canViewClientWorkspace ? (
-              <div className="flex justify-end">
+            {canEditSelectedClient || canViewClientWorkspace ? (
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                {canEditSelectedClient ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => {
+                      loadClientIntoForm(selectedClient);
+                      setIsEditOpen(true);
+                    }}
+                  >
+                    Edit Client Details
+                  </Button>
+                ) : null}
+                {canViewClientWorkspace ? (
                 <Button asChild className="rounded-xl">
                   <Link to={`/dashboard/staff/client-workspace?clientId=${selectedClient.id}`}>
                     Open Client 360
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -1212,7 +1241,7 @@ export default function AdminClients() {
         title="Edit Client Details"
         description="Update this client profile to resolve warnings and keep the record accurate."
       >
-        {selectedClient ? (
+        {selectedClient && canEditSelectedClient ? (
           <div className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
@@ -1350,6 +1379,10 @@ export default function AdminClients() {
                 {isSavingEdit ? "Saving..." : "Save Changes"}
               </Button>
             </div>
+          </div>
+        ) : selectedClient ? (
+          <div className="rounded-2xl border border-border bg-accent/20 p-4 text-sm text-muted-foreground font-body">
+            Practitioners can only edit clients they created.
           </div>
         ) : null}
       </DashboardItemDialog>
