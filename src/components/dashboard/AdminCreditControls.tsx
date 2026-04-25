@@ -25,10 +25,11 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { Tables } from "@/integrations/supabase/types";
-import { formatStorageLimitFromMb, formatStorageValue, formatZarCurrency } from "@/lib/practitionerBilling";
+import { BILLING_SUBSCRIPTION_PLANS, formatStorageLimitFromMb, formatStorageValue, formatZarCurrency } from "@/lib/practitionerBilling";
 
 type PractitionerCreditAccount = Tables<"practitioner_credit_accounts">;
 type PractitionerSubscriptionPlan = Tables<"practitioner_subscription_plans">;
+type PractitionerSubscription = Tables<"practitioner_subscriptions">;
 
 interface AdminCreditControlsProps {
   practitionerId: string | null;
@@ -75,6 +76,43 @@ export function AdminCreditControls({
     enabled: isAdmin,
   });
 
+  const normalizedSubscriptionPlans = useMemo(() => {
+    const fetchedPlans = subscriptionPlans ?? [];
+
+    return fetchedPlans.map((plan) => {
+      const defaultPlan = BILLING_SUBSCRIPTION_PLANS.find((item) => item.code === plan.code);
+      if (!defaultPlan) {
+        return plan;
+      }
+
+      return {
+        ...plan,
+        name: defaultPlan.name,
+        price_zar: defaultPlan.priceZar,
+        credits_per_month: defaultPlan.creditsPerMonth,
+        storage_limit_mb: defaultPlan.storageLimitMb,
+        listing_priority_level: defaultPlan.listingPriorityLevel,
+      };
+    });
+  }, [subscriptionPlans]);
+
+  const { data: activeSubscription } = useQuery({
+    queryKey: ["admin-practitioner-active-subscription", practitionerId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_subscriptions")
+        .select("*")
+        .eq("practitioner_profile_id", practitionerId!)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data ?? null) as PractitionerSubscription | null;
+    },
+    enabled: isAdmin && !!practitionerId,
+  });
+
   const [planForm, setPlanForm] = useState({
     name: "",
     price_zar: "",
@@ -84,8 +122,12 @@ export function AdminCreditControls({
   });
 
   const activePlan = useMemo(
-    () => subscriptionPlans?.find((plan) => plan.code === editingPlanCode) ?? null,
-    [editingPlanCode, subscriptionPlans],
+    () => normalizedSubscriptionPlans.find((plan) => plan.code === editingPlanCode) ?? null,
+    [editingPlanCode, normalizedSubscriptionPlans],
+  );
+  const activePractitionerPlan = useMemo(
+    () => normalizedSubscriptionPlans.find((plan) => plan.code === activeSubscription?.plan_code) ?? null,
+    [activeSubscription?.plan_code, normalizedSubscriptionPlans],
   );
 
   useEffect(() => {
@@ -111,11 +153,22 @@ export function AdminCreditControls({
   const currentStorageLimitMb = (creditAccount?.storage_base_limit_mb ?? 0)
     + (creditAccount?.storage_addon_limit_mb ?? 0)
     + (creditAccount?.storage_override_limit_mb ?? 0);
+  const monthlyCreditsRemaining = creditAccount?.monthly_credits_remaining ?? 0;
+  const purchasedCreditsBalance = creditAccount?.purchased_credits_balance ?? 0;
+  const monthlyExpiryDate = creditAccount?.monthly_credits_expires_at ?? activeSubscription?.next_renewal_at ?? null;
+  const storageAddonLimitMb = creditAccount?.storage_addon_limit_mb ?? 0;
+  const storageOverrideLimitMb = creditAccount?.storage_override_limit_mb ?? 0;
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return "Not scheduled";
+    return new Date(value).toLocaleDateString();
+  };
 
   const refreshBillingQueries = async () => {
     await queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", practitionerId] });
     await queryClient.invalidateQueries({ queryKey: ["practitioner-credit-transactions", practitionerId] });
     await queryClient.invalidateQueries({ queryKey: ["admin-practitioner-subscription-plans"] });
+    await queryClient.invalidateQueries({ queryKey: ["admin-practitioner-active-subscription", practitionerId] });
     onCreditsChanged?.();
   };
 
@@ -249,6 +302,84 @@ export function AdminCreditControls({
 
   return (
     <div className="space-y-6">
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <TrendingUp className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-display text-lg font-semibold text-foreground">Current Credits & Billing Snapshot</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Live plan pricing, limits, and wallet balances for this practitioner.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="rounded-xl border border-border bg-background/60 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Active Plan</p>
+            <p className="mt-2 font-display text-2xl text-foreground">
+              {activePractitionerPlan?.name ?? "No active subscription"}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {activePractitionerPlan
+                ? `${formatZarCurrency(activePractitionerPlan.price_zar)} / month`
+                : "Using purchased credits only."}
+            </p>
+            <div className="mt-4 space-y-1 text-sm text-muted-foreground">
+              <p>Monthly credits: {activePractitionerPlan?.credits_per_month ?? 0}</p>
+              <p>Plan storage: {formatStorageLimitFromMb(activePractitionerPlan?.storage_limit_mb ?? creditAccount?.storage_base_limit_mb ?? 0)}</p>
+              <p>Listing priority: {activePractitionerPlan?.listing_priority_level ?? 0}</p>
+              <p>Next reset: {formatDate(activeSubscription?.next_renewal_at)}</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-background/60 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Wallet Overview</p>
+            <p className="mt-2 font-display text-2xl text-foreground">{currentBalance} total credits</p>
+            <div className="mt-4 space-y-1 text-sm text-muted-foreground">
+              <p>Monthly credits remaining: {monthlyCreditsRemaining}</p>
+              <p>Monthly credit expiry: {formatDate(monthlyExpiryDate)}</p>
+              <p>Purchased credits balance: {purchasedCreditsBalance}</p>
+              <p>Purchased credits do not expire.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-xl border border-border bg-background/60 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Storage Used</p>
+            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageValue(creditAccount?.storage_used_bytes ?? 0)}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-background/60 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Effective Storage Limit</p>
+            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageLimitFromMb(currentStorageLimitMb)}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-background/60 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Storage Add-ons</p>
+            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageLimitFromMb(storageAddonLimitMb)}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-background/60 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Admin Override</p>
+            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageLimitFromMb(storageOverrideLimitMb)}</p>
+          </div>
+        </div>
+
+        {activePractitionerPlan ? (
+          <div className="rounded-xl border border-border bg-background/60 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Included Plan Features</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 text-sm text-muted-foreground">
+              <p>{activePractitionerPlan.includes_verified_badge ? "Verified badge included" : "No verified badge"}</p>
+              <p>{activePractitionerPlan.includes_standard_listing ? "Standard listing included" : "No standard listing"}</p>
+              <p>{activePractitionerPlan.includes_priority_listing ? "Priority listing included" : "No priority listing"}</p>
+              <p>{activePractitionerPlan.includes_featured_profile ? "Featured profile included" : "No featured profile"}</p>
+              <p>{activePractitionerPlan.includes_highlighted_profile ? "Highlighted profile included" : "No highlighted profile"}</p>
+              <p>{activePractitionerPlan.includes_upgrade_support ? "Upgrade support included" : "No upgrade support"}</p>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -483,7 +614,7 @@ export function AdminCreditControls({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(subscriptionPlans ?? []).map((plan) => (
+              {normalizedSubscriptionPlans.map((plan) => (
                 <SelectItem key={plan.code} value={plan.code}>
                   {plan.name} · {formatZarCurrency(plan.price_zar)}
                 </SelectItem>
