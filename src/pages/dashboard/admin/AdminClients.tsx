@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Search, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowRight, Search, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { DeletePlatformUserDialog } from "@/components/dashboard/DeletePlatformUserDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { getClientIdentityFieldLabel, getClientIdentityLabel, getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
@@ -34,6 +35,7 @@ type StaffClient = {
   archived_at: string | null;
   archived_by: string | null;
   id: string;
+  profile_id: string;
   created_by: string | null;
   client_type: string;
   company_registration_number: string | null;
@@ -186,6 +188,7 @@ export default function AdminClients() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [isDeleteClientOpen, setIsDeleteClientOpen] = useState(false);
   const [clientView, setClientView] = useState<"active" | "archived">("active");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -1409,6 +1412,15 @@ export default function AdminClients() {
 
             {canEditSelectedClient || canViewClientWorkspace ? (
               <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                  onClick={() => setIsDeleteClientOpen(true)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Client
+                </Button>
                 {canEditSelectedClient ? (
                   <Button
                     type="button"
@@ -1435,6 +1447,23 @@ export default function AdminClients() {
           </div>
         ) : null}
       </DashboardItemDialog>
+
+      <DeletePlatformUserDialog
+        open={isDeleteClientOpen && !!selectedClient}
+        onOpenChange={setIsDeleteClientOpen}
+        targetProfileId={selectedClient?.profile_id ?? null}
+        titleName={selectedClient ? getClientName(selectedClient) : "Client"}
+        entityLabel="client"
+        onDeleted={() => {
+          setIsDeleteClientOpen(false);
+          setSelectedClientId(null);
+          void Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["staff-clients"] }),
+            queryClient.invalidateQueries({ queryKey: ["staff-client-risk-invoices"] }),
+            queryClient.invalidateQueries({ queryKey: ["staff-client-risk-document-requests"] }),
+          ]);
+        }}
+      />
 
       <DashboardItemDialog
         open={!!selectedClient && isEditOpen}

@@ -41,6 +41,7 @@ import { PractitionerDocumentsSection } from "@/components/dashboard/Practitione
 import { PractitionerProfileMissingFields } from "@/components/dashboard/PractitionerProfileMissingFields";
 import { AdminCreditControls } from "@/components/dashboard/AdminCreditControls";
 import { CreditHistory } from "@/components/dashboard/CreditHistory";
+import { DeletePlatformUserDialog } from "@/components/dashboard/DeletePlatformUserDialog";
 import {
   formatAvailabilityLabel,
   getAvailabilityBadgeClass,
@@ -361,6 +362,7 @@ export default function AdminUsers() {
     "newest" | "oldest" | "workload_high" | "workload_low"
   >("newest");
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [isDeletePractitionerOpen, setIsDeletePractitionerOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -2472,6 +2474,18 @@ export default function AdminUsers() {
             ) : null}
 
             <div className="flex justify-end gap-3">
+              {selectedStaffUser.role === "consultant" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                  onClick={() => setIsDeletePractitionerOpen(true)}
+                  disabled={isSaving}
+                >
+                  <UserX className="mr-2 h-4 w-4" />
+                  Delete Practitioner
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -2493,6 +2507,19 @@ export default function AdminUsers() {
           </div>
         ) : null}
       </DashboardItemDialog>
+
+      <DeletePlatformUserDialog
+        open={isDeletePractitionerOpen && !!selectedStaffUser && selectedStaffUser.role === "consultant"}
+        onOpenChange={setIsDeletePractitionerOpen}
+        targetProfileId={selectedStaffUser?.role === "consultant" ? selectedStaffUser.id : null}
+        titleName={selectedStaffUser?.full_name || selectedStaffUser?.email || "Practitioner"}
+        entityLabel="practitioner"
+        onDeleted={() => {
+          setIsDeletePractitionerOpen(false);
+          setSelectedStaffId(null);
+          void quickRefreshStaffBoard();
+        }}
+      />
     </div>
   );
 }
