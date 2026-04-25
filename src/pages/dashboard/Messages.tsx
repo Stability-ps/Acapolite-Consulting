@@ -230,6 +230,8 @@ export default function Messages() {
       queryClient.invalidateQueries({ queryKey: ["client-unread-messages"] });
       queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] });
       queryClient.invalidateQueries({ queryKey: ["conversations", client.id] });
+      queryClient.invalidateQueries({ queryKey: ["documents", client.id] });
+      queryClient.invalidateQueries({ queryKey: ["staff-documents"] });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to send this message.");
     } finally {

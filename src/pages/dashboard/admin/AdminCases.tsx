@@ -753,14 +753,16 @@ export default function AdminCases() {
       if (caseAttachmentInputRef.current) {
         caseAttachmentInputRef.current.value = "";
       }
-      toast.success("Case message sent.");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["staff-case-conversations", selectedCase.id] }),
-        queryClient.invalidateQueries({ queryKey: ["staff-case-messages"] }),
-        queryClient.invalidateQueries({ queryKey: ["staff-conversations"] }),
-        queryClient.invalidateQueries({ queryKey: ["staff-messages"] }),
-        queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] }),
-      ]);
+        toast.success("Case message sent.");
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["staff-case-conversations", selectedCase.id] }),
+          queryClient.invalidateQueries({ queryKey: ["staff-case-messages"] }),
+          queryClient.invalidateQueries({ queryKey: ["staff-conversations"] }),
+          queryClient.invalidateQueries({ queryKey: ["staff-messages"] }),
+          queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] }),
+          queryClient.invalidateQueries({ queryKey: ["staff-documents"] }),
+          queryClient.invalidateQueries({ queryKey: ["documents", selectedCase.client_id] }),
+        ]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to send this case message.");
     } finally {

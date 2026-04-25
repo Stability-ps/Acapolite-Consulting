@@ -71,13 +71,14 @@ export default function Documents() {
   const [documentType, setDocumentType] = useState("");
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [openingDocument, setOpeningDocument] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "chat" | "case" | "general">("all");
 
   const { data: documents, isLoading } = useQuery({
     queryKey: ["documents", client?.id],
     queryFn: async () => {
       const { data } = await supabase
         .from("documents")
-        .select("*")
+        .select("*, linked_case:cases!documents_case_id_fkey(id, case_title, case_number)")
         .eq("client_id", client!.id)
         .order("uploaded_at", { ascending: false });
       return data ?? [];
@@ -202,6 +203,7 @@ export default function Documents() {
       }
 
       await queryClient.invalidateQueries({ queryKey: ["documents", client.id] });
+      await queryClient.invalidateQueries({ queryKey: ["staff-documents"] });
       closeUploadModal();
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : "Document upload failed.";
@@ -219,6 +221,25 @@ export default function Documents() {
     if (type?.includes("pdf")) return FileText;
     return File;
   };
+
+  const filteredDocuments = (documents ?? []).filter((document) => {
+    if (sourceFilter === "all") {
+      return true;
+    }
+
+    const isChatAttachment = (document.category ?? "").toLowerCase() === "chat attachment";
+    const isCaseDocument = Boolean(document.case_id);
+
+    if (sourceFilter === "chat") {
+      return isChatAttachment;
+    }
+
+    if (sourceFilter === "case") {
+      return isCaseDocument;
+    }
+
+    return !isChatAttachment && !isCaseDocument;
+  });
 
   const selectedDocument = documents?.find((document) => document.id === selectedDocumentId) ?? null;
 
@@ -243,7 +264,7 @@ export default function Documents() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">Documents</h1>
-          <p className="text-muted-foreground font-body text-sm">Upload and manage your tax documents</p>
+          <p className="text-muted-foreground font-body text-sm">Upload and manage your tax documents, case files, and chat attachments</p>
         </div>
         <Button
           disabled={uploading || !client}
@@ -265,9 +286,32 @@ export default function Documents() {
       ) : isLoading ? (
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : documents && documents.length > 0 ? (
-        <div className="grid gap-3">
-          {documents.map((doc) => {
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: "all", label: "All Files" },
+              { value: "general", label: "General Uploads" },
+              { value: "case", label: "Case Files" },
+              { value: "chat", label: "Chat Attachments" },
+            ].map((filter) => (
+              <Button
+                key={filter.value}
+                type="button"
+                variant={sourceFilter === filter.value ? "default" : "outline"}
+                className="rounded-full"
+                onClick={() => setSourceFilter(filter.value as typeof sourceFilter)}
+              >
+                {filter.label}
+              </Button>
+            ))}
+          </div>
+
+          <div className="grid gap-3">
+          {filteredDocuments.map((doc) => {
             const Icon = getIcon(doc.mime_type);
+            const isChatAttachment = (doc.category ?? "").toLowerCase() === "chat attachment";
+            const sourceLabel = isChatAttachment ? "Chat Attachment" : doc.case_id ? "Case File" : "General Upload";
+            const caseLabel = doc.linked_case?.case_title || doc.linked_case?.case_number || null;
 
             return (
               <button
@@ -285,10 +329,18 @@ export default function Documents() {
                     <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-body">
                       {doc.status.replace(/_/g, " ")}
                     </span>
+                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-body">
+                      {sourceLabel}
+                    </span>
                   </div>
                   <p className="text-xs text-muted-foreground font-body truncate">
                     {doc.file_name}
                   </p>
+                  {caseLabel ? (
+                    <p className="text-xs text-muted-foreground font-body truncate">
+                      Related case: {caseLabel}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground font-body">
                     {doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB | ` : ""}
                     {new Date(doc.uploaded_at).toLocaleDateString()}
@@ -297,6 +349,7 @@ export default function Documents() {
               </button>
             );
           })}
+          </div>
         </div>
       ) : (
         <div className="bg-card rounded-xl border border-border p-12 text-center">
@@ -426,6 +479,16 @@ export default function Documents() {
                 <p className="font-body text-foreground">{selectedDocument.status.replace(/_/g, " ")}</p>
               </div>
               <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Source</p>
+                <p className="font-body text-foreground">
+                  {(selectedDocument.category ?? "").toLowerCase() === "chat attachment"
+                    ? "Chat Attachment"
+                    : selectedDocument.case_id
+                      ? "Case File"
+                      : "General Upload"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Uploaded</p>
                 <p className="font-body text-foreground">{new Date(selectedDocument.uploaded_at).toLocaleString()}</p>
               </div>
@@ -433,6 +496,12 @@ export default function Documents() {
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Size</p>
                 <p className="font-body text-foreground">
                   {selectedDocument.file_size ? `${(selectedDocument.file_size / 1024).toFixed(1)} KB` : "Unknown"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-accent/30 p-4 sm:col-span-2">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Related Case</p>
+                <p className="font-body text-foreground">
+                  {selectedDocument.linked_case?.case_title || selectedDocument.linked_case?.case_number || "No linked case"}
                 </p>
               </div>
             </div>

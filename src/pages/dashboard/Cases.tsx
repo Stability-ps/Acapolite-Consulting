@@ -499,6 +499,8 @@ export default function Cases() {
       await queryClient.invalidateQueries({
         queryKey: ["conversations", client.id],
       });
+      await queryClient.invalidateQueries({ queryKey: ["documents", client.id] });
+      await queryClient.invalidateQueries({ queryKey: ["staff-documents"] });
       setSubmittingRequest(false);
       setIsRequestCaseOpen(false);
       resetRequestForm();
@@ -632,6 +634,8 @@ export default function Cases() {
           queryKey: ["conversations", client.id],
         }),
         queryClient.invalidateQueries({ queryKey: ["cases", client.id] }),
+        queryClient.invalidateQueries({ queryKey: ["documents", client.id] }),
+        queryClient.invalidateQueries({ queryKey: ["staff-documents"] }),
       ]);
     } catch (error) {
       const message =

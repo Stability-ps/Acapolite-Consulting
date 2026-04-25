@@ -24,9 +24,10 @@ export async function uploadChatAttachment(params: {
 
   const safeFileName = sanitizeFileName(params.file.name);
   const uniqueFileName = `${Date.now()}-${safeFileName}`;
+  const basePath = `${params.uploadedBy}/${params.clientId}/chat-attachments`;
   const filePath = params.caseId
-    ? `chat-attachments/${params.clientId}/${params.caseId}/${uniqueFileName}`
-    : `chat-attachments/${params.clientId}/general/${uniqueFileName}`;
+    ? `${basePath}/${params.caseId}/${uniqueFileName}`
+    : `${basePath}/general/${uniqueFileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from("documents")

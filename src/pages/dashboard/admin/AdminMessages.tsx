@@ -417,6 +417,10 @@ export default function AdminMessages() {
     queryClient.invalidateQueries({ queryKey: ["staff-messages", selectedConversation] });
     queryClient.invalidateQueries({ queryKey: ["staff-conversations"] });
     queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] });
+    queryClient.invalidateQueries({ queryKey: ["staff-documents"] });
+    if (selectedConversationRecord?.client_id) {
+      queryClient.invalidateQueries({ queryKey: ["documents", selectedConversationRecord.client_id] });
+    }
   };
 
   const handleAttachmentChange = (file: File | null) => {
