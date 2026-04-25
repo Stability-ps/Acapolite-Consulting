@@ -24,6 +24,7 @@ import Faq from "./pages/Faq";
 import TrustSafety from "./pages/TrustSafety";
 import OurServices from "./pages/OurServices";
 import HowAcapoliteWorks from "./pages/HowAcapoliteWorks";
+import Practitioners from "./pages/Practitioners";
 import ContactUs from "./pages/ContactUs";
 import HelpCenter from "./pages/HelpCenter";
 import AboutUs from "./pages/AboutUs";
@@ -90,6 +91,7 @@ const App = () => (
               path="/how-acapolite-works"
               element={<HowAcapoliteWorks />}
             />
+            <Route path="/practitioners" element={<Practitioners />} />
             <Route path="/contact-us" element={<ContactUs />} />
             <Route path="/help-center" element={<HelpCenter />} />
             <Route path="/about-us" element={<AboutUs />} />

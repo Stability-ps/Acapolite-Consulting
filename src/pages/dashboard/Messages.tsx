@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Send, Shield } from "lucide-react";
+import { Paperclip, Search, Send, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
+import { openChatAttachment, uploadChatAttachment } from "@/lib/chatAttachments";
 
 function getSenderLabel(isOwnMessage: boolean) {
   return isOwnMessage ? "You" : "Acapolite Consulting";
@@ -19,9 +20,13 @@ export default function Messages() {
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedConversation, setSelectedConversation] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
 
   const { data: conversations } = useQuery({
     queryKey: ["conversations", client?.id],
@@ -77,6 +82,27 @@ export default function Messages() {
     enabled: !!selectedConversation,
   });
 
+  const attachmentIds = useMemo(
+    () => Array.from(new Set((messages ?? []).map((message) => message.attachment_document_id).filter(Boolean))) as string[],
+    [messages],
+  );
+
+  const { data: attachmentDocuments } = useQuery({
+    queryKey: ["client-message-attachments", attachmentIds],
+    queryFn: async () => {
+      if (!attachmentIds.length) return [];
+
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, file_name, file_path")
+        .in("id", attachmentIds);
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: attachmentIds.length > 0,
+  });
+
   useEffect(() => {
     const markMessagesAsRead = async () => {
       if (!selectedConversation || !messages?.length) return;
@@ -126,6 +152,11 @@ export default function Messages() {
     }, {});
   }, [unreadMessages]);
 
+  const attachmentMap = useMemo(
+    () => new Map((attachmentDocuments ?? []).map((document) => [document.id, document])),
+    [attachmentDocuments],
+  );
+
   const filteredConversations = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -160,26 +191,49 @@ export default function Messages() {
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation || !user) return;
+    if ((!newMessage.trim() && !attachmentFile) || !selectedConversation || !user || !client) return;
 
-    const { error } = await supabase.from("messages").insert({
-      conversation_id: selectedConversation,
-      sender_profile_id: user.id,
-      sender_type: "client",
-      message_text: newMessage.trim(),
-    });
+    setSendingMessage(true);
 
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
+    let attachmentDocumentId: string | null = null;
 
-    setNewMessage("");
-    queryClient.invalidateQueries({ queryKey: ["messages", selectedConversation] });
-    queryClient.invalidateQueries({ queryKey: ["client-unread-messages"] });
-    queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] });
-    if (client) {
+    try {
+      if (attachmentFile) {
+        const uploadedDocument = await uploadChatAttachment({
+          file: attachmentFile,
+          uploadedBy: user.id,
+          clientId: client.id,
+          recipientProfileId: null,
+          title: `Conversation Attachment - ${attachmentFile.name}`,
+        });
+        attachmentDocumentId = uploadedDocument.id;
+      }
+
+      const { error } = await supabase.from("messages").insert({
+        conversation_id: selectedConversation,
+        sender_profile_id: user.id,
+        sender_type: "client",
+        message_text: newMessage.trim() || `Sent an attachment: ${attachmentFile?.name || "File"}`,
+        attachment_document_id: attachmentDocumentId,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setNewMessage("");
+      setAttachmentFile(null);
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = "";
+      }
+      queryClient.invalidateQueries({ queryKey: ["messages", selectedConversation] });
+      queryClient.invalidateQueries({ queryKey: ["client-unread-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] });
       queryClient.invalidateQueries({ queryKey: ["conversations", client.id] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send this message.");
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -290,6 +344,25 @@ export default function Messages() {
                             {getSenderLabel(isOwnMessage)}
                           </p>
                           <p className="text-sm font-body whitespace-pre-wrap">{message.message_text}</p>
+                          {message.attachment_document_id && attachmentMap.get(message.attachment_document_id) ? (
+                            <button
+                              type="button"
+                              className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
+                                isOwnMessage ? "bg-white/15 text-primary-foreground" : "bg-card text-foreground"
+                              }`}
+                              onClick={() => {
+                                const attachment = attachmentMap.get(message.attachment_document_id!);
+                                if (!attachment) return;
+                                setOpeningAttachmentId(message.id);
+                                void openChatAttachment(attachment.file_path)
+                                  .catch((error) => toast.error(error instanceof Error ? error.message : "Unable to open attachment."))
+                                  .finally(() => setOpeningAttachmentId(null));
+                              }}
+                            >
+                              <Paperclip className="h-3.5 w-3.5" />
+                              {openingAttachmentId === message.id ? "Opening..." : attachmentMap.get(message.attachment_document_id)?.file_name}
+                            </button>
+                          ) : null}
                           <p className={`mt-3 text-xs ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
                             {new Date(message.created_at).toLocaleString()}
                           </p>
@@ -306,6 +379,20 @@ export default function Messages() {
 
                 <div className="border-t border-border p-4">
                   <div className="flex gap-3">
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl shrink-0"
+                      onClick={() => attachmentInputRef.current?.click()}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
                     <Input
                       value={newMessage}
                       onChange={(event) => setNewMessage(event.target.value)}
@@ -313,11 +400,16 @@ export default function Messages() {
                       className="flex-1 rounded-xl"
                       onKeyDown={(event) => event.key === "Enter" && !event.shiftKey && sendMessage()}
                     />
-                    <Button onClick={sendMessage} className="rounded-xl shrink-0">
+                    <Button onClick={sendMessage} className="rounded-xl shrink-0" disabled={sendingMessage || (!newMessage.trim() && !attachmentFile)}>
                       <Send className="h-4 w-4 mr-2" />
-                      Send
+                      {sendingMessage ? "Sending..." : "Send"}
                     </Button>
                   </div>
+                  {attachmentFile ? (
+                    <p className="mt-3 text-xs text-muted-foreground font-body">
+                      Attached: {attachmentFile.name}
+                    </p>
+                  ) : null}
                 </div>
               </>
             ) : (

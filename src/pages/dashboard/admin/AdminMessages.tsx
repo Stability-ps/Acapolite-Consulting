@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Send } from "lucide-react";
+import { Paperclip, Search, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,6 +11,7 @@ import { sendClientMessageNotification } from "@/lib/clientMessageNotifications"
 import { formatCaseReference } from "@/lib/practitionerAssignments";
 import { useSearchParams } from "react-router-dom";
 import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
+import { openChatAttachment, uploadChatAttachment } from "@/lib/chatAttachments";
 
 type ConversationRecord = {
   id: string;
@@ -81,12 +82,16 @@ export default function AdminMessages() {
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedConversationId = searchParams.get("conversationId") ?? "";
   const [selectedConversation, setSelectedConversation] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<ConversationFilter>("all");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canReplyMessages = hasStaffPermission("can_reply_messages");
@@ -153,6 +158,27 @@ export default function AdminMessages() {
       return data ?? [];
     },
     enabled: !!selectedConversation,
+  });
+
+  const attachmentIds = useMemo(
+    () => Array.from(new Set((messages ?? []).map((message) => message.attachment_document_id).filter(Boolean))) as string[],
+    [messages],
+  );
+
+  const { data: attachmentDocuments } = useQuery({
+    queryKey: ["staff-message-attachments", attachmentIds],
+    queryFn: async () => {
+      if (!attachmentIds.length) return [];
+
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, file_name, file_path")
+        .in("id", attachmentIds);
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: attachmentIds.length > 0,
   });
 
   const conversationIds = useMemo(
@@ -308,55 +334,84 @@ export default function AdminMessages() {
     }, {});
   }, [unreadMessages, user?.id]);
 
+  const attachmentMap = useMemo(
+    () => new Map((attachmentDocuments ?? []).map((document) => [document.id, document])),
+    [attachmentDocuments],
+  );
+
   const selectedConversationRecord = filteredConversations.find((conversation) => conversation.id === selectedConversation)
     || conversations?.find((conversation) => conversation.id === selectedConversation)
     || null;
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation || !user) return;
+    if ((!newMessage.trim() && !attachmentFile) || !selectedConversation || !user) return;
     if (!canReplyMessages) {
       toast.error("This consultant profile cannot reply to client messages.");
       return;
     }
 
     const outgoingMessage = newMessage.trim();
+    setSendingMessage(true);
+    let attachmentDocumentId: string | null = null;
 
-    const { data, error } = await supabase.from("messages").insert({
-      conversation_id: selectedConversation,
-      sender_profile_id: user.id,
-      sender_type: role === "consultant" ? "consultant" : "admin",
-      message_text: outgoingMessage,
-    }).select("id, created_at").single();
+    try {
+      if (attachmentFile && selectedConversationRecord?.client_id) {
+        const uploadedDocument = await uploadChatAttachment({
+          file: attachmentFile,
+          uploadedBy: user.id,
+          clientId: selectedConversationRecord.client_id,
+          caseId: selectedConversationRecord.case_id,
+          recipientProfileId: selectedConversationRecord.clients?.profile_id ?? null,
+          title: `Conversation Attachment - ${attachmentFile.name}`,
+        });
+        attachmentDocumentId = uploadedDocument.id;
+      }
 
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
+      const { data, error } = await supabase.from("messages").insert({
+        conversation_id: selectedConversation,
+        sender_profile_id: user.id,
+        sender_type: role === "consultant" ? "consultant" : "admin",
+        message_text: outgoingMessage || `Sent an attachment: ${attachmentFile?.name || "File"}`,
+        attachment_document_id: attachmentDocumentId,
+      }).select("id, created_at").single();
 
-    setNewMessage("");
-    if (selectedConversationRecord?.clients?.profile_id) {
-      const senderName = profile?.full_name?.trim()
-        || (role === "consultant" ? "Your Consultant" : "Acapolite Consulting");
-      const notification = await sendClientMessageNotification({
-        messageId: data.id,
-        clientProfileId: selectedConversationRecord.clients.profile_id,
-        clientEmail: selectedConversationRecord.clients.profiles?.email,
-        clientName: getConversationName(selectedConversationRecord),
-        senderName,
-        messageText: outgoingMessage,
-        sentAt: data.created_at,
-        caseId: selectedConversationRecord.case_id,
-        conversationSubject: selectedConversationRecord.subject,
-      });
+      if (error) {
+        throw error;
+      }
 
-      if (notification.error) {
-        console.error("Client message email failed:", notification.error);
-        toast.error("Message sent, but the client email notification could not be delivered.");
+      setNewMessage("");
+      setAttachmentFile(null);
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = "";
+      }
+      if (selectedConversationRecord?.clients?.profile_id) {
+        const senderName = profile?.full_name?.trim()
+          || (role === "consultant" ? "Your Consultant" : "Acapolite Consulting");
+        const notification = await sendClientMessageNotification({
+          messageId: data.id,
+          clientProfileId: selectedConversationRecord.clients.profile_id,
+          clientEmail: selectedConversationRecord.clients.profiles?.email,
+          clientName: getConversationName(selectedConversationRecord),
+          senderName,
+          messageText: outgoingMessage || `Sent an attachment: ${attachmentFile?.name || "File"}`,
+          sentAt: data.created_at,
+          caseId: selectedConversationRecord.case_id,
+          conversationSubject: selectedConversationRecord.subject,
+        });
+
+        if (notification.error) {
+          console.error("Client message email failed:", notification.error);
+          toast.error("Message sent, but the client email notification could not be delivered.");
+        } else {
+          toast.success("Message sent");
+        }
       } else {
         toast.success("Message sent");
       }
-    } else {
-      toast.success("Message sent");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send this message.");
+    } finally {
+      setSendingMessage(false);
     }
 
     queryClient.invalidateQueries({ queryKey: ["staff-messages", selectedConversation] });
@@ -519,6 +574,25 @@ export default function AdminMessages() {
                         {message.sender_profile_id === user?.id ? "You" : message.sender_type}
                       </p>
                       <p className="text-sm font-body whitespace-pre-wrap">{message.message_text}</p>
+                      {message.attachment_document_id && attachmentMap.get(message.attachment_document_id) ? (
+                        <button
+                          type="button"
+                          className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
+                            message.sender_profile_id === user?.id ? "bg-white/15 text-primary-foreground" : "bg-card text-foreground"
+                          }`}
+                          onClick={() => {
+                            const attachment = attachmentMap.get(message.attachment_document_id!);
+                            if (!attachment) return;
+                            setOpeningAttachmentId(message.id);
+                            void openChatAttachment(attachment.file_path)
+                              .catch((error) => toast.error(error instanceof Error ? error.message : "Unable to open attachment."))
+                              .finally(() => setOpeningAttachmentId(null));
+                          }}
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                          {openingAttachmentId === message.id ? "Opening..." : attachmentMap.get(message.attachment_document_id)?.file_name}
+                        </button>
+                      ) : null}
                       <p className={`text-xs mt-3 ${message.sender_profile_id === user?.id ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
                         {new Date(message.created_at).toLocaleString()}
                       </p>
@@ -534,6 +608,21 @@ export default function AdminMessages() {
 
               <div className="border-t border-border p-4">
                 <div className="flex gap-3">
+                  <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl shrink-0"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={!canReplyMessages}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
                   <Input
                     value={newMessage}
                     onChange={(event) => setNewMessage(event.target.value)}
@@ -542,11 +631,16 @@ export default function AdminMessages() {
                     onKeyDown={(event) => event.key === "Enter" && !event.shiftKey && sendMessage()}
                     disabled={!canReplyMessages}
                   />
-                  <Button onClick={sendMessage} className="rounded-xl shrink-0" disabled={!canReplyMessages}>
+                  <Button onClick={sendMessage} className="rounded-xl shrink-0" disabled={!canReplyMessages || sendingMessage || (!newMessage.trim() && !attachmentFile)}>
                     <Send className="h-4 w-4 mr-2" />
-                    {canReplyMessages ? "Send" : "View Only"}
+                    {canReplyMessages ? (sendingMessage ? "Sending..." : "Send") : "View Only"}
                   </Button>
                 </div>
+                {attachmentFile ? (
+                  <p className="mt-3 text-xs text-muted-foreground font-body">
+                    Attached: {attachmentFile.name}
+                  </p>
+                ) : null}
               </div>
             </>
           ) : (
