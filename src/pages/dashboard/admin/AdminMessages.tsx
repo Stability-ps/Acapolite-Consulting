@@ -11,7 +11,7 @@ import { sendClientMessageNotification } from "@/lib/clientMessageNotifications"
 import { formatCaseReference } from "@/lib/practitionerAssignments";
 import { useSearchParams } from "react-router-dom";
 import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
-import { openChatAttachment, uploadChatAttachment } from "@/lib/chatAttachments";
+import { assertValidChatAttachment, openChatAttachment, uploadChatAttachment } from "@/lib/chatAttachments";
 
 type ConversationRecord = {
   id: string;
@@ -419,6 +419,23 @@ export default function AdminMessages() {
     queryClient.invalidateQueries({ queryKey: ["sidebar-unread-messages"] });
   };
 
+  const handleAttachmentChange = (file: File | null) => {
+    if (!file) {
+      setAttachmentFile(null);
+      return;
+    }
+
+    try {
+      assertValidChatAttachment(file);
+      setAttachmentFile(file);
+    } catch (error) {
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = "";
+      }
+      toast.error(error instanceof Error ? error.message : "Unable to attach this file.");
+    }
+  };
+
   return (
     <div>
       <h1 className="font-display text-2xl font-bold text-foreground mb-1">All Messages</h1>
@@ -612,7 +629,7 @@ export default function AdminMessages() {
                     ref={attachmentInputRef}
                     type="file"
                     className="hidden"
-                    onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                    onChange={(event) => handleAttachmentChange(event.target.files?.[0] ?? null)}
                   />
                   <Button
                     type="button"
@@ -638,9 +655,13 @@ export default function AdminMessages() {
                 </div>
                 {attachmentFile ? (
                   <p className="mt-3 text-xs text-muted-foreground font-body">
-                    Attached: {attachmentFile.name}
+                    Attached: {attachmentFile.name} ({Math.max(1, Math.round(attachmentFile.size / 1024))} KB)
                   </p>
-                ) : null}
+                ) : (
+                  <p className="mt-3 text-xs text-muted-foreground font-body">
+                    You can send a message, a file, or both. Maximum file size: 10 MB.
+                  </p>
+                )}
               </div>
             </>
           ) : (

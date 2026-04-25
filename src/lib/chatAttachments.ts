@@ -1,7 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
+}
+
+export function assertValidChatAttachment(file: File) {
+  if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+    throw new Error("Chat attachments must be 10 MB or smaller.");
+  }
 }
 
 export async function uploadChatAttachment(params: {
@@ -12,6 +20,8 @@ export async function uploadChatAttachment(params: {
   recipientProfileId?: string | null;
   title?: string;
 }) {
+  assertValidChatAttachment(params.file);
+
   const safeFileName = sanitizeFileName(params.file.name);
   const uniqueFileName = `${Date.now()}-${safeFileName}`;
   const filePath = params.caseId

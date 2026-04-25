@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { formatCaseReference } from "@/lib/practitionerAssignments";
 import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
+import { assertValidChatAttachment, openChatAttachment, uploadChatAttachment } from "@/lib/chatAttachments";
 
 const caseTypeOptions = [
   "individual_tax_return",
@@ -111,6 +112,7 @@ export default function Cases() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const caseAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     null,
@@ -122,7 +124,9 @@ export default function Cases() {
   const [reviewText, setReviewText] = useState("");
   const [savingReview, setSavingReview] = useState(false);
   const [caseReply, setCaseReply] = useState("");
+  const [caseAttachmentFile, setCaseAttachmentFile] = useState<File | null>(null);
   const [sendingCaseReply, setSendingCaseReply] = useState(false);
+  const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
   const [requestForm, setRequestForm] = useState({
     case_title: "",
     case_type: "individual_tax_return",
@@ -225,6 +229,34 @@ export default function Cases() {
     enabled: selectedCaseConversationIds.length > 0,
   });
 
+  const caseMessageAttachmentIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (selectedCaseMessages ?? [])
+            .map((message) => message.attachment_document_id)
+            .filter(Boolean),
+        ),
+      ) as string[],
+    [selectedCaseMessages],
+  );
+
+  const { data: caseMessageAttachments } = useQuery({
+    queryKey: ["case-message-attachments", caseMessageAttachmentIds],
+    queryFn: async () => {
+      if (!caseMessageAttachmentIds.length) return [];
+
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, file_name, file_path")
+        .in("id", caseMessageAttachmentIds);
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: caseMessageAttachmentIds.length > 0,
+  });
+
   const selectedCase =
     cases?.find((caseItem) => caseItem.id === selectedCaseId) ?? null;
   const caseIdFromQuery = searchParams.get("caseId");
@@ -238,6 +270,14 @@ export default function Cases() {
     selectedCase?.assigned_consultant_id &&
     selectedCase &&
     ["resolved", "closed"].includes(selectedCase.status),
+  );
+
+  const caseAttachmentMap = useMemo(
+    () =>
+      new Map(
+        (caseMessageAttachments ?? []).map((document) => [document.id, document]),
+      ),
+    [caseMessageAttachments],
   );
 
   useEffect(() => {
@@ -311,6 +351,23 @@ export default function Cases() {
     setAttachmentFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  };
+
+  const handleCaseAttachmentChange = (file: File | null) => {
+    if (!file) {
+      setCaseAttachmentFile(null);
+      return;
+    }
+
+    try {
+      assertValidChatAttachment(file);
+      setCaseAttachmentFile(file);
+    } catch (error) {
+      if (caseAttachmentInputRef.current) {
+        caseAttachmentInputRef.current.value = "";
+      }
+      toast.error(error instanceof Error ? error.message : "Unable to attach this file.");
     }
   };
 
@@ -497,13 +554,14 @@ export default function Cases() {
   };
 
   const sendCaseReply = async () => {
-    if (!client || !user || !selectedCase || !caseReply.trim()) {
+    if (!client || !user || !selectedCase || (!caseReply.trim() && !caseAttachmentFile)) {
       return;
     }
 
     setSendingCaseReply(true);
 
     try {
+      let attachmentDocumentId: string | null = null;
       let conversationId = primaryCaseConversationId;
 
       if (!conversationId) {
@@ -528,11 +586,24 @@ export default function Cases() {
         conversationId = conversation.id;
       }
 
+      if (caseAttachmentFile) {
+        const uploadedDocument = await uploadChatAttachment({
+          file: caseAttachmentFile,
+          uploadedBy: user.id,
+          clientId: client.id,
+          caseId: selectedCase.id,
+          recipientProfileId: selectedCase.assigned_consultant_id ?? null,
+          title: `Case Attachment - ${caseAttachmentFile.name}`,
+        });
+        attachmentDocumentId = uploadedDocument.id;
+      }
+
       const { error } = await supabase.from("messages").insert({
         conversation_id: conversationId,
         sender_profile_id: user.id,
         sender_type: "client",
-        message_text: caseReply.trim(),
+        message_text: caseReply.trim() || `Sent an attachment: ${caseAttachmentFile?.name || "File"}`,
+        attachment_document_id: attachmentDocumentId,
       });
 
       if (error) {
@@ -540,6 +611,10 @@ export default function Cases() {
       }
 
       setCaseReply("");
+      setCaseAttachmentFile(null);
+      if (caseAttachmentInputRef.current) {
+        caseAttachmentInputRef.current.value = "";
+      }
       toast.success("Case message sent.");
       await Promise.all([
         queryClient.invalidateQueries({
@@ -836,7 +911,7 @@ export default function Cases() {
                       const isOwnMessage =
                         message.sender_profile_id === user?.id;
 
-                      return (
+                    return (
                         <div
                           key={message.id}
                           className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
@@ -858,6 +933,40 @@ export default function Cases() {
                             <p className="text-sm font-body whitespace-pre-wrap">
                               {message.message_text}
                             </p>
+                            {message.attachment_document_id &&
+                            caseAttachmentMap.get(message.attachment_document_id) ? (
+                              <button
+                                type="button"
+                                className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
+                                  isOwnMessage
+                                    ? "bg-white/15 text-primary-foreground"
+                                    : "bg-card text-foreground"
+                                }`}
+                                onClick={() => {
+                                  const attachment = caseAttachmentMap.get(
+                                    message.attachment_document_id!,
+                                  );
+                                  if (!attachment) return;
+                                  setOpeningAttachmentId(message.id);
+                                  void openChatAttachment(attachment.file_path)
+                                    .catch((error) =>
+                                      toast.error(
+                                        error instanceof Error
+                                          ? error.message
+                                          : "Unable to open attachment.",
+                                      ),
+                                    )
+                                    .finally(() => setOpeningAttachmentId(null));
+                                }}
+                              >
+                                <Paperclip className="h-3.5 w-3.5" />
+                                {openingAttachmentId === message.id
+                                  ? "Opening..."
+                                  : caseAttachmentMap.get(
+                                      message.attachment_document_id,
+                                    )?.file_name}
+                              </button>
+                            ) : null}
                             <p
                               className={`mt-3 text-xs ${isOwnMessage ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                             >
@@ -876,6 +985,22 @@ export default function Cases() {
                 </div>
                 <div className="border-t border-border p-4">
                   <div className="flex gap-3">
+                    <input
+                      ref={caseAttachmentInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(event) =>
+                        handleCaseAttachmentChange(event.target.files?.[0] ?? null)
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl shrink-0"
+                      onClick={() => caseAttachmentInputRef.current?.click()}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
                     <Input
                       value={caseReply}
                       onChange={(event) => setCaseReply(event.target.value)}
@@ -891,11 +1016,20 @@ export default function Cases() {
                       type="button"
                       className="rounded-xl"
                       onClick={sendCaseReply}
-                      disabled={sendingCaseReply || !caseReply.trim()}
+                      disabled={sendingCaseReply || (!caseReply.trim() && !caseAttachmentFile)}
                     >
                       {sendingCaseReply ? "Sending..." : "Send"}
                     </Button>
                   </div>
+                  {caseAttachmentFile ? (
+                    <p className="mt-3 text-xs text-muted-foreground font-body">
+                      Attached: {caseAttachmentFile.name} ({Math.max(1, Math.round(caseAttachmentFile.size / 1024))} KB)
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-xs text-muted-foreground font-body">
+                      You can send a message, a file, or both. Maximum file size: 10 MB.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
