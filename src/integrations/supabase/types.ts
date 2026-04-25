@@ -295,27 +295,54 @@ export type Database = {
         Row: {
           profile_id: string;
           balance: number;
+          monthly_credits_remaining: number;
+          monthly_credits_expires_at: string | null;
+          purchased_credits_balance: number;
           total_bonus_credits: number;
           total_purchased_credits: number;
           total_used_credits: number;
+          storage_used_bytes: number;
+          storage_base_limit_mb: number;
+          storage_addon_limit_mb: number;
+          storage_override_limit_mb: number;
+          storage_warning_sent_at: string | null;
+          tracked_client_count: number;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           profile_id: string;
           balance?: number;
+          monthly_credits_remaining?: number;
+          monthly_credits_expires_at?: string | null;
+          purchased_credits_balance?: number;
           total_bonus_credits?: number;
           total_purchased_credits?: number;
           total_used_credits?: number;
+          storage_used_bytes?: number;
+          storage_base_limit_mb?: number;
+          storage_addon_limit_mb?: number;
+          storage_override_limit_mb?: number;
+          storage_warning_sent_at?: string | null;
+          tracked_client_count?: number;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           profile_id?: string;
           balance?: number;
+          monthly_credits_remaining?: number;
+          monthly_credits_expires_at?: string | null;
+          purchased_credits_balance?: number;
           total_bonus_credits?: number;
           total_purchased_credits?: number;
           total_used_credits?: number;
+          storage_used_bytes?: number;
+          storage_base_limit_mb?: number;
+          storage_addon_limit_mb?: number;
+          storage_override_limit_mb?: number;
+          storage_warning_sent_at?: string | null;
+          tracked_client_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -384,6 +411,13 @@ export type Database = {
           credits_delta: number;
           balance_after: number;
           description: string | null;
+          issued_by: string | null;
+          reason: string | null;
+          expiry_date: string | null;
+          credit_type: string | null;
+          credit_bucket: string;
+          monthly_credits_used: number;
+          purchased_credits_used: number;
           metadata: Json | null;
           created_at: string;
         };
@@ -398,6 +432,13 @@ export type Database = {
           credits_delta: number;
           balance_after: number;
           description?: string | null;
+          issued_by?: string | null;
+          reason?: string | null;
+          expiry_date?: string | null;
+          credit_type?: string | null;
+          credit_bucket?: string;
+          monthly_credits_used?: number;
+          purchased_credits_used?: number;
           metadata?: Json | null;
           created_at?: string;
         };
@@ -412,8 +453,66 @@ export type Database = {
           credits_delta?: number;
           balance_after?: number;
           description?: string | null;
+          issued_by?: string | null;
+          reason?: string | null;
+          expiry_date?: string | null;
+          credit_type?: string | null;
+          credit_bucket?: string;
+          monthly_credits_used?: number;
+          purchased_credits_used?: number;
           metadata?: Json | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      practitioner_storage_addon_purchases: {
+        Row: {
+          id: string;
+          practitioner_profile_id: string;
+          addon_code: string;
+          addon_name: string;
+          storage_mb: number;
+          amount_zar: number;
+          currency: string;
+          payment_provider: string;
+          payment_status: string;
+          provider_payment_id: string | null;
+          metadata: Json | null;
+          created_at: string;
+          updated_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          practitioner_profile_id: string;
+          addon_code: string;
+          addon_name: string;
+          storage_mb: number;
+          amount_zar: number;
+          currency?: string;
+          payment_provider?: string;
+          payment_status?: string;
+          provider_payment_id?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          practitioner_profile_id?: string;
+          addon_code?: string;
+          addon_name?: string;
+          storage_mb?: number;
+          amount_zar?: number;
+          currency?: string;
+          payment_provider?: string;
+          payment_status?: string;
+          provider_payment_id?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+          completed_at?: string | null;
         };
         Relationships: [];
       };
@@ -477,11 +576,14 @@ export type Database = {
           name: string;
           price_zar: number;
           credits_per_month: number;
+          storage_limit_mb: number;
+          listing_priority_level: number;
           includes_verified_badge: boolean;
           includes_standard_listing: boolean;
           includes_priority_listing: boolean;
           includes_featured_profile: boolean;
           includes_highlighted_profile: boolean;
+          includes_upgrade_support: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -490,11 +592,14 @@ export type Database = {
           name: string;
           price_zar: number;
           credits_per_month: number;
+          storage_limit_mb?: number;
+          listing_priority_level?: number;
           includes_verified_badge?: boolean;
           includes_standard_listing?: boolean;
           includes_priority_listing?: boolean;
           includes_featured_profile?: boolean;
           includes_highlighted_profile?: boolean;
+          includes_upgrade_support?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -503,11 +608,14 @@ export type Database = {
           name?: string;
           price_zar?: number;
           credits_per_month?: number;
+          storage_limit_mb?: number;
+          listing_priority_level?: number;
           includes_verified_badge?: boolean;
           includes_standard_listing?: boolean;
           includes_priority_listing?: boolean;
           includes_featured_profile?: boolean;
           includes_highlighted_profile?: boolean;
+          includes_upgrade_support?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -1440,6 +1548,52 @@ export type Database = {
       };
     };
     Functions: {
+      admin_deduct_credits: {
+        Args: {
+          p_practitioner_profile_id: string;
+          p_credits: number;
+          p_reason: string;
+          p_issued_by_id?: string | null;
+        };
+        Returns: number;
+      };
+      admin_grant_credits: {
+        Args: {
+          p_practitioner_profile_id: string;
+          p_credits: number;
+          p_reason: string;
+          p_credit_type?: string;
+          p_expiry_date?: string | null;
+          p_issued_by_id?: string | null;
+        };
+        Returns: number;
+      };
+      admin_update_practitioner_storage_limits: {
+        Args: {
+          p_practitioner_profile_id: string;
+          p_storage_override_limit_mb?: number | null;
+          p_storage_addon_delta_mb?: number;
+          p_reason?: string | null;
+        };
+        Returns: number;
+      };
+      admin_update_practitioner_subscription_plan: {
+        Args: {
+          p_plan_code: string;
+          p_name: string;
+          p_price_zar: number;
+          p_credits_per_month: number;
+          p_storage_limit_mb: number;
+          p_listing_priority_level: number;
+          p_includes_verified_badge?: boolean;
+          p_includes_standard_listing?: boolean;
+          p_includes_priority_listing?: boolean;
+          p_includes_featured_profile?: boolean;
+          p_includes_highlighted_profile?: boolean;
+          p_includes_upgrade_support?: boolean;
+        };
+        Returns: boolean;
+      };
       accept_service_request_response: {
         Args: {
           p_response_id: string;

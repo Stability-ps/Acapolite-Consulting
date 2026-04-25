@@ -23,7 +23,7 @@ import {
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
 import { getResponseStatusClass } from "@/lib/practitionerMarketplace";
-import { getServiceRequestCreditCost } from "@/lib/practitionerCredits";
+import { calculateServiceRequestCreditCost } from "@/lib/practitionerCredits";
 import { sendLeadUnlockedNotification } from "@/lib/leadUnlockNotifications";
 
 type ServiceRequest = Tables<"service_requests">;
@@ -429,7 +429,7 @@ export default function PractitionerLeads() {
     setRequestingAccessId(request.id);
 
     try {
-      const creditCost = getServiceRequestCreditCost(request.service_needed);
+      const creditCost = calculateServiceRequestCreditCost(resolveServiceList(request));
       const { data, error } = await supabase.rpc("unlock_service_request_access", {
         p_request_id: request.id,
       });
@@ -464,7 +464,8 @@ export default function PractitionerLeads() {
     setStartingQuickPurchase(true);
 
     try {
-      await buyCredits(CREDIT_PACKAGES[0]);
+      const starterPack = CREDIT_PACKAGES.find((pkg) => pkg.code === "starter") ?? CREDIT_PACKAGES[0];
+      await buyCredits(starterPack);
       toast.success("Starter Paystack checkout opened.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to add starter credits.";
@@ -692,7 +693,7 @@ export default function PractitionerLeads() {
               missingReturnsFlag: request.missing_returns_flag,
               missingDocumentsFlag: request.missing_documents_flag,
             });
-            const creditCost = getServiceRequestCreditCost(request.service_needed);
+            const creditCost = calculateServiceRequestCreditCost(resolveServiceList(request));
             const accessRequest = accessRequestMap.get(request.id);
             const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
             const displayName = accessApproved ? request.full_name : "Hidden - Unlock to View";
@@ -828,8 +829,8 @@ export default function PractitionerLeads() {
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Credit Cost</p>
                     <p className="mt-1 text-sm text-foreground font-body">
-                      {getServiceRequestCreditCost(selectedRequest.service_needed)} credit
-                      {getServiceRequestCreditCost(selectedRequest.service_needed) === 1 ? "" : "s"}
+                      {calculateServiceRequestCreditCost(resolveServiceList(selectedRequest))} credit
+                      {calculateServiceRequestCreditCost(resolveServiceList(selectedRequest)) === 1 ? "" : "s"}
                     </p>
                   </div>
                   <div>

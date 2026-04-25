@@ -64,7 +64,7 @@ const consultantItems = [
   { title: "Notifications", url: "/dashboard/staff/notifications", icon: Bell, permission: "can_view_overview" as StaffPermissionKey },
   { title: "My Profile", url: "/dashboard/staff/profile", icon: BriefcaseBusiness },
   { title: "Verification Docs", url: "/dashboard/staff/verification-documents", icon: Upload },
-  { title: "Credits", url: "/dashboard/staff/credits", icon: Coins },
+  { title: "Credits & Billing", url: "/dashboard/staff/credits", icon: Coins },
   { title: "Clients", url: "/dashboard/staff/clients", icon: Users, permission: "can_view_clients" as StaffPermissionKey },
   { title: "Service Requests", url: "/dashboard/staff/service-requests", icon: ClipboardList, permission: "can_view_clients" as StaffPermissionKey },
   { title: "Client 360", url: "/dashboard/staff/client-workspace", icon: UserRound, permission: "can_view_client_workspace" as StaffPermissionKey },

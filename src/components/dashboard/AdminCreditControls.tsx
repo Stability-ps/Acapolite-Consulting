@@ -1,12 +1,15 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   Coins,
+  Database,
   Gift,
+  HardDrive,
   Loader2,
   Minus,
   Plus,
+  Settings2,
   TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,8 +25,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { Tables } from "@/integrations/supabase/types";
+import { formatStorageLimitFromMb, formatStorageValue, formatZarCurrency } from "@/lib/practitionerBilling";
 
 type PractitionerCreditAccount = Tables<"practitioner_credit_accounts">;
+type PractitionerSubscriptionPlan = Tables<"practitioner_subscription_plans">;
 
 interface AdminCreditControlsProps {
   practitionerId: string | null;
@@ -47,15 +52,72 @@ export function AdminCreditControls({
   const [creditType, setCreditType] = useState<CreditType>("bonus");
   const [hasExpiry, setHasExpiry] = useState(false);
   const [expiryDays, setExpiryDays] = useState<string>("30");
+  const [storageOverrideMb, setStorageOverrideMb] = useState<string>("");
+  const [storageAddonDeltaMb, setStorageAddonDeltaMb] = useState<string>("0");
+  const [storageReason, setStorageReason] = useState<string>("");
+  const [editingPlanCode, setEditingPlanCode] = useState<string>("starter");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isUpdatingStorage, setIsUpdatingStorage] = useState(false);
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
   const queryClient = useQueryClient();
+
+  const { data: subscriptionPlans } = useQuery({
+    queryKey: ["admin-practitioner-subscription-plans"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_subscription_plans")
+        .select("*")
+        .order("price_zar", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as PractitionerSubscriptionPlan[];
+    },
+    enabled: isAdmin,
+  });
+
+  const [planForm, setPlanForm] = useState({
+    name: "",
+    price_zar: "",
+    credits_per_month: "",
+    storage_limit_mb: "",
+    listing_priority_level: "",
+  });
+
+  const activePlan = useMemo(
+    () => subscriptionPlans?.find((plan) => plan.code === editingPlanCode) ?? null,
+    [editingPlanCode, subscriptionPlans],
+  );
+
+  useEffect(() => {
+    if (!activePlan) {
+      return;
+    }
+
+    setPlanForm({
+      name: activePlan.name,
+      price_zar: String(activePlan.price_zar),
+      credits_per_month: String(activePlan.credits_per_month),
+      storage_limit_mb: String(activePlan.storage_limit_mb),
+      listing_priority_level: String(activePlan.listing_priority_level),
+    });
+  }, [activePlan]);
 
   if (!isAdmin || !practitionerId) {
     return null;
   }
 
   const currentBalance = creditAccount?.balance ?? 0;
-  const creditsToProcess = parseInt(credits) || 0;
+  const creditsToProcess = parseInt(credits, 10) || 0;
+  const currentStorageLimitMb = (creditAccount?.storage_base_limit_mb ?? 0)
+    + (creditAccount?.storage_addon_limit_mb ?? 0)
+    + (creditAccount?.storage_override_limit_mb ?? 0);
+
+  const refreshBillingQueries = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", practitionerId] });
+    await queryClient.invalidateQueries({ queryKey: ["practitioner-credit-transactions", practitionerId] });
+    await queryClient.invalidateQueries({ queryKey: ["admin-practitioner-subscription-plans"] });
+    onCreditsChanged?.();
+  };
 
   const validateAndProcess = async () => {
     if (!credits.trim() || creditsToProcess <= 0) {
@@ -69,9 +131,7 @@ export function AdminCreditControls({
     }
 
     if (action === "deduct" && creditsToProcess > currentBalance) {
-      toast.error(
-        `Insufficient balance. Current: ${currentBalance}, Requested: ${creditsToProcess}`,
-      );
+      toast.error(`Insufficient balance. Current: ${currentBalance}, requested: ${creditsToProcess}.`);
       return;
     }
 
@@ -81,7 +141,7 @@ export function AdminCreditControls({
       let expiryDate = null;
       if (hasExpiry && expiryDays) {
         const date = new Date();
-        date.setDate(date.getDate() + parseInt(expiryDays));
+        date.setDate(date.getDate() + parseInt(expiryDays, 10));
         expiryDate = date.toISOString();
       }
 
@@ -95,10 +155,7 @@ export function AdminCreditControls({
         });
 
         if (error) throw error;
-
-        toast.success(
-          `Granted ${creditsToProcess} credits to practitioner${hasExpiry ? ` (expires in ${expiryDays} days)` : ""}`,
-        );
+        toast.success(`Granted ${creditsToProcess} credits to practitioner.`);
       } else {
         const { error } = await supabase.rpc("admin_deduct_credits", {
           p_practitioner_profile_id: practitionerId,
@@ -107,260 +164,371 @@ export function AdminCreditControls({
         });
 
         if (error) throw error;
-
-        toast.success(`Deducted ${creditsToProcess} credits from practitioner`);
+        toast.success(`Deducted ${creditsToProcess} credits from practitioner.`);
       }
 
-      // Reset form
       setCredits("");
       setReason("");
       setCreditType("bonus");
       setHasExpiry(false);
       setExpiryDays("30");
-
-      // Refresh credit data
-      await queryClient.invalidateQueries({
-        queryKey: ["practitioner-credit-account", practitionerId],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["practitioner-credit-transactions", practitionerId],
-      });
-
-      onCreditsChanged?.();
+      await refreshBillingQueries();
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to process credit action";
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : "Failed to process credit action");
     } finally {
       setIsProcessing(false);
     }
   };
 
+  const updateStorageLimits = async () => {
+    if (!storageReason.trim()) {
+      toast.error("Please add a reason for the storage update.");
+      return;
+    }
+
+    setIsUpdatingStorage(true);
+
+    try {
+      const overrideValue = storageOverrideMb.trim() ? parseInt(storageOverrideMb, 10) : null;
+      const addonDelta = storageAddonDeltaMb.trim() ? parseInt(storageAddonDeltaMb, 10) : 0;
+
+      const { error } = await supabase.rpc("admin_update_practitioner_storage_limits", {
+        p_practitioner_profile_id: practitionerId,
+        p_storage_override_limit_mb: overrideValue,
+        p_storage_addon_delta_mb: addonDelta,
+        p_reason: storageReason,
+      });
+
+      if (error) throw error;
+
+      toast.success("Storage allocation updated.");
+      setStorageReason("");
+      setStorageAddonDeltaMb("0");
+      await refreshBillingQueries();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update storage.");
+    } finally {
+      setIsUpdatingStorage(false);
+    }
+  };
+
+  const savePlan = async () => {
+    if (!activePlan) {
+      toast.error("Select a plan first.");
+      return;
+    }
+
+    setIsSavingPlan(true);
+
+    try {
+      const { error } = await supabase.rpc("admin_update_practitioner_subscription_plan", {
+        p_plan_code: activePlan.code,
+        p_name: planForm.name,
+        p_price_zar: Number(planForm.price_zar),
+        p_credits_per_month: Number(planForm.credits_per_month),
+        p_storage_limit_mb: Number(planForm.storage_limit_mb),
+        p_listing_priority_level: Number(planForm.listing_priority_level),
+        p_includes_verified_badge: activePlan.includes_verified_badge,
+        p_includes_standard_listing: activePlan.includes_standard_listing,
+        p_includes_priority_listing: activePlan.includes_priority_listing,
+        p_includes_featured_profile: activePlan.includes_featured_profile,
+        p_includes_highlighted_profile: activePlan.includes_highlighted_profile,
+        p_includes_upgrade_support: activePlan.includes_upgrade_support,
+      });
+
+      if (error) throw error;
+
+      toast.success("Subscription plan updated.");
+      await refreshBillingQueries();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save the plan.");
+    } finally {
+      setIsSavingPlan(false);
+    }
+  };
+
   return (
-    <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
-            <Coins className="h-6 w-6 text-amber-600" />
-          </div>
-          <div>
-            <h3 className="font-display text-lg font-semibold text-foreground">
-              Credit Management
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Current balance: {currentBalance} credits
-            </p>
+    <div className="space-y-6">
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
+              <Coins className="h-6 w-6 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="font-display text-lg font-semibold text-foreground">Credit Management</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Current balance: {currentBalance} credits</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Action Type */}
-        <div>
-          <label className="mb-2 block text-sm font-semibold text-foreground">
-            Action
-          </label>
-          <Select
-            value={action}
-            onValueChange={(val) => setAction(val as CreditAction)}
-          >
-            <SelectTrigger className="rounded-lg">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="grant">
-                <div className="flex items-center gap-2">
-                  <Plus className="h-4 w-4 text-emerald-600" />
-                  Grant Credits
-                </div>
-              </SelectItem>
-              <SelectItem value="deduct">
-                <div className="flex items-center gap-2">
-                  <Minus className="h-4 w-4 text-red-600" />
-                  Deduct Credits
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Number of Credits */}
-        <div>
-          <label className="mb-2 block text-sm font-semibold text-foreground">
-            Number of Credits
-          </label>
-          <Input
-            type="number"
-            min="1"
-            value={credits}
-            onChange={(e) => setCredits(e.target.value)}
-            placeholder="Enter number of credits"
-            className="rounded-lg"
-          />
-        </div>
-
-        {/* Credit Type (only for grant) */}
-        {action === "grant" && (
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-foreground">
-              Credit Type
-            </label>
-            <Select
-              value={creditType}
-              onValueChange={(val) => setCreditType(val as CreditType)}
-            >
+            <label className="mb-2 block text-sm font-semibold text-foreground">Action</label>
+            <Select value={action} onValueChange={(val) => setAction(val as CreditAction)}>
               <SelectTrigger className="rounded-lg">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="bonus">
-                  <div className="flex items-center gap-2">
-                    <Gift className="h-4 w-4 text-blue-600" />
-                    Bonus Credits
-                  </div>
-                </SelectItem>
-                <SelectItem value="referral">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-emerald-600" />
-                    Referral Credits
-                  </div>
-                </SelectItem>
+                <SelectItem value="grant">Grant Credits</SelectItem>
+                <SelectItem value="deduct">Deduct Credits</SelectItem>
               </SelectContent>
             </Select>
           </div>
-        )}
 
-        {/* Expiry (only for grant) */}
-        {action === "grant" && (
           <div>
-            <label className="mb-2 block text-sm font-semibold text-foreground">
-              <input
-                type="checkbox"
-                checked={hasExpiry}
-                onChange={(e) => setHasExpiry(e.target.checked)}
-                className="mr-2"
-              />
-              Add Expiry Date
-            </label>
-            {hasExpiry && (
-              <Input
-                type="number"
-                min="1"
-                value={expiryDays}
-                onChange={(e) => setExpiryDays(e.target.value)}
-                placeholder="Days until expiry"
-                className="rounded-lg"
-              />
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Reason */}
-      <div>
-        <label className="mb-2 block text-sm font-semibold text-foreground">
-          Reason for {action === "grant" ? "Credit Grant" : "Credit Deduction"}
-        </label>
-        <Textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder={
-            action === "grant"
-              ? "e.g., Campaign Bonus, Referral Reward, Promotion Special"
-              : "e.g., Manual Correction, Service Issue, Refund"
-          }
-          rows={3}
-          className="resize-none rounded-lg"
-        />
-        <p className="mt-1 text-xs text-muted-foreground">
-          This reason will appear in the practitioner's credit history
-        </p>
-      </div>
-
-      {/* Summary */}
-      {credits && creditsToProcess > 0 && (
-        <div
-          className={`rounded-lg border px-4 py-3 ${
-            action === "grant"
-              ? "border-emerald-200 bg-emerald-50"
-              : "border-red-200 bg-red-50"
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            <AlertCircle
-              className={`h-5 w-5 shrink-0 ${
-                action === "grant" ? "text-emerald-600" : "text-red-600"
-              }`}
+            <label className="mb-2 block text-sm font-semibold text-foreground">Number of Credits</label>
+            <Input
+              type="number"
+              min="1"
+              value={credits}
+              onChange={(event) => setCredits(event.target.value)}
+              placeholder="Enter number of credits"
+              className="rounded-lg"
             />
-            <div className="text-sm">
-              <p
-                className={`font-semibold ${
-                  action === "grant" ? "text-emerald-900" : "text-red-900"
-                }`}
-              >
-                {action === "grant" ? "Granting" : "Deducting"}{" "}
-                {creditsToProcess} credits
-              </p>
-              <p
-                className={`mt-1 ${
-                  action === "grant" ? "text-emerald-800" : "text-red-800"
-                }`}
-              >
-                New balance will be:{" "}
-                <span className="font-semibold">
-                  {action === "grant"
-                    ? currentBalance + creditsToProcess
-                    : currentBalance - creditsToProcess}{" "}
-                  credits
-                </span>
-              </p>
-              {hasExpiry && action === "grant" && (
-                <p
-                  className={`mt-1 ${
-                    action === "grant" ? "text-emerald-800" : "text-red-800"
-                  }`}
-                >
-                  Credits expire in {expiryDays} days
+          </div>
+
+          {action === "grant" ? (
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground">Credit Type</label>
+              <Select value={creditType} onValueChange={(val) => setCreditType(val as CreditType)}>
+                <SelectTrigger className="rounded-lg">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bonus">
+                    <div className="flex items-center gap-2">
+                      <Gift className="h-4 w-4 text-blue-600" />
+                      Bonus Credits
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="referral">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-emerald-600" />
+                      Referral Credits
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          {action === "grant" ? (
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground">
+                <input
+                  type="checkbox"
+                  checked={hasExpiry}
+                  onChange={(event) => setHasExpiry(event.target.checked)}
+                  className="mr-2"
+                />
+                Add Expiry Date
+              </label>
+              {hasExpiry ? (
+                <Input
+                  type="number"
+                  min="1"
+                  value={expiryDays}
+                  onChange={(event) => setExpiryDays(event.target.value)}
+                  placeholder="Days until expiry"
+                  className="rounded-lg"
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground">
+            Reason for {action === "grant" ? "Credit Grant" : "Credit Deduction"}
+          </label>
+          <Textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder={action === "grant" ? "e.g. campaign bonus or recovery action" : "e.g. correction or reversal"}
+            rows={3}
+            className="resize-none rounded-lg"
+          />
+        </div>
+
+        {credits && creditsToProcess > 0 ? (
+          <div className={`rounded-lg border px-4 py-3 ${action === "grant" ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+            <div className="flex items-start gap-3">
+              <AlertCircle className={`h-5 w-5 shrink-0 ${action === "grant" ? "text-emerald-600" : "text-red-600"}`} />
+              <div className="text-sm">
+                <p className={`font-semibold ${action === "grant" ? "text-emerald-900" : "text-red-900"}`}>
+                  {action === "grant" ? "Granting" : "Deducting"} {creditsToProcess} credits
                 </p>
-              )}
+                <p className={`mt-1 ${action === "grant" ? "text-emerald-800" : "text-red-800"}`}>
+                  New balance will be {action === "grant" ? currentBalance + creditsToProcess : currentBalance - creditsToProcess} credits
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        ) : null}
 
-      {/* Action Button */}
-      <Button
-        onClick={validateAndProcess}
-        disabled={isProcessing || !credits.trim() || !reason.trim()}
-        className={`w-full rounded-lg ${
-          action === "grant"
-            ? "bg-emerald-600 hover:bg-emerald-700"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
-      >
-        {isProcessing ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          <>
-            {action === "grant" ? (
-              <>
-                <Plus className="mr-2 h-4 w-4" />
-                Grant {creditsToProcess || 0} Credits
-              </>
-            ) : (
-              <>
-                <Minus className="mr-2 h-4 w-4" />
-                Deduct {creditsToProcess || 0} Credits
-              </>
-            )}
-          </>
-        )}
-      </Button>
+        <Button
+          onClick={() => void validateAndProcess()}
+          disabled={isProcessing || !credits.trim() || !reason.trim()}
+          className={`w-full rounded-lg ${action === "grant" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}`}
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : action === "grant" ? (
+            <>
+              <Plus className="mr-2 h-4 w-4" />
+              Grant {creditsToProcess || 0} Credits
+            </>
+          ) : (
+            <>
+              <Minus className="mr-2 h-4 w-4" />
+              Deduct {creditsToProcess || 0} Credits
+            </>
+          )}
+        </Button>
+      </div>
+
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100">
+            <HardDrive className="h-6 w-6 text-sky-700" />
+          </div>
+          <div>
+            <h3 className="font-display text-lg font-semibold text-foreground">Storage & Usage Overrides</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Current storage: {formatStorageValue(creditAccount?.storage_used_bytes ?? 0)} / {formatStorageLimitFromMb(currentStorageLimitMb)}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground">Absolute Override (MB)</label>
+            <Input
+              type="number"
+              min="0"
+              value={storageOverrideMb}
+              onChange={(event) => setStorageOverrideMb(event.target.value)}
+              placeholder={String(creditAccount?.storage_override_limit_mb ?? 0)}
+              className="rounded-lg"
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground">Increase Add-on Allocation (MB)</label>
+            <Input
+              type="number"
+              value={storageAddonDeltaMb}
+              onChange={(event) => setStorageAddonDeltaMb(event.target.value)}
+              placeholder="0"
+              className="rounded-lg"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-border bg-background/60 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Current upload usage</p>
+            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageValue(creditAccount?.storage_used_bytes ?? 0)}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-background/60 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Tracked clients</p>
+            <p className="mt-2 font-display text-2xl text-foreground">{creditAccount?.tracked_client_count ?? 0}</p>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground">Reason</label>
+          <Textarea
+            value={storageReason}
+            onChange={(event) => setStorageReason(event.target.value)}
+            placeholder="Explain why the storage allocation is being changed"
+            rows={3}
+            className="resize-none rounded-lg"
+          />
+        </div>
+
+        <Button onClick={() => void updateStorageLimits()} disabled={isUpdatingStorage || !storageReason.trim()} className="w-full rounded-lg">
+          {isUpdatingStorage ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Updating Storage...
+            </>
+          ) : (
+            <>
+              <Database className="mr-2 h-4 w-4" />
+              Save Storage Allocation
+            </>
+          )}
+        </Button>
+      </div>
+
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100">
+            <Settings2 className="h-6 w-6 text-violet-700" />
+          </div>
+          <div>
+            <h3 className="font-display text-lg font-semibold text-foreground">Plan Limits</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Update global plan limits, credits, and storage allowances.</p>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-foreground">Subscription Plan</label>
+          <Select value={editingPlanCode} onValueChange={setEditingPlanCode}>
+            <SelectTrigger className="rounded-lg">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(subscriptionPlans ?? []).map((plan) => (
+                <SelectItem key={plan.code} value={plan.code}>
+                  {plan.name} · {formatZarCurrency(plan.price_zar)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground">Plan Name</label>
+            <Input value={planForm.name} onChange={(event) => setPlanForm((current) => ({ ...current, name: event.target.value }))} className="rounded-lg" />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground">Monthly Price (ZAR)</label>
+            <Input value={planForm.price_zar} onChange={(event) => setPlanForm((current) => ({ ...current, price_zar: event.target.value }))} className="rounded-lg" />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground">Credits Per Month</label>
+            <Input value={planForm.credits_per_month} onChange={(event) => setPlanForm((current) => ({ ...current, credits_per_month: event.target.value }))} className="rounded-lg" />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground">Storage Limit (MB)</label>
+            <Input value={planForm.storage_limit_mb} onChange={(event) => setPlanForm((current) => ({ ...current, storage_limit_mb: event.target.value }))} className="rounded-lg" />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-foreground">Listing Priority</label>
+            <Input value={planForm.listing_priority_level} onChange={(event) => setPlanForm((current) => ({ ...current, listing_priority_level: event.target.value }))} className="rounded-lg" />
+          </div>
+        </div>
+
+        <Button onClick={() => void savePlan()} disabled={isSavingPlan || !activePlan} className="w-full rounded-lg">
+          {isSavingPlan ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving Plan...
+            </>
+          ) : (
+            <>
+              <HardDrive className="mr-2 h-4 w-4" />
+              Save Plan Limits
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

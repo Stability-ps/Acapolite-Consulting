@@ -26,6 +26,7 @@ import {
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass } from "@/lib/practitionerMarketplace";
+import { formatStorageLimitFromMb, formatStorageValue } from "@/lib/practitionerBilling";
 
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type ServiceRequest = Tables<"service_requests">;
@@ -291,12 +292,20 @@ export default function PractitionerOverview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("practitioner_credit_accounts")
-        .select("balance")
+        .select("balance, monthly_credits_remaining, purchased_credits_balance, storage_used_bytes, storage_base_limit_mb, storage_addon_limit_mb, storage_override_limit_mb")
         .eq("profile_id", user!.id)
         .maybeSingle();
 
       if (error) throw error;
-      return data as { balance: number } | null;
+      return data as {
+        balance: number;
+        monthly_credits_remaining: number;
+        purchased_credits_balance: number;
+        storage_used_bytes: number;
+        storage_base_limit_mb: number;
+        storage_addon_limit_mb: number;
+        storage_override_limit_mb: number;
+      } | null;
     },
     enabled: !!user,
   });
@@ -525,8 +534,27 @@ export default function PractitionerOverview() {
         <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground font-body">
           Focus on the work queue for today: new leads, active matters, document issues, and client risks that need attention.
         </p>
-        <div className="mt-5 inline-flex items-center gap-3 rounded-full border border-primary/15 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
-          Credit Balance: {creditAccount?.balance ?? 0} Credits
+        <div className="mt-5 flex flex-wrap gap-3">
+          <div className="inline-flex items-center gap-3 rounded-full border border-primary/15 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
+            Total Credits: {creditAccount?.balance ?? 0}
+          </div>
+          <div className="inline-flex items-center gap-3 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground">
+            Monthly: {creditAccount?.monthly_credits_remaining ?? 0}
+          </div>
+          <div className="inline-flex items-center gap-3 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground">
+            Purchased: {creditAccount?.purchased_credits_balance ?? 0}
+          </div>
+          <div className="inline-flex items-center gap-3 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground">
+            Storage: {
+              formatStorageValue(creditAccount?.storage_used_bytes ?? 0)
+            } / {
+              formatStorageLimitFromMb(
+                (creditAccount?.storage_base_limit_mb ?? 0)
+                + (creditAccount?.storage_addon_limit_mb ?? 0)
+                + (creditAccount?.storage_override_limit_mb ?? 0),
+              )
+            }
+          </div>
         </div>
       </section>
 

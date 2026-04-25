@@ -24,11 +24,17 @@ const documentTypeOptions = [
   "Other",
 ] as const;
 
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
 }
 
 async function uploadDocumentFile(file: File, userId: string, clientId: string) {
+  if (file.size > MAX_DOCUMENT_BYTES) {
+    throw new Error("Files larger than 10 MB are not allowed.");
+  }
+
   const safeFileName = sanitizeFileName(file.name);
   const uniqueFileName = `${Date.now()}-${safeFileName}`;
   const candidatePaths = [

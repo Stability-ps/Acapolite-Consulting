@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Enums } from "@/integrations/supabase/types";
 
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
 export const serviceCategoryOptions: { value: Enums<"service_request_category">; label: string }[] = [
   { value: "individual_tax", label: "Individual Tax Services" },
   { value: "business_tax", label: "Business Tax Services" },
@@ -156,6 +158,10 @@ function sanitizeFileName(fileName: string) {
 }
 
 export async function uploadServiceRequestFile(file: File, requestId: string) {
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error("Files larger than 10 MB are not allowed.");
+  }
+
   const safeFileName = sanitizeFileName(file.name);
   const uniqueFileName = `${Date.now()}-${safeFileName}`;
   const filePath = `service-requests/${requestId}/${uniqueFileName}`;

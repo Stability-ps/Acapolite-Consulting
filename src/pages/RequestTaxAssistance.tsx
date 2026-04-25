@@ -240,6 +240,11 @@ export default function RequestTaxAssistance() {
         return current;
       }
 
+      if (!alreadySelected && current.service_needed_list.length >= 5) {
+        toast.error("You can select up to 5 services per request.");
+        return current;
+      }
+
       const nextServices = alreadySelected
         ? current.service_needed_list.filter((item) => item !== service)
         : [...current.service_needed_list, service];

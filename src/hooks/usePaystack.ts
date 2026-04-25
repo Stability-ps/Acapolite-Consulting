@@ -2,23 +2,18 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  BILLING_CREDIT_PACKAGES,
+  BILLING_STORAGE_ADDONS,
+  BILLING_SUBSCRIPTION_PLANS,
+  type BillingCreditPackage,
+  type BillingStorageAddon,
+  type BillingSubscriptionPlan,
+} from "@/lib/practitionerBilling";
 
-type CreditPackage = {
-  code: string;
-  name: string;
-  credits: number;
-  price_zar: number;
-  description: string;
-};
-
-type SubscriptionPlan = {
-  code: string;
-  name: string;
-  price_zar: number;
-  credits_per_month: number;
-  paystack_plan_code: string;
-  features: string[];
-};
+type CreditPackage = BillingCreditPackage;
+type SubscriptionPlan = BillingSubscriptionPlan;
+type StorageAddon = BillingStorageAddon;
 
 type PaystackResponse = {
   reference: string;
@@ -55,56 +50,9 @@ declare global {
 
 const DEFAULT_PAYSTACK_PUBLIC_KEY = "pk_live_22d1de7dc3c5f3f2247e243c1aa26c9ae5e08da3";
 
-export const CREDIT_PACKAGES: CreditPackage[] = [
-  {
-    code: "starter",
-    name: "Starter Pack",
-    credits: 5,
-    price_zar: 149,
-    description: "A lightweight top-up for unlocking and responding to new leads.",
-  },
-  {
-    code: "growth",
-    name: "Growth Pack",
-    credits: 15,
-    price_zar: 349,
-    description: "A balanced package for practitioners actively responding each week.",
-  },
-  {
-    code: "pro",
-    name: "Pro Pack",
-    credits: 35,
-    price_zar: 699,
-    description: "High-volume credits for practitioners working the marketplace consistently.",
-  },
-];
-
-export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
-  {
-    code: "basic",
-    name: "Basic",
-    price_zar: 299,
-    credits_per_month: 10,
-    paystack_plan_code: "PLN_itawkcig6c30q77",
-    features: ["Verified Badge", "Standard Listing"],
-  },
-  {
-    code: "standard",
-    name: "Standard",
-    price_zar: 599,
-    credits_per_month: 25,
-    paystack_plan_code: "PLN_9deli5oghu3lt2h",
-    features: ["Verified Badge", "Priority Listing", "Featured Profile"],
-  },
-  {
-    code: "premium",
-    name: "Premium",
-    price_zar: 999,
-    credits_per_month: 60,
-    paystack_plan_code: "PLN_6qfph5xvmtzgpag",
-    features: ["Verified Badge", "Priority Listing", "Featured Profile", "Highlighted Profile"],
-  },
-];
+export const CREDIT_PACKAGES: CreditPackage[] = BILLING_CREDIT_PACKAGES;
+export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = BILLING_SUBSCRIPTION_PLANS;
+export const STORAGE_ADDONS: StorageAddon[] = BILLING_STORAGE_ADDONS;
 
 function getPaystackPublicKey() {
   return import.meta.env.VITE_PAYSTACK_PUBLIC_KEY
@@ -131,6 +79,7 @@ async function invalidateBillingQueries(queryClient: ReturnType<typeof useQueryC
     queryClient.invalidateQueries({ queryKey: ["practitioner-credit-account", userId] }),
     queryClient.invalidateQueries({ queryKey: ["practitioner-credit-transactions", userId] }),
     queryClient.invalidateQueries({ queryKey: ["practitioner-credit-purchases", userId] }),
+    queryClient.invalidateQueries({ queryKey: ["practitioner-storage-addon-purchases", userId] }),
     queryClient.invalidateQueries({ queryKey: ["practitioner-active-subscription", userId] }),
   ]);
 }
@@ -145,6 +94,32 @@ function scheduleBillingRefresh(queryClient: ReturnType<typeof useQueryClient>, 
   }, 6000);
 }
 
+async function getAuthenticatedProfile() {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("email, full_name")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  if (!profile?.email) {
+    throw new Error("No email found on your profile.");
+  }
+
+  return { user, profile };
+}
+
 export function usePaystack() {
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();
@@ -154,28 +129,7 @@ export function usePaystack() {
 
     try {
       ensurePaystack();
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error("Not authenticated");
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("email, full_name")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError) {
-        throw profileError;
-      }
-
-      if (!profile?.email) {
-        throw new Error("No email found on your profile.");
-      }
+      const { user, profile } = await getAuthenticatedProfile();
 
       const { data: purchase, error: insertError } = await supabase
         .from("practitioner_credit_purchases")
@@ -184,7 +138,7 @@ export function usePaystack() {
           package_code: pkg.code,
           package_name: pkg.name,
           credits: pkg.credits,
-          amount_zar: pkg.price_zar,
+          amount_zar: pkg.priceZar,
           currency: "ZAR",
           payment_provider: "paystack",
           payment_status: "pending",
@@ -202,7 +156,7 @@ export function usePaystack() {
       const handler = window.PaystackPop!.setup({
         key: getPaystackPublicKey(),
         email: profile.email,
-        amount: pkg.price_zar * 100,
+        amount: pkg.priceZar * 100,
         currency: "ZAR",
         ref: purchase.id,
         metadata: {
@@ -218,7 +172,13 @@ export function usePaystack() {
           void (async () => {
             await supabase
               .from("practitioner_credit_purchases")
-              .update({ provider_payment_id: response.reference })
+              .update({
+                provider_payment_id: response.reference,
+                metadata: {
+                  purchase_type: "credit_package",
+                  paystack_reference: response.reference,
+                },
+              })
               .eq("id", purchase.id);
 
             toast.success("Payment successful. Your credits will be added shortly.");
@@ -254,35 +214,14 @@ export function usePaystack() {
 
     try {
       ensurePaystack();
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error("Not authenticated");
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("email, full_name")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError) {
-        throw profileError;
-      }
-
-      if (!profile?.email) {
-        throw new Error("No email found on your profile.");
-      }
+      const { user, profile } = await getAuthenticatedProfile();
 
       const handler = window.PaystackPop!.setup({
         key: getPaystackPublicKey(),
         email: profile.email,
-        amount: plan.price_zar * 100,
+        amount: plan.priceZar * 100,
         currency: "ZAR",
-        plan: plan.paystack_plan_code,
+        plan: plan.paystackPlanCode,
         metadata: {
           practitioner_profile_id: user.id,
           plan_code: plan.code,
@@ -293,7 +232,7 @@ export function usePaystack() {
         },
         callback: () => {
           void (async () => {
-            toast.success(`Subscribed to ${plan.name}. Your credits will be added shortly.`);
+            toast.success(`Subscribed to ${plan.name}. Your monthly credits will refresh shortly.`);
             await invalidateBillingQueries(queryClient, user.id);
             scheduleBillingRefresh(queryClient, user.id);
           })();
@@ -306,6 +245,91 @@ export function usePaystack() {
       handler.openIframe();
     } catch (error) {
       console.error("subscribe error:", error);
+      toast.error(formatPaystackError(error));
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const buyStorageUpgrade = async (addon: StorageAddon) => {
+    setLoading(true);
+
+    try {
+      ensurePaystack();
+      const { user, profile } = await getAuthenticatedProfile();
+
+      const { data: purchase, error: insertError } = await supabase
+        .from("practitioner_storage_addon_purchases")
+        .insert({
+          practitioner_profile_id: user.id,
+          addon_code: addon.code,
+          addon_name: addon.name,
+          storage_mb: addon.storageMb,
+          amount_zar: addon.priceZar,
+          currency: "ZAR",
+          payment_provider: "paystack",
+          payment_status: "pending",
+          metadata: {
+            purchase_type: "storage_addon",
+          },
+        })
+        .select()
+        .single();
+
+      if (insertError || !purchase) {
+        throw insertError ?? new Error("Unable to create the storage upgrade purchase record.");
+      }
+
+      const handler = window.PaystackPop!.setup({
+        key: getPaystackPublicKey(),
+        email: profile.email,
+        amount: addon.priceZar * 100,
+        currency: "ZAR",
+        ref: purchase.id,
+        metadata: {
+          practitioner_profile_id: user.id,
+          addon_code: addon.code,
+          purchase_type: "storage_addon",
+          purchase_id: purchase.id,
+          custom_fields: [
+            { display_name: "Storage Add-on", variable_name: "storage_addon", value: addon.name },
+          ],
+        },
+        callback: (response) => {
+          void (async () => {
+            await supabase
+              .from("practitioner_storage_addon_purchases")
+              .update({
+                provider_payment_id: response.reference,
+                metadata: {
+                  purchase_type: "storage_addon",
+                  paystack_reference: response.reference,
+                },
+              })
+              .eq("id", purchase.id);
+
+            toast.success("Payment successful. Your storage upgrade will be applied shortly.");
+            await invalidateBillingQueries(queryClient, user.id);
+            scheduleBillingRefresh(queryClient, user.id);
+          })();
+        },
+        onClose: () => {
+          void (async () => {
+            await supabase
+              .from("practitioner_storage_addon_purchases")
+              .update({ payment_status: "cancelled" })
+              .eq("id", purchase.id)
+              .eq("payment_status", "pending");
+
+            await queryClient.invalidateQueries({ queryKey: ["practitioner-storage-addon-purchases", user.id] });
+          })();
+        },
+      });
+
+      handler.openIframe();
+    } catch (error) {
+      console.error("buyStorageUpgrade error:", error);
       toast.error(formatPaystackError(error));
       throw error;
     } finally {
@@ -343,5 +367,5 @@ export function usePaystack() {
     }
   };
 
-  return { buyCredits, subscribe, cancelSubscription, loading };
+  return { buyCredits, subscribe, buyStorageUpgrade, cancelSubscription, loading };
 }

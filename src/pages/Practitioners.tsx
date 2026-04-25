@@ -55,7 +55,7 @@ const creditPoints = [
 ];
 
 export default function Practitioners() {
-  const lowestExtraCreditPrice = Math.min(...CREDIT_PACKAGES.map((pkg) => pkg.price_zar));
+  const lowestExtraCreditPrice = Math.min(...CREDIT_PACKAGES.map((pkg) => pkg.priceZar));
 
   return (
     <div className="min-h-screen bg-background">
@@ -124,7 +124,7 @@ export default function Practitioners() {
                 <div className="rounded-[28px] border border-sky-200/40 bg-white p-6 shadow-card">
                   <p className="text-xs uppercase tracking-[0.18em] text-primary/70">Plans Start At</p>
                   <p className="mt-3 font-display text-4xl text-foreground">
-                    {formatZarCurrency(SUBSCRIPTION_PLANS[0]?.price_zar ?? 0)}
+                    {formatZarCurrency(SUBSCRIPTION_PLANS[0]?.priceZar ?? 0)}
                     <span className="ml-2 text-base font-body text-muted-foreground">/ month</span>
                   </p>
                   <p className="mt-3 text-sm leading-6 text-muted-foreground">
@@ -218,10 +218,10 @@ export default function Practitioners() {
                     </Badge>
                   </div>
                   <p className="mt-5 font-display text-4xl text-foreground">
-                    {formatZarCurrency(plan.price_zar)}
+                    {formatZarCurrency(plan.priceZar)}
                     <span className="ml-2 text-sm font-body text-muted-foreground">/ month</span>
                   </p>
-                  <p className="mt-3 text-sm font-semibold text-primary">{plan.credits_per_month} credits included monthly</p>
+                  <p className="mt-3 text-sm font-semibold text-primary">{plan.creditsPerMonth} credits included monthly</p>
                   <div className="mt-6 space-y-3">
                     {plan.features.map((feature) => (
                       <div key={feature} className="flex items-start gap-3">
