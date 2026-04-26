@@ -213,6 +213,7 @@ Deno.serve(async (request) => {
         { count: assignedClientCount },
         { count: assignedCaseCount },
         { count: assignedLeadCount },
+        { count: conversationCount },
       ] = await Promise.all([
         adminClient.from("practitioner_profiles").select("*", { count: "exact", head: true }).eq("profile_id", targetProfileId),
         adminClient.from("practitioner_verification_documents").select("*", { count: "exact", head: true }).eq("practitioner_profile_id", targetProfileId),
@@ -227,6 +228,7 @@ Deno.serve(async (request) => {
         adminClient.from("clients").select("*", { count: "exact", head: true }).eq("assigned_consultant_id", targetProfileId),
         adminClient.from("cases").select("*", { count: "exact", head: true }).eq("assigned_consultant_id", targetProfileId),
         adminClient.from("service_requests").select("*", { count: "exact", head: true }).eq("assigned_practitioner_id", targetProfileId),
+        adminClient.from("conversations").select("*", { count: "exact", head: true }).eq("practitioner_profile_id", targetProfileId),
       ]);
 
       preview.practitioner_profile = normalizeCount(practitionerProfileCount);
@@ -242,6 +244,32 @@ Deno.serve(async (request) => {
       preview.assigned_clients = normalizeCount(assignedClientCount);
       preview.assigned_cases = normalizeCount(assignedCaseCount);
       preview.assigned_leads = normalizeCount(assignedLeadCount);
+      preview.conversations = normalizeCount(conversationCount);
+
+      if (normalizeCount(conversationCount) > 0) {
+        const { data: conversationIds, error: conversationIdsError } = await adminClient
+          .from("conversations")
+          .select("id")
+          .eq("practitioner_profile_id", targetProfileId);
+
+        if (conversationIdsError) {
+          return jsonResponse(request, { error: conversationIdsError.message }, 400);
+        }
+
+        const ids = (conversationIds ?? []).map((row) => row.id);
+        if (ids.length > 0) {
+          const { count: messageCount, error: messageCountError } = await adminClient
+            .from("messages")
+            .select("*", { count: "exact", head: true })
+            .in("conversation_id", ids);
+
+          if (messageCountError) {
+            return jsonResponse(request, { error: messageCountError.message }, 400);
+          }
+
+          preview.messages = normalizeCount(messageCount);
+        }
+      }
 
       const { count: notificationCount } = await adminClient
         .from("notifications")
@@ -314,6 +342,84 @@ Deno.serve(async (request) => {
 
       if (verificationPaths.length > 0) {
         await adminClient.storage.from("documents").remove(verificationPaths);
+      }
+
+      const { data: practitionerConversations, error: practitionerConversationsError } = await adminClient
+        .from("conversations")
+        .select("id, client_id, case_id")
+        .eq("practitioner_profile_id", targetProfileId);
+
+      if (practitionerConversationsError) {
+        return jsonResponse(request, { error: practitionerConversationsError.message }, 400);
+      }
+
+      const caseIdsToResolve = Array.from(
+        new Set(
+          (practitionerConversations ?? [])
+            .filter((conversation) => !conversation.client_id && conversation.case_id)
+            .map((conversation) => conversation.case_id as string),
+        ),
+      );
+
+      const caseClientMap = new Map<string, string | null>();
+
+      if (caseIdsToResolve.length > 0) {
+        const { data: caseRows, error: caseRowsError } = await adminClient
+          .from("cases")
+          .select("id, client_id")
+          .in("id", caseIdsToResolve);
+
+        if (caseRowsError) {
+          return jsonResponse(request, { error: caseRowsError.message }, 400);
+        }
+
+        for (const caseRow of caseRows ?? []) {
+          caseClientMap.set(caseRow.id, caseRow.client_id);
+        }
+      }
+
+      const conversationIdsToDelete: string[] = [];
+
+      for (const conversation of practitionerConversations ?? []) {
+        const fallbackClientId = conversation.case_id ? caseClientMap.get(conversation.case_id) ?? null : null;
+        const resolvedClientId = conversation.client_id ?? fallbackClientId;
+
+        if (resolvedClientId) {
+          const { error: updateConversationError } = await adminClient
+            .from("conversations")
+            .update({
+              client_id: resolvedClientId,
+              practitioner_profile_id: null,
+            })
+            .eq("id", conversation.id);
+
+          if (updateConversationError) {
+            return jsonResponse(request, { error: updateConversationError.message }, 400);
+          }
+
+        } else {
+          conversationIdsToDelete.push(conversation.id);
+        }
+      }
+
+      if (conversationIdsToDelete.length > 0) {
+        const { error: deleteConversationMessagesError } = await adminClient
+          .from("messages")
+          .delete()
+          .in("conversation_id", conversationIdsToDelete);
+
+        if (deleteConversationMessagesError) {
+          return jsonResponse(request, { error: deleteConversationMessagesError.message }, 400);
+        }
+
+        const { error: deleteConversationsError } = await adminClient
+          .from("conversations")
+          .delete()
+          .in("id", conversationIdsToDelete);
+
+        if (deleteConversationsError) {
+          return jsonResponse(request, { error: deleteConversationsError.message }, 400);
+        }
       }
 
       await adminClient.from("clients").update({ assigned_consultant_id: null }).eq("assigned_consultant_id", targetProfileId);

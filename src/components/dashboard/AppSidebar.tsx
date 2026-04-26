@@ -136,9 +136,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/80">
-      <SidebarContent>
+      <SidebarContent className="pt-3">
         <SidebarGroup>
-          <SidebarGroupLabel className="px-3 pt-3">
+          <SidebarGroupLabel className="px-3 pt-4">
             <div className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
               <AcapoliteLogo className={collapsed ? "h-8" : "h-10"} />
               {!collapsed ? (
