@@ -144,7 +144,7 @@ export default function ClientServiceRequests() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, phone, role, avatar_url, is_active, created_at, updated_at")
+        .select("id, full_name, email")
         .in("id", practitionerIds);
 
       if (error) throw error;
@@ -290,6 +290,12 @@ export default function ClientServiceRequests() {
 
   const getPractitionerDisplayName = (practitionerUser?: Profile | null, practitionerProfile?: PractitionerProfile | null) =>
     practitionerProfile?.business_name || practitionerUser?.full_name || "Practitioner";
+
+  const getPractitionerFullName = (practitionerUser?: Profile | null, practitionerProfile?: PractitionerProfile | null) =>
+    practitionerUser?.full_name
+    || practitionerProfile?.bank_account_holder_name
+    || practitionerProfile?.business_name
+    || "Practitioner";
 
   const getPractitionerSubtitle = (practitionerProfile?: PractitionerProfile | null) =>
     practitionerProfile?.professional_title
@@ -864,7 +870,7 @@ export default function ClientServiceRequests() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Practitioner</p>
                     <h3 className="mt-2 font-display text-2xl text-foreground">
-                      {getPractitionerDisplayName(practitionerUser, practitionerProfile)}
+                      {getPractitionerFullName(practitionerUser, practitionerProfile)}
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground font-body">
                       {getPractitionerSubtitle(practitionerProfile)}
