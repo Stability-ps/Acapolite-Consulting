@@ -68,7 +68,7 @@ export function InvoiceLineItemsEditor({
         <div className="divide-y divide-border">
           {items?.map((item, index) => (
             <div
-              key={item.id ?? `${item.service_item}-${index}`}
+              key={item.id ?? `item-${index}`}
               className={`grid gap-3 px-4 py-4 ${readOnly ? "grid-cols-[minmax(0,1.9fr)_110px_140px_140px]" : "grid-cols-[minmax(0,1.9fr)_110px_140px_140px_52px]"}`}
             >
               {readOnly ? (
