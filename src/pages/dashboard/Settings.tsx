@@ -49,6 +49,7 @@ export default function SettingsPage() {
     address_line_2: "",
     postal_code: "",
     country: "South Africa",
+    vat_number: "",
   });
 
   const { data: profile } = useQuery({
@@ -78,6 +79,7 @@ export default function SettingsPage() {
       address_line_2: client?.address_line_2 || "",
       postal_code: client?.postal_code || "",
       country: client?.country || "South Africa",
+      vat_number: client?.vat_number || "",
     });
   }, [profile, client]);
 
@@ -123,6 +125,7 @@ export default function SettingsPage() {
             address_line_2: form.address_line_2,
             postal_code: form.postal_code,
             country: form.country,
+            vat_number: form.vat_number,
           })
           .eq("id", client.id)
       : Promise.resolve({ error: null });
@@ -236,6 +239,10 @@ export default function SettingsPage() {
         <div>
           <Label className="font-body">SARS Reference Number</Label>
           <Input value={form.sars_reference_number} onChange={(event) => setForm({ ...form, sars_reference_number: event.target.value })} className="mt-1.5" />
+        </div>
+        <div>
+          <Label className="font-body">VAT Number (Optional)</Label>
+          <Input value={form.vat_number} onChange={(event) => setForm({ ...form, vat_number: event.target.value })} className="mt-1.5" placeholder="VAT number" />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>

@@ -69,6 +69,8 @@ type StaffInvoice = {
   client_email?: string | null;
   client_phone?: string | null;
   client_address?: string | null;
+  client_vat_number?: string | null;
+  practitioner_vat_number?: string | null;
   clients?: {
     profile_id?: string | null;
     company_name?: string | null;
@@ -82,6 +84,7 @@ type StaffInvoice = {
     province?: string | null;
     postal_code?: string | null;
     country?: string | null;
+    vat_number?: string | null;
     profiles?: {
       full_name?: string | null;
       email?: string | null;
@@ -231,7 +234,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("invoices")
-        .select("*, clients(profile_id, client_type, company_name, first_name, last_name, client_code, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
+        .select("*, client_vat_number, practitioner_vat_number, clients(profile_id, client_type, company_name, first_name, last_name, client_code, vat_number, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -253,7 +256,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("clients")
-        .select("id, profile_id, client_type, company_name, first_name, last_name, client_code, address_line_1, address_line_2, city, province, postal_code, country, assigned_consultant_id, profiles!clients_profile_id_fkey(full_name, email, phone)")
+        .select("id, profile_id, client_type, company_name, first_name, last_name, client_code, vat_number, address_line_1, address_line_2, city, province, postal_code, country, assigned_consultant_id, profiles!clients_profile_id_fkey(full_name, email, phone)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -619,6 +622,8 @@ export default function AdminInvoices() {
           practitionerProfile?.province,
         ]) || null,
       practitioner_logo_path: practitionerProfile?.invoice_logo_path || null,
+      client_vat_number: (selectedClient as any)?.vat_number || null,
+      practitioner_vat_number: practitionerProfile?.vat_number || null,
     };
 
     return invoiceDetails;
@@ -1790,14 +1795,14 @@ export default function AdminInvoices() {
                       phone: selectedInvoice.practitioner_phone || selectedInvoiceBankProfile?.profiles?.phone || null,
                       address: selectedInvoice.practitioner_address || getAddressLabel([selectedInvoiceBankProfile?.city, selectedInvoiceBankProfile?.province]) || null,
                       registrationNumber: selectedInvoice.practitioner_number || selectedInvoiceBankProfile?.tax_practitioner_number || null,
-                      vatNumber: selectedInvoiceBankProfile?.vat_number || null,
+                      vatNumber: selectedInvoice.practitioner_vat_number || selectedInvoiceBankProfile?.vat_number || null,
                     },
                     client: {
                       name: selectedInvoice.client_name || getClientName(selectedInvoice),
                       email: selectedInvoice.client_email || selectedInvoice.clients?.profiles?.email || null,
                       phone: selectedInvoice.client_phone || selectedInvoice.clients?.profiles?.phone || null,
                       address: selectedInvoiceClientAddress || null,
-                      vatNumber: (selectedInvoice.clients as any)?.tax_number || null,
+                      vatNumber: selectedInvoice.client_vat_number || selectedInvoice.clients?.vat_number || null,
                     },
                     serviceDescription: invoiceTitle || selectedInvoice.title || selectedInvoice.description || "Service invoice",
                     lineItems: (invoiceLineItems || []).map((item) => ({

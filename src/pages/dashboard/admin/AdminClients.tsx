@@ -45,6 +45,7 @@ type StaffClient = {
   tax_number: string | null;
   sars_reference_number: string | null;
   id_number: string | null;
+  vat_number: string | null;
   sars_outstanding_debt: number;
   returns_filed: boolean;
   client_code: string | null;
@@ -86,6 +87,7 @@ type NewClientFormState = {
   taxNumber: string;
   sarsReferenceNumber: string;
   idNumber: string;
+  vatNumber: string;
   sarsOutstandingDebt: string;
   returnsFiled: boolean;
   clientCode: string;
@@ -111,6 +113,7 @@ const initialFormState: NewClientFormState = {
   taxNumber: "",
   sarsReferenceNumber: "",
   idNumber: "",
+  vatNumber: "",
   sarsOutstandingDebt: "0",
   returnsFiled: false,
   clientCode: "",
@@ -471,6 +474,7 @@ export default function AdminClients() {
       taxNumber: client.tax_number || "",
       sarsReferenceNumber: client.sars_reference_number || "",
       idNumber: client.id_number || "",
+      vatNumber: client.vat_number || "",
       sarsOutstandingDebt: String(client.sars_outstanding_debt ?? 0),
       returnsFiled: client.returns_filed,
       clientCode: client.client_code || "",
@@ -607,6 +611,7 @@ export default function AdminClients() {
       tax_number: formState.taxNumber.trim() || null,
       sars_reference_number: formState.sarsReferenceNumber.trim() || null,
       id_number: formState.clientType === "individual" ? formState.idNumber.trim() || null : null,
+      vat_number: formState.vatNumber.trim() || null,
       sars_outstanding_debt: Number(formState.sarsOutstandingDebt || 0),
       returns_filed: formState.returnsFiled,
       client_code: formState.clientCode.trim() || generateClientCode(profile.id),
@@ -699,6 +704,7 @@ export default function AdminClients() {
         tax_number: formState.taxNumber.trim() || null,
         sars_reference_number: formState.sarsReferenceNumber.trim() || null,
         id_number: formState.clientType === "individual" ? formState.idNumber.trim() || null : null,
+        vat_number: formState.vatNumber.trim() || null,
         sars_outstanding_debt: Number(formState.sarsOutstandingDebt || 0),
         returns_filed: formState.returnsFiled,
         client_code: formState.clientCode.trim() || selectedClient.client_code || generateClientCode(selectedClient.id),
@@ -1051,6 +1057,10 @@ export default function AdminClients() {
               <Input value={formState.sarsReferenceNumber} onChange={(event) => updateForm("sarsReferenceNumber", event.target.value)} placeholder="SARS reference number" className="rounded-xl" />
             </div>
             <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">VAT Number (Optional)</label>
+              <Input value={formState.vatNumber} onChange={(event) => updateForm("vatNumber", event.target.value)} placeholder="VAT number" className="rounded-xl" />
+            </div>
+            <div>
               <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Outstanding / Debt</label>
               <Input
                 value={formState.sarsOutstandingDebt}
@@ -1298,6 +1308,10 @@ export default function AdminClients() {
                 <p className="font-body text-foreground">{selectedClient.tax_number || "Not provided"}</p>
               </div>
               <div className="rounded-2xl border border-border p-4">
+                <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">VAT Number</p>
+                <p className="font-body text-foreground">{selectedClient.vat_number || "Not provided"}</p>
+              </div>
+              <div className="rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">SARS Reference</p>
                 <p className="font-body text-foreground">{selectedClient.sars_reference_number || "Not provided"}</p>
               </div>
@@ -1541,6 +1555,10 @@ export default function AdminClients() {
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Reference</label>
                 <Input value={formState.sarsReferenceNumber} onChange={(event) => updateForm("sarsReferenceNumber", event.target.value)} placeholder="SARS reference number" className="rounded-xl" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-foreground font-body">VAT Number (Optional)</label>
+                <Input value={formState.vatNumber} onChange={(event) => updateForm("vatNumber", event.target.value)} placeholder="VAT number" className="rounded-xl" />
               </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground font-body">SARS Outstanding / Debt</label>

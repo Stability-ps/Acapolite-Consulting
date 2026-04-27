@@ -618,6 +618,7 @@ export default function Invoices() {
                             email: selectedInvoice.client_email || profile?.email || null,
                             phone: selectedInvoice.client_phone || profile?.phone || null,
                             address: selectedInvoice.client_address || [client.address_line_1, client.address_line_2, client.city, client.province, client.postal_code, client.country].filter(Boolean).join(", ") || null,
+                            vatNumber: client.vat_number || null,
                           },
                           serviceDescription: selectedInvoice.description || selectedInvoice.title,
                           lineItems: (selectedInvoiceItems?.length

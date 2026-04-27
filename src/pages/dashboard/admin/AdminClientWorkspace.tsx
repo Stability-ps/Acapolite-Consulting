@@ -115,6 +115,7 @@ type ClientDetails = {
   tax_number: string | null;
   sars_reference_number: string | null;
   id_number: string | null;
+  vat_number: string | null;
   sars_outstanding_debt: number;
   returns_filed: boolean;
   client_code: string | null;
@@ -306,6 +307,7 @@ export default function AdminClientWorkspace() {
     tax_number: "",
     sars_reference_number: "",
     id_number: "",
+    vat_number: "",
     sars_outstanding_debt: "0",
     returns_filed: false,
     client_code: "",
@@ -537,6 +539,7 @@ export default function AdminClientWorkspace() {
       tax_number: clientDetails.tax_number || "",
       sars_reference_number: clientDetails.sars_reference_number || "",
       id_number: clientDetails.id_number || "",
+      vat_number: clientDetails.vat_number || "",
       sars_outstanding_debt: String(clientDetails.sars_outstanding_debt ?? 0),
       returns_filed: clientDetails.returns_filed,
       client_code: clientDetails.client_code || "",
@@ -689,6 +692,7 @@ export default function AdminClientWorkspace() {
         tax_number: clientForm.tax_number.trim() || null,
         sars_reference_number: clientForm.sars_reference_number.trim() || null,
         id_number: clientForm.client_type === "individual" ? clientForm.id_number.trim() || null : null,
+        vat_number: clientForm.vat_number.trim() || null,
         sars_outstanding_debt: Number(clientForm.sars_outstanding_debt || 0),
         returns_filed: clientForm.returns_filed,
         client_code: clientForm.client_code.trim() || null,
@@ -1542,6 +1546,10 @@ export default function AdminClientWorkspace() {
                       <p className="font-body text-foreground">{clientDetails.sars_reference_number || "Not provided"}</p>
                     </div>
                     <div className="rounded-xl border border-border bg-accent/30 p-4">
+                      <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">VAT Number</p>
+                      <p className="font-body text-foreground">{clientDetails.vat_number || "Not provided"}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-accent/30 p-4">
                       <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">{getClientIdentityFieldLabel(clientDetails.client_type)}</p>
                       <p className="font-body text-foreground">{getClientIdentityLabel(clientDetails)}</p>
                     </div>
@@ -2126,6 +2134,15 @@ export default function AdminClientWorkspace() {
                     value={clientForm.tax_number}
                     onChange={(event) => setClientForm((current) => ({ ...current, tax_number: event.target.value }))}
                     placeholder="Tax number"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">VAT Number (Optional)</label>
+                  <Input
+                    value={clientForm.vat_number}
+                    onChange={(event) => setClientForm((current) => ({ ...current, vat_number: event.target.value }))}
+                    placeholder="VAT number"
                     className="rounded-xl"
                   />
                 </div>
