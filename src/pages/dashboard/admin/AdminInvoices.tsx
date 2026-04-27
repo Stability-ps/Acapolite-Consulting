@@ -1829,15 +1829,6 @@ export default function AdminInvoices() {
                         <Download className="mr-2 h-4 w-4" />
                         Download
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-xl px-4 h-11 font-semibold border-border/80 hover:bg-accent/10 transition-colors shadow-sm"
-                        onClick={() => openInvoicePdf(pdfPayload, { autoPrint: false }).then(() => window.print())}
-                      >
-                        <Printer className="mr-2 h-4 w-4" />
-                        Print
-                      </Button>
                     </>
                   );
                 })()}
