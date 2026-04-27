@@ -133,6 +133,7 @@ export type Database = {
           banking_verified_by: string | null;
           verification_status: string;
           verification_submitted_at: string | null;
+          invoice_logo_path: string | null;
           id_document_path: string | null;
           certificate_document_path: string | null;
           proof_of_address_path: string | null;
@@ -172,6 +173,7 @@ export type Database = {
           banking_verified_by?: string | null;
           verification_status?: string;
           verification_submitted_at?: string | null;
+          invoice_logo_path?: string | null;
           id_document_path?: string | null;
           certificate_document_path?: string | null;
           proof_of_address_path?: string | null;
@@ -211,6 +213,7 @@ export type Database = {
           banking_verified_by?: string | null;
           verification_status?: string;
           verification_submitted_at?: string | null;
+          invoice_logo_path?: string | null;
           id_document_path?: string | null;
           certificate_document_path?: string | null;
           proof_of_address_path?: string | null;
@@ -1093,6 +1096,7 @@ export type Database = {
           description: string | null;
           currency: string;
           subtotal: number;
+          discount_amount: number;
           tax_amount: number;
           total_amount: number;
           amount_paid: number;
@@ -1100,6 +1104,7 @@ export type Database = {
           status: Database["public"]["Enums"]["invoice_status"];
           issue_date: string;
           sent_at: string | null;
+          viewed_at: string | null;
           paid_at: string | null;
           overdue_at: string | null;
           cancelled_at: string | null;
@@ -1108,6 +1113,19 @@ export type Database = {
           payment_reference: string | null;
           proof_of_payment_document_id: string | null;
           practitioner_bank_details: string | null;
+          notes_to_client: string | null;
+          terms_and_conditions: string | null;
+          practitioner_name: string | null;
+          practice_name: string | null;
+          practitioner_number: string | null;
+          practitioner_email: string | null;
+          practitioner_phone: string | null;
+          practitioner_address: string | null;
+          practitioner_logo_path: string | null;
+          client_name: string | null;
+          client_email: string | null;
+          client_phone: string | null;
+          client_address: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -1121,12 +1139,14 @@ export type Database = {
           description?: string | null;
           currency?: string;
           subtotal?: number;
+          discount_amount?: number;
           tax_amount?: number;
           total_amount?: number;
           amount_paid?: number;
           status?: Database["public"]["Enums"]["invoice_status"];
           issue_date?: string;
           sent_at?: string | null;
+          viewed_at?: string | null;
           paid_at?: string | null;
           overdue_at?: string | null;
           cancelled_at?: string | null;
@@ -1135,6 +1155,19 @@ export type Database = {
           payment_reference?: string | null;
           proof_of_payment_document_id?: string | null;
           practitioner_bank_details?: string | null;
+          notes_to_client?: string | null;
+          terms_and_conditions?: string | null;
+          practitioner_name?: string | null;
+          practice_name?: string | null;
+          practitioner_number?: string | null;
+          practitioner_email?: string | null;
+          practitioner_phone?: string | null;
+          practitioner_address?: string | null;
+          practitioner_logo_path?: string | null;
+          client_name?: string | null;
+          client_email?: string | null;
+          client_phone?: string | null;
+          client_address?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1148,12 +1181,14 @@ export type Database = {
           description?: string | null;
           currency?: string;
           subtotal?: number;
+          discount_amount?: number;
           tax_amount?: number;
           total_amount?: number;
           amount_paid?: number;
           status?: Database["public"]["Enums"]["invoice_status"];
           issue_date?: string;
           sent_at?: string | null;
+          viewed_at?: string | null;
           paid_at?: string | null;
           overdue_at?: string | null;
           cancelled_at?: string | null;
@@ -1162,9 +1197,77 @@ export type Database = {
           payment_reference?: string | null;
           proof_of_payment_document_id?: string | null;
           practitioner_bank_details?: string | null;
+          notes_to_client?: string | null;
+          terms_and_conditions?: string | null;
+          practitioner_name?: string | null;
+          practice_name?: string | null;
+          practitioner_number?: string | null;
+          practitioner_email?: string | null;
+          practitioner_phone?: string | null;
+          practitioner_address?: string | null;
+          practitioner_logo_path?: string | null;
+          client_name?: string | null;
+          client_email?: string | null;
+          client_phone?: string | null;
+          client_address?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      invoice_items: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          service_item: string;
+          quantity: number;
+          unit_price: number;
+          line_total: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_id: string;
+          service_item: string;
+          quantity?: number;
+          unit_price?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          invoice_id?: string;
+          service_item?: string;
+          quantity?: number;
+          unit_price?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      invoice_attachments: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          document_id: string;
+          attachment_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_id: string;
+          document_id: string;
+          attachment_type?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          invoice_id?: string;
+          document_id?: string;
+          attachment_type?: string;
+          created_at?: string;
         };
         Relationships: [];
       };

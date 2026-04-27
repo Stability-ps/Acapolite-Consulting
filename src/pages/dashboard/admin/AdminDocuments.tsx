@@ -590,15 +590,29 @@ export default function AdminDocuments() {
   const openItem = async (item: UnifiedItem) => {
     if (item.sourceType === "invoice" && item.invoice) {
       openInvoicePdf({
-        invoiceNumber: `INV-${item.invoice.invoice_number}`,
-        clientName: item.clientName,
-        caseReference: item.caseLabel,
-        serviceDescription:
-          item.invoice.title || item.invoice.description || "Client invoice",
+        invoiceNumber: item.invoice.invoice_number,
         issueDate: item.invoice.issue_date,
         dueDate: item.invoice.due_date,
         status: item.invoice.status,
+        caseReference: item.caseLabel,
+        practitioner: {
+          name: "Practitioner",
+        },
+        client: {
+          name: item.clientName,
+        },
+        serviceDescription:
+          item.invoice.title || item.invoice.description || "Client invoice",
+        lineItems: [
+          {
+            serviceItem: item.invoice.title || item.invoice.description || "Client invoice",
+            quantity: 1,
+            unitPrice: item.invoice.subtotal,
+            total: item.invoice.subtotal,
+          },
+        ],
         subtotal: item.invoice.subtotal,
+        discountAmount: item.invoice.discount_amount || 0,
         vatAmount: item.invoice.tax_amount,
         total: item.invoice.total_amount,
         bankDetails: item.invoice.practitioner_bank_details,

@@ -5,7 +5,9 @@ import {
   BriefcaseBusiness,
   ClipboardList,
   FileUp,
+  ImagePlus,
   Save,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -26,6 +28,7 @@ import {
   getAvailabilityBadgeClass,
   normalizeServicesOffered,
 } from "@/lib/practitionerMarketplace";
+import { sanitizeStorageFileName } from "@/lib/invoiceUtils";
 
 function getBankingVerificationBadgeClass(status?: string | null) {
   switch (status) {
@@ -117,6 +120,7 @@ export default function PractitionerProfile() {
     initialPractitionerForm,
   );
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const { data: practitionerProfile } = useQuery({
     queryKey: ["practitioner-profile", user?.id],
@@ -202,6 +206,16 @@ export default function PractitionerProfile() {
   }, [practitionerProfile, profile?.email, profile?.full_name, profile?.phone, user?.email]);
 
   const completion = useMemo(() => getProfileCompletion(form), [form]);
+  const logoUrl = useMemo(() => {
+    if (!practitionerProfile?.invoice_logo_path) {
+      return null;
+    }
+
+    const { data } = supabase.storage
+      .from("branding")
+      .getPublicUrl(practitionerProfile.invoice_logo_path);
+    return data.publicUrl;
+  }, [practitionerProfile?.invoice_logo_path]);
   const serviceLabels = useMemo(() => {
     const labelMap = new Map(
       serviceNeededOptions.map((service) => [service.value, service.label]),
@@ -298,6 +312,79 @@ export default function PractitionerProfile() {
     ]);
   };
 
+  const handleLogoUpload = async (file: File | null) => {
+    if (!user || !file) return;
+
+    setUploadingLogo(true);
+    const safeFileName = sanitizeStorageFileName(file.name);
+    const filePath = `${user.id}/invoice-logo/${Date.now()}-${safeFileName}`;
+
+    const previousPath = practitionerProfile?.invoice_logo_path || null;
+
+    const { error: uploadError } = await supabase.storage
+      .from("branding")
+      .upload(filePath, file, { upsert: false });
+
+    if (uploadError) {
+      setUploadingLogo(false);
+      toast.error(uploadError.message);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from("practitioner_profiles")
+      .upsert({
+        profile_id: user.id,
+        invoice_logo_path: filePath,
+      });
+
+    if (updateError) {
+      await supabase.storage.from("branding").remove([filePath]);
+      setUploadingLogo(false);
+      toast.error(updateError.message);
+      return;
+    }
+
+    if (previousPath && previousPath !== filePath) {
+      await supabase.storage.from("branding").remove([previousPath]);
+    }
+
+    setUploadingLogo(false);
+    toast.success("Practitioner logo updated.");
+    await queryClient.invalidateQueries({
+      queryKey: ["practitioner-profile", user.id],
+    });
+  };
+
+  const removeLogo = async () => {
+    if (!user || !practitionerProfile?.invoice_logo_path) {
+      return;
+    }
+
+    setUploadingLogo(true);
+
+    const currentPath = practitionerProfile.invoice_logo_path;
+    const { error } = await supabase
+      .from("practitioner_profiles")
+      .upsert({
+        profile_id: user.id,
+        invoice_logo_path: null,
+      });
+
+    if (error) {
+      setUploadingLogo(false);
+      toast.error(error.message);
+      return;
+    }
+
+    await supabase.storage.from("branding").remove([currentPath]);
+    setUploadingLogo(false);
+    toast.success("Practitioner logo removed.");
+    await queryClient.invalidateQueries({
+      queryKey: ["practitioner-profile", user.id],
+    });
+  };
+
   return (
     <div className="space-y-8">
       <section className="rounded-[28px] border border-border bg-card p-6 shadow-card sm:p-8">
@@ -356,6 +443,80 @@ export default function PractitionerProfile() {
         </section>
 
         <div className="space-y-6">
+          <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="font-display text-2xl text-foreground">
+                  Invoice Branding
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground font-body">
+                  Upload the logo that should appear on the top-left of your invoices.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/40 hover:bg-accent/30">
+                  <ImagePlus className="mr-2 h-4 w-4" />
+                  {uploadingLogo ? "Uploading..." : "Upload Logo"}
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".png,.jpg,.jpeg,.svg,.webp"
+                    disabled={uploadingLogo}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      void handleLogoUpload(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                {practitionerProfile?.invoice_logo_path ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => void removeLogo()}
+                    disabled={uploadingLogo}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Remove Logo
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-dashed border-border bg-accent/10 p-5">
+              {logoUrl ? (
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <img
+                    src={logoUrl}
+                    alt="Practitioner invoice logo"
+                    className="h-24 w-24 rounded-2xl border border-border bg-white object-contain p-2"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground font-body">
+                      Invoice logo ready
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground font-body">
+                      This image will appear on your invoice previews and printable invoice layouts.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3">
+                  <ImagePlus className="mt-0.5 h-5 w-5 text-primary" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground font-body">
+                      No invoice logo uploaded yet
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground font-body">
+                      Upload a clean square logo for the most polished invoice branding.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
           <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
             <div className="flex items-center justify-between gap-4">
               <div>

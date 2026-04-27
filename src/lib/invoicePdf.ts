@@ -1,110 +1,193 @@
-type InvoicePdfPayload = {
+import { toast } from "sonner";
+
+/**
+ * Payload for the PDF generation API
+ * Structured to match the requirements for template ID: dc90e595-e2ca-440a-ac11-4fe1f58efb23
+ */
+export type InvoicePdfPayload = {
   invoiceNumber: string;
-  clientName: string;
-  caseReference?: string | null;
-  serviceDescription?: string | null;
   issueDate: string;
   dueDate?: string | null;
   status?: string | null;
+  caseReference?: string | null;
+  logoUrl?: string | null;
+  practitioner: {
+    name: string;
+    subtitle?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    vatNumber?: string | null;
+  };
+  client: {
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    vatNumber?: string | null;
+  };
+  lineItems: Array<{
+    serviceItem: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
   subtotal: number;
+  discountAmount?: number;
   vatAmount: number;
-  total: number;
-  bankDetails?: string | null;
+  vatRate?: number;
+  notesToClient?: string | null;
+  termsAndConditions?: string | null;
+  bankName?: string | null;
+  accountName?: string | null;
+  accountNumber?: string | null;
+  branchCode?: string | null;
+  paymentReference?: string | null;
 };
 
-const disclaimerText =
-  "Payment is made directly to the practitioner. Acapolite Consulting is not responsible for payment processing or payment disputes.";
+type OpenInvoicePdfOptions = {
+  autoPrint?: boolean;
+};
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function formatCurrency(amount: number) {
-  return `R ${Number(amount).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
+/**
+ * Formats a date string to "DD MMMM YYYY" (e.g. 27 April 2026)
+ */
 function formatDate(value?: string | null) {
-  if (!value) return "Not set";
-  return new Date(value).toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
-}
-
-export function openInvoicePdf(payload: InvoicePdfPayload) {
-  const pdfWindow = window.open("", "_blank", "noopener,noreferrer");
-
-  if (!pdfWindow) {
-    return;
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleDateString("en-ZA", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  } catch (e) {
+    return value || "";
   }
-
-  const body = `
-    <div class="header">
-      <div>
-        <div class="eyebrow">Invoice</div>
-        <h1>${escapeHtml(payload.invoiceNumber)}</h1>
-        <p>Status: ${escapeHtml(payload.status ?? "Draft")}</p>
-      </div>
-      <div class="dates">
-        <div><span>Issue Date:</span> ${escapeHtml(formatDate(payload.issueDate))}</div>
-        <div><span>Due Date:</span> ${escapeHtml(formatDate(payload.dueDate))}</div>
-      </div>
-    </div>
-    <div class="section">
-      <h2>Client</h2>
-      <p>${escapeHtml(payload.clientName)}</p>
-      <p class="muted">Case Reference: ${escapeHtml(payload.caseReference || "General Support")}</p>
-    </div>
-    <div class="section">
-      <h2>Service Description</h2>
-      <p>${escapeHtml(payload.serviceDescription || "Professional tax services")}</p>
-    </div>
-    <div class="section totals">
-      <div class="row"><span>Amount</span><strong>${escapeHtml(formatCurrency(payload.subtotal))}</strong></div>
-      <div class="row"><span>VAT</span><strong>${escapeHtml(formatCurrency(payload.vatAmount))}</strong></div>
-      <div class="row total"><span>Total</span><strong>${escapeHtml(formatCurrency(payload.total))}</strong></div>
-    </div>
-    <div class="section">
-      <h2>Practitioner Banking Details</h2>
-      <pre>${escapeHtml(payload.bankDetails || "Bank details will be provided by the practitioner.")}</pre>
-    </div>
-    <div class="disclaimer">${escapeHtml(disclaimerText)}</div>
-  `;
-
-  pdfWindow.document.write(`
-    <!doctype html>
-    <html>
-      <head>
-        <title>Invoice ${escapeHtml(payload.invoiceNumber)}</title>
-        <style>
-          body { font-family: "Inter", "Segoe UI", sans-serif; color: #0f172a; margin: 32px; }
-          h1 { margin: 6px 0 2px; font-size: 28px; }
-          h2 { font-size: 16px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; }
-          .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.2em; color: #64748b; }
-          .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 24px; }
-          .dates { font-size: 13px; color: #475569; line-height: 1.6; }
-          .dates span { font-weight: 600; color: #0f172a; }
-          .section { border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; margin-bottom: 16px; background: #f8fafc; }
-          .section p { margin: 0; line-height: 1.5; }
-          .muted { color: #64748b; font-size: 13px; margin-top: 6px; }
-          .totals { background: #ffffff; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
-          .row.total { font-size: 16px; }
-          pre { margin: 0; white-space: pre-wrap; font-family: "Inter", "Segoe UI", sans-serif; font-size: 13px; color: #0f172a; }
-          .disclaimer { margin-top: 24px; font-size: 12px; color: #64748b; }
-        </style>
-      </head>
-      <body>
-        ${body}
-        <script>
-          window.onload = () => {
-            window.print();
-          };
-        </script>
-      </body>
-    </html>
-  `);
-  pdfWindow.document.close();
 }
 
+/**
+ * Generates and opens/downloads the invoice PDF via the external Supabase Edge Function
+ */
+export async function openInvoicePdf(
+  payload: InvoicePdfPayload,
+  options: OpenInvoicePdfOptions = {},
+) {
+  const shouldDownload = options.autoPrint === true;
+  const appLogoUrl = "https://acapoliteconsulting.co.za/acapolite-logo.png";
+
+  const pdfApiUrl =
+    import.meta.env.VITE_PDF_API_URL ||
+    "https://nxqtduvaaacxsxkkaopd.supabase.co/functions/v1/generate-pdf-api";
+  const pdfApiKey =
+    import.meta.env.VITE_PDF_API_KEY ||
+    "ih_live_9be7d51f616815f04121124e0a09a08ce117fc343ebb695a";
+
+  const toastId = toast.loading("Generating Tax Invoice...", {
+    description: "Please wait while we prepare your document.",
+  });
+
+  // Calculate dynamic VAT rate if not explicitly provided
+  const calculatedVatRate =
+    payload.vatRate ??
+    (payload.vatAmount > 0 && payload.subtotal > 0
+      ? Math.round((payload.vatAmount / payload.subtotal) * 100)
+      : 0);
+
+  // Construct the notes field from client notes and payment terms
+  const notesText = [
+    payload.notesToClient || "Thank you for your business.",
+    payload.termsAndConditions || "Payment due within 7 days. Late payments may attract penalties.",
+    payload.paymentReference ? `Payment Reference: ${payload.paymentReference}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  // Construct the API payload exactly as requested
+  const apiPayload = {
+    template_id: "dc90e595-e2ca-440a-ac11-4fe1f58efb23",
+    invoice_number: payload.invoiceNumber,
+    currency: "R",
+    variable_data: {
+      accent_color: "#155bb8",
+      logo_url:
+        payload.logoUrl && payload.logoUrl.startsWith("http")
+          ? payload.logoUrl
+          : appLogoUrl,
+
+      invoice_label: "Tax Invoice",
+      invoice_number: payload.invoiceNumber,
+      invoice_date: formatDate(payload.issueDate),
+      due_date: formatDate(payload.dueDate),
+
+      practitioner_name: payload.practitioner.name,
+      practitioner_address: payload.practitioner.address || "",
+      practitioner_email: payload.practitioner.email || "",
+      practitioner_phone: payload.practitioner.phone || "",
+      practitioner_vat: payload.practitioner.vatNumber || "",
+
+      client_name: payload.client.name,
+      client_address: payload.client.address || "",
+      client_email: payload.client.email || "",
+      client_phone: payload.client.phone || "",
+      client_vat: payload.client.vatNumber || "",
+
+      bank_name: payload.bankName || "",
+      account_name: payload.accountName || payload.practitioner.name || "",
+      account_number: payload.accountNumber || "",
+      branch_code: payload.branchCode || "",
+      reference: payload.paymentReference || payload.invoiceNumber,
+
+      vat_rate: calculatedVatRate,
+      discount_raw: payload.discountAmount ?? 0,
+
+      notes: notesText,
+
+      footer_text:
+        "Acapolite Consulting · Professional SARS Tax Assistance · Generated electronically.",
+
+      line_items: payload.lineItems.map((item) => ({
+        description: item.serviceItem,
+        quantity: Number(item.quantity) || 1,
+        unit_price: Number(item.unitPrice) || 0,
+      })),
+    },
+  };
+
+  try {
+    console.log("Requesting PDF with template ID dc90e595-e2ca-440a-ac11-4fe1f58efb23");
+    const response = await fetch(pdfApiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${pdfApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(apiPayload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error: ${response.status} - ${errorText}`);
+    }
+
+    const pdfBlob = await response.blob();
+
+    if (shouldDownload) {
+      const downloadUrl = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = `invoice-${payload.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 10_000);
+    } else {
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      window.open(blobUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+    }
+
+    toast.success("PDF generated successfully!", { id: toastId });
+  } catch (err: any) {
+    console.error("PDF generation error:", err);
+    toast.error(`Failed to generate PDF: ${err.message}`, { id: toastId });
+  }
+}

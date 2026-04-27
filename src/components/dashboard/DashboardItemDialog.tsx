@@ -18,7 +18,7 @@ export function DashboardItemDialog({
 }: DashboardItemDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl rounded-[28px] border border-border bg-card p-0 overflow-hidden">
+      <DialogContent className="max-w-4xl rounded-[28px] border border-border bg-card p-0 overflow-hidden">
         <div className="border-b border-border px-6 py-5 sm:px-7">
           <DialogHeader className="text-left space-y-2">
             <DialogTitle className="font-display text-2xl text-foreground">{title}</DialogTitle>

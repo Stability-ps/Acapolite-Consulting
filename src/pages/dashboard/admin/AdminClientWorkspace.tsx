@@ -21,6 +21,7 @@ import { sendInvoiceCreatedNotification } from "@/lib/invoiceNotifications";
 import { sendCaseStatusChangedNotification } from "@/lib/caseStatusNotifications";
 import { sendDocumentRequestNotification } from "@/lib/documentRequestNotifications";
 import { sendCaseCreatedNotification } from "@/lib/caseCreatedNotifications";
+import { defaultInvoiceTerms } from "@/lib/invoiceUtils";
 import {
   AlertTriangle,
   User,
@@ -282,12 +283,15 @@ export default function AdminClientWorkspace() {
   const [isEditClientOpen, setIsEditClientOpen] = useState(false);
   const [isCreateCaseOpen, setIsCreateCaseOpen] = useState(false);
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
+  const [isInvoiceMissingDataOpen, setIsInvoiceMissingDataOpen] = useState(false);
+  const [invoiceMissingDataType, setInvoiceMissingDataType] = useState<"client" | "practitioner">("client");
   const [isCreateAlertOpen, setIsCreateAlertOpen] = useState(false);
   const [isCreateDocumentRequestOpen, setIsCreateDocumentRequestOpen] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [savingClient, setSavingClient] = useState(false);
   const [creatingCase, setCreatingCase] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [invoiceCreateStep, setInvoiceCreateStep] = useState<"idle" | "creating" | "items" | "notification">("idle");
   const [resendingInvoiceId, setResendingInvoiceId] = useState<string | null>(null);
   const [creatingAlert, setCreatingAlert] = useState(false);
   const [creatingDocumentRequest, setCreatingDocumentRequest] = useState(false);
@@ -842,113 +846,219 @@ export default function AdminClientWorkspace() {
     }
 
     setCreatingInvoice(true);
+    setInvoiceCreateStep("creating");
+
     const totalAmount = Number(invoiceForm.total_amount);
 
     if (Number.isNaN(totalAmount) || totalAmount < 0) {
       toast.error("Enter a valid invoice amount.");
       setCreatingInvoice(false);
+      setInvoiceCreateStep("idle");
       return;
     }
 
-    const selectedCase = clientCases?.find((caseItem) => caseItem.id === invoiceForm.case_id) ?? null;
-    const practitionerId =
-      selectedCase?.assigned_consultant_id
-      || clientDetails?.assigned_consultant_id
-      || (role === "consultant" ? user?.id ?? null : null);
+    try {
+      // Check client data completeness
+      if (!clientDetails) {
+        throw new Error("Client details not loaded. Please refresh and try again.");
+      }
 
-    let practitionerBankDetails: string | null = null;
-
-    if (practitionerId) {
-      const { data: bankProfile, error: bankProfileError } = await supabase
-        .from("practitioner_profiles")
-        .select("bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, profiles!practitioner_profiles_profile_id_fkey(full_name)")
-        .eq("profile_id", practitionerId)
-        .maybeSingle();
-
-      if (bankProfileError) {
-        toast.error(bankProfileError.message);
+      const clientName = getClientName(clientDetails);
+      if (!clientName) {
+        setIsInvoiceMissingDataOpen(true);
+        setInvoiceMissingDataType("client");
         setCreatingInvoice(false);
+        setInvoiceCreateStep("idle");
         return;
       }
 
-      const accountHolder = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
-      const lines = [
-        accountHolder && `Account Holder: ${accountHolder}`,
-        bankProfile?.bank_name && `Bank: ${bankProfile.bank_name}`,
-        bankProfile?.bank_branch_name && `Branch: ${bankProfile.bank_branch_name}`,
-        bankProfile?.bank_branch_code && `Branch Code: ${bankProfile.bank_branch_code}`,
-        bankProfile?.bank_account_number && `Account Number: ${bankProfile.bank_account_number}`,
-        bankProfile?.bank_account_type && `Account Type: ${bankProfile.bank_account_type}`,
-        bankProfile?.vat_number && `VAT Number: ${bankProfile.vat_number}`,
-      ].filter(Boolean);
+      const selectedCase = clientCases?.find((caseItem) => caseItem.id === (invoiceForm as any).case_id) ?? null;
+      const practitionerId =
+        selectedCase?.assigned_consultant_id
+        || (clientDetails as any)?.assigned_consultant_id
+        || (role === "consultant" ? user?.id ?? null : null);
 
-      practitionerBankDetails = lines.length ? lines.join("\n") : null;
-    }
+      let bankProfile: any = null;
+      let practitionerBankDetails: string | null = null;
 
-    const nowIso = new Date().toISOString();
-    const payload: TablesInsert<"invoices"> = {
-      client_id: selectedClientId,
-      invoice_number: `TEMP-${Date.now()}`,
-      title: invoiceForm.title.trim() || null,
-      description: invoiceForm.description.trim() || null,
-      subtotal: totalAmount,
-      tax_amount: 0,
-      total_amount: totalAmount,
-      amount_paid: 0,
-      status: invoiceForm.status,
-      due_date: invoiceForm.due_date || null,
-      created_by: user?.id ?? null,
-      practitioner_bank_details: practitionerBankDetails,
-    };
-    if (invoiceForm.status === "issued") {
-      payload.sent_at = nowIso;
-    }
-    if (invoiceForm.status === "paid") {
-      payload.paid_at = nowIso;
-    }
-    if (invoiceForm.status === "overdue") {
-      payload.overdue_at = nowIso;
-    }
-    if (invoiceForm.status === "cancelled") {
-      payload.cancelled_at = nowIso;
-    }
+      if (practitionerId) {
+        try {
+          const { data, error: bankProfileError } = await supabase
+            .from("practitioner_profiles")
+            .select("bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, profiles!practitioner_profiles_profile_id_fkey(full_name)")
+            .eq("profile_id", practitionerId)
+            .maybeSingle();
 
-    const { data, error } = await supabase.from("invoices").insert(payload).select("id, invoice_number, due_date, status").single();
+          if (bankProfileError) {
+            console.warn("Bank profile fetch warning:", bankProfileError.message);
+          }
 
-    if (error) {
-      toast.error(error.message);
-      setCreatingInvoice(false);
-      return;
-    }
+          bankProfile = data;
 
-    let notified = false;
+          if (bankProfile) {
+            const accountHolder = bankProfile.bank_account_holder_name || bankProfile.profiles?.full_name || "";
+            const lines = [
+              accountHolder && `Account Holder: ${accountHolder}`,
+              bankProfile.bank_name && `Bank: ${bankProfile.bank_name}`,
+              bankProfile.bank_branch_name && `Branch: ${bankProfile.bank_branch_name}`,
+              bankProfile.bank_branch_code && `Branch Code: ${bankProfile.bank_branch_code}`,
+              bankProfile.bank_account_number && `Account Number: ${bankProfile.bank_account_number}`,
+              bankProfile.bank_account_type && `Account Type: ${bankProfile.bank_account_type}`,
+              bankProfile.vat_number && `VAT Number: ${bankProfile.vat_number}`,
+            ].filter(Boolean);
 
-    if (clientDetails?.profile_id && data?.id) {
-      const notification = await sendInvoiceCreatedNotification({
-        invoiceId: data.id,
-        invoiceNumber: data.invoice_number,
-        clientProfileId: clientDetails.profile_id,
-        clientEmail: clientDetails.profiles?.email,
-        clientName: getClientName(clientDetails),
-        serviceDescription: invoiceForm.title.trim() || invoiceForm.description.trim() || "Professional tax services",
-        amount: totalAmount,
-        dueDate: data.due_date,
-        status: data.status,
+            practitionerBankDetails = lines.length ? lines.join("\n") : null;
+          }
+        } catch (err) {
+          console.warn("Error fetching bank profile:", err);
+          // Continue without bank details
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      const clientAddress = [
+        clientDetails?.address_line_1,
+        clientDetails?.address_line_2,
+        clientDetails?.city,
+        clientDetails?.province,
+        clientDetails?.postal_code,
+        clientDetails?.country,
+      ].filter(Boolean).join(", ");
+
+      // Auto-generate sequential invoice number like INV-2026-0001
+      const currentYear = new Date().getFullYear();
+      let generatedInvoiceNumber = `INV-${currentYear}-0001`;
+
+      try {
+        const { data: latestInvoiceData } = await supabase
+          .from("invoices")
+          .select("invoice_number")
+          .like("invoice_number", `INV-${currentYear}-%`)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        const latestInv = latestInvoiceData?.[0] as { invoice_number?: string } | undefined;
+        if (latestInv?.invoice_number) {
+          const parts = String(latestInv.invoice_number).split("-");
+          const suffix = parts[parts.length - 1];
+          if (suffix && !Number.isNaN(Number(suffix))) {
+            const nextNumber = String(Number(suffix) + 1).padStart(4, "0");
+            generatedInvoiceNumber = `INV-${currentYear}-${nextNumber}`;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to generate sequential invoice number.", err);
+      }
+
+      const payload: TablesInsert<"invoices"> = {
+        client_id: selectedClientId,
+        invoice_number: generatedInvoiceNumber,
+        title: invoiceForm.title.trim() || null,
+        description: invoiceForm.description.trim() || null,
+        subtotal: totalAmount,
+        discount_amount: 0,
+        tax_amount: 0,
+        total_amount: totalAmount,
+        amount_paid: 0,
+        status: invoiceForm.status,
+        due_date: invoiceForm.due_date || null,
+        created_by: user?.id ?? null,
+        practitioner_bank_details: practitionerBankDetails,
+        notes_to_client: null,
+        terms_and_conditions: defaultInvoiceTerms,
+        client_name: clientName,
+        client_email: clientDetails?.profiles?.email || null,
+        client_phone: clientDetails?.profiles?.phone || null,
+        client_address: clientAddress || null,
+        practitioner_name: bankProfile?.profiles?.full_name || null,
+        practice_name: null,
+        practitioner_number: null,
+        practitioner_email: null,
+        practitioner_phone: null,
+        practitioner_address: null,
+        practitioner_logo_path: null,
+      };
+
+      if (invoiceForm.status === "issued") {
+        payload.sent_at = nowIso;
+      }
+      if (invoiceForm.status === "paid") {
+        payload.paid_at = nowIso;
+      }
+      if (invoiceForm.status === "overdue") {
+        payload.overdue_at = nowIso;
+      }
+      if (invoiceForm.status === "cancelled") {
+        payload.cancelled_at = nowIso;
+      }
+
+      const { data, error } = await supabase.from("invoices").insert(payload).select("id, invoice_number, due_date, status").single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setInvoiceCreateStep("items");
+
+      const { error: invoiceItemError } = await supabase.from("invoice_items").insert({
+        invoice_id: data.id,
+        description: invoiceForm.title.trim() || invoiceForm.description.trim() || "Service item",
+        quantity: 1,
+        unit_price: totalAmount,
       });
 
-      if (notification.error) {
-        console.error("Invoice email failed:", notification.error);
-        toast.error("Invoice created, but the client email notification could not be delivered.");
-      } else {
-        notified = !notification.skipped;
+      if (invoiceItemError) {
+        console.error("Line item creation failed:", invoiceItemError);
+        toast.warning(`Invoice created, but line items could not be added: ${invoiceItemError.message}`);
       }
-    }
 
-    toast.success(notified ? "Invoice created and client notified." : "Invoice created.");
-    setCreatingInvoice(false);
-    setIsCreateInvoiceOpen(false);
-    resetInvoiceForm();
-    await refreshWorkspace();
+      setInvoiceCreateStep("notification");
+
+      let notified = false;
+
+      if (clientDetails?.profile_id && data?.id) {
+        try {
+          const notification = await sendInvoiceCreatedNotification({
+            invoiceId: data.id,
+            invoiceNumber: data.invoice_number,
+            clientProfileId: clientDetails.profile_id,
+            clientEmail: clientDetails.profiles?.email,
+            clientName: clientName,
+            serviceDescription: invoiceForm.title.trim() || invoiceForm.description.trim() || "Professional tax services",
+            amount: totalAmount,
+            dueDate: data.due_date,
+            status: data.status,
+          });
+
+          if (notification.error) {
+            console.warn("Invoice email failed:", notification.error);
+            toast.warning("Invoice created, but the client email could not be sent.");
+          } else {
+            notified = !notification.skipped;
+          }
+        } catch (notificationErr) {
+          console.warn("Notification error:", notificationErr);
+          toast.warning("Invoice created, but notification could not be sent.");
+        }
+      }
+
+      toast.success(notified ? "Invoice created and client notified." : "Invoice created successfully.");
+      setCreatingInvoice(false);
+      setInvoiceCreateStep("idle");
+      setIsCreateInvoiceOpen(false);
+      resetInvoiceForm();
+      await refreshWorkspace();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "An error occurred while creating the invoice.";
+      console.error("Invoice creation error:", err);
+      toast.error(errorMsg);
+      setCreatingInvoice(false);
+      setInvoiceCreateStep("idle");
+      // Auto-close dialog on error after 2 seconds
+      setTimeout(() => {
+        setIsCreateInvoiceOpen(false);
+      }, 2000);
+    }
   };
 
   const createAlert = async () => {
@@ -1690,9 +1800,8 @@ export default function AdminClientWorkspace() {
                         key={conversation.id}
                         type="button"
                         onClick={() => setSelectedConversation(conversation.id)}
-                        className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
-                          selectedConversation === conversation.id ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30 hover:bg-accent/30"
-                        }`}
+                        className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${selectedConversation === conversation.id ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30 hover:bg-accent/30"
+                          }`}
                       >
                         <p className="font-body font-semibold text-foreground truncate">{conversation.subject || "General Support"}</p>
                         <p className="mt-1 text-xs text-muted-foreground font-body">Last activity {new Date(conversation.last_message_at).toLocaleString()}</p>
@@ -2328,7 +2437,18 @@ export default function AdminClientWorkspace() {
                   Cancel
                 </Button>
                 <Button type="button" className="rounded-xl" onClick={createInvoice} disabled={creatingInvoice}>
-                  {creatingInvoice ? "Creating..." : "Create Invoice"}
+                  {creatingInvoice ? (
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <span>
+                        {invoiceCreateStep === "creating" && "Creating invoice..."}
+                        {invoiceCreateStep === "items" && "Adding line items..."}
+                        {invoiceCreateStep === "notification" && "Sending notification..."}
+                      </span>
+                    </div>
+                  ) : (
+                    "Create Invoice"
+                  )}
                 </Button>
               </div>
             </div>
@@ -2484,6 +2604,81 @@ export default function AdminClientWorkspace() {
                   {creatingDocumentRequest ? "Creating..." : "Send Request"}
                 </Button>
               </div>
+            </div>
+          </DashboardItemDialog>
+
+          <DashboardItemDialog
+            open={isInvoiceMissingDataOpen}
+            onOpenChange={setIsInvoiceMissingDataOpen}
+            title={invoiceMissingDataType === "client" ? "Complete Client Information" : "Add Practitioner Details"}
+            description={invoiceMissingDataType === "client" ? "Please update the client's information before creating an invoice." : "Please add practitioner banking details to complete the invoice."}
+          >
+            <div className="space-y-5">
+              {invoiceMissingDataType === "client" ? (
+                <>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">Client Full Name *</label>
+                    <Input
+                      value={clientDetails?.first_name || ""}
+                      disabled
+                      placeholder="First name"
+                      className="rounded-xl opacity-50"
+                    />
+                  </div>
+                  <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    📋 The client's full name is missing. Please update the client profile first, then return to create the invoice.
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => setIsInvoiceMissingDataOpen(false)}
+                    >
+                      Close
+                    </Button>
+                    <Button
+                      type="button"
+                      className="rounded-xl"
+                      onClick={() => {
+                        setIsInvoiceMissingDataOpen(false);
+                        // Optionally open edit client modal here
+                      }}
+                    >
+                      Go to Client Profile
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    ℹ️ Practitioner banking details are optional but recommended for professional invoices.
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      type="button"
+                      className="rounded-xl"
+                      onClick={() => {
+                        setIsInvoiceMissingDataOpen(false);
+                        // Continue invoice creation without bank details
+                      }}
+                    >
+                      Continue Without Details
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => {
+                        setIsInvoiceMissingDataOpen(false);
+                        // Open practitioner profile
+                      }}
+                    >
+                      Add to Practitioner Profile
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </DashboardItemDialog>
         </>

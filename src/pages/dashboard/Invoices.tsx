@@ -4,13 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Upload, X } from "lucide-react";
+import { Download, Eye, Paperclip, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { sendProofOfPaymentUploadedNotification } from "@/lib/paymentNotifications";
 import { formatCaseReference } from "@/lib/practitionerAssignments";
 import { openInvoicePdf } from "@/lib/invoicePdf";
+import { defaultInvoiceTerms, formatCurrency } from "@/lib/invoiceUtils";
 
 type PractitionerBankProfile = {
   profile_id: string;
@@ -24,9 +25,38 @@ type PractitionerBankProfile = {
   banking_verification_status: string;
   banking_verified_at: string | null;
   banking_verified_by: string | null;
+  business_name?: string | null;
+  tax_practitioner_number?: string | null;
+  city?: string | null;
+  province?: string | null;
+  invoice_logo_path?: string | null;
   profiles?: {
     full_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
   } | null;
+};
+
+type InvoiceItemRecord = {
+  id: string;
+  invoice_id: string;
+  service_item: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+};
+
+type InvoiceAttachmentRecord = {
+  id: string;
+  attachment_type: string;
+  document: {
+    id: string;
+    title: string;
+    file_name: string;
+    file_path: string;
+    mime_type: string | null;
+    file_size: number | null;
+  };
 };
 
 function getBankingVerificationLabel(status?: string | null) {
@@ -136,7 +166,7 @@ export default function Invoices() {
 
       const { data, error } = await supabase
         .from("practitioner_profiles")
-        .select("profile_id, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, banking_verification_status, banking_verified_at, banking_verified_by, profiles!practitioner_profiles_profile_id_fkey(full_name)")
+        .select("profile_id, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, banking_verification_status, banking_verified_at, banking_verified_by, business_name, tax_practitioner_number, city, province, invoice_logo_path, profiles!practitioner_profiles_profile_id_fkey(full_name, email, phone)")
         .in("profile_id", practitionerIds);
 
       if (error) {
@@ -152,6 +182,37 @@ export default function Invoices() {
 
   const selectedInvoice = invoices?.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
   const disclaimerText = "Payment is made directly to the practitioner. Acapolite Consulting is not responsible for payment processing or payment disputes.";
+
+  const { data: selectedInvoiceItems } = useQuery({
+    queryKey: ["client-invoice-items", selectedInvoiceId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("invoice_items")
+        .select("*")
+        .eq("invoice_id", selectedInvoiceId!)
+        .order("created_at", { ascending: true });
+      if (error) {
+        throw error;
+      }
+      return (data ?? []) as InvoiceItemRecord[];
+    },
+    enabled: Boolean(selectedInvoiceId),
+  });
+
+  const { data: selectedInvoiceAttachments } = useQuery({
+    queryKey: ["client-invoice-attachments", selectedInvoiceId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("invoice_attachments")
+        .select("id, attachment_type, document:documents!invoice_attachments_document_id_fkey(id, title, file_name, file_path, mime_type, file_size)")
+        .eq("invoice_id", selectedInvoiceId!);
+      if (error) {
+        throw error;
+      }
+      return (data ?? []) as unknown as InvoiceAttachmentRecord[];
+    },
+    enabled: Boolean(selectedInvoiceId),
+  });
 
   const getInvoiceBankDetails = (invoice: NonNullable<typeof selectedInvoice>) => {
     if (invoice.practitioner_bank_details?.trim()) {
@@ -179,10 +240,53 @@ export default function Invoices() {
     );
   };
 
+  const getInvoiceLogoUrl = (invoice: NonNullable<typeof selectedInvoice>) => {
+    const filePath =
+      invoice.practitioner_logo_path
+      || getInvoiceBankProfile(invoice)?.invoice_logo_path
+      || null;
+
+    if (!filePath) {
+      return null;
+    }
+
+    const { data } = supabase.storage.from("branding").getPublicUrl(filePath);
+    return data.publicUrl;
+  };
+
+  const getInvoiceAttachmentUrl = async (filePath: string) => {
+    const { data, error } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(filePath, 60 * 10);
+
+    if (error || !data?.signedUrl) {
+      throw new Error(error?.message || "Unable to open attachment.");
+    }
+
+    return data.signedUrl;
+  };
+
   useEffect(() => {
     setProofReference(selectedInvoice?.payment_reference || "");
     setProofFile(null);
   }, [selectedInvoice?.id, selectedInvoice?.payment_reference]);
+
+  useEffect(() => {
+    if (!selectedInvoice || selectedInvoice.viewed_at) {
+      return;
+    }
+
+    void supabase
+      .from("invoices")
+      .update({ viewed_at: new Date().toISOString() })
+      .eq("id", selectedInvoice.id)
+      .is("viewed_at", null)
+      .then(async ({ error }) => {
+        if (!error && client?.id) {
+          await queryClient.invalidateQueries({ queryKey: ["invoices", client.id] });
+        }
+      });
+  }, [client?.id, queryClient, selectedInvoice]);
 
   const statusColor = (status: string) => {
     switch (status) {
@@ -360,93 +464,320 @@ export default function Invoices() {
           </div>
 
           <div className="space-y-6 px-6 py-5 sm:px-7">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Title</p>
-                <p className="font-body text-foreground">{selectedInvoice.title || selectedInvoice.description || "Service invoice"}</p>
-              </div>
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Status</p>
-                <p className="font-body text-foreground">{selectedInvoice.status.replace(/_/g, " ")}</p>
-              </div>
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Case Reference</p>
-                <p className="font-body text-foreground">{selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support"}</p>
-              </div>
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issue Date</p>
-                <p className="font-body text-foreground">{new Date(selectedInvoice.issue_date).toLocaleDateString()}</p>
-              </div>
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issued By</p>
-                <p className="font-body text-foreground">
-                  {selectedInvoice.created_by_profile?.full_name || selectedInvoice.created_by_profile?.email || "Acapolite Consulting"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Due Date</p>
-                <p className="font-body text-foreground">{selectedInvoice.due_date ? new Date(selectedInvoice.due_date).toLocaleDateString() : "Not set"}</p>
-              </div>
-            </div>
+            <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <div className="flex items-start gap-4">
+                    {getInvoiceLogoUrl(selectedInvoice) ? (
+                      <img
+                        src={getInvoiceLogoUrl(selectedInvoice) || ""}
+                        alt="Practitioner logo"
+                        className="h-16 w-16 rounded-2xl border border-border bg-white object-contain p-2"
+                      />
+                    ) : null}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Invoice Summary</p>
+                      <p className="mt-2 font-display text-2xl text-foreground">{selectedInvoice.title || selectedInvoice.description || "Service invoice"}</p>
+                      <p className="mt-2 text-sm text-muted-foreground font-body">
+                        Status: {selectedInvoice.status.replace(/_/g, " ")} · Viewed: {selectedInvoice.viewed_at ? new Date(selectedInvoice.viewed_at).toLocaleString() : "Not yet"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-            <div className="grid sm:grid-cols-3 gap-4">
-              <div className="rounded-2xl border border-border p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Amount</p>
-                <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.subtotal).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="rounded-2xl border border-border p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">VAT</p>
-                <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.tax_amount || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="rounded-2xl border border-border p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Total</p>
-                <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.total_amount).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
-              </div>
-            </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Practitioner Details</p>
+                    <p className="font-semibold text-foreground font-body">{selectedInvoice.practitioner_name || getInvoiceBankProfile(selectedInvoice)?.profiles?.full_name || "Practitioner"}</p>
+                    <p className="mt-2 text-sm text-muted-foreground font-body">{selectedInvoice.practice_name || getInvoiceBankProfile(selectedInvoice)?.business_name || "Independent practitioner"}</p>
+                    <p className="text-sm text-muted-foreground font-body">{selectedInvoice.practitioner_number || getInvoiceBankProfile(selectedInvoice)?.tax_practitioner_number || "Practitioner number not added"}</p>
+                    <p className="text-sm text-muted-foreground font-body">{selectedInvoice.practitioner_email || getInvoiceBankProfile(selectedInvoice)?.profiles?.email || "No practitioner email"}</p>
+                    <p className="text-sm text-muted-foreground font-body">{selectedInvoice.practitioner_phone || getInvoiceBankProfile(selectedInvoice)?.profiles?.phone || "No practitioner phone"}</p>
+                    <p className="mt-2 text-sm text-muted-foreground font-body">
+                      {selectedInvoice.practitioner_address
+                        || [getInvoiceBankProfile(selectedInvoice)?.city, getInvoiceBankProfile(selectedInvoice)?.province].filter(Boolean).join(", ")
+                        || "No practitioner address added"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-accent/30 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Client Details</p>
+                    <p className="font-semibold text-foreground font-body">{selectedInvoice.client_name || client.company_name || profile?.full_name || "Client"}</p>
+                    <p className="mt-2 text-sm text-muted-foreground font-body">{selectedInvoice.client_email || profile?.email || "No client email"}</p>
+                    <p className="text-sm text-muted-foreground font-body">{selectedInvoice.client_phone || profile?.phone || "No client phone"}</p>
+                    <p className="mt-2 text-sm text-muted-foreground font-body">
+                      {selectedInvoice.client_address
+                        || [client.address_line_1, client.address_line_2, client.city, client.province, client.postal_code, client.country].filter(Boolean).join(", ")
+                        || "No client address added"}
+                    </p>
+                  </div>
+                </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="rounded-2xl border border-border p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Amount Paid</p>
-                <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.amount_paid).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="rounded-2xl border border-border p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Balance Due</p>
-                <p className="font-display text-2xl text-foreground">R {Number(selectedInvoice.balance_due).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}</p>
-              </div>
-            </div>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issue Date</p>
+                    <p className="font-body text-foreground">{new Date(selectedInvoice.issue_date).toLocaleDateString()}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Due Date</p>
+                    <p className="font-body text-foreground">{selectedInvoice.due_date ? new Date(selectedInvoice.due_date).toLocaleDateString() : "Not set"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Case Reference</p>
+                    <p className="font-body text-foreground">{selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support"}</p>
+                  </div>
+                </div>
 
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Practitioner Banking Details</p>
-              {(() => {
-                const bankProfile = getInvoiceBankProfile(selectedInvoice);
-                if (!bankProfile) {
-                  return null;
-                }
-
-                return (
-                  <Badge className={`mb-2 rounded-full border px-3 py-1 text-xs font-semibold ${getBankingVerificationBadgeClass(bankProfile.banking_verification_status)}`}>
-                    {getBankingVerificationLabel(bankProfile.banking_verification_status)}
-                  </Badge>
-                );
-              })()}
-              <div className="rounded-2xl border border-border p-4">
-                <p className="font-body text-foreground whitespace-pre-wrap">
-                  {getInvoiceBankDetails(selectedInvoice) || "Banking details will be provided by the practitioner."}
-                </p>
-              </div>
-            </div>
-
-            {selectedInvoice.payment_reference ? (
-              <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Payment Reference</p>
                 <div className="rounded-2xl border border-border p-4">
-                  <p className="font-body text-foreground">{selectedInvoice.payment_reference}</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-3">Invoice Line Items</p>
+                  <div className="overflow-hidden rounded-2xl border border-border">
+                    <div className="grid grid-cols-[minmax(0,1.9fr)_90px_140px_140px] gap-3 border-b border-border bg-accent/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      <p>Service Item</p>
+                      <p>Qty</p>
+                      <p>Price</p>
+                      <p>Total</p>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {(selectedInvoiceItems?.length
+                        ? selectedInvoiceItems
+                        : [{
+                            id: selectedInvoice.id,
+                            service_item: selectedInvoice.title || selectedInvoice.description || "Service item",
+                            quantity: 1,
+                            unit_price: Number(selectedInvoice.subtotal || selectedInvoice.total_amount || 0),
+                            line_total: Number(selectedInvoice.subtotal || selectedInvoice.total_amount || 0),
+                          }]
+                      ).map((item) => (
+                        <div key={item.id} className="grid grid-cols-[minmax(0,1.9fr)_90px_140px_140px] gap-3 px-4 py-4">
+                          <p className="text-sm text-foreground font-body">{item.service_item}</p>
+                          <p className="text-sm text-foreground font-body">{item.quantity}</p>
+                          <p className="text-sm text-foreground font-body">{formatCurrency(Number(item.unit_price || 0))}</p>
+                          <p className="text-sm font-semibold text-foreground font-body">{formatCurrency(Number(item.line_total || 0))}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-4 gap-4">
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Subtotal</p>
+                    <p className="font-display text-2xl text-foreground">{formatCurrency(Number(selectedInvoice.subtotal || 0))}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Discount</p>
+                    <p className="font-display text-2xl text-foreground">{formatCurrency(Number(selectedInvoice.discount_amount || 0))}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">VAT</p>
+                    <p className="font-display text-2xl text-foreground">{formatCurrency(Number(selectedInvoice.tax_amount || 0))}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Final Total</p>
+                    <p className="font-display text-2xl text-foreground">{formatCurrency(Number(selectedInvoice.total_amount || 0))}</p>
+                  </div>
+                </div>
+
+                {selectedInvoice.notes_to_client ? (
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Notes to Client</p>
+                    <p className="font-body text-foreground whitespace-pre-wrap">{selectedInvoice.notes_to_client}</p>
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-border p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Terms & Conditions</p>
+                  <p className="font-body text-foreground whitespace-pre-wrap">{selectedInvoice.terms_and_conditions || defaultInvoiceTerms}</p>
                 </div>
               </div>
-            ) : null}
 
-            <div className="rounded-2xl border border-border bg-accent/20 p-4">
-              <p className="text-sm text-muted-foreground font-body">{disclaimerText}</p>
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() =>
+                      openInvoicePdf(
+                        {
+                          invoiceNumber: selectedInvoice.invoice_number,
+                          issueDate: selectedInvoice.issue_date,
+                          dueDate: selectedInvoice.due_date,
+                          status: selectedInvoice.status,
+                          caseReference: selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support",
+                          logoUrl: getInvoiceLogoUrl(selectedInvoice),
+                          practitioner: {
+                            name: selectedInvoice.practitioner_name || getInvoiceBankProfile(selectedInvoice)?.profiles?.full_name || "Practitioner",
+                            subtitle: selectedInvoice.practice_name || getInvoiceBankProfile(selectedInvoice)?.business_name || null,
+                            email: selectedInvoice.practitioner_email || getInvoiceBankProfile(selectedInvoice)?.profiles?.email || null,
+                            phone: selectedInvoice.practitioner_phone || getInvoiceBankProfile(selectedInvoice)?.profiles?.phone || null,
+                            address: selectedInvoice.practitioner_address || [getInvoiceBankProfile(selectedInvoice)?.city, getInvoiceBankProfile(selectedInvoice)?.province].filter(Boolean).join(", ") || null,
+                            registrationNumber: selectedInvoice.practitioner_number || getInvoiceBankProfile(selectedInvoice)?.tax_practitioner_number || null,
+                          },
+                          client: {
+                            name: selectedInvoice.client_name || client.company_name || profile?.full_name || "Client",
+                            email: selectedInvoice.client_email || profile?.email || null,
+                            phone: selectedInvoice.client_phone || profile?.phone || null,
+                            address: selectedInvoice.client_address || [client.address_line_1, client.address_line_2, client.city, client.province, client.postal_code, client.country].filter(Boolean).join(", ") || null,
+                          },
+                          serviceDescription: selectedInvoice.description || selectedInvoice.title,
+                          lineItems: (selectedInvoiceItems?.length
+                            ? selectedInvoiceItems
+                            : [{
+                                id: selectedInvoice.id,
+                                service_item: selectedInvoice.title || selectedInvoice.description || "Service item",
+                                quantity: 1,
+                                unit_price: Number(selectedInvoice.subtotal || selectedInvoice.total_amount || 0),
+                                line_total: Number(selectedInvoice.subtotal || selectedInvoice.total_amount || 0),
+                              }]
+                          ).map((item) => ({
+                            serviceItem: item.service_item,
+                            quantity: Number(item.quantity || 0),
+                            unitPrice: Number(item.unit_price || 0),
+                            total: Number(item.line_total || 0),
+                          })),
+                          subtotal: Number(selectedInvoice.subtotal || 0),
+                          discountAmount: Number(selectedInvoice.discount_amount || 0),
+                          vatAmount: Number(selectedInvoice.tax_amount || 0),
+                          total: Number(selectedInvoice.total_amount || 0),
+                          notesToClient: selectedInvoice.notes_to_client || null,
+                          termsAndConditions: selectedInvoice.terms_and_conditions || defaultInvoiceTerms,
+                          bankDetails: getInvoiceBankDetails(selectedInvoice),
+                          attachments: (selectedInvoiceAttachments ?? []).map((attachment) => ({
+                            title: attachment.document.title,
+                            type: attachment.attachment_type.replace(/_/g, " "),
+                          })),
+                        },
+                        { autoPrint: false },
+                      )
+                    }
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Generate PDF
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() =>
+                      openInvoicePdf(
+                        {
+                          invoiceNumber: selectedInvoice.invoice_number,
+                          issueDate: selectedInvoice.issue_date,
+                          dueDate: selectedInvoice.due_date,
+                          status: selectedInvoice.status,
+                          caseReference: selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : "General Support",
+                          logoUrl: getInvoiceLogoUrl(selectedInvoice),
+                          practitioner: {
+                            name: selectedInvoice.practitioner_name || getInvoiceBankProfile(selectedInvoice)?.profiles?.full_name || "Practitioner",
+                            subtitle: selectedInvoice.practice_name || getInvoiceBankProfile(selectedInvoice)?.business_name || null,
+                            email: selectedInvoice.practitioner_email || getInvoiceBankProfile(selectedInvoice)?.profiles?.email || null,
+                            phone: selectedInvoice.practitioner_phone || getInvoiceBankProfile(selectedInvoice)?.profiles?.phone || null,
+                            address: selectedInvoice.practitioner_address || [getInvoiceBankProfile(selectedInvoice)?.city, getInvoiceBankProfile(selectedInvoice)?.province].filter(Boolean).join(", ") || null,
+                            registrationNumber: selectedInvoice.practitioner_number || getInvoiceBankProfile(selectedInvoice)?.tax_practitioner_number || null,
+                          },
+                          client: {
+                            name: selectedInvoice.client_name || client.company_name || profile?.full_name || "Client",
+                            email: selectedInvoice.client_email || profile?.email || null,
+                            phone: selectedInvoice.client_phone || profile?.phone || null,
+                            address: selectedInvoice.client_address || [client.address_line_1, client.address_line_2, client.city, client.province, client.postal_code, client.country].filter(Boolean).join(", ") || null,
+                          },
+                          serviceDescription: selectedInvoice.description || selectedInvoice.title,
+                          lineItems: (selectedInvoiceItems?.length
+                            ? selectedInvoiceItems
+                            : [{
+                                id: selectedInvoice.id,
+                                service_item: selectedInvoice.title || selectedInvoice.description || "Service item",
+                                quantity: 1,
+                                unit_price: Number(selectedInvoice.subtotal || selectedInvoice.total_amount || 0),
+                                line_total: Number(selectedInvoice.subtotal || selectedInvoice.total_amount || 0),
+                              }]
+                          ).map((item) => ({
+                            serviceItem: item.service_item,
+                            quantity: Number(item.quantity || 0),
+                            unitPrice: Number(item.unit_price || 0),
+                            total: Number(item.line_total || 0),
+                          })),
+                          subtotal: Number(selectedInvoice.subtotal || 0),
+                          discountAmount: Number(selectedInvoice.discount_amount || 0),
+                          vatAmount: Number(selectedInvoice.tax_amount || 0),
+                          total: Number(selectedInvoice.total_amount || 0),
+                          notesToClient: selectedInvoice.notes_to_client || null,
+                          termsAndConditions: selectedInvoice.terms_and_conditions || defaultInvoiceTerms,
+                          bankDetails: getInvoiceBankDetails(selectedInvoice),
+                          attachments: (selectedInvoiceAttachments ?? []).map((attachment) => ({
+                            title: attachment.document.title,
+                            type: attachment.attachment_type.replace(/_/g, " "),
+                          })),
+                        },
+                        { autoPrint: true },
+                      )
+                    }
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download PDF
+                  </Button>
+                </div>
+
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Practitioner Banking Details</p>
+                  {(() => {
+                    const bankProfile = getInvoiceBankProfile(selectedInvoice);
+                    if (!bankProfile) {
+                      return null;
+                    }
+
+                    return (
+                      <Badge className={`mb-2 rounded-full border px-3 py-1 text-xs font-semibold ${getBankingVerificationBadgeClass(bankProfile.banking_verification_status)}`}>
+                        {getBankingVerificationLabel(bankProfile.banking_verification_status)}
+                      </Badge>
+                    );
+                  })()}
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="font-body text-foreground whitespace-pre-wrap">
+                      {getInvoiceBankDetails(selectedInvoice) || "Banking details will be provided by the practitioner."}
+                    </p>
+                  </div>
+                </div>
+
+                {(selectedInvoiceAttachments?.length ?? 0) > 0 ? (
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-3">Invoice Attachments</p>
+                    <div className="space-y-2">
+                      {(selectedInvoiceAttachments ?? []).map((attachment) => (
+                        <button
+                          key={attachment.id}
+                          type="button"
+                          onClick={() => {
+                            void getInvoiceAttachmentUrl(attachment.document.file_path).then((url) => {
+                              window.open(url, "_blank", "noopener,noreferrer");
+                            }).catch((error) => {
+                              toast.error(error instanceof Error ? error.message : "Unable to open attachment.");
+                            });
+                          }}
+                          className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-left transition hover:border-primary/30 hover:bg-accent/20"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-foreground font-body">{attachment.document.title}</p>
+                            <p className="text-xs text-muted-foreground font-body">{attachment.attachment_type.replace(/_/g, " ")}</p>
+                          </div>
+                          <Paperclip className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {selectedInvoice.payment_reference ? (
+                  <div className="rounded-2xl border border-border p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Payment Reference</p>
+                    <p className="font-body text-foreground">{selectedInvoice.payment_reference}</p>
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                  <p className="text-sm text-muted-foreground font-body">{disclaimerText}</p>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-5 rounded-[24px] border border-border bg-accent/20 p-5">
