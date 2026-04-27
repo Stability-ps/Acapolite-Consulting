@@ -115,8 +115,12 @@ export type Database = {
           tax_practitioner_number: string | null;
           professional_body: string | null;
           professional_title: string | null;
+          address_line_1: string | null;
+          address_line_2: string | null;
           city: string | null;
           province: string | null;
+          postal_code: string | null;
+          country: string | null;
           profile_summary: string | null;
           languages_spoken: string[];
           show_registration_number: boolean;
@@ -155,8 +159,12 @@ export type Database = {
           tax_practitioner_number?: string | null;
           professional_body?: string | null;
           professional_title?: string | null;
+          address_line_1?: string | null;
+          address_line_2?: string | null;
           city?: string | null;
           province?: string | null;
+          postal_code?: string | null;
+          country?: string | null;
           profile_summary?: string | null;
           languages_spoken?: string[];
           show_registration_number?: boolean;
@@ -195,8 +203,12 @@ export type Database = {
           tax_practitioner_number?: string | null;
           professional_body?: string | null;
           professional_title?: string | null;
+          address_line_1?: string | null;
+          address_line_2?: string | null;
           city?: string | null;
           province?: string | null;
+          postal_code?: string | null;
+          country?: string | null;
           profile_summary?: string | null;
           languages_spoken?: string[];
           show_registration_number?: boolean;
@@ -693,6 +705,7 @@ export type Database = {
           last_name: string | null;
           company_name: string | null;
           tax_number: string | null;
+          vat_number: string | null;
           sars_reference_number: string | null;
           id_number: string | null;
           sars_outstanding_debt: number;
@@ -724,6 +737,7 @@ export type Database = {
           last_name?: string | null;
           company_name?: string | null;
           tax_number?: string | null;
+          vat_number?: string | null;
           sars_reference_number?: string | null;
           id_number?: string | null;
           sars_outstanding_debt?: number;
@@ -755,6 +769,7 @@ export type Database = {
           last_name?: string | null;
           company_name?: string | null;
           tax_number?: string | null;
+          vat_number?: string | null;
           sars_reference_number?: string | null;
           id_number?: string | null;
           sars_outstanding_debt?: number;

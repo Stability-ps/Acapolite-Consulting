@@ -11,24 +11,12 @@ export function Footer() {
             <p className="text-sm text-background/50 font-body">Registered Tax Practitioners</p>
             <div className="space-y-2">
               <p className="text-sm text-background/50 font-body">Copyright 2026 Acapolite Consulting. All rights reserved.</p>
-              <div className="space-y-1">
-                <a
-                  href="mailto:support@acapoliteconsulting.co.za"
-                  className="text-sm text-primary font-body hover:underline block"
-                >
-                  support@acapoliteconsulting.co.za (General Support)
-                </a>
-                <a
-                  href="mailto:accounts@acapoliteconsulting.co.za"
-                  className="text-sm text-primary font-body hover:underline block"
-                >
-                  accounts@acapoliteconsulting.co.za (Billing & Refunds)
-                </a>
-                <div className="text-sm text-background/50 font-body">
-                  <a href="tel:+27102886912" className="text-primary hover:underline">+27 10 288 6912</a> (Office) | 
-                  <a href="tel:+27675775506" className="text-primary hover:underline">+27 67 577 5506</a> (WhatsApp)
-                </div>
-              </div>
+              <a
+                href="mailto:support@acapoliteconsulting.co.za"
+                className="text-sm text-primary font-body hover:underline block"
+              >
+                support@acapoliteconsulting.co.za
+              </a>
             </div>
           </div>
 

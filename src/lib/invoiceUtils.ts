@@ -60,15 +60,29 @@ export function calculateInvoiceSubtotal(items: InvoiceLineItemDraft[]) {
   return items.reduce((total, item) => total + calculateLineItemTotal(item), 0);
 }
 
-export function calculateInvoiceFinalTotal(
+export function calculateInvoiceVatAmount(
   items: InvoiceLineItemDraft[],
-  taxAmount: string,
+  taxRate: string,
   discountAmount: string,
 ) {
-  return Math.max(
-    calculateInvoiceSubtotal(items) + parseNumericInput(taxAmount) - parseNumericInput(discountAmount),
-    0,
-  );
+  const subtotal = calculateInvoiceSubtotal(items);
+  const discount = parseNumericInput(discountAmount);
+  const rate = parseNumericInput(taxRate);
+  const amountAfterDiscount = Math.max(subtotal - discount, 0);
+  return amountAfterDiscount * (rate / 100);
+}
+
+export function calculateInvoiceFinalTotal(
+  items: InvoiceLineItemDraft[],
+  taxRate: string,
+  discountAmount: string,
+) {
+  const subtotal = calculateInvoiceSubtotal(items);
+  const discount = parseNumericInput(discountAmount);
+  const amountAfterDiscount = Math.max(subtotal - discount, 0);
+  const vatAmount = calculateInvoiceVatAmount(items, taxRate, discountAmount);
+  
+  return Math.max(amountAfterDiscount + vatAmount, 0);
 }
 
 export function createInvoiceAttachmentLocalId() {

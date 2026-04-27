@@ -117,6 +117,7 @@ export async function openInvoicePdf(
       invoice_number: payload.invoiceNumber,
       invoice_date: formatDate(payload.issueDate),
       due_date: formatDate(payload.dueDate),
+      case_reference: payload.caseReference || null,
 
       practitioner_name: payload.practitioner.name,
       practitioner_address: payload.practitioner.address || "",

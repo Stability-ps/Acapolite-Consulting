@@ -23,6 +23,11 @@ export function InvoiceLineItemsEditor({
     onChange(nextItems);
   };
 
+  // Generate stable key that doesn't change when item values change
+  const getStableKey = (item: InvoiceLineItemDraft, index: number) => {
+    return item.id || `item-${index}`;
+  };
+
   const addItem = () => {
     if (!onChange) return;
     onChange([
@@ -68,7 +73,7 @@ export function InvoiceLineItemsEditor({
         <div className="divide-y divide-border">
           {items?.map((item, index) => (
             <div
-              key={item.id ?? `item-${index}`}
+              key={getStableKey(item, index)}
               className={`grid gap-3 px-4 py-4 ${readOnly ? "grid-cols-[minmax(0,1.9fr)_110px_140px_140px]" : "grid-cols-[minmax(0,1.9fr)_110px_140px_140px_52px]"}`}
             >
               {readOnly ? (

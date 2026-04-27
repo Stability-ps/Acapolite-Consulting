@@ -19,6 +19,7 @@ import { logSystemActivity } from "@/lib/systemActivityLog";
 import { InvoiceLineItemsEditor } from "@/components/dashboard/InvoiceLineItemsEditor";
 import {
   calculateInvoiceFinalTotal,
+  calculateInvoiceVatAmount,
   calculateInvoiceSubtotal,
   createEmptyInvoiceLineItem,
   createInvoiceAttachmentLocalId,
@@ -96,6 +97,7 @@ type StaffInvoice = {
 
 type PractitionerBankProfile = {
   profile_id: string;
+  business_type: string;
   bank_account_holder_name: string | null;
   bank_name: string | null;
   bank_branch_name: string | null;
@@ -202,7 +204,7 @@ export default function AdminInvoices() {
   const [invoiceDueDate, setInvoiceDueDate] = useState("");
   const [invoiceSubtotal, setInvoiceSubtotal] = useState("");
   const [invoiceDiscountAmount, setInvoiceDiscountAmount] = useState("0");
-  const [invoiceVatAmount, setInvoiceVatAmount] = useState("");
+  const [invoiceVatAmount, setInvoiceVatAmount] = useState("15");
   const [invoiceNotesToClient, setInvoiceNotesToClient] = useState("");
   const [invoiceTermsAndConditions, setInvoiceTermsAndConditions] = useState(defaultInvoiceTerms);
   const [invoiceCaseId, setInvoiceCaseId] = useState<string | null>(null);
@@ -229,7 +231,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("invoices")
-        .select("*, clients(profile_id, company_name, first_name, last_name, client_code, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
+        .select("*, clients(profile_id, client_type, company_name, first_name, last_name, client_code, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -251,7 +253,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("clients")
-        .select("id, profile_id, company_name, first_name, last_name, client_code, address_line_1, address_line_2, city, province, postal_code, country, assigned_consultant_id, profiles!clients_profile_id_fkey(full_name, email, phone)")
+        .select("id, profile_id, client_type, company_name, first_name, last_name, client_code, address_line_1, address_line_2, city, province, postal_code, country, assigned_consultant_id, profiles!clients_profile_id_fkey(full_name, email, phone)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -291,7 +293,7 @@ export default function AdminInvoices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("practitioner_profiles")
-        .select("profile_id, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, banking_verification_status, banking_verified_at, banking_verified_by, business_name, tax_practitioner_number, city, province, invoice_logo_path, profiles!practitioner_profiles_profile_id_fkey(full_name, email, phone)")
+        .select("profile_id, business_type, bank_account_holder_name, bank_name, bank_branch_name, bank_branch_code, bank_account_number, bank_account_type, vat_number, banking_verification_status, banking_verified_at, banking_verified_by, business_name, tax_practitioner_number, city, province, invoice_logo_path, profiles!practitioner_profiles_profile_id_fkey(full_name, email, phone)")
         .order("profile_id", { ascending: true });
       if (error) {
         throw error;
@@ -405,7 +407,16 @@ export default function AdminInvoices() {
       setInvoiceDueDate(selectedInvoice.due_date || "");
       setInvoiceSubtotal(String(selectedInvoice.subtotal ?? selectedInvoice.total_amount ?? ""));
       setInvoiceDiscountAmount(String(selectedInvoice.discount_amount ?? 0));
-      setInvoiceVatAmount(String(selectedInvoice.tax_amount ?? 0));
+      
+      // Convert stored currency tax_amount back to percentage rate for UI
+      const subtotal = selectedInvoice.subtotal ?? selectedInvoice.total_amount ?? 0;
+      const discount = selectedInvoice.discount_amount ?? 0;
+      const amountAfterDiscount = subtotal - discount;
+      const rate = amountAfterDiscount > 0 
+        ? Math.round((Number(selectedInvoice.tax_amount || 0) / amountAfterDiscount) * 100) 
+        : 15;
+      
+      setInvoiceVatAmount(String(rate));
       setInvoiceNotesToClient(selectedInvoice.notes_to_client || "");
       setInvoiceTermsAndConditions(selectedInvoice.terms_and_conditions || defaultInvoiceTerms);
       setInvoiceCaseId(selectedInvoice.case_id ?? null);
@@ -449,7 +460,7 @@ export default function AdminInvoices() {
     setInvoiceDueDate("");
     setInvoiceSubtotal("");
     setInvoiceDiscountAmount("0");
-    setInvoiceVatAmount("");
+    setInvoiceVatAmount("15");
     setInvoiceNotesToClient("");
     setInvoiceTermsAndConditions(defaultInvoiceTerms);
     setInvoiceCaseId(null);
@@ -579,7 +590,7 @@ export default function AdminInvoices() {
       || (role === "consultant" ? user?.id ?? null : null);
     const practitionerProfile = practitionerId ? practitionerProfileMap.get(practitionerId) ?? null : null;
 
-    return {
+    const invoiceDetails = {
       client_name:
         selectedClient?.company_name
         || selectedClient?.profiles?.full_name
@@ -597,7 +608,7 @@ export default function AdminInvoices() {
           selectedClient?.postal_code,
           selectedClient?.country,
         ]) || null,
-      practitioner_name: practitionerProfile?.profiles?.full_name || null,
+      practitioner_name: practitionerProfile?.business_name || practitionerProfile?.profiles?.full_name || null,
       practice_name: practitionerProfile?.business_name || null,
       practitioner_number: practitionerProfile?.tax_practitioner_number || null,
       practitioner_email: practitionerProfile?.profiles?.email || null,
@@ -609,6 +620,8 @@ export default function AdminInvoices() {
         ]) || null,
       practitioner_logo_path: practitionerProfile?.invoice_logo_path || null,
     };
+
+    return invoiceDetails;
   };
 
   const addPendingAttachmentFiles = (files: FileList | null) => {
@@ -744,7 +757,8 @@ export default function AdminInvoices() {
 
     const subtotalAmount = computedSubtotal;
     const discountAmount = Number(invoiceDiscountAmount || 0);
-    const vatAmount = Number(invoiceVatAmount || 0);
+    // Calculate actual currency value of tax from the percentage rate
+    const vatCurrencyAmount = calculateInvoiceVatAmount(invoiceLineItems, invoiceVatAmount, invoiceDiscountAmount);
     const totalAmount = computedFinalTotal;
     const nowIso = new Date().toISOString();
     const snapshot = buildInvoiceSnapshot(selectedInvoice.client_id, invoiceCaseId || null);
@@ -754,7 +768,7 @@ export default function AdminInvoices() {
       description: invoiceDescription.trim() || null,
       subtotal: subtotalAmount,
       discount_amount: Number.isNaN(discountAmount) ? 0 : discountAmount,
-      tax_amount: Number.isNaN(vatAmount) ? 0 : vatAmount,
+      tax_amount: vatCurrencyAmount,
       total_amount: totalAmount,
       due_date: invoiceDueDate || null,
       case_id: invoiceCaseId || null,
@@ -937,7 +951,8 @@ export default function AdminInvoices() {
     );
     const subtotalAmount = computedSubtotal;
     const discountAmount = Number(invoiceDiscountAmount || 0);
-    const vatAmount = Number(invoiceVatAmount || 0);
+    // Calculate actual currency value of tax from the percentage rate
+    const vatCurrencyAmount = calculateInvoiceVatAmount(invoiceLineItems, invoiceVatAmount, invoiceDiscountAmount);
     const totalAmount = computedFinalTotal;
 
     if (!cleanedLineItems.length) {
@@ -987,7 +1002,7 @@ export default function AdminInvoices() {
       description: invoiceDescription.trim() || null,
       subtotal: subtotalAmount,
       discount_amount: Number.isNaN(discountAmount) ? 0 : discountAmount,
-      tax_amount: Number.isNaN(vatAmount) ? 0 : vatAmount,
+      tax_amount: vatCurrencyAmount,
       total_amount: totalAmount,
       amount_paid: 0,
       due_date: invoiceDueDate || null,
@@ -1543,18 +1558,20 @@ export default function AdminInvoices() {
                       <span className="text-muted-foreground font-body">VAT (Tax)</span>
                       {canManageInvoices ? (
                         <div className="w-32 relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R</span>
-                          <Input
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                          <input
                             type="number"
                             min="0"
-                            step="0.01"
+                            max="100"
+                            step="1"
                             value={invoiceVatAmount}
                             onChange={(event) => setInvoiceVatAmount(event.target.value)}
                             className="rounded-lg h-8 pl-7 text-right pr-3 font-semibold"
+                            placeholder="15"
                           />
                         </div>
                       ) : (
-                        <span className="font-semibold text-foreground font-display">{formatCurrency(Number(invoiceVatAmount || 0))}</span>
+                        <span className="font-semibold text-foreground font-display">{invoiceVatAmount || 15}%</span>
                       )}
                     </div>
 
@@ -1791,8 +1808,8 @@ export default function AdminInvoices() {
                     })),
                     subtotal: computedSubtotal,
                     discountAmount: Number(invoiceDiscountAmount || 0),
-                    vatAmount: Number(invoiceVatAmount || 0),
-                    vatRate: computedSubtotal > 0 ? Math.round((Number(invoiceVatAmount || 0) / computedSubtotal) * 100) : 0,
+                    vatAmount: calculateInvoiceVatAmount(invoiceLineItems || [], invoiceVatAmount, invoiceDiscountAmount),
+                    vatRate: Number(invoiceVatAmount || 0),
                     total: computedFinalTotal,
                     amountPaid: Number(selectedInvoice.amount_paid || 0),
                     balanceDue: Number(selectedInvoice.balance_due || 0),
@@ -1928,16 +1945,20 @@ export default function AdminInvoices() {
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-foreground font-body mb-2">VAT (optional)</label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={invoiceVatAmount}
-                onChange={(event) => setInvoiceVatAmount(event.target.value)}
-                placeholder="0.00"
-                className="rounded-xl"
-              />
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">VAT (%)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={invoiceVatAmount}
+                  onChange={(event) => setInvoiceVatAmount(event.target.value)}
+                  placeholder="15"
+                  className="rounded-xl pl-8"
+                />
+              </div>
             </div>
           </div>
 
@@ -2117,7 +2138,7 @@ export default function AdminInvoices() {
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Invoice Preview Summary</p>
                 <p className="mt-2 text-sm text-muted-foreground font-body">Subtotal: {formatCurrency(computedSubtotal)}</p>
                 <p className="text-sm text-muted-foreground font-body">Discount: {formatCurrency(Number(invoiceDiscountAmount || 0))}</p>
-                <p className="text-sm text-muted-foreground font-body">VAT: {formatCurrency(Number(invoiceVatAmount || 0))}</p>
+                <p className="text-sm text-muted-foreground font-body">VAT ({invoiceVatAmount}%): {formatCurrency(calculateInvoiceVatAmount(invoiceLineItems, invoiceVatAmount, invoiceDiscountAmount))}</p>
                 <p className="mt-2 text-sm font-semibold text-foreground font-body">Final Total: {formatCurrency(computedFinalTotal)}</p>
               </div>
             </div>

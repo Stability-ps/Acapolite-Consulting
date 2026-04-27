@@ -54,7 +54,6 @@ export default function ContactUs() {
               <p><strong>General Support:</strong> <a href="mailto:support@acapoliteconsulting.co.za" className="text-primary hover:underline">support@acapoliteconsulting.co.za</a></p>
               <p><strong>Billing & Refunds:</strong> <a href="mailto:accounts@acapoliteconsulting.co.za" className="text-primary hover:underline">accounts@acapoliteconsulting.co.za</a></p>
               <p><strong>Office Phone:</strong> <a href="tel:+27102886912" className="text-primary hover:underline">+27 10 288 6912</a></p>
-              <p><strong>WhatsApp:</strong> <a href="tel:+27675775506" className="text-primary hover:underline">+27 67 577 5506</a></p>
             </div>
           </div>
 
