@@ -115,7 +115,7 @@ export default function TermsAndConditions() {
             <section>
               <h2 className="text-lg font-semibold">10. Contact Information</h2>
               <p className="mt-2 text-muted-foreground">
-                For questions regarding these Terms and Conditions, please contact info@acapoliteconsulting.co.za.
+                For questions regarding these Terms and Conditions, please contact support@acapoliteconsulting.co.za.
               </p>
             </section>
           </div>

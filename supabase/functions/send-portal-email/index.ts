@@ -231,12 +231,14 @@ type WebPushMessage = {
 };
 
 const MAILTRAP_API_URL = "https://send.api.mailtrap.io/api/send";
-const DEFAULT_FROM_EMAIL = "info@acapoliteconsulting.co.za";
+const DEFAULT_FROM_EMAIL = "noreply@acapoliteconsulting.co.za";
 const DEFAULT_FROM_NAME = "Acapolite Consulting";
 const DEFAULT_NOTIFICATION_EMAIL = "Acapoliteconsulting@gmail.com";
 const DEFAULT_PORTAL_URL = "https://acapoliteconsulting.co.za";
-const DEFAULT_SUPPORT_EMAIL = "info@acapoliteconsulting.co.za";
+const DEFAULT_SUPPORT_EMAIL = "support@acapoliteconsulting.co.za";
 const DEFAULT_SUPPORT_WHATSAPP = "+27 67 5775506";
+const DEFAULT_OFFICE_PHONE = "+27 10 288 6912";
+const DEFAULT_ACCOUNTS_EMAIL = "accounts@acapoliteconsulting.co.za";
 
 function buildCorsHeaders(request: Request) {
   const origin = request.headers.get("Origin") ?? "*";
@@ -389,8 +391,8 @@ function buildWebPushContent(params: {
 
     case "lead_unlocked":
       return {
-        title: "Practitioner unlocked your request",
-        body: trimNotificationText(`${trimString(payload.practitionerName) || "A practitioner"} unlocked your request and is ready to assist.`),
+        title: "Your request has been unlocked",
+        body: trimNotificationText("A practitioner has unlocked your request and is ready to assist you."),
         url: buildPortalLink(portalUrl, "/dashboard/client/messages"),
         tag: `lead-unlocked:${trimString(payload.requestId)}`,
       } satisfies WebPushMessage;
@@ -925,8 +927,10 @@ function buildEmailContent(params: {
   portalUrl: string;
   supportEmail: string;
   supportWhatsapp: string;
+  officePhone: string;
+  accountsEmail: string;
 }) {
-  const { payload, notificationEmail, portalUrl, supportEmail, supportWhatsapp } = params;
+  const { payload, notificationEmail, portalUrl, supportEmail, supportWhatsapp, officePhone, accountsEmail } = params;
 
   if (payload.type === "contact_form") {
     const name = trimString(payload.name);
@@ -1060,11 +1064,11 @@ function buildEmailContent(params: {
           "",
           "Through your portal you can upload documents, track your case status in real time, view invoices, and communicate directly with your consultant.",
           "",
-          `For quick help, WhatsApp us on ${supportWhatsapp}.`,
+          `For quick help, WhatsApp us on ${supportWhatsapp} or call us on ${officePhone}.`,
           "",
           "The Acapolite Consulting Team",
           "Registered Tax Practitioners",
-          `${supportEmail} | ${supportWhatsapp}`,
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
           portalUrl,
         ].join("\n"),
         html: `<!DOCTYPE html>
@@ -1134,12 +1138,12 @@ function buildEmailContent(params: {
                               </td>
                             </tr>
                           </table>
-                          <p style="font-size:13px;color:#666;margin:20px 0 0">For quick help, WhatsApp us on <strong>${supportWhatsapp}</strong>.</p>
+                          <p style="font-size:13px;color:#666;margin:20px 0 0">For quick help, WhatsApp us on <strong>${supportWhatsapp}</strong> or call us on <strong>${officePhone}</strong>.</p>
                           <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
                           <p style="font-size:13px;color:#555;line-height:1.7;margin:0">
                             <strong style="color:#1a3a5c">The Acapolite Consulting Team</strong><br />
                             Registered Tax Practitioners<br />
-                            ${supportEmail} | ${supportWhatsapp}<br />
+                            ${supportEmail} | ${officePhone} | ${supportWhatsapp}<br />
                             <a href="${portalUrl}" style="color:#1a3a5c">${siteLabel}</a>
                           </p>
                         </td>
@@ -1218,7 +1222,7 @@ function buildEmailContent(params: {
           "If you already have an account, you can log in with the same email address.",
           "",
           "The Acapolite Consulting Team",
-          `${supportEmail} | ${supportWhatsapp}`,
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
         ].filter(Boolean).join("\n"),
         html: `<!DOCTYPE html>
           <html>
@@ -1654,7 +1658,7 @@ function buildEmailContent(params: {
           "",
           "The Acapolite Consulting Team",
           "Registered Tax Practitioners",
-          `${supportEmail} | ${supportWhatsapp}`,
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
           portalUrl,
         ].join("\n"),
         html: `<!DOCTYPE html>
@@ -1956,7 +1960,7 @@ function buildEmailContent(params: {
           `Read and Reply in Portal: ${portalUrl}`,
           "",
           "The Acapolite Consulting Team",
-          `${supportEmail} | ${supportWhatsapp}`,
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
         ].join("\n"),
         html: `<!DOCTYPE html>
           <html>
@@ -2108,7 +2112,7 @@ function buildEmailContent(params: {
           `View Invoice and Pay: ${portalUrl}`,
           "",
           "The Acapolite Consulting Team",
-          `${supportEmail} | ${supportWhatsapp}`,
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
         ].join("\n"),
         html: `<!DOCTYPE html>
           <html>
@@ -2410,7 +2414,7 @@ function buildEmailContent(params: {
           `View Case in Portal: ${portalUrl}`,
           "",
           "The Acapolite Consulting Team",
-          `${supportEmail} | ${supportWhatsapp}`,
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
         ].join("\n"),
         html: `<!DOCTYPE html>
           <html>
@@ -2561,7 +2565,7 @@ function buildEmailContent(params: {
           `Upload Documents Now: ${portalUrl}`,
           "",
           "The Acapolite Consulting Team",
-          `${supportEmail} | ${supportWhatsapp}`,
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
         ].join("\n"),
         html: `<!DOCTYPE html>
           <html>
@@ -2671,7 +2675,6 @@ function buildEmailContent(params: {
     const clientProfileId = trimString(payload.clientProfileId);
     const clientEmail = normalizeEmail(payload.clientEmail);
     const clientName = trimString(payload.clientName) || "Client";
-    const practitionerName = trimString(payload.practitionerName) || "Practitioner";
     const serviceType = trimString(payload.serviceType) || "tax assistance";
     const notificationKey = `lead_unlocked:${requestId || clientEmail}`;
 
@@ -2680,7 +2683,6 @@ function buildEmailContent(params: {
     }
 
     const safeClientName = escapeHtml(clientName);
-    const safePractitionerName = escapeHtml(practitionerName);
     const safeServiceType = escapeHtml(serviceType);
     const portalLink = buildPortalLink(portalUrl, "/dashboard/client/messages");
 
@@ -2688,17 +2690,17 @@ function buildEmailContent(params: {
       requiresAuth: true,
       mail: {
         toEmail: clientEmail,
-        subject: "A practitioner unlocked your request",
+        subject: "A practitioner has unlocked your request",
         text: [
           `Dear ${clientName},`,
           "",
-          `${practitionerName} has unlocked your request for ${serviceType} and is ready to assist you.`,
+          "A practitioner has unlocked your request and is ready to assist you.",
           "Please use the portal messaging area to communicate securely.",
           "",
           `Open Messages: ${portalLink}`,
           "",
           "The Acapolite Consulting Team",
-          `${supportEmail} | ${supportWhatsapp}`,
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
         ].join("\n"),
         html: `<!DOCTYPE html>
           <html>
@@ -2738,7 +2740,7 @@ function buildEmailContent(params: {
                         <td style="background:#fff;padding:32px 36px">
                           <p style="font-size:15px;font-weight:bold;color:#1a3a5c;margin:0 0 12px">Dear ${safeClientName},</p>
                           <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 20px">
-                            ${safePractitionerName} has unlocked your request for ${safeServiceType} and is ready to assist you.
+                            A practitioner has unlocked your request and is ready to assist you.
                             Please use the portal messaging area to communicate securely.
                           </p>
                           <table cellpadding="0" cellspacing="0">
@@ -2955,7 +2957,7 @@ function buildEmailContent(params: {
           `View documents in your portal: ${portalUrl}`,
           "",
           "The Acapolite Consulting Team",
-          `${supportEmail} | ${supportWhatsapp}`,
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
         ].join("\n"),
         html: `<!DOCTYPE html>
           <html>
@@ -3091,6 +3093,8 @@ Deno.serve(async (request) => {
           portalUrl,
           supportEmail,
           supportWhatsapp,
+          officePhone: DEFAULT_OFFICE_PHONE,
+          accountsEmail: DEFAULT_ACCOUNTS_EMAIL,
         });
 
         const notificationKey = typeof emailContent.log.metadata?.notification_key === "string"
@@ -3144,6 +3148,8 @@ Deno.serve(async (request) => {
       portalUrl,
       supportEmail,
       supportWhatsapp,
+      officePhone: DEFAULT_OFFICE_PHONE,
+      accountsEmail: DEFAULT_ACCOUNTS_EMAIL,
     });
 
     if (emailContent.requiresAuth) {

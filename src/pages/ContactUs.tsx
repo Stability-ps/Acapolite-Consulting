@@ -48,6 +48,16 @@ export default function ContactUs() {
             so we can route you to the right specialist faster.
           </p>
 
+          <div className="mt-6 rounded-xl bg-accent/20 p-4 border border-border/60">
+            <h3 className="text-sm font-semibold text-foreground font-body mb-3">Contact Information</h3>
+            <div className="space-y-2 text-sm text-muted-foreground font-body">
+              <p><strong>General Support:</strong> <a href="mailto:support@acapoliteconsulting.co.za" className="text-primary hover:underline">support@acapoliteconsulting.co.za</a></p>
+              <p><strong>Billing & Refunds:</strong> <a href="mailto:accounts@acapoliteconsulting.co.za" className="text-primary hover:underline">accounts@acapoliteconsulting.co.za</a></p>
+              <p><strong>Office Phone:</strong> <a href="tel:+27102886912" className="text-primary hover:underline">+27 10 288 6912</a></p>
+              <p><strong>WhatsApp:</strong> <a href="tel:+27675775506" className="text-primary hover:underline">+27 67 577 5506</a></p>
+            </div>
+          </div>
+
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
