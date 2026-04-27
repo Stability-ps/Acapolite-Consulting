@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Eye, Mail, Paperclip, Printer, Search } from "lucide-react";
+import { Download, Eye, Mail, Paperclip, Printer, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
@@ -1301,9 +1301,9 @@ export default function AdminInvoices() {
         description="Review the full billing summary and edit invoice details from this popup."
       >
         {selectedInvoice ? (
-          <div className="space-y-8 pb-4">
+          <div className="space-y-6 pb-4">
             {/* Header Branding & Status */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 rounded-[24px] bg-accent/20 p-6 border border-border/60 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-[20px] bg-accent/20 p-4 border border-border/60 shadow-sm">
               <div className="flex items-center gap-5">
                 <div className="flex -space-x-4 items-center">
                   <img
@@ -1338,16 +1338,16 @@ export default function AdminInvoices() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="space-y-6">
+            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-4">
                 {/* Parties Details */}
-                <div className="grid sm:grid-cols-2 gap-5">
+                <div className="grid sm:grid-cols-2 gap-4">
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 mb-1">
                       <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                       <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-body font-bold">Client Details</p>
                     </div>
-                    <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm space-y-2">
+                    <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm space-y-2">
                       <p className="font-bold text-foreground font-body text-base truncate">{selectedInvoice.client_name || getClientName(selectedInvoice)}</p>
                       <div className="space-y-1">
                         <p className="text-sm text-muted-foreground font-body flex items-center gap-2 break-all">
@@ -1368,7 +1368,7 @@ export default function AdminInvoices() {
                       <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
                       <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-body font-bold">Practitioner Details</p>
                     </div>
-                    <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm space-y-2">
+                    <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm space-y-2">
                       <p className="font-bold text-foreground font-body text-base truncate">{selectedInvoice.practitioner_name || selectedInvoiceBankProfile?.profiles?.full_name || "Practitioner"}</p>
                       <p className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded inline-block truncate max-w-full">
                         {selectedInvoice.practice_name || selectedInvoiceBankProfile?.business_name || "Independent practice"}

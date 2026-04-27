@@ -18,8 +18,8 @@ export function DashboardItemDialog({
 }: DashboardItemDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl rounded-[28px] border border-border bg-card p-0 overflow-hidden">
-        <div className="border-b border-border px-6 py-5 sm:px-7">
+      <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] rounded-[28px] border border-border bg-card p-0 overflow-hidden flex flex-col">
+        <div className="border-b border-border px-6 py-5 sm:px-7 flex-shrink-0">
           <DialogHeader className="text-left space-y-2">
             <DialogTitle className="font-display text-2xl text-foreground">{title}</DialogTitle>
             {description ? (
@@ -29,7 +29,7 @@ export function DashboardItemDialog({
             ) : null}
           </DialogHeader>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto px-6 py-5 sm:px-7">
+        <div className="flex-1 overflow-y-auto px-6 py-5 sm:px-7">
           {children}
         </div>
       </DialogContent>
