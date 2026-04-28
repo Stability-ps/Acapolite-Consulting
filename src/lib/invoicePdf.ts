@@ -71,19 +71,6 @@ export async function openInvoicePdf(
   payload: InvoicePdfPayload,
   options: OpenInvoicePdfOptions = {},
 ) {
-  // Validate banking details before generating PDF
-  const hasCompleteBanking = Boolean(
-    payload.bankName?.trim()
-    && payload.accountName?.trim()
-    && payload.accountNumber?.trim()
-    && payload.branchCode?.trim()
-  );
-
-  if (!hasCompleteBanking) {
-    toast.error("Please complete and verify your banking details before generating or sending invoices.");
-    return;
-  }
-
   const shouldDownload = options.autoPrint === true;
   const appLogoUrl = "https://acapoliteconsulting.co.za/acapolite-logo.png";
 
