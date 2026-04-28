@@ -3056,6 +3056,7 @@ Deno.serve(async (request) => {
     const portalUrl = requireEnv("PORTAL_URL", DEFAULT_PORTAL_URL);
     const supportEmail = requireEnv("PORTAL_SUPPORT_EMAIL", DEFAULT_SUPPORT_EMAIL);
     const supportWhatsapp = requireEnv("PORTAL_SUPPORT_WHATSAPP", DEFAULT_SUPPORT_WHATSAPP);
+    const officePhone = requireEnv("PORTAL_OFFICE_PHONE", DEFAULT_OFFICE_PHONE);
     const webPushVapidConfig = getWebPushVapidConfig();
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
