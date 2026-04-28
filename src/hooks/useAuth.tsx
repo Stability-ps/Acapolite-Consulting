@@ -22,6 +22,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isConsultant: boolean;
   isStaff: boolean;
+  isConfirmed: boolean;
   hasStaffPermission: (permission: StaffPermissionKey) => boolean;
   signOut: () => Promise<{ error: Error | null }>;
 }
@@ -38,6 +39,7 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   isConsultant: false,
   isStaff: false,
+  isConfirmed: false,
   hasStaffPermission: () => false,
   signOut: async () => ({ error: null }),
 });
@@ -169,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isConsultant = role === "consultant";
   const isClient = role === "client";
   const isStaff = role === "admin" || role === "consultant";
+  const isConfirmed = Boolean(user?.email_confirmed_at);
   const resolvedStaffPermissions = resolveStaffPermissions(role, staffPermissions);
   const dashboardPath = getDashboardHome(role, resolvedStaffPermissions);
   const hasStaffPermission = (permission: StaffPermissionKey) => checkStaffPermission(role, resolvedStaffPermissions, permission);
@@ -187,6 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isConsultant,
         isStaff,
         isClient,
+        isConfirmed,
         hasStaffPermission,
         signOut,
       }}

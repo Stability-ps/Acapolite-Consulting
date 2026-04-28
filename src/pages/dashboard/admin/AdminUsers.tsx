@@ -124,13 +124,22 @@ const initialEditForm: EditStaffFormState = {
 };
 
 const initialPractitionerProfileForm: PractitionerProfileFormState = {
-  businessType: "individual",
-  businessName: "",
-  registrationNumber: "",
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  idNumber: "",
+  taxPractitionerNumber: "",
+  professionalBody: "",
   professionalTitle: "",
+  city: "",
+  province: "",
   profileSummary: "",
   languagesSpoken: "",
   showRegistrationNumber: false,
+  businessType: "individual",
+  businessName: "",
+  registrationNumber: "",
   yearsOfExperience: "0",
   availabilityStatus: "available",
   isVerified: false,
@@ -905,6 +914,15 @@ export default function AdminUsers() {
     }
 
     setEditPractitionerProfile({
+      firstName: selectedStaffUser.full_name?.split(" ")[0] || "",
+      lastName: selectedStaffUser.full_name?.split(" ").slice(1).join(" ") || "",
+      email: selectedStaffUser.email || "",
+      phone: selectedStaffUser.phone || "",
+      idNumber: selectedPractitionerProfile?.id_number || "",
+      taxPractitionerNumber: selectedPractitionerProfile?.tax_practitioner_number || "",
+      professionalBody: selectedPractitionerProfile?.professional_body || "",
+      city: selectedPractitionerProfile?.city || "",
+      province: selectedPractitionerProfile?.province || "",
       businessType:
         selectedPractitionerProfile?.business_type === "company"
           ? "company"
@@ -939,6 +957,34 @@ export default function AdminUsers() {
       vatNumber: selectedPractitionerProfile?.vat_number || "",
     });
   }, [selectedPractitionerProfile, selectedStaffUser]);
+
+  // Sync editPractitionerProfile back to editForm for name/phone
+  useEffect(() => {
+    if (editForm.role === "consultant") {
+      const newFullName = `${editPractitionerProfile.firstName} ${editPractitionerProfile.lastName}`.trim();
+      if (newFullName !== editForm.fullName || editPractitionerProfile.phone !== editForm.phone) {
+        setEditForm(prev => ({
+          ...prev,
+          fullName: newFullName,
+          phone: editPractitionerProfile.phone,
+        }));
+      }
+    }
+  }, [editPractitionerProfile.firstName, editPractitionerProfile.lastName, editPractitionerProfile.phone, editForm.role]);
+
+  // Sync createPractitionerProfile back to createForm for name/phone
+  useEffect(() => {
+    if (createForm.role === "consultant") {
+      const newFullName = `${createPractitionerProfile.firstName} ${createPractitionerProfile.lastName}`.trim();
+      if (newFullName !== createForm.fullName || createPractitionerProfile.phone !== createForm.phone) {
+        setCreateForm(prev => ({
+          ...prev,
+          fullName: newFullName,
+          phone: createPractitionerProfile.phone,
+        }));
+      }
+    }
+  }, [createPractitionerProfile.firstName, createPractitionerProfile.lastName, createPractitionerProfile.phone, createForm.role]);
 
   const adminCount = staffCards.filter((card) => card.role === "admin").length;
   const practitionerCards = staffCards.filter(
@@ -991,18 +1037,23 @@ export default function AdminUsers() {
 
     const { error } = await supabase.from("practitioner_profiles").upsert({
       profile_id: profileId,
-      business_type: values.businessType,
-      business_name:
-        values.businessType === "company" ? values.businessName.trim() || null : null,
-      registration_number:
-        values.businessType === "company" ? values.registrationNumber.trim() || null : null,
+      id_number: values.idNumber.trim() || null,
+      tax_practitioner_number: values.taxPractitionerNumber.trim() || null,
+      professional_body: values.professionalBody.trim() || null,
       professional_title: values.professionalTitle.trim() || null,
+      city: values.city.trim() || null,
+      province: values.province.trim() || null,
       profile_summary: values.profileSummary.trim() || null,
       languages_spoken: values.languagesSpoken
         .split(",")
         .map((language) => language.trim())
         .filter(Boolean),
       show_registration_number: values.showRegistrationNumber,
+      business_type: values.businessType,
+      business_name:
+        values.businessType === "company" ? values.businessName.trim() || null : null,
+      registration_number:
+        values.businessType === "company" ? values.registrationNumber.trim() || null : null,
       years_of_experience: Number.isNaN(yearsOfExperience)
         ? 0
         : Math.max(0, yearsOfExperience),

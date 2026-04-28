@@ -320,9 +320,9 @@ export default function Register() {
       );
     }
 
-    if ((result?.savedDocuments ?? 0) < 4) {
+    if (!result?.success || (result?.savedDocuments ?? 0) < 3) {
       throw new Error(
-        "Practitioner signup did not save all required documents. Please try again before leaving this page.",
+        result?.error || "Practitioner signup did not save all required documents. Please try again before leaving this page.",
       );
     }
   };

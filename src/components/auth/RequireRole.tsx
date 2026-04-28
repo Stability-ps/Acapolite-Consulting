@@ -13,7 +13,7 @@ interface RequireRoleProps {
 }
 
 export function RequireRole({ allowedRoles }: RequireRoleProps) {
-  const { loading, user, role } = useAuth();
+  const { loading, user, role, isConfirmed } = useAuth();
   const {
     isAccountSuspended,
     isPendingVerification,
@@ -31,6 +31,25 @@ export function RequireRole({ allowedRoles }: RequireRoleProps) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (!isConfirmed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="max-w-lg rounded-2xl border border-border bg-card p-8 text-center shadow-card">
+          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground font-body">Email Not Verified</p>
+          <h1 className="mt-3 font-display text-2xl text-foreground">Please verify your email address</h1>
+          <p className="mt-3 text-sm text-muted-foreground font-body">
+            You must click the verification link in the email we sent you before you can access your dashboard.
+          </p>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <Button asChild className="rounded-xl">
+              <Link to="/login">Go to Login</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!role || !allowedRoles.includes(role)) {
