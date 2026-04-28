@@ -1555,7 +1555,7 @@ export default function AdminUsers() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All document states</SelectItem>
-              <SelectItem value="outstanding">Outstanding documents</SelectItem>
+              <SelectItem value="outstanding">Documents pending review</SelectItem>
               <SelectItem value="rejected">Rejected documents</SelectItem>
               <SelectItem value="attention">Any document issue</SelectItem>
               <SelectItem value="clean">No document issues</SelectItem>
@@ -1751,7 +1751,7 @@ export default function AdminUsers() {
                         </div>
                         <div className="rounded-2xl border border-border bg-accent/30 p-4">
                           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
-                            Outstanding Docs
+                            Pending Review
                           </p>
                           <p
                             className={`mt-2 text-lg font-semibold font-body ${card.outstandingDocumentsCount > 0 ? "text-amber-700" : "text-foreground"}`}
@@ -1805,7 +1805,7 @@ export default function AdminUsers() {
                         {card.outstandingDocumentsCount > 0 ? (
                           <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
                             <FileWarning className="h-3.5 w-3.5" />
-                            Outstanding documents
+                            Documents pending review
                           </span>
                         ) : null}
                         {card.rejectedDocumentsCount > 0 ? (
@@ -1894,7 +1894,7 @@ export default function AdminUsers() {
                             to={`/dashboard/staff/documents?practitionerId=${staffUser.id}&documentState=attention`}
                           >
                             <FileWarning className="mr-2 h-4 w-4" />
-                            View Outstanding Docs
+                            View Pending Docs
                           </Link>
                         </Button>
                       ) : (
@@ -1905,7 +1905,7 @@ export default function AdminUsers() {
                           disabled
                         >
                           <FileWarning className="mr-2 h-4 w-4" />
-                          View Outstanding Docs
+                          View Pending Docs
                         </Button>
                       )
                     ) : null}
