@@ -436,7 +436,6 @@ export default function AdminClients() {
         status: "paid",
         paid_at: new Date().toISOString(),
         amount_paid: total,
-        balance_due: 0,
       })
       .eq("id", invoiceId);
     setUpdatingInvoiceId(null);
