@@ -749,6 +749,30 @@ export default function AdminInvoices() {
       return;
     }
 
+    // Validate banking details when updating to non-draft status
+    if (selectedStatus !== "draft") {
+      const bankProfile = resolveBankProfile();
+      const accountHolderName = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
+      const hasCompleteBanking = Boolean(
+        accountHolderName.trim()
+        && bankProfile?.bank_name?.trim()
+        && bankProfile?.bank_branch_name?.trim()
+        && bankProfile?.bank_branch_code?.trim()
+        && bankProfile?.bank_account_number?.trim()
+        && bankProfile?.bank_account_type?.trim(),
+      );
+
+      if (!bankProfile || !hasCompleteBanking) {
+        toast.error("Please complete and verify your banking details before generating or sending invoices.");
+        return;
+      }
+
+      if (bankProfile.banking_verification_status !== "verified") {
+        toast.error("Please complete and verify your banking details before generating or sending invoices.");
+        return;
+      }
+    }
+
     setSavingStatus(true);
     const cleanedLineItems = invoiceLineItems.filter(
       (item) => item.service_item.trim() || Number(item.unit_price || 0) > 0,
@@ -864,6 +888,28 @@ export default function AdminInvoices() {
       return;
     }
 
+    // Validate banking details before resending invoice
+    const bankProfile = resolveBankProfile();
+    const accountHolderName = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
+    const hasCompleteBanking = Boolean(
+      accountHolderName.trim()
+      && bankProfile?.bank_name?.trim()
+      && bankProfile?.bank_branch_name?.trim()
+      && bankProfile?.bank_branch_code?.trim()
+      && bankProfile?.bank_account_number?.trim()
+      && bankProfile?.bank_account_type?.trim(),
+    );
+
+    if (!bankProfile || !hasCompleteBanking) {
+      toast.error("Please complete and verify your banking details before generating or sending invoices.");
+      return;
+    }
+
+    if (bankProfile.banking_verification_status !== "verified") {
+      toast.error("Please complete and verify your banking details before generating or sending invoices.");
+      return;
+    }
+
     const clientProfileId = selectedInvoice.clients?.profile_id;
     const clientEmail = selectedInvoice.clients?.profiles?.email;
 
@@ -945,10 +991,16 @@ export default function AdminInvoices() {
       && bankProfile?.bank_account_type?.trim(),
     );
 
+    // Block invoice creation if banking details are incomplete
     if (!bankProfile || !hasCompleteBanking) {
-      toast.warning("Incomplete banking details. Please update the practitioner's banking profile soon.");
-    } else if (selectedStatus !== "draft" && bankProfile.banking_verification_status !== "verified") {
-      toast.warning("Practitioner banking details are not verified yet.");
+      toast.error("Please complete and verify your banking details before generating or sending invoices.");
+      return;
+    }
+
+    // Block non-draft invoices if banking details are not verified
+    if (selectedStatus !== "draft" && bankProfile.banking_verification_status !== "verified") {
+      toast.error("Please complete and verify your banking details before generating or sending invoices.");
+      return;
     }
 
     const cleanedLineItems = invoiceLineItems.filter(
