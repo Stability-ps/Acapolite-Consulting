@@ -490,6 +490,19 @@ export default function AdminUsers() {
     },
   });
 
+  const { data: practitionerVerificationDocuments } = useQuery({
+    queryKey: ["practitioner-verification-documents"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_verification_documents")
+        .select("practitioner_profile_id, status")
+        .in("status", ["pending_review", "rejected"]);
+
+      if (error) throw error;
+      return (data ?? []) as { practitioner_profile_id: string; status: string }[];
+    },
+  });
+
   const practitionerProfileMap = useMemo(
     () =>
       new Map(
@@ -537,29 +550,17 @@ export default function AdminUsers() {
       }
     }
 
-    for (const documentRow of documentAttentionRows ?? []) {
-      const practitionerId =
-        (documentRow.case_id
-          ? caseToPractitioner.get(documentRow.case_id)
-          : null) ||
-        (documentRow.client_id
-          ? clientToPractitioner.get(documentRow.client_id)
-          : null);
-
-      if (!practitionerId) continue;
-
-      if (documentRow.status === "rejected") {
+    // Count practitioner verification documents (ID copy, tax certificate, proof of address)
+    for (const doc of practitionerVerificationDocuments ?? []) {
+      if (doc.status === "rejected") {
         rejectedDocumentsByPractitioner.set(
-          practitionerId,
-          (rejectedDocumentsByPractitioner.get(practitionerId) ?? 0) + 1,
+          doc.practitioner_profile_id,
+          (rejectedDocumentsByPractitioner.get(doc.practitioner_profile_id) ?? 0) + 1,
         );
-        continue;
-      }
-
-      if (["uploaded", "pending_review"].includes(documentRow.status)) {
+      } else if (doc.status === "pending_review") {
         outstandingDocumentsByPractitioner.set(
-          practitionerId,
-          (outstandingDocumentsByPractitioner.get(practitionerId) ?? 0) + 1,
+          doc.practitioner_profile_id,
+          (outstandingDocumentsByPractitioner.get(doc.practitioner_profile_id) ?? 0) + 1,
         );
       }
     }
@@ -582,7 +583,7 @@ export default function AdminUsers() {
     caseAssignmentRows,
     clientAssignmentRows,
     consultantIds,
-    documentAttentionRows,
+    practitionerVerificationDocuments,
   ]);
 
   const staffCards = useMemo(() => {
