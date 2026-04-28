@@ -71,6 +71,7 @@ type StaffInvoice = {
   client_address?: string | null;
   client_vat_number?: string | null;
   practitioner_vat_number?: string | null;
+  created_by: string;
   clients?: {
     profile_id?: string | null;
     company_name?: string | null;
@@ -234,7 +235,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("invoices")
-        .select("*, client_vat_number, practitioner_vat_number, clients(profile_id, client_type, company_name, first_name, last_name, client_code, vat_number, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
+        .select("*, created_by, client_vat_number, practitioner_vat_number, clients(profile_id, client_type, company_name, first_name, last_name, client_code, vat_number, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -501,9 +502,8 @@ export default function AdminInvoices() {
       return null;
     }
 
-    const selectedCase = (cases ?? []).find((caseItem: { id: string; assigned_consultant_id?: string | null }) => caseItem.id === invoice.case_id);
-    const selectedClient = (clients ?? []).find((client: { id: string; assigned_consultant_id?: string | null }) => client.id === invoice.client_id);
-    const practitionerId = selectedCase?.assigned_consultant_id || selectedClient?.assigned_consultant_id || null;
+    // Use the invoice's created_by field to get the practitioner who created the invoice
+    const practitionerId = invoice.created_by;
 
     if (!practitionerId) {
       return null;
