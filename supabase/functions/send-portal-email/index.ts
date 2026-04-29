@@ -16,6 +16,7 @@ type SignupNotificationPayload = {
   fullName?: string;
   role?: string;
   provider?: string;
+  confirmationLink?: string;
 };
 
 type WelcomeEmailPayload = {
@@ -991,11 +992,73 @@ function buildEmailContent(params: {
     const fullName = trimString(payload.fullName) || "New user";
     const role = trimString(payload.role) || "client";
     const provider = trimString(payload.provider) || "email";
+    const confirmationLink = trimString(payload.confirmationLink || "");
 
     if (!profileId || !email) {
       throw new Error("Profile ID and email are required for signup notifications.");
     }
 
+    // If confirmationLink is provided, send confirmation email to user
+    if (confirmationLink) {
+      const safeName = escapeHtml(fullName);
+      const safeEmail = escapeHtml(email);
+      const safeLink = escapeHtml(confirmationLink);
+
+      return {
+        requiresAuth: true,
+        mail: {
+          toEmail: email,
+          subject: "Confirm your email address - Acapolite Consulting",
+          text: [
+            `Dear ${fullName},`,
+            "",
+            "Thank you for signing up with Acapolite Consulting.",
+            "",
+            "Please confirm your email address by clicking the link below:",
+            "",
+            confirmationLink,
+            "",
+            "This link will expire in 24 hours.",
+            "",
+            "If you did not create an account, please ignore this email.",
+            "",
+            "Best regards,",
+            "The Acapolite Consulting Team",
+          ].join("\n"),
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #333;">Confirm your email address</h2>
+              <p>Dear ${safeName},</p>
+              <p>Thank you for signing up with Acapolite Consulting.</p>
+              <p>Please confirm your email address by clicking the button below:</p>
+              <p style="text-align: center; margin: 30px 0;">
+                <a href="${safeLink}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Confirm Email</a>
+              </p>
+              <p>Or copy and paste this link into your browser:</p>
+              <p style="word-break: break-all; color: #666; font-size: 12px;">${safeLink}</p>
+              <p style="color: #666; font-size: 12px;">This link will expire in 24 hours.</p>
+              <p>If you did not create an account, please ignore this email.</p>
+              <p>Best regards,<br>The Acapolite Consulting Team</p>
+            </div>
+          `,
+          category: "Email Confirmation",
+        } satisfies MailtrapMessage,
+        log: {
+          notificationType: "signup_notification",
+          recipientEmail: email,
+          profileId,
+          contactEmail: email,
+          metadata: {
+            full_name: fullName,
+            role,
+            provider,
+            confirmation_link: confirmationLink,
+          },
+        } satisfies NotificationLogEntry,
+      };
+    }
+
+    // Otherwise, send admin notification about new signup
     return {
       requiresAuth: true,
       mail: {

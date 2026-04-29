@@ -89,7 +89,11 @@ Deno.serve(async (request) => {
   try {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+    const anonKey = requireEnv("SUPABASE_ANON_KEY");
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const authClient = createClient(supabaseUrl, anonKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
@@ -150,12 +154,12 @@ Deno.serve(async (request) => {
           .eq("id", existingProfile.id);
       }
 
-      const { data: createdUserData, error: createUserError } =
-        await adminClient.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: false,
-          user_metadata: {
+      const { data: signUpData, error: signUpError } = await authClient.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: "https://acapoliteconsulting.co.za/login",
+          data: {
             full_name: fullName,
             phone,
             role: "consultant",
@@ -169,17 +173,18 @@ Deno.serve(async (request) => {
             city,
             province,
           },
-        });
+        },
+      });
 
-      if (createUserError || !createdUserData.user) {
+      if (signUpError || !signUpData.user) {
         return jsonResponse(
           request,
-          { error: createUserError?.message || "Unable to create practitioner account." },
+          { error: signUpError?.message || "Unable to create practitioner account." },
           400,
         );
       }
 
-      userId = createdUserData.user.id;
+      userId = signUpData.user.id;
       createdUserId = userId;
     } else {
       const {

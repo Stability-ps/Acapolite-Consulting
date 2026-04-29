@@ -79,6 +79,20 @@ Deno.serve(async (request) => {
       },
     });
 
+    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
     const {
       data: { user: callerUser },
       error: callerAuthError,
@@ -116,13 +130,6 @@ Deno.serve(async (request) => {
       return jsonResponse(request, { error: "Password must be at least 8 characters long." }, 400);
     }
 
-    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-
     // Check profiles table for any orphaned profiles
     const { data: existingProfile } = await adminClient
       .from("profiles")
@@ -138,23 +145,25 @@ Deno.serve(async (request) => {
         .eq("id", existingProfile.id);
     }
 
-    const { data: createdUserData, error: createUserError } = await adminClient.auth.admin.createUser({
+    const { data: signUpData, error: signUpError } = await authClient.auth.signUp({
       email,
       password,
-      email_confirm: false,
-      user_metadata: {
-        full_name: fullName,
-        phone,
-        account_type: "client",
-        role: "client",
+      options: {
+        emailRedirectTo: "https://acapoliteconsulting.co.za/login",
+        data: {
+          full_name: fullName,
+          phone,
+          account_type: "client",
+          role: "client",
+        },
       },
     });
 
-    if (createUserError || !createdUserData.user) {
-      return jsonResponse(request, { error: getCreateUserErrorMessage(createUserError?.message) }, 400);
+    if (signUpError || !signUpData.user) {
+      return jsonResponse(request, { error: getCreateUserErrorMessage(signUpError?.message) }, 400);
     }
 
-    const createdUser = createdUserData.user;
+    const createdUser = signUpData.user;
 
     const { error: profileUpsertError } = await adminClient.from("profiles").upsert({
       id: createdUser.id,
