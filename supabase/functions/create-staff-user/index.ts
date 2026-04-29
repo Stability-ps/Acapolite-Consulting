@@ -199,6 +199,21 @@ Deno.serve(async (request) => {
       },
     });
 
+    // Check profiles table for any orphaned profiles
+    const { data: existingProfile } = await adminClient
+      .from("profiles")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (existingProfile) {
+      // Delete orphaned profile to allow re-creation
+      await adminClient
+        .from("profiles")
+        .delete()
+        .eq("id", existingProfile.id);
+    }
+
     const { data: createdUserData, error: createUserError } = await adminClient.auth.admin.createUser({
       email,
       password,

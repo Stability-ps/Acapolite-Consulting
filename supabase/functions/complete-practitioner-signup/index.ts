@@ -135,6 +135,7 @@ Deno.serve(async (request) => {
         );
       }
 
+      // Check profiles table for any orphaned profiles
       const { data: existingProfile } = await adminClient
         .from("profiles")
         .select("id")
@@ -142,11 +143,11 @@ Deno.serve(async (request) => {
         .maybeSingle();
 
       if (existingProfile) {
-        return jsonResponse(
-          request,
-          { error: "An account with this email already exists." },
-          400,
-        );
+        // Delete orphaned profile to allow re-creation
+        await adminClient
+          .from("profiles")
+          .delete()
+          .eq("id", existingProfile.id);
       }
 
       const { data: createdUserData, error: createUserError } =
