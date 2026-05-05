@@ -19,6 +19,12 @@ const STORAGE_ADDONS: Record<string, { storage_mb: number; name: string }> = {
   plus_25gb: { storage_mb: 25 * 1024, name: "+25 GB Storage" },
 };
 
+const PAYSTACK_PLAN_CODE_MAP: Record<string, string> = {
+  PLN_itawkcig6c30q77: "starter",
+  PLN_9deli5oghu3lt2h: "professional",
+  PLN_6qfph5xvmtzgpag: "business",
+};
+
 async function verifySignature(body: string, signature: string): Promise<boolean> {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -48,6 +54,126 @@ function buildPeriodDates(nextPaymentDate?: string | null) {
     currentPeriodStart: now.toISOString(),
     currentPeriodEnd: nextRenewal.toISOString(),
     nextRenewalAt: nextRenewal.toISOString(),
+  };
+}
+
+function normalizeString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function resolveInternalPlanCode(data: any) {
+  const rawPlanCode = normalizeString(data?.metadata?.plan_code)
+    ?? normalizeString(data?.plan_code)
+    ?? normalizeString(data?.plan?.plan_code);
+
+  if (!rawPlanCode) {
+    return null;
+  }
+
+  return PAYSTACK_PLAN_CODE_MAP[rawPlanCode] ?? rawPlanCode.toLowerCase();
+}
+
+async function resolvePractitionerProfileId(supabase: ReturnType<typeof createClient>, data: any) {
+  const customerMetadata = data?.customer?.metadata ?? {};
+  const practitionerProfileId = normalizeString(customerMetadata.practitioner_profile_id)
+    ?? normalizeString(data?.metadata?.practitioner_profile_id);
+
+  if (practitionerProfileId) {
+    return practitionerProfileId;
+  }
+
+  const customerEmail = normalizeString(data?.customer?.email) ?? normalizeString(data?.email);
+  if (!customerEmail) {
+    return null;
+  }
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("email", customerEmail)
+    .eq("role", "consultant")
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return profile?.id ?? null;
+}
+
+async function ensureSubscriptionRecord(
+  supabase: ReturnType<typeof createClient>,
+  data: any,
+) {
+  const customerMetadata = data?.customer?.metadata ?? {};
+  const practitionerProfileId = await resolvePractitionerProfileId(supabase, data);
+  const planCode = resolveInternalPlanCode(data);
+  const subscriptionCode = normalizeString(data?.subscription_code)
+    ?? normalizeString(data?.subscription?.subscription_code);
+
+  if (!practitionerProfileId || !planCode || !subscriptionCode) {
+    console.error("subscription webhook missing practitionerProfileId, planCode, or subscriptionCode", {
+      practitionerProfileId,
+      planCode,
+      subscriptionCode,
+      customerEmail: data?.customer?.email ?? null,
+      rawPlanCode: data?.plan?.plan_code ?? data?.plan_code ?? data?.metadata?.plan_code ?? null,
+    });
+    return null;
+  }
+
+  const { data: planRow, error: planError } = await supabase
+    .from("practitioner_subscription_plans")
+    .select("code, credits_per_month, storage_limit_mb")
+    .eq("code", planCode)
+    .maybeSingle();
+
+  if (planError || !planRow) {
+    throw planError ?? new Error(`Subscription plan ${planCode} not found.`);
+  }
+
+  const periodDates = buildPeriodDates(data?.next_payment_date);
+
+  const { error: upsertError } = await supabase
+    .from("practitioner_subscriptions")
+    .upsert({
+      practitioner_profile_id: practitionerProfileId,
+      plan_code: planRow.code,
+      status: "active",
+      payment_provider: "paystack",
+      provider_subscription_id: subscriptionCode,
+      started_at: data?.created_at ?? new Date().toISOString(),
+      current_period_start: periodDates.currentPeriodStart,
+      current_period_end: periodDates.currentPeriodEnd,
+      next_renewal_at: periodDates.nextRenewalAt,
+      last_credited_at: new Date().toISOString(),
+      metadata: {
+        ...(customerMetadata ?? {}),
+        customer_code: data?.customer?.customer_code ?? null,
+        customer_email: data?.customer?.email ?? null,
+        email_token: data?.email_token ?? data?.customer?.email_token ?? null,
+        raw_plan_code: data?.plan?.plan_code ?? data?.plan_code ?? null,
+      },
+    }, { onConflict: "provider_subscription_id" });
+
+  if (upsertError) {
+    throw upsertError;
+  }
+
+  const { data: subscriptionRow, error: subscriptionError } = await supabase
+    .from("practitioner_subscriptions")
+    .select("id, practitioner_profile_id, plan_code")
+    .eq("provider_subscription_id", subscriptionCode)
+    .maybeSingle();
+
+  if (subscriptionError || !subscriptionRow) {
+    throw subscriptionError ?? new Error("Subscription row was not created.");
+  }
+
+  return {
+    subscription: subscriptionRow,
+    plan: planRow,
+    periodDates,
   };
 }
 
@@ -137,78 +263,26 @@ async function handleChargeSuccess(supabase: ReturnType<typeof createClient>, da
 }
 
 async function handleSubscriptionCreate(supabase: ReturnType<typeof createClient>, data: any) {
-  const customerMetadata = data?.customer?.metadata ?? {};
-  const practitionerProfileId = customerMetadata.practitioner_profile_id ?? data?.metadata?.practitioner_profile_id ?? null;
-  const planCode = data?.plan?.plan_code ?? data?.plan_code ?? data?.metadata?.plan_code ?? null;
-  const subscriptionCode = data?.subscription_code ?? null;
-
-  if (!practitionerProfileId || !planCode || !subscriptionCode) {
-    console.error("subscription.create missing practitionerProfileId, planCode, or subscriptionCode");
+  const resolved = await ensureSubscriptionRecord(supabase, data);
+  if (!resolved) {
     return;
   }
 
-  const { data: planRow, error: planError } = await supabase
-    .from("practitioner_subscription_plans")
-    .select("credits_per_month, storage_limit_mb")
-    .eq("code", planCode)
-    .maybeSingle();
-
-  if (planError || !planRow) {
-    throw planError ?? new Error(`Subscription plan ${planCode} not found.`);
-  }
-
-  const periodDates = buildPeriodDates(data?.next_payment_date);
-
-  const { error: upsertError } = await supabase
-    .from("practitioner_subscriptions")
-    .upsert({
-      practitioner_profile_id: practitionerProfileId,
-      plan_code: planCode,
-      status: "active",
-      payment_provider: "paystack",
-      provider_subscription_id: subscriptionCode,
-      started_at: data?.created_at ?? new Date().toISOString(),
-      current_period_start: periodDates.currentPeriodStart,
-      current_period_end: periodDates.currentPeriodEnd,
-      next_renewal_at: periodDates.nextRenewalAt,
-      last_credited_at: new Date().toISOString(),
-      metadata: {
-        ...(customerMetadata ?? {}),
-        customer_code: data?.customer?.customer_code ?? null,
-        customer_email: data?.customer?.email ?? null,
-        email_token: data?.email_token ?? data?.customer?.email_token ?? null,
-      },
-    }, { onConflict: "provider_subscription_id" });
-
-  if (upsertError) {
-    throw upsertError;
-  }
-
-  const { data: subscriptionRow, error: subscriptionError } = await supabase
-    .from("practitioner_subscriptions")
-    .select("id")
-    .eq("provider_subscription_id", subscriptionCode)
-    .maybeSingle();
-
-  if (subscriptionError || !subscriptionRow) {
-    throw subscriptionError ?? new Error("Subscription row was not created.");
-  }
-
   await grantMonthlyCredits(supabase, {
-    practitionerProfileId,
-    subscriptionId: subscriptionRow.id,
-    planCode,
-    creditsPerMonth: planRow.credits_per_month,
-    expiresAt: periodDates.nextRenewalAt,
-    description: `${planCode} monthly credits reset`,
+    practitionerProfileId: resolved.subscription.practitioner_profile_id,
+    subscriptionId: resolved.subscription.id,
+    planCode: resolved.subscription.plan_code,
+    creditsPerMonth: resolved.plan.credits_per_month,
+    expiresAt: resolved.periodDates.nextRenewalAt,
+    description: `${resolved.subscription.plan_code} monthly credits reset`,
   });
 
   await supabase
     .from("practitioner_credit_accounts")
     .update({
-      storage_base_limit_mb: planRow.storage_limit_mb,
+      storage_base_limit_mb: resolved.plan.storage_limit_mb,
     })
-    .eq("profile_id", practitionerProfileId);
+    .eq("profile_id", resolved.subscription.practitioner_profile_id);
 }
 
 async function handleInvoiceUpdate(supabase: ReturnType<typeof createClient>, data: any) {
@@ -223,15 +297,23 @@ async function handleInvoiceUpdate(supabase: ReturnType<typeof createClient>, da
     .eq("provider_subscription_id", subscriptionCode)
     .maybeSingle();
 
-  if (subscriptionError || !subscription) {
-    throw subscriptionError ?? new Error("Subscription not found for invoice update.");
+  if (subscriptionError) {
+    throw subscriptionError;
+  }
+
+  const resolved = !subscription ? await ensureSubscriptionRecord(supabase, data) : null;
+  const activeSubscription = subscription ?? resolved?.subscription ?? null;
+  const activePlan = resolved?.plan ?? null;
+
+  if (!activeSubscription) {
+    throw new Error("Subscription not found for invoice update.");
   }
 
   if (!data?.paid) {
     const { error } = await supabase
       .from("practitioner_subscriptions")
       .update({ status: "past_due" })
-      .eq("id", subscription.id);
+      .eq("id", activeSubscription.id);
 
     if (error) {
       throw error;
@@ -239,14 +321,16 @@ async function handleInvoiceUpdate(supabase: ReturnType<typeof createClient>, da
     return;
   }
 
-  const { data: planRow, error: planError } = await supabase
-    .from("practitioner_subscription_plans")
-    .select("credits_per_month, storage_limit_mb")
-    .eq("code", subscription.plan_code)
-    .maybeSingle();
+  const { data: planRow, error: planError } = activePlan
+    ? { data: activePlan, error: null }
+    : await supabase
+      .from("practitioner_subscription_plans")
+      .select("credits_per_month, storage_limit_mb")
+      .eq("code", activeSubscription.plan_code)
+      .maybeSingle();
 
   if (planError || !planRow) {
-    throw planError ?? new Error(`Subscription plan ${subscription.plan_code} not found.`);
+    throw planError ?? new Error(`Subscription plan ${activeSubscription.plan_code} not found.`);
   }
 
   const periodDates = buildPeriodDates(data?.next_payment_date);
@@ -260,19 +344,19 @@ async function handleInvoiceUpdate(supabase: ReturnType<typeof createClient>, da
       next_renewal_at: periodDates.nextRenewalAt,
       last_credited_at: new Date().toISOString(),
     })
-    .eq("id", subscription.id);
+    .eq("id", activeSubscription.id);
 
   if (updateError) {
     throw updateError;
   }
 
   await grantMonthlyCredits(supabase, {
-    practitionerProfileId: subscription.practitioner_profile_id,
-    subscriptionId: subscription.id,
-    planCode: subscription.plan_code,
+    practitionerProfileId: activeSubscription.practitioner_profile_id,
+    subscriptionId: activeSubscription.id,
+    planCode: activeSubscription.plan_code,
     creditsPerMonth: planRow.credits_per_month,
     expiresAt: periodDates.nextRenewalAt,
-    description: `${subscription.plan_code} monthly credits reset`,
+    description: `${activeSubscription.plan_code} monthly credits reset`,
   });
 
   await supabase
@@ -280,7 +364,7 @@ async function handleInvoiceUpdate(supabase: ReturnType<typeof createClient>, da
     .update({
       storage_base_limit_mb: planRow.storage_limit_mb,
     })
-    .eq("profile_id", subscription.practitioner_profile_id);
+    .eq("profile_id", activeSubscription.practitioner_profile_id);
 }
 
 async function handleSubscriptionDisable(supabase: ReturnType<typeof createClient>, data: any) {
