@@ -20,6 +20,26 @@ type PractitionerCreditPurchase = Tables<"practitioner_credit_purchases">;
 type PractitionerStorageAddonPurchase = Tables<"practitioner_storage_addon_purchases">;
 type PractitionerSubscription = Tables<"practitioner_subscriptions">;
 
+function getUnlockCreditCost(transaction: PractitionerCreditTransaction) {
+  const metadata = transaction.metadata;
+
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return Math.abs(transaction.credits_delta);
+  }
+
+  const creditCost = metadata.credit_cost;
+  return typeof creditCost === "number" ? creditCost : Math.abs(transaction.credits_delta);
+}
+
+function getCreditActivityLabel(transaction: PractitionerCreditTransaction) {
+  if (transaction.transaction_type === "lead_unlock") {
+    const creditCost = getUnlockCreditCost(transaction);
+    return `Lead unlock - ${creditCost} credit${creditCost === 1 ? "" : "s"}`;
+  }
+
+  return transaction.description || transaction.transaction_type;
+}
+
 function formatDate(value?: string | null) {
   if (!value) {
     return "Not scheduled";
@@ -508,7 +528,7 @@ export default function PractitionerCredits() {
               creditTransactions.map((transaction) => (
                 <div key={transaction.id} className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-background/60 p-4">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground font-body">{transaction.description || transaction.transaction_type}</p>
+                    <p className="text-sm font-semibold text-foreground font-body">{getCreditActivityLabel(transaction)}</p>
                     <p className="mt-1 text-xs text-muted-foreground font-body">
                       {new Date(transaction.created_at).toLocaleString()} · {transaction.credit_bucket}
                     </p>

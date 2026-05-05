@@ -26,7 +26,11 @@ import {
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass } from "@/lib/practitionerMarketplace";
-import { formatStorageLimitFromMb, formatStorageValue } from "@/lib/practitionerBilling";
+import {
+  calculateServiceRequestCreditCost,
+  formatStorageLimitFromMb,
+  formatStorageValue,
+} from "@/lib/practitionerBilling";
 
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type ServiceRequest = Tables<"service_requests">;
@@ -336,6 +340,16 @@ export default function PractitionerOverview() {
     [accessRequests],
   );
 
+  const getDisplayedCreditCost = (lead: ServiceRequest) => {
+    const storedCreditCost = accessRequestMap.get(lead.id)?.credit_cost;
+
+    if (typeof storedCreditCost === "number" && storedCreditCost > 0) {
+      return storedCreditCost;
+    }
+
+    return calculateServiceRequestCreditCost(resolveServiceList(lead));
+  };
+
   const serviceLabelMap = useMemo(
     () => new Map(serviceNeededOptions.map((option) => [option.value, option.label])),
     [],
@@ -614,6 +628,9 @@ export default function PractitionerOverview() {
 
                         <p className="text-sm text-muted-foreground font-body">
                           {formatServiceList(resolveServiceList(lead))} | Priority {formatServiceRequestLabel(lead.priority_level)}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-body">
+                          Cost: {getDisplayedCreditCost(lead)} credit{getDisplayedCreditCost(lead) === 1 ? "" : "s"}
                         </p>
                         <p className="line-clamp-2 text-sm text-foreground font-body">{lead.description}</p>
                         <p className="text-xs text-muted-foreground font-body">
