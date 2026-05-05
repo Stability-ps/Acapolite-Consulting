@@ -86,6 +86,7 @@ export default function PractitionerLeads() {
         .from("service_requests")
         .select("*")
         .neq("status", "closed")
+        .is("assigned_practitioner_id", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -282,11 +283,7 @@ export default function PractitionerLeads() {
     return (requests ?? [])
       .filter((request) => {
         const matchesService = servicesOffered.size === 0 || resolveServiceList(request).some((service) => servicesOffered.has(service));
-        const visibleToPractitioner =
-          request.assigned_practitioner_id === null
-          || request.assigned_practitioner_id === user?.id;
-
-        return matchesService && visibleToPractitioner;
+        return matchesService;
       })
       .filter((request) => {
         if (filters.status !== "all" && request.status !== filters.status) return false;
@@ -325,7 +322,6 @@ export default function PractitionerLeads() {
     requests,
     responseMap,
     searchQuery,
-    user?.id,
   ]);
 
   const selectedRequest = filteredRequests.find((request) => request.id === selectedRequestId)

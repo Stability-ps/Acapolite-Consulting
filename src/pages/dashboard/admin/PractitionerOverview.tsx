@@ -255,6 +255,7 @@ export default function PractitionerOverview() {
         .from("service_requests")
         .select("id, full_name, service_needed, service_needed_list, service_categories, priority_level, risk_indicator, status, assigned_practitioner_id, description, created_at")
         .neq("status", "closed")
+        .is("assigned_practitioner_id", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -378,14 +379,10 @@ export default function PractitionerOverview() {
     return (overviewLeads ?? [])
       .filter((lead) => {
         const matchesService = servicesOffered.size === 0 || resolveServiceList(lead).some((service) => servicesOffered.has(service));
-        const visibleToPractitioner =
-          lead.assigned_practitioner_id === null
-          || lead.assigned_practitioner_id === user?.id;
-
-        return matchesService && visibleToPractitioner;
+        return matchesService;
       })
       .slice(0, 5);
-  }, [overviewLeads, practitionerProfile?.services_offered, user?.id]);
+  }, [overviewLeads, practitionerProfile?.services_offered]);
 
   const activeCases = useMemo(
     () => (assignedCases ?? []).filter((caseItem) => !["resolved", "closed"].includes(caseItem.status)),
