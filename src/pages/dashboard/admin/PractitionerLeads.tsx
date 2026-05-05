@@ -199,7 +199,13 @@ export default function PractitionerLeads() {
   );
 
   const getDisplayedCreditCost = (request: ServiceRequest) => {
-    const storedCreditCost = accessRequestMap.get(request.id)?.credit_cost;
+    const accessRequest = accessRequestMap.get(request.id);
+    const shouldUseStoredCreditCost = Boolean(
+      responseMap.get(request.id)
+      || accessRequest?.credit_deducted
+      || accessRequest?.status === "approved",
+    );
+    const storedCreditCost = shouldUseStoredCreditCost ? accessRequest?.credit_cost : null;
 
     if (typeof storedCreditCost === "number" && storedCreditCost > 0) {
       return storedCreditCost;
