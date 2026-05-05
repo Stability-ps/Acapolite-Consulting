@@ -198,6 +198,16 @@ export default function PractitionerLeads() {
     [accessRequests],
   );
 
+  const getDisplayedCreditCost = (request: ServiceRequest) => {
+    const storedCreditCost = accessRequestMap.get(request.id)?.credit_cost;
+
+    if (typeof storedCreditCost === "number" && storedCreditCost > 0) {
+      return storedCreditCost;
+    }
+
+    return calculateServiceRequestCreditCost(resolveServiceList(request));
+  };
+
   const serviceLabelMap = useMemo(
     () => new Map(serviceNeededOptions.map((option) => [option.value, option.label])),
     [],
@@ -320,6 +330,7 @@ export default function PractitionerLeads() {
   const selectedResponseLimitReached = !selectedResponse && selectedResponseCount >= MAX_LEAD_RESPONSES;
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
   const selectedAccessRequest = selectedRequest ? accessRequestMap.get(selectedRequest.id) ?? null : null;
+  const selectedCreditCost = selectedRequest ? getDisplayedCreditCost(selectedRequest) : 0;
   const availableCredits = creditAccount?.balance ?? 0;
   const hasApprovedAccess = Boolean(selectedResponse || selectedAccessRequest?.status === "approved");
   const canSendNewResponse = Boolean(selectedResponse || selectedAccessRequest?.status === "approved") && !selectedResponseLimitReached;
@@ -429,7 +440,6 @@ export default function PractitionerLeads() {
     setRequestingAccessId(request.id);
 
     try {
-      const creditCost = calculateServiceRequestCreditCost(resolveServiceList(request));
       const { data, error } = await supabase.rpc("unlock_service_request_access", {
         p_request_id: request.id,
       });
@@ -682,24 +692,24 @@ export default function PractitionerLeads() {
         <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground font-body">
           Loading leads...
         </div>
-      ) : filteredRequests.length ? (
-        <div className="space-y-4">
-          {filteredRequests.map((request) => {
-            const ownResponse = responseMap.get(request.id);
-            const responseCount = responseCountMap.get(request.id) ?? 0;
-            const responseLimitReached = !ownResponse && responseCount >= MAX_LEAD_RESPONSES;
-            const flags = getServiceRequestIssueFlags({
-              hasDebtFlag: request.has_debt_flag,
-              missingReturnsFlag: request.missing_returns_flag,
-              missingDocumentsFlag: request.missing_documents_flag,
-            });
-            const creditCost = calculateServiceRequestCreditCost(resolveServiceList(request));
-            const accessRequest = accessRequestMap.get(request.id);
-            const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
-            const displayName = accessApproved ? request.full_name : "Hidden - Unlock to View";
+        ) : filteredRequests.length ? (
+          <div className="space-y-4">
+            {filteredRequests.map((request) => {
+              const ownResponse = responseMap.get(request.id);
+              const responseCount = responseCountMap.get(request.id) ?? 0;
+              const responseLimitReached = !ownResponse && responseCount >= MAX_LEAD_RESPONSES;
+              const flags = getServiceRequestIssueFlags({
+                hasDebtFlag: request.has_debt_flag,
+                missingReturnsFlag: request.missing_returns_flag,
+                missingDocumentsFlag: request.missing_documents_flag,
+              });
+              const creditCost = getDisplayedCreditCost(request);
+              const accessRequest = accessRequestMap.get(request.id);
+              const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
+              const displayName = accessApproved ? request.full_name : "Hidden - Unlock to View";
 
-            return (
-              <button
+              return (
+                <button
                 key={request.id}
                 type="button"
                 onClick={() => setSelectedRequestId(request.id)}
@@ -829,8 +839,8 @@ export default function PractitionerLeads() {
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Credit Cost</p>
                     <p className="mt-1 text-sm text-foreground font-body">
-                      {calculateServiceRequestCreditCost(resolveServiceList(selectedRequest))} credit
-                      {calculateServiceRequestCreditCost(resolveServiceList(selectedRequest)) === 1 ? "" : "s"}
+                      {selectedCreditCost} credit
+                      {selectedCreditCost === 1 ? "" : "s"}
                     </p>
                   </div>
                   <div>

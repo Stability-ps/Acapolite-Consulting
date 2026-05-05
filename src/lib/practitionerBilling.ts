@@ -118,7 +118,7 @@ export const BILLING_STORAGE_ADDONS: BillingStorageAddon[] = [
 const SERVICE_CREDIT_COSTS: Record<Enums<"service_request_service_needed">, number> = {
   individual_personal_income_tax_returns: 2,
   individual_sars_debt_assistance: 5,
-  individual_tax_compliance_issues: 3,
+  individual_tax_compliance_issues: 2,
   individual_tax_clearance_certificates: 3,
   individual_objections_and_disputes: 7,
   individual_late_return_submissions: 2,
@@ -128,7 +128,7 @@ const SERVICE_CREDIT_COSTS: Record<Enums<"service_request_service_needed">, numb
   business_vat_registration: 3,
   business_vat_returns: 4,
   business_paye_registration: 3,
-  business_paye_compliance: 5,
+  business_paye_compliance: 4,
   business_sars_debt_arrangements: 6,
   business_tax_clearance_certificates: 3,
   business_sars_audits_support: 7,
