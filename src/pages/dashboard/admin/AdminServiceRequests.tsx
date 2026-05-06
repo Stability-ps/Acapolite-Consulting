@@ -4,6 +4,16 @@ import { AlertTriangle, BadgeCheck, ExternalLink, File, FileText, Image, Search,
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +45,7 @@ type PractitionerUser = Tables<"profiles">;
 
 export default function AdminServiceRequests() {
   useNotificationSectionRead("requests");
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
@@ -57,6 +67,7 @@ export default function AdminServiceRequests() {
   const [leadArchiveNotes, setLeadArchiveNotes] = useState("");
   const [archivingLeadId, setArchivingLeadId] = useState<string | null>(null);
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
+  const [confirmDeleteLeadOpen, setConfirmDeleteLeadOpen] = useState(false);
   const leadIdFromQuery = searchParams.get("leadId");
 
   if (role === "consultant") {
@@ -448,13 +459,14 @@ export default function AdminServiceRequests() {
     await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
   };
 
-  const deleteArchivedLead = async (requestId: string) => {
+  const deleteLead = async (requestId: string) => {
     setDeletingLeadId(requestId);
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("service_requests")
       .delete()
       .eq("id", requestId)
-      .eq("is_archived", true);
+      .select("id")
+      .maybeSingle();
 
     setDeletingLeadId(null);
 
@@ -463,9 +475,20 @@ export default function AdminServiceRequests() {
       return;
     }
 
-    toast.success("Archived dead lead deleted permanently.");
+    if (!data?.id) {
+      toast.error("Lead was not deleted. Please make sure your account has admin delete permission.");
+      return;
+    }
+
+    toast.success("Lead deleted permanently.");
     setSelectedRequestId(null);
-    await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
+    setConfirmDeleteLeadOpen(false);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-request-documents"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-request-responses"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-request-assignment-history"] }),
+    ]);
   };
 
   const assignPractitioner = async (requestId: string, practitionerId: string, automatic = false) => {
@@ -926,7 +949,7 @@ export default function AdminServiceRequests() {
                         type="button"
                         variant="destructive"
                         className="rounded-xl"
-                        onClick={() => void deleteArchivedLead(selectedRequest.id)}
+                        onClick={() => setConfirmDeleteLeadOpen(true)}
                         disabled={deletingLeadId === selectedRequest.id}
                       >
                         {deletingLeadId === selectedRequest.id ? "Deleting..." : "Delete Permanently"}
@@ -963,15 +986,28 @@ export default function AdminServiceRequests() {
                     </div>
                   </div>
                   <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() => void archiveLead(selectedRequest.id)}
-                      disabled={archivingLeadId === selectedRequest.id}
-                    >
-                      {archivingLeadId === selectedRequest.id ? "Archiving..." : "Mark as Dead Lead"}
-                    </Button>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => void archiveLead(selectedRequest.id)}
+                        disabled={archivingLeadId === selectedRequest.id}
+                      >
+                        {archivingLeadId === selectedRequest.id ? "Archiving..." : "Mark as Dead Lead"}
+                      </Button>
+                      {role === "admin" ? (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          className="rounded-xl"
+                          onClick={() => setConfirmDeleteLeadOpen(true)}
+                          disabled={deletingLeadId === selectedRequest.id}
+                        >
+                          {deletingLeadId === selectedRequest.id ? "Deleting..." : "Delete Lead"}
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1146,6 +1182,36 @@ export default function AdminServiceRequests() {
           </div>
         ) : null}
       </DashboardItemDialog>
+
+      <AlertDialog open={confirmDeleteLeadOpen} onOpenChange={setConfirmDeleteLeadOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete lead permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the lead and its related marketplace records, including uploaded request documents, practitioner responses, access requests, and assignment history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(selectedRequest && deletingLeadId === selectedRequest.id)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault();
+                if (!selectedRequest) {
+                  setConfirmDeleteLeadOpen(false);
+                  return;
+                }
+
+                void deleteLead(selectedRequest.id);
+              }}
+            >
+              {selectedRequest && deletingLeadId === selectedRequest.id ? "Deleting..." : "Delete Permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

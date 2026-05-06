@@ -278,6 +278,28 @@ function normalizeEmail(value?: string | null) {
   return trimString(value).toLowerCase();
 }
 
+async function isVerifiedPractitionerEmailRecipient(
+  adminClient: ReturnType<typeof createClient>,
+  practitionerProfileId?: string | null,
+) {
+  const profileId = trimString(practitionerProfileId);
+  if (!profileId) {
+    return false;
+  }
+
+  const { data, error } = await adminClient
+    .from("practitioner_profiles")
+    .select("is_verified, verification_status")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.is_verified === true && data?.verification_status === "verified";
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -3127,10 +3149,10 @@ Deno.serve(async (request) => {
 
     if (payload.type === "service_request_received_practitioner" && !payload.recipientEmail) {
       const { data: practitioners, error: practitionerError } = await adminClient
-        .from("profiles")
-        .select("id, email, full_name")
-        .eq("role", "consultant")
-        .eq("is_active", true);
+        .from("practitioner_profiles")
+        .select("profile_id, is_verified, verification_status, profiles!practitioner_profiles_profile_id_fkey(id, email, full_name, role, is_active)")
+        .eq("is_verified", true)
+        .eq("verification_status", "verified");
 
       if (practitionerError) {
         return jsonResponse(request, { error: practitionerError.message }, 500);
@@ -3140,9 +3162,17 @@ Deno.serve(async (request) => {
       let skipped = 0;
       let failed = 0;
 
-      for (const practitioner of practitioners ?? []) {
-        const recipientEmail = normalizeEmail(practitioner.email);
+      for (const practitionerRecord of practitioners ?? []) {
+        const practitioner = Array.isArray(practitionerRecord.profiles)
+          ? practitionerRecord.profiles[0]
+          : practitionerRecord.profiles;
+        const recipientEmail = normalizeEmail(practitioner?.email);
         if (!recipientEmail) {
+          continue;
+        }
+
+        if (practitioner?.role !== "consultant" || practitioner?.is_active !== true) {
+          skipped += 1;
           continue;
         }
 
@@ -3150,8 +3180,8 @@ Deno.serve(async (request) => {
           payload: {
             ...payload,
             recipientEmail,
-            practitionerProfileId: practitioner.id,
-            practitionerName: practitioner.full_name || practitioner.email || "Practitioner",
+            practitionerProfileId: practitionerRecord.profile_id,
+            practitionerName: practitioner?.full_name || practitioner?.email || "Practitioner",
           },
           notificationEmail,
           portalUrl,
@@ -3215,6 +3245,22 @@ Deno.serve(async (request) => {
       officePhone: DEFAULT_OFFICE_PHONE,
       accountsEmail: DEFAULT_ACCOUNTS_EMAIL,
     });
+
+    if (payload.type === "service_request_received_practitioner" || payload.type === "practitioner_assigned") {
+      const practitionerProfileId = payload.practitionerProfileId;
+      const canReceivePractitionerEmail = await isVerifiedPractitionerEmailRecipient(
+        adminClient,
+        practitionerProfileId,
+      );
+
+      if (!canReceivePractitionerEmail) {
+        return jsonResponse(request, {
+          success: true,
+          skipped: true,
+          reason: "Practitioner is not verified for marketplace email notifications.",
+        }, 200);
+      }
+    }
 
     if (emailContent.requiresAuth) {
       const { error } = await authorizeEmailRequest({
