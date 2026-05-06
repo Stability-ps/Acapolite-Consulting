@@ -25,7 +25,7 @@ type WelcomeEmailPayload = {
   email?: string;
   fullName?: string;
 };
-
+// welcome
 type CaseCreatedPayload = {
   type: "case_created";
   caseId?: string;
