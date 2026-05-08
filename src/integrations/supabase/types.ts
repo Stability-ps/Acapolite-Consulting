@@ -137,6 +137,9 @@ export type Database = {
           banking_verified_by: string | null;
           verification_status: string;
           verification_submitted_at: string | null;
+          lead_access_enabled: boolean;
+          lead_notifications_enabled: boolean;
+          lead_access_status: string;
           invoice_logo_path: string | null;
           id_document_path: string | null;
           certificate_document_path: string | null;
@@ -181,6 +184,9 @@ export type Database = {
           banking_verified_by?: string | null;
           verification_status?: string;
           verification_submitted_at?: string | null;
+          lead_access_enabled?: boolean;
+          lead_notifications_enabled?: boolean;
+          lead_access_status?: string;
           invoice_logo_path?: string | null;
           id_document_path?: string | null;
           certificate_document_path?: string | null;
@@ -225,6 +231,9 @@ export type Database = {
           banking_verified_by?: string | null;
           verification_status?: string;
           verification_submitted_at?: string | null;
+          lead_access_enabled?: boolean;
+          lead_notifications_enabled?: boolean;
+          lead_access_status?: string;
           invoice_logo_path?: string | null;
           id_document_path?: string | null;
           certificate_document_path?: string | null;
@@ -1361,6 +1370,7 @@ export type Database = {
           service_categories: Database["public"]["Enums"]["service_request_category"][] | null;
           service_needed: Database["public"]["Enums"]["service_request_service_needed"];
           service_needed_list: Database["public"]["Enums"]["service_request_service_needed"][] | null;
+          lead_tier: Database["public"]["Enums"]["lead_access_tier"] | null;
           priority_level: Database["public"]["Enums"]["service_request_priority"];
           description: string;
           sars_debt_amount: number;
@@ -1369,6 +1379,12 @@ export type Database = {
           has_debt_flag: boolean;
           missing_returns_flag: boolean;
           missing_documents_flag: boolean;
+          has_sars_audit: boolean;
+          has_adr: boolean;
+          has_vat_investigation: boolean;
+          has_payroll_dispute: boolean;
+          has_multiple_tax_types: boolean;
+          has_legal_complexity: boolean;
           risk_indicator: Database["public"]["Enums"]["service_request_risk_indicator"];
           viewed_at: string | null;
           responded_at: string | null;
@@ -1400,6 +1416,7 @@ export type Database = {
           service_categories?: Database["public"]["Enums"]["service_request_category"][] | null;
           service_needed: Database["public"]["Enums"]["service_request_service_needed"];
           service_needed_list?: Database["public"]["Enums"]["service_request_service_needed"][] | null;
+          lead_tier?: Database["public"]["Enums"]["lead_access_tier"] | null;
           priority_level?: Database["public"]["Enums"]["service_request_priority"];
           description: string;
           sars_debt_amount?: number;
@@ -1408,6 +1425,12 @@ export type Database = {
           has_debt_flag?: boolean;
           missing_returns_flag?: boolean;
           missing_documents_flag?: boolean;
+          has_sars_audit?: boolean;
+          has_adr?: boolean;
+          has_vat_investigation?: boolean;
+          has_payroll_dispute?: boolean;
+          has_multiple_tax_types?: boolean;
+          has_legal_complexity?: boolean;
           risk_indicator?: Database["public"]["Enums"]["service_request_risk_indicator"];
           viewed_at?: string | null;
           responded_at?: string | null;
@@ -1439,6 +1462,7 @@ export type Database = {
           service_categories?: Database["public"]["Enums"]["service_request_category"][] | null;
           service_needed?: Database["public"]["Enums"]["service_request_service_needed"];
           service_needed_list?: Database["public"]["Enums"]["service_request_service_needed"][] | null;
+          lead_tier?: Database["public"]["Enums"]["lead_access_tier"] | null;
           priority_level?: Database["public"]["Enums"]["service_request_priority"];
           description?: string;
           sars_debt_amount?: number;
@@ -1447,6 +1471,12 @@ export type Database = {
           has_debt_flag?: boolean;
           missing_returns_flag?: boolean;
           missing_documents_flag?: boolean;
+          has_sars_audit?: boolean;
+          has_adr?: boolean;
+          has_vat_investigation?: boolean;
+          has_payroll_dispute?: boolean;
+          has_multiple_tax_types?: boolean;
+          has_legal_complexity?: boolean;
           risk_indicator?: Database["public"]["Enums"]["service_request_risk_indicator"];
           viewed_at?: string | null;
           responded_at?: string | null;
@@ -1868,6 +1898,7 @@ export type Database = {
         | "support_financial_compliance";
       service_request_priority: "low" | "medium" | "high" | "urgent";
       service_request_risk_indicator: "low" | "medium" | "high";
+      lead_access_tier: "basic" | "professional" | "business";
       practitioner_availability_status: "available" | "limited" | "not_available";
       service_request_response_status: "submitted" | "selected" | "declined" | "withdrawn";
       service_request_assignment_type: "manual" | "automatic" | "client_selected" | "reassigned";
@@ -2038,6 +2069,7 @@ export const Constants = {
       ],
       service_request_priority: ["low", "medium", "high", "urgent"],
       service_request_risk_indicator: ["low", "medium", "high"],
+      lead_access_tier: ["basic", "professional", "business"],
       practitioner_availability_status: ["available", "limited", "not_available"],
       service_request_response_status: ["submitted", "selected", "declined", "withdrawn"],
       service_request_assignment_type: ["manual", "automatic", "client_selected", "reassigned"],

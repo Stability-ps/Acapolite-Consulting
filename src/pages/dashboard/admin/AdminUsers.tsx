@@ -395,6 +395,10 @@ export default function AdminUsers() {
     useState<PractitionerProfileFormState>(initialPractitionerProfileForm);
   const [editPractitionerProfile, setEditPractitionerProfile] =
     useState<PractitionerProfileFormState>(initialPractitionerProfileForm);
+  const [createLeadAccessEnabled, setCreateLeadAccessEnabled] = useState(true);
+  const [createLeadNotificationsEnabled, setCreateLeadNotificationsEnabled] = useState(true);
+  const [editLeadAccessEnabled, setEditLeadAccessEnabled] = useState(true);
+  const [editLeadNotificationsEnabled, setEditLeadNotificationsEnabled] = useState(true);
   const [startingConversationId, setStartingConversationId] = useState<
     string | null
   >(null);
@@ -878,6 +882,8 @@ export default function AdminUsers() {
       setEditForm(initialEditForm);
       setEditPermissions(defaultConsultantPermissions);
       setEditPractitionerProfile(initialPractitionerProfileForm);
+      setEditLeadAccessEnabled(true);
+      setEditLeadNotificationsEnabled(true);
       return;
     }
 
@@ -957,6 +963,8 @@ export default function AdminUsers() {
         Boolean(selectedPractitionerProfile?.vat_number),
       vatNumber: selectedPractitionerProfile?.vat_number || "",
     });
+    setEditLeadAccessEnabled(selectedPractitionerProfile?.lead_access_enabled ?? true);
+    setEditLeadNotificationsEnabled(selectedPractitionerProfile?.lead_notifications_enabled ?? true);
   }, [selectedPractitionerProfile, selectedStaffUser]);
 
   // Sync editPractitionerProfile back to editForm for name/phone
@@ -1009,6 +1017,8 @@ export default function AdminUsers() {
     setCreateForm(initialCreateForm);
     setCreatePermissions(defaultConsultantPermissions);
     setCreatePractitionerProfile(initialPractitionerProfileForm);
+    setCreateLeadAccessEnabled(true);
+    setCreateLeadNotificationsEnabled(true);
     setIsCreating(false);
   };
 
@@ -1033,6 +1043,7 @@ export default function AdminUsers() {
   const upsertPractitionerProfile = async (
     profileId: string,
     values: PractitionerProfileFormState,
+    options?: { leadAccessEnabled?: boolean; leadNotificationsEnabled?: boolean; statusOverride?: "active" | "lead_paused" | "notifications_paused" | "suspended" },
   ) => {
     const yearsOfExperience = Number(values.yearsOfExperience || 0);
 
@@ -1070,6 +1081,12 @@ export default function AdminUsers() {
       bank_account_type: values.bankAccountType.trim() || null,
       is_vat_registered: values.isVatRegistered,
       vat_number: values.isVatRegistered ? values.vatNumber.trim() || null : null,
+      lead_access_enabled: options?.leadAccessEnabled ?? true,
+      lead_notifications_enabled: options?.leadNotificationsEnabled ?? true,
+      lead_access_status: options?.statusOverride
+        ?? ((options?.leadAccessEnabled ?? true)
+          ? ((options?.leadNotificationsEnabled ?? true) ? "active" : "notifications_paused")
+          : "lead_paused"),
     });
 
     return error;
@@ -1119,6 +1136,10 @@ export default function AdminUsers() {
       const practitionerError = await upsertPractitionerProfile(
         data.user.id,
         createPractitionerProfile,
+        {
+          leadAccessEnabled: createLeadAccessEnabled,
+          leadNotificationsEnabled: createLeadNotificationsEnabled,
+        },
       );
 
       if (practitionerError) {
@@ -1228,6 +1249,13 @@ export default function AdminUsers() {
       const practitionerError = await upsertPractitionerProfile(
         selectedStaffUser.id,
         editPractitionerProfile,
+        {
+          leadAccessEnabled: editLeadAccessEnabled,
+          leadNotificationsEnabled: editLeadNotificationsEnabled,
+          statusOverride: editForm.isActive
+            ? (editLeadAccessEnabled ? (editLeadNotificationsEnabled ? "active" : "notifications_paused") : "lead_paused")
+            : "suspended",
+        },
       );
 
       if (practitionerError) {
@@ -2169,6 +2197,22 @@ export default function AdminUsers() {
 
           {createForm.role === "consultant" ? (
             <div className="space-y-4">
+              <div className="rounded-2xl border border-border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground font-body">Receive leads</p>
+                    <p className="text-sm text-muted-foreground font-body">Allow this practitioner to view and unlock new marketplace leads.</p>
+                  </div>
+                  <Switch checked={createLeadAccessEnabled} onCheckedChange={setCreateLeadAccessEnabled} />
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground font-body">Receive lead emails</p>
+                    <p className="text-sm text-muted-foreground font-body">Send lead notification emails for new eligible marketplace leads.</p>
+                  </div>
+                  <Switch checked={createLeadNotificationsEnabled} onCheckedChange={setCreateLeadNotificationsEnabled} />
+                </div>
+              </div>
               <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
                   Practitioner Profile Setup
@@ -2351,6 +2395,22 @@ export default function AdminUsers() {
 
             {editForm.role === "consultant" ? (
               <div className="space-y-4">
+                <div className="rounded-2xl border border-border p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground font-body">Lead marketplace access</p>
+                      <p className="text-sm text-muted-foreground font-body">Disable to block viewing/unlocking/responding to new leads.</p>
+                    </div>
+                    <Switch checked={editLeadAccessEnabled} onCheckedChange={setEditLeadAccessEnabled} />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground font-body">Lead emails</p>
+                      <p className="text-sm text-muted-foreground font-body">Disable lead notifications while keeping existing client notifications active.</p>
+                    </div>
+                    <Switch checked={editLeadNotificationsEnabled} onCheckedChange={setEditLeadNotificationsEnabled} />
+                  </div>
+                </div>
                 <div className="rounded-2xl border border-border p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
                     Practitioner Profile

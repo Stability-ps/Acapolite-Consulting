@@ -18,11 +18,13 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
 import { usePractitionerVerificationGate } from "@/hooks/usePractitionerVerificationGate";
 import type { StaffPermissionKey } from "@/lib/staffPermissions";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar,
@@ -83,6 +85,26 @@ export function AppSidebar() {
   const { isPendingVerification } = usePractitionerVerificationGate();
   const [signingOut, setSigningOut] = useState(false);
   const { unreadBySection } = useNotifications();
+  const { data: practitionerAccess } = useQuery({
+    queryKey: ["sidebar-practitioner-lead-access", user?.id, role],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_profiles")
+        .select("lead_access_enabled")
+        .eq("profile_id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: role === "consultant" && !!user,
+  });
+
+  const consultantNavigation = consultantItems
+    .filter((item) => !item.permission || hasStaffPermission(item.permission))
+    .filter((item) => (
+      item.url !== "/dashboard/staff/service-requests"
+      || practitionerAccess?.lead_access_enabled !== false
+    ));
 
   const navigationItems = role === "client"
     ? clientItems
@@ -90,7 +112,7 @@ export function AppSidebar() {
       ? adminItems
       : isPendingVerification
         ? consultantItems.filter((item) => item.url === "/dashboard/staff/profile" || item.url === "/dashboard/staff/verification-documents")
-        : consultantItems.filter((item) => !item.permission || hasStaffPermission(item.permission));
+        : consultantNavigation;
 
   const groupLabel = role === "client" ? "Client Menu" : role === "consultant" ? "Practitioner Tools" : "Staff Tools";
 

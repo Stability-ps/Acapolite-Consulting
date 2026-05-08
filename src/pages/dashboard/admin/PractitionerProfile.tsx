@@ -21,6 +21,7 @@ import {
 import { WebPushPrompt } from "@/components/dashboard/WebPushPrompt";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { RatingStars } from "@/components/dashboard/RatingStars";
 import { serviceNeededOptions } from "@/lib/serviceRequests";
 import {
@@ -121,6 +122,8 @@ export default function PractitionerProfile() {
   );
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [leadAccessEnabled, setLeadAccessEnabled] = useState(true);
+  const [leadNotificationsEnabled, setLeadNotificationsEnabled] = useState(true);
 
   const { data: practitionerProfile } = useQuery({
     queryKey: ["practitioner-profile", user?.id],
@@ -203,6 +206,8 @@ export default function PractitionerProfile() {
         practitionerProfile.is_vat_registered ?? Boolean(practitionerProfile.vat_number),
       vatNumber: practitionerProfile.vat_number || "",
     });
+    setLeadAccessEnabled(practitionerProfile.lead_access_enabled ?? true);
+    setLeadNotificationsEnabled(practitionerProfile.lead_notifications_enabled ?? true);
   }, [practitionerProfile, profile?.email, profile?.full_name, profile?.phone, user?.email]);
 
   const completion = useMemo(() => getProfileCompletion(form), [form]);
@@ -286,6 +291,13 @@ export default function PractitionerProfile() {
       bank_account_type: form.bankAccountType.trim() || null,
       is_vat_registered: form.isVatRegistered,
       vat_number: form.isVatRegistered ? form.vatNumber.trim() || null : null,
+      lead_access_enabled: leadAccessEnabled,
+      lead_notifications_enabled: leadNotificationsEnabled,
+      lead_access_status: profile?.is_active === false
+        ? "suspended"
+        : leadAccessEnabled
+          ? (leadNotificationsEnabled ? "active" : "notifications_paused")
+          : "lead_paused",
     });
 
     setSaving(false);
@@ -427,6 +439,31 @@ export default function PractitionerProfile() {
               onChange={setForm}
               allowVerification={false}
             />
+          </div>
+
+          <div className="mt-6 grid gap-3">
+            <div className="rounded-2xl border border-border p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-foreground font-body">Receive leads</p>
+                  <p className="mt-1 text-sm text-muted-foreground font-body">
+                    Turn off to pause marketplace lead access while keeping existing client work active.
+                  </p>
+                </div>
+                <Switch checked={leadAccessEnabled} onCheckedChange={setLeadAccessEnabled} />
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-foreground font-body">Receive lead emails</p>
+                  <p className="mt-1 text-sm text-muted-foreground font-body">
+                    Turn off to pause lead notification emails while staying active in the platform.
+                  </p>
+                </div>
+                <Switch checked={leadNotificationsEnabled} onCheckedChange={setLeadNotificationsEnabled} />
+              </div>
+            </div>
           </div>
 
           <div className="mt-6 flex justify-end">

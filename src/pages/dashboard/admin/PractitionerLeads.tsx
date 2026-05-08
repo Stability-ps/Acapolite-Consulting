@@ -31,16 +31,24 @@ type ServiceRequestDocument = Tables<"service_request_documents">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
 type PractitionerCreditAccount = Tables<"practitioner_credit_accounts">;
 type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
-const MAX_LEAD_RESPONSES = 4;
+
+const LEAD_RESPONSE_LIMITS: Record<string, number> = {
+  basic: 4,
+  professional: 3,
+  business: 2,
+};
 
 function formatLeadResponseCount(count: number) {
-  const safeCount = Math.min(count, MAX_LEAD_RESPONSES);
-  return `${safeCount} responded`;
+  return `${Math.max(0, count)} responded`;
+}
+
+function getLeadResponseLimit(leadTier?: string | null) {
+  return LEAD_RESPONSE_LIMITS[leadTier ?? "basic"] ?? 4;
 }
 
 export default function PractitionerLeads() {
   const { buyCredits } = usePaystack();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
@@ -329,13 +337,29 @@ export default function PractitionerLeads() {
     || null;
   const selectedResponse = selectedRequest ? responseMap.get(selectedRequest.id) ?? null : null;
   const selectedResponseCount = selectedRequest ? responseCountMap.get(selectedRequest.id) ?? 0 : 0;
-  const selectedResponseLimitReached = !selectedResponse && selectedResponseCount >= MAX_LEAD_RESPONSES;
+  const selectedResponseLimit = getLeadResponseLimit(selectedRequest?.lead_tier ?? null);
+  const selectedResponseLimitReached = !selectedResponse && selectedResponseCount >= selectedResponseLimit;
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
   const selectedAccessRequest = selectedRequest ? accessRequestMap.get(selectedRequest.id) ?? null : null;
   const selectedCreditCost = selectedRequest ? getDisplayedCreditCost(selectedRequest) : 0;
   const availableCredits = creditAccount?.balance ?? 0;
   const hasApprovedAccess = Boolean(selectedResponse || selectedAccessRequest?.status === "approved");
   const canSendNewResponse = Boolean(selectedResponse || selectedAccessRequest?.status === "approved") && !selectedResponseLimitReached;
+  const isLeadAccessDisabled = practitionerProfile?.lead_access_enabled === false || profile?.is_active === false;
+
+  const getDescriptionPreview = (description: string, accessApproved: boolean) => {
+    if (accessApproved) {
+      return description;
+    }
+    const trimmed = description.trim();
+    if (!trimmed) {
+      return "Description hidden until lead unlock.";
+    }
+    if (trimmed.length <= 120) {
+      return `${trimmed} ... (unlock to view full description)`;
+    }
+    return `${trimmed.slice(0, 120)}... (unlock to view full description)`;
+  };
 
   useEffect(() => {
     if (!leadIdFromQuery || !(requests ?? []).some((request) => request.id === leadIdFromQuery)) {
@@ -434,7 +458,8 @@ export default function PractitionerLeads() {
     if (!user?.id) return;
     const responseCount = responseCountMap.get(request.id) ?? 0;
 
-    if (responseCount >= MAX_LEAD_RESPONSES && !responseMap.has(request.id)) {
+    const responseLimit = getLeadResponseLimit(request.lead_tier ?? null);
+    if (responseCount >= responseLimit && !responseMap.has(request.id)) {
       toast.error("Response limit reached.");
       return;
     }
@@ -690,16 +715,30 @@ export default function PractitionerLeads() {
         </div>
       </section>
 
+      {isLeadAccessDisabled ? (
+        <section className="rounded-[24px] border border-amber-200 bg-amber-50 p-5 shadow-card">
+          <p className="text-sm font-semibold text-amber-800 font-body">Lead access currently disabled.</p>
+          <p className="mt-2 text-sm text-amber-700 font-body">
+            Existing cases remain active, but lead marketplace access is paused for this practitioner profile.
+          </p>
+        </section>
+      ) : null}
+
       {isLoading ? (
         <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground font-body">
           Loading leads...
         </div>
-        ) : filteredRequests.length ? (
+      ) : isLeadAccessDisabled ? (
+        <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground font-body">
+          Lead marketplace is currently unavailable for this account.
+        </div>
+      ) : filteredRequests.length ? (
           <div className="space-y-4">
             {filteredRequests.map((request) => {
               const ownResponse = responseMap.get(request.id);
               const responseCount = responseCountMap.get(request.id) ?? 0;
-              const responseLimitReached = !ownResponse && responseCount >= MAX_LEAD_RESPONSES;
+              const responseLimit = getLeadResponseLimit(request.lead_tier ?? null);
+              const responseLimitReached = !ownResponse && responseCount >= responseLimit;
               const flags = getServiceRequestIssueFlags({
                 hasDebtFlag: request.has_debt_flag,
                 missingReturnsFlag: request.missing_returns_flag,
@@ -746,9 +785,11 @@ export default function PractitionerLeads() {
                     <p className="text-xs text-muted-foreground font-body">
                       Cost: {creditCost} credit{creditCost === 1 ? "" : "s"}
                     </p>
-                    <p className="line-clamp-2 text-sm text-foreground font-body">{request.description}</p>
+                    <p className="line-clamp-2 text-sm text-foreground font-body">
+                      {getDescriptionPreview(request.description, accessApproved)}
+                    </p>
                     {responseLimitReached ? (
-                      <p className="text-sm font-semibold text-red-700 font-body">Response limit reached</p>
+                      <p className="text-sm font-semibold text-red-700 font-body">Response limit reached ({responseLimit} max)</p>
                     ) : null}
                     <div className="flex flex-wrap gap-2">
                       {flags.length ? flags.map((flag) => (
@@ -850,7 +891,7 @@ export default function PractitionerLeads() {
                     <p className={`mt-1 text-sm font-semibold font-body ${
                       selectedResponseLimitReached ? "text-red-700" : "text-foreground"
                     }`}>
-                      {formatLeadResponseCount(selectedResponseCount)}
+                      {formatLeadResponseCount(selectedResponseCount)} / {selectedResponseLimit} max
                     </p>
                     {selectedResponseLimitReached ? (
                       <p className="mt-1 text-xs font-semibold text-red-700 font-body">Response limit reached</p>
