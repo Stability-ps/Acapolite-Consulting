@@ -403,6 +403,7 @@ export default function PractitionerLeads() {
     : activeSubscription?.plan_code === "professional"
       ? "professional"
       : "basic";
+  const hasActiveSubscription = Boolean(activeSubscription);
   const selectedLeadTier = selectedRequest?.lead_tier ?? "basic";
   const selectedLeadLocked = Boolean(
     selectedRequest
@@ -521,6 +522,10 @@ export default function PractitionerLeads() {
 
   const requestLeadAccess = async (request: ServiceRequest) => {
     if (!user?.id) return;
+    if (!hasActiveSubscription) {
+      toast.error("You need an active subscription before using credits. Please subscribe first.");
+      return;
+    }
     const responseCount = responseCountMap.get(request.id) ?? 0;
 
     const responseLimit = getLeadResponseLimit(request.lead_tier ?? null);
@@ -1208,10 +1213,12 @@ export default function PractitionerLeads() {
                         ? "Update Response"
                         : "Respond to Lead"}
                   </Button>
-                ) : selectedLeadLocked ? (
+                ) : selectedLeadLocked || !hasActiveSubscription ? (
                   <Button asChild type="button" className="rounded-xl">
                     <Link to="/dashboard/staff/credits">
-                      {`Upgrade to ${selectedUpgradeTarget}`}
+                      {selectedLeadLocked
+                        ? `Upgrade to ${selectedUpgradeTarget}`
+                        : "Subscribe to Use Credits"}
                     </Link>
                   </Button>
                 ) : (

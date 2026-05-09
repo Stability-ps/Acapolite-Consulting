@@ -65,6 +65,18 @@ type InvoiceSnapshot = {
   created_at?: string;
 };
 
+type SubscriptionRevenueRow = {
+  plan_code: string;
+  created_at: string;
+  current_period_start: string;
+  last_credited_at?: string | null;
+};
+
+type SubscriptionPlanRow = {
+  code: string;
+  price_zar: number;
+};
+
 type RiskDocumentRequest = {
   client_id: string;
   is_required: boolean;
@@ -261,6 +273,37 @@ export default function AdminOverview() {
       return (data ?? []) as InvoiceSnapshot[];
     },
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
+  });
+
+  const { data: subscriptionRevenueRows } = useQuery({
+    queryKey: ["staff-overview-subscription-revenue"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_subscriptions")
+        .select("plan_code, created_at, current_period_start, last_credited_at")
+        .eq("status", "active");
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as SubscriptionRevenueRow[];
+    },
+  });
+
+  const { data: subscriptionPlanRows } = useQuery({
+    queryKey: ["staff-overview-subscription-plans"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_subscription_plans")
+        .select("code, price_zar");
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as SubscriptionPlanRow[];
+    },
   });
 
   const { data: riskClients } = useQuery({
@@ -489,6 +532,9 @@ export default function AdminOverview() {
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
     );
     const monthStartIso = monthStart.toISOString();
+    const subscriptionPlanPriceMap = new Map(
+      (subscriptionPlanRows ?? []).map((plan) => [plan.code, Number(plan.price_zar || 0)]),
+    );
 
     const paidInvoicesThisMonth = (invoiceRows ?? []).filter(
       (invoice) =>
@@ -496,10 +542,23 @@ export default function AdminOverview() {
         invoice.created_at &&
         invoice.created_at >= monthStartIso,
     );
-    const monthlyRevenue = paidInvoicesThisMonth.reduce(
+    const invoiceRevenueThisMonth = paidInvoicesThisMonth.reduce(
       (sum, invoice) => sum + Number(invoice.total_amount || 0),
       0,
     );
+    const subscriptionRevenueThisMonth = (subscriptionRevenueRows ?? []).reduce((sum, subscription) => {
+      const revenueDate =
+        subscription.last_credited_at ||
+        subscription.current_period_start ||
+        subscription.created_at;
+
+      if (!revenueDate || revenueDate < monthStartIso) {
+        return sum;
+      }
+
+      return sum + (subscriptionPlanPriceMap.get(subscription.plan_code) ?? 0);
+    }, 0);
+    const monthlyRevenue = invoiceRevenueThisMonth + subscriptionRevenueThisMonth;
 
     const completedCasesThisMonth = (caseRows ?? []).filter((caseRow) => {
       if (!["resolved", "closed"].includes(caseRow.status)) {
@@ -524,7 +583,7 @@ export default function AdminOverview() {
       clientGrowth,
       outstandingInvoices,
     };
-  }, [caseRows, clientGrowthRows, invoiceRows]);
+  }, [caseRows, clientGrowthRows, invoiceRows, subscriptionPlanRows, subscriptionRevenueRows]);
 
   const attentionClients = useMemo(() => {
     const outstandingInvoicesByClient = new Map<string, number>();
