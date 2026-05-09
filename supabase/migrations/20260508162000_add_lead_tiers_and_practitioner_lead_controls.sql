@@ -291,7 +291,7 @@ using (
   public.get_my_role() = 'admin'
   or (
     public.get_my_role() = 'consultant'
-    and public.can_practitioner_view_service_request(auth.uid(), id)
+    and public.practitioner_can_access_leads(auth.uid())
   )
 );
 

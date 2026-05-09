@@ -6,6 +6,7 @@ import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CREDIT_PACKAGES, SUBSCRIPTION_PLANS } from "@/hooks/usePaystack";
+import { BILLING_UPGRADE_REASONS, BILLING_UPGRADE_REASSURANCE } from "@/lib/practitionerBilling";
 import { formatZarCurrency } from "@/lib/practitionerCredits";
 
 const practitionerSteps = [
@@ -53,6 +54,24 @@ const creditPoints = [
   "Extra credits can be purchased anytime.",
   "Purchased credits do not expire.",
 ];
+
+const subscriptionPlanStyles = {
+  starter: {
+    cardClassName: "border-emerald-200 bg-[linear-gradient(180deg,rgba(240,253,244,0.98),rgba(255,255,255,0.98))]",
+    badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    priceClassName: "text-emerald-700",
+  },
+  professional: {
+    cardClassName: "border-sky-200 bg-[linear-gradient(180deg,rgba(239,246,255,0.98),rgba(255,255,255,0.98))]",
+    badgeClassName: "border-sky-200 bg-sky-50 text-sky-700",
+    priceClassName: "text-sky-700",
+  },
+  business: {
+    cardClassName: "border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,255,255,0.98))]",
+    badgeClassName: "border-amber-200 bg-amber-50 text-amber-700",
+    priceClassName: "text-amber-700",
+  },
+} as const;
 
 export default function Practitioners() {
   const lowestExtraCreditPrice = Math.min(...CREDIT_PACKAGES.map((pkg) => pkg.priceZar));
@@ -209,29 +228,55 @@ export default function Practitioners() {
             </div>
 
             <div className="mt-10 grid gap-6 xl:grid-cols-3">
-              {SUBSCRIPTION_PLANS.map((plan) => (
-                <div key={plan.code} className="rounded-[32px] border border-border bg-card p-6 shadow-card">
-                  <div className="flex items-center justify-between gap-4">
-                    <h3 className="font-display text-2xl text-foreground">{plan.name}</h3>
-                    <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                      Monthly
-                    </Badge>
+              {SUBSCRIPTION_PLANS.map((plan) => {
+                const planStyle = subscriptionPlanStyles[plan.code];
+
+                return (
+                  <div key={plan.code} className={`rounded-[32px] border p-6 shadow-card ${planStyle.cardClassName}`}>
+                    <div className="flex items-center justify-between gap-4">
+                      <h3 className="font-display text-2xl text-foreground">{plan.name}</h3>
+                      <Badge className={`rounded-full px-3 py-1 text-xs font-semibold ${planStyle.badgeClassName}`}>
+                        Monthly
+                      </Badge>
+                    </div>
+                    <p className={`mt-5 font-display text-4xl ${planStyle.priceClassName}`}>
+                      {formatZarCurrency(plan.priceZar)}
+                      <span className="ml-2 text-sm font-body text-muted-foreground">/ month</span>
+                    </p>
+                    <p className="mt-3 text-sm font-semibold text-foreground">{plan.creditsPerMonth} credits included monthly</p>
+                    <div className="mt-6 space-y-3">
+                      {plan.features.map((feature) => (
+                        <div key={feature} className="flex items-start gap-3">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
+                          <p className="text-sm leading-6 text-muted-foreground">{feature}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <p className="mt-5 font-display text-4xl text-foreground">
-                    {formatZarCurrency(plan.priceZar)}
-                    <span className="ml-2 text-sm font-body text-muted-foreground">/ month</span>
-                  </p>
-                  <p className="mt-3 text-sm font-semibold text-primary">{plan.creditsPerMonth} credits included monthly</p>
-                  <div className="mt-6 space-y-3">
-                    {plan.features.map((feature) => (
-                      <div key={feature} className="flex items-start gap-3">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                        <p className="text-sm leading-6 text-muted-foreground">{feature}</p>
-                      </div>
-                    ))}
-                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+              <div className="rounded-[32px] border border-border bg-card p-6 shadow-card">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary/70">Why upgrade?</p>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {BILLING_UPGRADE_REASONS.map((reason) => (
+                    <div key={reason} className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+                      <p className="text-sm leading-6 text-muted-foreground">{reason}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              <div className="rounded-[32px] border border-emerald-200 bg-emerald-50 p-6 shadow-card">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">100% Secure</p>
+                </div>
+                <p className="mt-4 text-sm leading-6 text-emerald-900/80">{BILLING_UPGRADE_REASSURANCE}</p>
+              </div>
             </div>
           </div>
         </section>

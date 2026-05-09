@@ -256,13 +256,6 @@ export default function RequestTaxAssistance() {
     });
   };
 
-  const buildSummary = (value: string, maxLength = 160) => {
-    const normalized = value.replace(/\s+/g, " ").trim();
-    if (!normalized) return "No summary provided.";
-    if (normalized.length <= maxLength) return normalized;
-    return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
-  };
-
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const nextFiles = Array.from(event.target.files ?? []);
 
@@ -503,7 +496,6 @@ export default function RequestTaxAssistance() {
             day: "numeric",
           },
         ),
-        summary: buildSummary(serviceRequest.description || form.description),
       };
 
       const [{ error: adminError }, { error: practitionerError }] =

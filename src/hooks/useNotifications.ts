@@ -7,8 +7,30 @@ import type { Tables } from "@/integrations/supabase/types";
 export type AppNotification = Tables<"notifications">;
 export type NotificationSection = "general" | "messages" | "requests" | "cases" | "documents";
 
+function sanitizePractitionerNotification(notification: AppNotification) {
+  if (notification.section !== "requests" || notification.entity_type !== "service_request") {
+    return notification;
+  }
+
+  if (notification.category === "new_service_request") {
+    return {
+      ...notification,
+      body: "A new service request is available in the marketplace.",
+    } satisfies AppNotification;
+  }
+
+  if (notification.category === "practitioner_assignment") {
+    return {
+      ...notification,
+      body: "You were assigned to a service request.",
+    } satisfies AppNotification;
+  }
+
+  return notification;
+}
+
 export function useNotifications() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const queryClient = useQueryClient();
 
   const query = useQuery({
@@ -55,7 +77,15 @@ export function useNotifications() {
     };
   }, [queryClient, user?.id]);
 
-  const notifications = query.data ?? [];
+  const notifications = useMemo(() => {
+    const items = query.data ?? [];
+
+    if (role !== "consultant") {
+      return items;
+    }
+
+    return items.map((notification) => sanitizePractitionerNotification(notification));
+  }, [query.data, role]);
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.is_read).length,

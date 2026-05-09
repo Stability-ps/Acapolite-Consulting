@@ -1418,7 +1418,6 @@ function buildEmailContent(params: {
     const status = trimString(payload.status) || "Open";
     const priority = trimString(payload.priority) || "Normal";
     const submittedAt = trimString(payload.submittedAt) || new Date().toLocaleDateString("en-ZA");
-    const summary = trimString(payload.summary) || "No summary provided.";
     const notificationKey = `service_request_received_admin:${requestId}`;
     const requestLink = buildPortalLink(portalUrl, `/dashboard/staff/service-requests?leadId=${requestId}`);
     const logoUrl = buildPublicAssetUrl(portalUrl, "/acapolite-logo.png");
@@ -1443,9 +1442,6 @@ function buildEmailContent(params: {
           `Request Status: ${status}`,
           `Date Submitted: ${submittedAt}`,
           `Priority Level: ${priority}`,
-          "",
-          "Summary:",
-          summary,
           "",
           "Unlock this lead using credits to view full client contact details and respond.",
           "",
@@ -1517,7 +1513,6 @@ function buildEmailContent(params: {
                               </td>
                             </tr>
                           </table>
-                          <p style="font-size:13px;color:#555;margin:0 0 20px"><strong>Summary:</strong> ${escapeHtml(summary)}</p>
                           <p style="font-size:13px;color:#888;margin:0 0 20px">Unlock this lead using credits to view full client contact details and respond.</p>
                           <table cellpadding="0" cellspacing="0">
                             <tr>
@@ -1560,7 +1555,6 @@ function buildEmailContent(params: {
     const status = trimString(payload.status) || "Open";
     const priority = trimString(payload.priority) || "Normal";
     const submittedAt = trimString(payload.submittedAt) || new Date().toLocaleDateString("en-ZA");
-    const summary = trimString(payload.summary) || "No summary provided.";
     const recipientEmail = normalizeEmail(payload.recipientEmail);
     const practitionerProfileId = trimString(payload.practitionerProfileId);
     const practitionerName = trimString(payload.practitionerName) || "Practitioner";
@@ -1590,9 +1584,6 @@ function buildEmailContent(params: {
           `Request Status: ${status}`,
           `Date Submitted: ${submittedAt}`,
           `Priority Level: ${priority}`,
-          "",
-          "Summary:",
-          summary,
           "",
           "Unlock this lead using credits to view full client contact details and respond.",
           "",
@@ -1664,7 +1655,6 @@ function buildEmailContent(params: {
                               </td>
                             </tr>
                           </table>
-                          <p style="font-size:13px;color:#555;margin:0 0 20px"><strong>Summary:</strong> ${escapeHtml(summary)}</p>
                           <p style="font-size:13px;color:#888;margin:0 0 20px">Unlock this lead using credits to view full client contact details and respond.</p>
                           <table cellpadding="0" cellspacing="0">
                             <tr>

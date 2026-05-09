@@ -208,10 +208,10 @@ begin
   end if;
 
   if new.sender_type = 'client' then
-    v_staff_recipient_ids := public.staff_profile_ids();
-
     if v_conversation.practitioner_profile_id is not null then
-      v_staff_recipient_ids := array_append(v_staff_recipient_ids, v_conversation.practitioner_profile_id);
+      v_staff_recipient_ids := array[v_conversation.practitioner_profile_id];
+    else
+      v_staff_recipient_ids := public.staff_profile_ids(array['admin']::public.app_role[]);
     end if;
 
     perform public.create_notifications(
