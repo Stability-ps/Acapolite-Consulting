@@ -67,7 +67,7 @@ export const BILLING_SUBSCRIPTION_PLANS: BillingSubscriptionPlan[] = [
     storageLimitMb: 2048,
     listingPriorityLevel: 1,
     paystackPlanCode: "PLN_itawkcig6c30q77",
-    features: ["Verified badge", "Standard listing", "Upgrade support", "2 GB storage"],
+    features: ["Standard Listing", "Verified Badge", "Access to Basic Lead", "Up to 2 GB Storage"],
   },
   {
     code: "professional",
@@ -77,7 +77,7 @@ export const BILLING_SUBSCRIPTION_PLANS: BillingSubscriptionPlan[] = [
     storageLimitMb: 8192,
     listingPriorityLevel: 2,
     paystackPlanCode: "PLN_9deli5oghu3lt2h",
-    features: ["Verified badge", "Priority listing", "Upgrade support", "8 GB storage"],
+    features: ["Priority Listing", "Featured Profile", "Verified Badge", "Access to Basic Leads", "Access to Professional Leads", "Up to 8 GB Storage"],
   },
   {
     code: "business",
@@ -87,7 +87,7 @@ export const BILLING_SUBSCRIPTION_PLANS: BillingSubscriptionPlan[] = [
     storageLimitMb: 20480,
     listingPriorityLevel: 3,
     paystackPlanCode: "PLN_6qfph5xvmtzgpag",
-    features: ["Verified badge", "Highest listing priority", "Upgrade support", "20 GB storage"],
+    features: ["Highlighted Profile", "Highest Listing Priority", "Verified Badge", "Access to All Leads", "Up to 20 GB Storage"],
   },
 ];
 

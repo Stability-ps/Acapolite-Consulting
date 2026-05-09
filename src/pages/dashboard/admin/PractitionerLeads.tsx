@@ -46,6 +46,40 @@ function getLeadResponseLimit(leadTier?: string | null) {
   return LEAD_RESPONSE_LIMITS[leadTier ?? "basic"] ?? 4;
 }
 
+function getLeadTierLabel(leadTier?: string | null) {
+  switch (leadTier ?? "basic") {
+    case "business":
+      return "Business";
+    case "professional":
+      return "Professional";
+    default:
+      return "Basic";
+  }
+}
+
+function getLeadTierAccessRank(leadTier?: string | null) {
+  switch (leadTier ?? "basic") {
+    case "business":
+      return 3;
+    case "professional":
+      return 2;
+    default:
+      return 1;
+  }
+}
+
+function getUpgradePrompt(requiredTier?: string | null) {
+  if ((requiredTier ?? "basic") === "business") {
+    return "Upgrade to Business to access premium SARS business matters.";
+  }
+
+  if ((requiredTier ?? "basic") === "professional") {
+    return "Upgrade to Professional to unlock higher-value SARS matters.";
+  }
+
+  return null;
+}
+
 export default function PractitionerLeads() {
   const { buyCredits } = usePaystack();
   const { user, profile } = useAuth();
@@ -79,6 +113,24 @@ export default function PractitionerLeads() {
         .from("practitioner_profiles")
         .select("*")
         .eq("profile_id", user!.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: activeSubscription } = useQuery({
+    queryKey: ["practitioner-active-subscription", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_subscriptions")
+        .select("plan_code")
+        .eq("practitioner_profile_id", user!.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (error) throw error;
@@ -346,6 +398,19 @@ export default function PractitionerLeads() {
   const hasApprovedAccess = Boolean(selectedResponse || selectedAccessRequest?.status === "approved");
   const canSendNewResponse = Boolean(selectedResponse || selectedAccessRequest?.status === "approved") && !selectedResponseLimitReached;
   const isLeadAccessDisabled = practitionerProfile?.lead_access_enabled === false || profile?.is_active === false;
+  const practitionerLeadTier = activeSubscription?.plan_code === "business"
+    ? "business"
+    : activeSubscription?.plan_code === "professional"
+      ? "professional"
+      : "basic";
+  const selectedLeadTier = selectedRequest?.lead_tier ?? "basic";
+  const selectedLeadLocked = Boolean(
+    selectedRequest
+    && !hasApprovedAccess
+    && getLeadTierAccessRank(practitionerLeadTier) < getLeadTierAccessRank(selectedLeadTier),
+  );
+  const selectedUpgradePrompt = selectedLeadLocked ? getUpgradePrompt(selectedLeadTier) : null;
+  const selectedUpgradeTarget = selectedLeadTier === "business" ? "Business" : "Professional";
 
   const getDescriptionPreview = (description: string, accessApproved: boolean) => {
     if (accessApproved) {
@@ -747,7 +812,11 @@ export default function PractitionerLeads() {
               const creditCost = getDisplayedCreditCost(request);
               const accessRequest = accessRequestMap.get(request.id);
               const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
-              const displayName = accessApproved ? request.full_name : "Hidden - Unlock to View";
+              const requiredTier = request.lead_tier ?? "basic";
+              const tierLocked = !accessApproved
+                && getLeadTierAccessRank(practitionerLeadTier) < getLeadTierAccessRank(requiredTier);
+              const upgradePrompt = tierLocked ? getUpgradePrompt(requiredTier) : null;
+              const displayName = accessApproved ? request.full_name : `${getLeadTierLabel(requiredTier)} Lead`;
 
               return (
                 <button
@@ -760,6 +829,9 @@ export default function PractitionerLeads() {
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-display text-xl text-foreground">{displayName}</h2>
+                      <Badge className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                        {getLeadTierLabel(requiredTier)} Lead
+                      </Badge>
                       <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestStatusClass(request.status)}`}>
                         {formatServiceRequestLabel(request.status)}
                       </Badge>
@@ -778,6 +850,15 @@ export default function PractitionerLeads() {
                       }`}>
                         {formatLeadResponseCount(responseCount)}
                       </Badge>
+                      {!accessApproved ? (
+                        <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                          tierLocked
+                            ? "border-amber-200 bg-amber-50 text-amber-700"
+                            : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        }`}>
+                          {tierLocked ? "Locked" : "Available"}
+                        </Badge>
+                      ) : null}
                     </div>
                     <p className="text-sm text-muted-foreground font-body">
                       {formatServiceList(resolveServiceList(request))}
@@ -788,6 +869,9 @@ export default function PractitionerLeads() {
                     <p className="line-clamp-2 text-sm text-foreground font-body">
                       {getDescriptionPreview(request.description, accessApproved)}
                     </p>
+                    {upgradePrompt ? (
+                      <p className="text-sm font-semibold text-amber-700 font-body">{upgradePrompt}</p>
+                    ) : null}
                     {responseLimitReached ? (
                       <p className="text-sm font-semibold text-red-700 font-body">Response limit reached ({responseLimit} max)</p>
                     ) : null}
@@ -832,9 +916,13 @@ export default function PractitionerLeads() {
           }
         }}
         title={selectedRequest
-          ? (hasApprovedAccess ? selectedRequest.full_name : "Hidden - Unlock to View")
+          ? (hasApprovedAccess ? selectedRequest.full_name : `${getLeadTierLabel(selectedLeadTier)} Lead`)
           : "Lead"}
-        description={selectedRequest ? "Review this lead and send your practitioner introduction." : undefined}
+        description={selectedRequest
+          ? selectedLeadLocked
+            ? "This lead is visible on your plan, but requires an upgrade before it can be unlocked."
+            : "Review this lead and send your practitioner introduction."
+          : undefined}
       >
         {selectedRequest ? (
           <div className="space-y-6">
@@ -866,8 +954,16 @@ export default function PractitionerLeads() {
                   </div>
                 ) : (
                   <div className="mt-3 space-y-2">
-                    <p className="text-sm text-muted-foreground font-body">Full name hidden until you unlock this lead.</p>
-                    <p className="text-sm text-muted-foreground font-body">Phone number, email address, and province will appear after unlock.</p>
+                    <p className="text-sm text-muted-foreground font-body">
+                      {selectedLeadLocked
+                        ? "Client details remain hidden until you upgrade your plan."
+                        : "Full name hidden until you unlock this lead."}
+                    </p>
+                    <p className="text-sm text-muted-foreground font-body">
+                      {selectedLeadLocked
+                        ? selectedUpgradePrompt
+                        : "Phone number, email address, and province will appear after unlock."}
+                    </p>
                   </div>
                 )}
               </div>
@@ -941,7 +1037,9 @@ export default function PractitionerLeads() {
                   </p>
                 ) : (
                   <p className="mt-3 text-sm leading-6 text-muted-foreground font-body">
-                    Unlock this lead to view the full client description and request background.
+                    {selectedLeadLocked
+                      ? selectedUpgradePrompt
+                      : "Unlock this lead to view the full client description and request background."}
                   </p>
                 )}
               </div>
@@ -951,7 +1049,9 @@ export default function PractitionerLeads() {
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">
                   {hasApprovedAccess
                     ? "No additional supporting notes were submitted with this request."
-                    : "Unlock this lead to review the complete request profile."}
+                    : selectedLeadLocked
+                      ? selectedUpgradePrompt
+                      : "Unlock this lead to review the complete request profile."}
                 </p>
               </div>
             </div>
@@ -968,7 +1068,9 @@ export default function PractitionerLeads() {
                     ? (selectedRequest.client_type === "individual"
                       ? selectedRequest.id_number || "Not provided"
                       : selectedRequest.company_registration_number || "Not provided")
-                    : "Unlock this lead to view submitted identity or registration details."}
+                    : selectedLeadLocked
+                      ? selectedUpgradePrompt
+                      : "Unlock this lead to view submitted identity or registration details."}
                 </p>
               </div>
 
@@ -1000,7 +1102,9 @@ export default function PractitionerLeads() {
                   </>
                 ) : (
                   <p className="mt-3 text-sm text-muted-foreground font-body">
-                    Unlock this lead to view the client tax indicators, debt amount, and return status.
+                    {selectedLeadLocked
+                      ? selectedUpgradePrompt
+                      : "Unlock this lead to view the client tax indicators, debt amount, and return status."}
                   </p>
                 )}
               </div>
@@ -1030,7 +1134,9 @@ export default function PractitionerLeads() {
                   <p className="text-sm text-muted-foreground font-body">No documents were uploaded for this lead.</p>
                 )) : (
                   <p className="text-sm text-muted-foreground font-body">
-                    Unlock this lead to view and open any supporting documents uploaded by the client.
+                    {selectedLeadLocked
+                      ? selectedUpgradePrompt
+                      : "Unlock this lead to view and open any supporting documents uploaded by the client."}
                   </p>
                 )}
               </div>
@@ -1040,7 +1146,9 @@ export default function PractitionerLeads() {
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Credit Status</p>
                 <p className="mt-2 text-sm text-foreground font-body">
-                  {selectedResponseLimitReached
+                  {selectedLeadLocked
+                    ? selectedUpgradePrompt
+                    : selectedResponseLimitReached
                     ? "Response limit reached. This lead already has the maximum number of practitioner responses."
                     : selectedResponse
                     ? "Updating this existing response will not deduct another credit."
@@ -1061,7 +1169,9 @@ export default function PractitionerLeads() {
               {!hasApprovedAccess ? (
                 <div className="rounded-2xl border border-dashed border-border bg-accent/10 p-4">
                   <p className="text-sm text-muted-foreground font-body">
-                    Client contact details are hidden until you unlock this lead.
+                    {selectedLeadLocked
+                      ? selectedUpgradePrompt
+                      : "Client contact details are hidden until you unlock this lead."}
                   </p>
                 </div>
               ) : null}
@@ -1097,6 +1207,12 @@ export default function PractitionerLeads() {
                       : selectedResponse
                         ? "Update Response"
                         : "Respond to Lead"}
+                  </Button>
+                ) : selectedLeadLocked ? (
+                  <Button asChild type="button" className="rounded-xl">
+                    <Link to="/dashboard/staff/credits">
+                      {`Upgrade to ${selectedUpgradeTarget}`}
+                    </Link>
                   </Button>
                 ) : (
                   <Button
