@@ -19,6 +19,15 @@ export type BillingSubscriptionPlan = {
   features: string[];
 };
 
+export const BILLING_UPGRADE_REASONS = [
+  "Access higher-value leads",
+  "More credits to win more clients",
+  "Priority visibility in marketplace",
+  "Grow your practice faster",
+] as const;
+
+export const BILLING_UPGRADE_REASSURANCE = "Upgrade anytime. Cancel anytime.";
+
 export type BillingStorageAddon = {
   code: "plus_5gb" | "plus_10gb" | "plus_25gb";
   name: string;

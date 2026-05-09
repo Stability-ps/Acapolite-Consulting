@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Coins, CreditCard, Database, HardDrive, Layers3, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Coins, CreditCard, Database, HardDrive, Layers3, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -9,6 +9,8 @@ import { CREDIT_PACKAGES, STORAGE_ADDONS, SUBSCRIPTION_PLANS, usePaystack } from
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  BILLING_UPGRADE_REASONS,
+  BILLING_UPGRADE_REASSURANCE,
   formatStorageLimitFromMb,
   formatStorageValue,
   formatZarCurrency,
@@ -19,6 +21,27 @@ type PractitionerCreditTransaction = Tables<"practitioner_credit_transactions">;
 type PractitionerCreditPurchase = Tables<"practitioner_credit_purchases">;
 type PractitionerStorageAddonPurchase = Tables<"practitioner_storage_addon_purchases">;
 type PractitionerSubscription = Tables<"practitioner_subscriptions">;
+
+const subscriptionPlanStyles = {
+  starter: {
+    cardClassName: "border-emerald-200 bg-[linear-gradient(180deg,rgba(240,253,244,0.98),rgba(255,255,255,0.98))]",
+    badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    priceClassName: "text-emerald-700",
+    buttonClassName: "bg-emerald-600 text-white hover:bg-emerald-700",
+  },
+  professional: {
+    cardClassName: "border-sky-200 bg-[linear-gradient(180deg,rgba(239,246,255,0.98),rgba(255,255,255,0.98))]",
+    badgeClassName: "border-sky-200 bg-sky-50 text-sky-700",
+    priceClassName: "text-sky-700",
+    buttonClassName: "bg-sky-600 text-white hover:bg-sky-700",
+  },
+  business: {
+    cardClassName: "border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,255,255,0.98))]",
+    badgeClassName: "border-amber-200 bg-amber-50 text-amber-700",
+    priceClassName: "text-amber-700",
+    buttonClassName: "bg-amber-500 text-slate-950 hover:bg-amber-400",
+  },
+} as const;
 
 function getUnlockCreditCost(transaction: PractitionerCreditTransaction) {
   const metadata = transaction.metadata;
@@ -328,29 +351,34 @@ export default function PractitionerCredits() {
         <div className="mt-5 grid gap-4 xl:grid-cols-3">
           {SUBSCRIPTION_PLANS.map((plan) => {
             const isCurrentPlan = activeSubscription?.plan_code === plan.code;
+            const planStyle = subscriptionPlanStyles[plan.code];
 
             return (
-              <div key={plan.code} className="rounded-2xl border border-border p-5">
+              <div key={plan.code} className={`rounded-[28px] border p-6 shadow-card ${planStyle.cardClassName}`}>
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-display text-2xl text-foreground">{plan.name}</p>
-                  <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                  <Badge className={`rounded-full px-3 py-1 text-xs font-semibold ${planStyle.badgeClassName}`}>
                     Priority {plan.listingPriorityLevel}
                   </Badge>
                 </div>
-                <p className="mt-3 font-display text-3xl text-foreground">
+                <p className={`mt-3 font-display text-3xl ${planStyle.priceClassName}`}>
                   {formatZarCurrency(plan.priceZar)}
                   <span className="ml-2 text-sm font-body text-muted-foreground">/ month</span>
                 </p>
-                <p className="mt-2 text-sm font-semibold text-primary font-body">{plan.creditsPerMonth} monthly credits</p>
+                <p className="mt-2 text-sm font-semibold text-foreground font-body">{plan.creditsPerMonth} monthly credits</p>
                 <p className="mt-1 text-sm text-muted-foreground font-body">{formatStorageLimitFromMb(plan.storageLimitMb)} storage</p>
-                <div className="mt-4 space-y-2 text-sm text-muted-foreground font-body">
+                <div className="mt-5 space-y-3 text-sm text-muted-foreground font-body">
                   {plan.features.map((feature) => (
-                    <p key={feature}>{feature}</p>
+                    <div key={feature} className="flex items-start gap-3">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                      <p>{feature}</p>
+                    </div>
                   ))}
                 </div>
                 <Button
                   type="button"
-                  className="mt-5 w-full rounded-xl"
+                  className={`mt-6 w-full rounded-xl ${isCurrentPlan ? "" : planStyle.buttonClassName}`}
+                  variant={isCurrentPlan ? "outline" : "default"}
                   onClick={() => void subscribeToPlan(plan.code)}
                   disabled={startingSubscriptionCode === plan.code || isCurrentPlan || paystackLoading}
                 >
@@ -365,6 +393,29 @@ export default function PractitionerCredits() {
               </div>
             );
           })}
+        </div>
+
+        <div className="mt-6 rounded-[28px] border border-border bg-background/70 p-6">
+          <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr] lg:items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary/70 font-body">Why upgrade?</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {BILLING_UPGRADE_REASONS.map((reason) => (
+                  <div key={reason} className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-white/80 p-4">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+                    <p className="text-sm leading-6 text-muted-foreground font-body">{reason}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-5">
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                <p className="text-sm font-semibold text-emerald-700 font-body">100% Secure</p>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-emerald-800/80 font-body">{BILLING_UPGRADE_REASSURANCE}</p>
+            </div>
+          </div>
         </div>
       </section>
 
