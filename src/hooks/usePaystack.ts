@@ -129,73 +129,54 @@ export function usePaystack() {
 
     try {
       ensurePaystack();
-      const { user, profile } = await getAuthenticatedProfile();
+      const { user } = await getAuthenticatedProfile();
 
-      const { data: purchase, error: insertError } = await supabase
-        .from("practitioner_credit_purchases")
-        .insert({
-          practitioner_profile_id: user.id,
-          package_code: pkg.code,
-          package_name: pkg.name,
-          credits: pkg.credits,
-          amount_zar: pkg.priceZar,
-          currency: "ZAR",
-          payment_provider: "paystack",
-          payment_status: "pending",
-          metadata: {
-            purchase_type: "credit_package",
-          },
-        })
-        .select()
-        .single();
+      // Audit C2: purchase row creation has moved server-side. The browser
+      // only sends the package code; the edge function looks up canonical
+      // credits and price and inserts the row using service_role.
+      const { data: purchaseData, error: invokeError } = await supabase.functions.invoke(
+        "create-practitioner-credit-purchase",
+        { body: { packageCode: pkg.code } },
+      );
 
-      if (insertError || !purchase) {
-        throw insertError ?? new Error("Unable to create the Paystack purchase record.");
+      if (invokeError) {
+        throw new Error(invokeError.message ?? "Unable to create the Paystack purchase record.");
       }
+      if (!purchaseData?.success || !purchaseData.purchaseId) {
+        throw new Error(purchaseData?.error ?? "Unable to create the Paystack purchase record.");
+      }
+
+      const purchaseId: string = purchaseData.purchaseId;
+      const verifiedAmountZar: number = Number(purchaseData.amountZar);
+      const verifiedEmail: string = String(purchaseData.email ?? "");
 
       const handler = window.PaystackPop!.setup({
         key: getPaystackPublicKey(),
-        email: profile.email,
-        amount: pkg.priceZar * 100,
+        email: verifiedEmail,
+        amount: Math.round(verifiedAmountZar * 100),
         currency: "ZAR",
-        ref: purchase.id,
+        ref: purchaseId,
         metadata: {
           practitioner_profile_id: user.id,
           package_code: pkg.code,
           purchase_type: "credit_package",
-          purchase_id: purchase.id,
+          purchase_id: purchaseId,
           custom_fields: [
             { display_name: "Package", variable_name: "package", value: pkg.name },
           ],
         },
-        callback: (response) => {
-          void (async () => {
-            await supabase
-              .from("practitioner_credit_purchases")
-              .update({
-                provider_payment_id: response.reference,
-                metadata: {
-                  purchase_type: "credit_package",
-                  paystack_reference: response.reference,
-                },
-              })
-              .eq("id", purchase.id);
-
-            toast.success("Payment successful. Your credits will be added shortly.");
-            await invalidateBillingQueries(queryClient, user.id);
-            scheduleBillingRefresh(queryClient, user.id);
-          })();
+        callback: () => {
+          // Webhook completes the purchase server-side (writes
+          // provider_payment_id, metadata, completes credits). No frontend
+          // write is needed or permitted after C2.
+          toast.success("Payment successful. Your credits will be added shortly.");
+          void invalidateBillingQueries(queryClient, user.id);
+          scheduleBillingRefresh(queryClient, user.id);
         },
         onClose: () => {
-          void (async () => {
-            await supabase
-              .from("practitioner_credit_purchases")
-              .update({ payment_status: "cancelled" })
-              .eq("id", purchase.id)
-              .eq("payment_status", "pending");
-
-            await queryClient.invalidateQueries({ queryKey: ["practitioner-credit-purchases", user.id] });
-          })();
+          // After C2 the browser cannot mark pending purchases as
+          // cancelled. Abandoned pending rows are cleaned up server-side.
+          void queryClient.invalidateQueries({ queryKey: ["practitioner-credit-purchases", user.id] });
         },
       });
 
