@@ -1,5 +1,7 @@
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
+
+
 export default function AboutUs() {
   return (
     <div className="min-h-screen bg-surface-gradient px-4 py-12 sm:py-16">
