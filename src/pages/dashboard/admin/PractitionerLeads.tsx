@@ -774,7 +774,7 @@ export default function PractitionerLeads() {
 
           <div className="flex flex-wrap gap-3">
             <Button asChild type="button" variant="outline" className="rounded-xl">
-              <Link to="/dashboard/staff/profile">Manage Packages</Link>
+              <Link to="/dashboard/staff/credits">Manage Packages</Link>
             </Button>
             {availableCredits < 1 ? (
               <Button type="button" className="rounded-xl" disabled={startingQuickPurchase} onClick={() => void quickBuyStarterCredits()}>
