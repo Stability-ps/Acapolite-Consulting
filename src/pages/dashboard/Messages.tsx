@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useClientRecord } from "@/hooks/useClientRecord";
 import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 import { assertValidChatAttachment, openChatAttachment, uploadChatAttachment } from "@/lib/chatAttachments";
+import { useSearchParams } from "react-router-dom";
 
 function getSenderLabel(isOwnMessage: boolean) {
   return isOwnMessage ? "You" : "Acapolite Consulting";
@@ -19,6 +20,7 @@ export default function Messages() {
   const { user } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedConversation, setSelectedConversation] = useState("");
@@ -27,6 +29,7 @@ export default function Messages() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
+  const conversationIdFromQuery = searchParams.get("conversationId") ?? "";
 
   const { data: conversations } = useQuery({
     queryKey: ["conversations", client?.id],
@@ -42,10 +45,15 @@ export default function Messages() {
   });
 
   useEffect(() => {
+    if (conversationIdFromQuery && conversations?.some((conversation) => conversation.id === conversationIdFromQuery)) {
+      setSelectedConversation(conversationIdFromQuery);
+      return;
+    }
+
     if (!selectedConversation && conversations?.length) {
       setSelectedConversation(conversations[0].id);
     }
-  }, [conversations, selectedConversation]);
+  }, [conversationIdFromQuery, conversations, selectedConversation]);
 
   const conversationIds = useMemo(
     () => (conversations ?? []).map((conversation) => conversation.id),
@@ -171,6 +179,16 @@ export default function Messages() {
   const selectedConversationRecord = filteredConversations.find((conversation) => conversation.id === selectedConversation)
     || conversations?.find((conversation) => conversation.id === selectedConversation)
     || null;
+
+  useEffect(() => {
+    if (!selectedConversation || !conversationIdFromQuery || selectedConversation !== conversationIdFromQuery) {
+      return;
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("conversationId");
+    setSearchParams(next);
+  }, [conversationIdFromQuery, searchParams, selectedConversation, setSearchParams]);
 
   const startConversation = async () => {
     if (!client || !user) return;

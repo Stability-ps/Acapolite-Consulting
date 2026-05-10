@@ -346,6 +346,7 @@ export default function AdminDocuments() {
   const canReviewDocuments = hasStaffPermission("can_review_documents");
   const practitionerIdFilter = searchParams.get("practitionerId");
   const documentStateFilter = searchParams.get("documentState");
+  const documentIdFromQuery = searchParams.get("documentId");
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
 
   useEffect(() => {
@@ -496,6 +497,24 @@ export default function AdminDocuments() {
 
     return [...documentItems, ...practitionerItems, ...invoiceItems];
   }, [documents, invoices, practitionerProfiles]);
+
+  useEffect(() => {
+    if (!documentIdFromQuery) {
+      return;
+    }
+
+    const matchedItem = allItems.find((item) => item.documentId === documentIdFromQuery);
+    if (!matchedItem) {
+      return;
+    }
+
+    setActiveGroup(matchedItem.group);
+    setSelectedItem(matchedItem);
+    setReviewStatus(matchedItem.status);
+    setReviewNotes(matchedItem.reviewerNotes);
+    setRejectionReason(matchedItem.rejectionReason);
+    setIsReviewDialogOpen(true);
+  }, [allItems, documentIdFromQuery]);
 
   const countsByGroup = useMemo(() => {
     return allItems.reduce<Record<GroupKey, number>>(
@@ -890,7 +909,17 @@ export default function AdminDocuments() {
       </section>
       <DashboardItemDialog
         open={isReviewDialogOpen}
-        onOpenChange={setIsReviewDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && documentIdFromQuery) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("documentId");
+            setSearchParams(next);
+          }
+          setIsReviewDialogOpen(open);
+          if (!open) {
+            setSelectedItem(null);
+          }
+        }}
         title={
           selectedItem ? `Review ${selectedItem.title}` : "Review document"
         }

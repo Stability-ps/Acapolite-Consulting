@@ -7,6 +7,49 @@ import type { Tables } from "@/integrations/supabase/types";
 export type AppNotification = Tables<"notifications">;
 export type NotificationSection = "general" | "messages" | "requests" | "cases" | "documents";
 
+function appendQueryParam(path: string, key: string, value: string) {
+  if (!value || path.includes(`${key}=`)) {
+    return path;
+  }
+
+  return `${path}${path.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}`;
+}
+
+function resolveNotificationLink(notification: AppNotification) {
+  const link = notification.link ?? "";
+  const entityId = notification.entity_id ?? "";
+
+  if (!link || !entityId) {
+    return notification.link;
+  }
+
+  if (notification.entity_type === "conversation" || notification.section === "messages") {
+    return appendQueryParam(link, "conversationId", entityId);
+  }
+
+  if (notification.entity_type === "service_request" || notification.section === "requests") {
+    if (link.includes("/service-requests")) {
+      return appendQueryParam(link, "leadId", entityId);
+    }
+
+    return appendQueryParam(link, "requestId", entityId);
+  }
+
+  if (notification.entity_type === "case" || notification.section === "cases") {
+    return appendQueryParam(link, "caseId", entityId);
+  }
+
+  if (notification.entity_type === "document" || notification.section === "documents") {
+    return appendQueryParam(link, "documentId", entityId);
+  }
+
+  if (notification.entity_type === "invoice") {
+    return appendQueryParam(link, "invoiceId", entityId);
+  }
+
+  return notification.link;
+}
+
 function sanitizePractitionerNotification(notification: AppNotification) {
   if (notification.section !== "requests" || notification.entity_type !== "service_request") {
     return notification;
@@ -16,6 +59,7 @@ function sanitizePractitionerNotification(notification: AppNotification) {
     return {
       ...notification,
       body: "A new service request is available in the marketplace.",
+      link: resolveNotificationLink(notification),
     } satisfies AppNotification;
   }
 
@@ -23,10 +67,14 @@ function sanitizePractitionerNotification(notification: AppNotification) {
     return {
       ...notification,
       body: "You were assigned to a service request.",
+      link: resolveNotificationLink(notification),
     } satisfies AppNotification;
   }
 
-  return notification;
+  return {
+    ...notification,
+    link: resolveNotificationLink(notification),
+  } satisfies AppNotification;
 }
 
 export function useNotifications() {
@@ -81,7 +129,10 @@ export function useNotifications() {
     const items = query.data ?? [];
 
     if (role !== "consultant") {
-      return items;
+      return items.map((notification) => ({
+        ...notification,
+        link: resolveNotificationLink(notification),
+      }));
     }
 
     return items.map((notification) => sanitizePractitionerNotification(notification));

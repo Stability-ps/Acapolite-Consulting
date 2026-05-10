@@ -12,6 +12,7 @@ import { sendProofOfPaymentUploadedNotification } from "@/lib/paymentNotificatio
 import { formatCaseReference } from "@/lib/practitionerAssignments";
 import { openInvoicePdf } from "@/lib/invoicePdf";
 import { defaultInvoiceTerms, formatCurrency } from "@/lib/invoiceUtils";
+import { useSearchParams } from "react-router-dom";
 
 type PractitionerBankProfile = {
   profile_id: string;
@@ -133,10 +134,12 @@ export default function Invoices() {
   const queryClient = useQueryClient();
   const { user, profile } = useAuth();
   const { data: client } = useClientRecord();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [proofReference, setProofReference] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
+  const invoiceIdFromQuery = searchParams.get("invoiceId");
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["invoices", client?.id],
@@ -181,6 +184,13 @@ export default function Invoices() {
   const practitionerProfileMap = new Map((practitionerProfiles ?? []).map((profile) => [profile.profile_id, profile]));
 
   const selectedInvoice = invoices?.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
+  useEffect(() => {
+    if (!invoiceIdFromQuery || !(invoices ?? []).some((invoice) => invoice.id === invoiceIdFromQuery)) {
+      return;
+    }
+
+    setSelectedInvoiceId(invoiceIdFromQuery);
+  }, [invoiceIdFromQuery, invoices]);
   const disclaimerText = "Payment is made directly to the practitioner. Acapolite Consulting is not responsible for payment processing or payment disputes.";
 
   const { data: selectedInvoiceItems } = useQuery({
@@ -456,7 +466,14 @@ export default function Invoices() {
               type="button"
               variant="outline"
               className="shrink-0 rounded-xl"
-              onClick={() => setSelectedInvoiceId(null)}
+              onClick={() => {
+                if (invoiceIdFromQuery) {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("invoiceId");
+                  setSearchParams(next);
+                }
+                setSelectedInvoiceId(null);
+              }}
             >
               <X className="mr-2 h-4 w-4" />
               Close

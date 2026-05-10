@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, BadgeCheck, BriefcaseBusiness, CheckCircle2, Clock, Flag } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
@@ -32,6 +32,7 @@ export default function ClientServiceRequests() {
   const { user } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectingResponseId, setSelectingResponseId] = useState<string | null>(null);
   const [respondingAccessId, setRespondingAccessId] = useState<string | null>(null);
@@ -60,6 +61,7 @@ export default function ClientServiceRequests() {
   });
 
   const requestIds = useMemo(() => (requests ?? []).map((request) => request.id), [requests]);
+  const requestIdFromQuery = searchParams.get("requestId");
 
   const { data: responses } = useQuery({
     queryKey: ["client-service-request-responses", requestIds],
@@ -256,6 +258,14 @@ export default function ClientServiceRequests() {
     categories.map((category) => categoryLabelMap.get(category) || formatServiceRequestLabel(category)).join(", ");
 
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
+
+  useEffect(() => {
+    if (!requestIdFromQuery || !(requests ?? []).some((request) => request.id === requestIdFromQuery)) {
+      return;
+    }
+
+    setSelectedRequestId(requestIdFromQuery);
+  }, [requestIdFromQuery, requests]);
   const selectedChangeRequest = selectedRequest
     ? (practitionerChangeRequests ?? []).find((changeRequest) => changeRequest.service_request_id === selectedRequest.id) ?? null
     : null;
@@ -517,7 +527,14 @@ export default function ClientServiceRequests() {
 
       <DashboardItemDialog
         open={!!selectedRequest}
-        onOpenChange={(open) => setSelectedRequestId(open ? selectedRequestId : null)}
+        onOpenChange={(open) => {
+          if (!open && requestIdFromQuery) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("requestId");
+            setSearchParams(next);
+          }
+          setSelectedRequestId(open ? selectedRequestId : null);
+        }}
         title={selectedServiceLabel || "Service Request"}
         description="Review responses and choose the practitioner you want Acapolite to assign to your case."
       >

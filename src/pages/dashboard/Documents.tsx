@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog"
 import { sendClientDocumentUploadConfirmation, sendClientDocumentUploadNotification } from "@/lib/documentUploadNotifications";
 import { logSystemActivity } from "@/lib/systemActivityLog";
 import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
+import { useSearchParams } from "react-router-dom";
 
 const documentTypeOptions = [
   "IRP5",
@@ -64,6 +65,7 @@ export default function Documents() {
   const { user, profile, role } = useAuth();
   const { data: client } = useClientRecord();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -72,6 +74,7 @@ export default function Documents() {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [openingDocument, setOpeningDocument] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<"all" | "chat" | "case" | "general">("all");
+  const documentIdFromQuery = searchParams.get("documentId");
 
   const { data: documents, isLoading } = useQuery({
     queryKey: ["documents", client?.id],
@@ -242,6 +245,14 @@ export default function Documents() {
   });
 
   const selectedDocument = documents?.find((document) => document.id === selectedDocumentId) ?? null;
+
+  useEffect(() => {
+    if (!documentIdFromQuery || !(documents ?? []).some((document) => document.id === documentIdFromQuery)) {
+      return;
+    }
+
+    setSelectedDocumentId(documentIdFromQuery);
+  }, [documentIdFromQuery, documents]);
 
   const openSelectedDocument = async () => {
     if (!selectedDocument) return;
@@ -462,6 +473,11 @@ export default function Documents() {
       <DashboardItemDialog
         open={!!selectedDocument}
         onOpenChange={(open) => {
+          if (!open && documentIdFromQuery) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("documentId");
+            setSearchParams(next);
+          }
           if (!open) setSelectedDocumentId(null);
         }}
         title={selectedDocument?.category || selectedDocument?.title || "Document Details"}
