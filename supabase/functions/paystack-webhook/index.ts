@@ -34,6 +34,37 @@ function getJsonHeaders() {
   return { "Content-Type": "application/json" };
 }
 
+
+function verifyChargeIntegrity(
+  data: any,
+  expectedAmountZar: number,
+  expectedCurrency = "ZAR",
+): { ok: boolean; reason?: string } {
+  const status = String(data?.status ?? "").toLowerCase();
+  if (status !== "success") {
+    return { ok: false, reason: `status mismatch: got "${status}", expected "success"` };
+  }
+
+  const currency = String(data?.currency ?? "").toUpperCase();
+  if (currency !== expectedCurrency.toUpperCase()) {
+    return {
+      ok: false,
+      reason: `currency mismatch: got "${currency}", expected "${expectedCurrency}"`,
+    };
+  }
+
+  const actualAmount = Number(data?.amount ?? 0);
+  const expectedAmount = Math.round(Number(expectedAmountZar) * 100);
+  if (!Number.isFinite(actualAmount) || actualAmount !== expectedAmount) {
+    return {
+      ok: false,
+      reason: `amount mismatch: got ${actualAmount} (minor unit), expected ${expectedAmount} (${expectedAmountZar} ZAR)`,
+    };
+  }
+
+  return { ok: true };
+}
+
 // ─────────────────────────────────────────────
 // Period date helpers
 // ─────────────────────────────────────────────
@@ -359,19 +390,7 @@ serve(async (request) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// charge.success
-//
-// Fires for:
-//   1. One-time credit package purchases
-//   2. One-time storage add-on purchases
-//   3. The INITIAL charge when a subscription is first created
-//      (alongside subscription.create)
-//   4. Every subsequent subscription renewal charge
-//
-// For cases 3 & 4 we rely on subscription.create / invoice.update
-// respectively, so we only act here if we see a known purchase_type.
-// ─────────────────────────────────────────────
+
 async function handleChargeSuccess(supabase: ReturnType<typeof createClient>, data: any) {
   const metadata = data?.metadata ?? {};
   const purchaseType = metadata.purchase_type;
@@ -386,6 +405,48 @@ async function handleChargeSuccess(supabase: ReturnType<typeof createClient>, da
       return;
     }
 
+    const { data: purchase, error: fetchError } = await supabase
+      .from("practitioner_credit_purchases")
+      .select("id, amount_zar, currency, payment_status")
+      .eq("id", purchaseId)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("charge.success credit_package: failed to fetch purchase", fetchError);
+      throw fetchError;
+    }
+    if (!purchase) {
+      console.error(`charge.success credit_package: purchase ${purchaseId} not found`);
+      return;
+    }
+
+    const verification = verifyChargeIntegrity(
+      data,
+      Number(purchase.amount_zar),
+      String(purchase.currency ?? "ZAR"),
+    );
+    if (!verification.ok) {
+      console.error(
+        `charge.success credit_package: integrity check failed for purchase ${purchaseId}: ${verification.reason}`,
+      );
+      await supabase
+        .from("practitioner_credit_purchases")
+        .update({
+          payment_status: "failed",
+          metadata: {
+            paystack_reference: reference,
+            paystack_event: "charge.success",
+            failure_reason: verification.reason,
+            paystack_amount: data?.amount ?? null,
+            paystack_currency: data?.currency ?? null,
+            paystack_status: data?.status ?? null,
+          },
+        })
+        .eq("id", purchaseId)
+        .eq("payment_status", "pending");
+      return;
+    }
+
     const { error } = await supabase.rpc("complete_practitioner_credit_purchase", {
       p_purchase_id: purchaseId,
       p_provider_payment_id: reference,
@@ -393,6 +454,8 @@ async function handleChargeSuccess(supabase: ReturnType<typeof createClient>, da
       p_metadata: {
         paystack_reference: reference,
         paystack_event: "charge.success",
+        verified_amount: data.amount,
+        verified_currency: data.currency,
       },
     });
     if (error) throw error;
@@ -406,6 +469,48 @@ async function handleChargeSuccess(supabase: ReturnType<typeof createClient>, da
       return;
     }
 
+    const { data: purchase, error: fetchError } = await supabase
+      .from("practitioner_storage_addon_purchases")
+      .select("id, amount_zar, currency, payment_status")
+      .eq("id", purchaseId)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("charge.success storage_addon: failed to fetch purchase", fetchError);
+      throw fetchError;
+    }
+    if (!purchase) {
+      console.error(`charge.success storage_addon: purchase ${purchaseId} not found`);
+      return;
+    }
+
+    const verification = verifyChargeIntegrity(
+      data,
+      Number(purchase.amount_zar),
+      String(purchase.currency ?? "ZAR"),
+    );
+    if (!verification.ok) {
+      console.error(
+        `charge.success storage_addon: integrity check failed for purchase ${purchaseId}: ${verification.reason}`,
+      );
+      await supabase
+        .from("practitioner_storage_addon_purchases")
+        .update({
+          payment_status: "failed",
+          metadata: {
+            paystack_reference: reference,
+            paystack_event: "charge.success",
+            failure_reason: verification.reason,
+            paystack_amount: data?.amount ?? null,
+            paystack_currency: data?.currency ?? null,
+            paystack_status: data?.status ?? null,
+          },
+        })
+        .eq("id", purchaseId)
+        .eq("payment_status", "pending");
+      return;
+    }
+
     const { error } = await supabase.rpc("complete_practitioner_storage_addon_purchase", {
       p_purchase_id: purchaseId,
       p_provider_payment_id: reference,
@@ -413,6 +518,8 @@ async function handleChargeSuccess(supabase: ReturnType<typeof createClient>, da
       p_metadata: {
         paystack_reference: reference,
         paystack_event: "charge.success",
+        verified_amount: data.amount,
+        verified_currency: data.currency,
       },
     });
     if (error) throw error;
