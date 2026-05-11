@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -18,6 +18,8 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
+import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { Button } from "@/components/ui/button";
 import { getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
 
 type CaseStatusRow = {
@@ -66,7 +68,10 @@ type InvoiceSnapshot = {
 };
 
 type SubscriptionRevenueRow = {
+  id: string;
   plan_code: string;
+  practitioner_profile_id: string;
+  status: string;
   created_at: string;
   current_period_start: string;
   last_credited_at?: string | null;
@@ -75,6 +80,33 @@ type SubscriptionRevenueRow = {
 type SubscriptionPlanRow = {
   code: string;
   price_zar: number;
+};
+
+type RevenueProfileRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+};
+
+type SubscriptionRevenueTransactionRow = {
+  id: string;
+  subscription_id: string | null;
+  practitioner_profile_id: string;
+  created_at: string;
+  metadata?: {
+    plan_code?: string | null;
+    plan_name?: string | null;
+  } | null;
+};
+
+type RevenueHistoryItem = {
+  id: string;
+  type: "invoice" | "subscription";
+  label: string;
+  details: string;
+  subdetails?: string[];
+  amount: number;
+  createdAt: string;
 };
 
 type RiskDocumentRequest = {
@@ -130,6 +162,7 @@ function formatCurrency(value: number) {
 
 export default function AdminOverview() {
   const { isAdmin, hasStaffPermission } = useAuth();
+  const [isRevenueHistoryOpen, setIsRevenueHistoryOpen] = useState(false);
   const {
     accessibleClientIds,
     hasRestrictedClientScope,
@@ -280,8 +313,7 @@ export default function AdminOverview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("practitioner_subscriptions")
-        .select("plan_code, created_at, current_period_start, last_credited_at")
-        .eq("status", "active");
+        .select("id, plan_code, practitioner_profile_id, status, created_at, current_period_start, last_credited_at");
 
       if (error) {
         throw error;
@@ -289,6 +321,46 @@ export default function AdminOverview() {
 
       return (data ?? []) as SubscriptionRevenueRow[];
     },
+  });
+
+  const { data: subscriptionRevenueTransactions } = useQuery({
+    queryKey: ["staff-overview-subscription-revenue-transactions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_credit_transactions")
+        .select("id, subscription_id, practitioner_profile_id, created_at, metadata")
+        .eq("transaction_type", "subscription_credit")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as SubscriptionRevenueTransactionRow[];
+    },
+  });
+
+  const { data: subscriptionRevenueProfiles } = useQuery({
+    queryKey: ["staff-overview-subscription-revenue-profiles", subscriptionRevenueTransactions?.length ?? 0],
+    queryFn: async () => {
+      const practitionerIds = Array.from(new Set((subscriptionRevenueTransactions ?? []).map((row) => row.practitioner_profile_id).filter(Boolean)));
+
+      if (!practitionerIds.length) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", practitionerIds);
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as RevenueProfileRow[];
+    },
+    enabled: Boolean(subscriptionRevenueTransactions?.length),
   });
 
   const { data: subscriptionPlanRows } = useQuery({
@@ -546,17 +618,23 @@ export default function AdminOverview() {
       (sum, invoice) => sum + Number(invoice.total_amount || 0),
       0,
     );
-    const subscriptionRevenueThisMonth = (subscriptionRevenueRows ?? []).reduce((sum, subscription) => {
-      const revenueDate =
-        subscription.last_credited_at ||
-        subscription.current_period_start ||
-        subscription.created_at;
-
-      if (!revenueDate || revenueDate < monthStartIso) {
+    const subscriptionPlanCodeById = new Map(
+      (subscriptionRevenueRows ?? []).map((subscription) => [subscription.id, subscription.plan_code]),
+    );
+    const subscriptionRevenueThisMonth = (subscriptionRevenueTransactions ?? []).reduce((sum, transaction) => {
+      if (!transaction.created_at || transaction.created_at < monthStartIso) {
         return sum;
       }
 
-      return sum + (subscriptionPlanPriceMap.get(subscription.plan_code) ?? 0);
+      const metadataPlanCode =
+        transaction.metadata &&
+        typeof transaction.metadata === "object" &&
+        "plan_code" in transaction.metadata &&
+        typeof transaction.metadata.plan_code === "string"
+          ? transaction.metadata.plan_code
+          : null;
+      const planCode = metadataPlanCode || (transaction.subscription_id ? subscriptionPlanCodeById.get(transaction.subscription_id) : null);
+      return sum + (planCode ? (subscriptionPlanPriceMap.get(planCode) ?? 0) : 0);
     }, 0);
     const monthlyRevenue = invoiceRevenueThisMonth + subscriptionRevenueThisMonth;
 
@@ -583,7 +661,76 @@ export default function AdminOverview() {
       clientGrowth,
       outstandingInvoices,
     };
-  }, [caseRows, clientGrowthRows, invoiceRows, subscriptionPlanRows, subscriptionRevenueRows]);
+  }, [caseRows, clientGrowthRows, invoiceRows, subscriptionPlanRows, subscriptionRevenueRows, subscriptionRevenueTransactions]);
+
+  const revenueHistory = useMemo(() => {
+    const subscriptionPlanPriceMap = new Map(
+      (subscriptionPlanRows ?? []).map((plan) => [plan.code, Number(plan.price_zar || 0)]),
+    );
+    const subscriptionPlanCodeById = new Map(
+      (subscriptionRevenueRows ?? []).map((subscription) => [subscription.id, subscription.plan_code]),
+    );
+    const subscriptionStatusById = new Map(
+      (subscriptionRevenueRows ?? []).map((subscription) => [subscription.id, subscription.status]),
+    );
+    const profileById = new Map(
+      (subscriptionRevenueProfiles ?? []).map((profile) => [profile.id, profile]),
+    );
+
+    const invoiceHistory: RevenueHistoryItem[] = (invoiceRows ?? [])
+      .filter((invoice) => invoice.status === "paid" && invoice.created_at)
+      .map((invoice) => ({
+        id: `invoice-${invoice.id}`,
+        type: "invoice",
+        label: "Invoice payment",
+        details: `Invoice ${invoice.id.slice(0, 8)}`,
+        subdetails: ["Status: paid"],
+        amount: Number(invoice.total_amount || 0),
+        createdAt: invoice.created_at!,
+      }));
+
+    const subscriptionHistory: RevenueHistoryItem[] = (subscriptionRevenueTransactions ?? [])
+      .map((transaction) => {
+        const metadataPlanCode =
+          transaction.metadata &&
+          typeof transaction.metadata === "object" &&
+          "plan_code" in transaction.metadata &&
+          typeof transaction.metadata.plan_code === "string"
+            ? transaction.metadata.plan_code
+            : null;
+        const metadataPlanName =
+          transaction.metadata &&
+          typeof transaction.metadata === "object" &&
+          "plan_name" in transaction.metadata &&
+          typeof transaction.metadata.plan_name === "string"
+            ? transaction.metadata.plan_name
+            : null;
+        const planCode = metadataPlanCode || (transaction.subscription_id ? subscriptionPlanCodeById.get(transaction.subscription_id) : null);
+        const amount = planCode ? (subscriptionPlanPriceMap.get(planCode) ?? 0) : 0;
+        const profile = profileById.get(transaction.practitioner_profile_id);
+        const subscriptionStatus = transaction.subscription_id ? subscriptionStatusById.get(transaction.subscription_id) : null;
+        const subscriberName = profile?.full_name || profile?.email || `Practitioner ${transaction.practitioner_profile_id.slice(0, 8)}`;
+
+        return {
+          id: `subscription-${transaction.id}`,
+          type: "subscription" as const,
+          label: "Subscription payment",
+          details: metadataPlanName || (planCode ? formatLabel(planCode) : "Subscription"),
+          subdetails: [
+            `Subscriber: ${subscriberName}`,
+            profile?.email ? `Email: ${profile.email}` : null,
+            subscriptionStatus ? `Current status: ${formatLabel(subscriptionStatus)}` : null,
+          ].filter(Boolean) as string[],
+          amount,
+          createdAt: transaction.created_at,
+        };
+      })
+      .filter((item) => item.amount > 0);
+
+    return [...subscriptionHistory, ...invoiceHistory].sort(
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+    );
+  }, [invoiceRows, subscriptionPlanRows, subscriptionRevenueProfiles, subscriptionRevenueRows, subscriptionRevenueTransactions]);
 
   const attentionClients = useMemo(() => {
     const outstandingInvoicesByClient = new Map<string, number>();
@@ -686,14 +833,21 @@ export default function AdminOverview() {
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-border bg-accent/30 p-5">
+          <button
+            type="button"
+            className="rounded-2xl border border-border bg-accent/30 p-5 text-left transition-shadow hover:shadow-card"
+            onClick={() => setIsRevenueHistoryOpen(true)}
+          >
             <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
               Monthly Revenue
             </p>
             <p className="font-display text-2xl text-foreground">
               {formatCurrency(reportingSnapshot.monthlyRevenue)}
             </p>
-          </div>
+            <p className="mt-3 text-xs text-muted-foreground font-body">
+              Click to view full revenue history
+            </p>
+          </button>
           <div className="rounded-2xl border border-border bg-accent/30 p-5">
             <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
               Cases Completed
@@ -1028,6 +1182,74 @@ export default function AdminOverview() {
           </div>
         </div>
       </section>
+
+      <DashboardItemDialog
+        open={isRevenueHistoryOpen}
+        onOpenChange={setIsRevenueHistoryOpen}
+        title="Revenue History"
+        description="Paid invoices and successful subscription billings are kept in history. Later cancellation does not remove already recorded revenue."
+      >
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-border bg-accent/20 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+              Total Recorded Revenue
+            </p>
+            <p className="mt-2 font-display text-2xl text-foreground">
+              {formatCurrency(revenueHistory.reduce((sum, item) => sum + item.amount, 0))}
+            </p>
+          </div>
+
+          {revenueHistory.length ? (
+            <div className="space-y-3">
+              {revenueHistory.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-border bg-card p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground font-body">{item.label}</p>
+                      <p className="mt-1 text-sm text-muted-foreground font-body">{item.details}</p>
+                      {item.subdetails?.length ? (
+                        <div className="mt-2 space-y-1">
+                          {item.subdetails.map((detail) => (
+                            <p key={detail} className="text-xs text-muted-foreground font-body">
+                              {detail}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                      <p className="mt-2 text-xs text-muted-foreground font-body">
+                        {new Date(item.createdAt).toLocaleString("en-ZA", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="font-display text-xl text-foreground">{formatCurrency(item.amount)}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground font-body">
+                        {item.type === "subscription" ? "Subscription" : "Invoice"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground font-body">
+              No revenue history found.
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <Button type="button" className="rounded-xl" onClick={() => setIsRevenueHistoryOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </DashboardItemDialog>
     </div>
   );
 }

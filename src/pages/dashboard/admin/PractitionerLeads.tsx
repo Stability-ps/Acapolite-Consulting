@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { CREDIT_PACKAGES, usePaystack } from "@/hooks/usePaystack";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { LeadLifecycleExplainerDialog } from "@/components/dashboard/LeadLifecycleExplainerDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -92,6 +93,7 @@ export default function PractitionerLeads() {
   const [savingResponse, setSavingResponse] = useState(false);
   const [startingQuickPurchase, setStartingQuickPurchase] = useState(false);
   const [requestingAccessId, setRequestingAccessId] = useState<string | null>(null);
+  const [isLifecycleDialogOpen, setIsLifecycleDialogOpen] = useState(false);
   const [filters, setFilters] = useState({
     status: "all",
     risk: "all",
@@ -773,6 +775,9 @@ export default function PractitionerLeads() {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            <Button type="button" variant="secondary" className="rounded-xl" onClick={() => setIsLifecycleDialogOpen(true)}>
+              Lead Lifecycle Explained
+            </Button>
             <Button asChild type="button" variant="outline" className="rounded-xl">
               <Link to="/dashboard/staff/credits">Manage Packages</Link>
             </Button>
@@ -1242,6 +1247,11 @@ export default function PractitionerLeads() {
           </div>
         ) : null}
       </DashboardItemDialog>
+
+      <LeadLifecycleExplainerDialog
+        open={isLifecycleDialogOpen}
+        onOpenChange={setIsLifecycleDialogOpen}
+      />
     </div>
   );
 }

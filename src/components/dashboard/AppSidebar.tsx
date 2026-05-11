@@ -75,7 +75,6 @@ const consultantItems = [
   { title: "Invoices", url: "/dashboard/staff/invoices", icon: Receipt, permission: "can_view_invoices" as StaffPermissionKey },
   { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare, permission: "can_view_messages" as StaffPermissionKey },
   { title: "External Tool", url: "/dashboard/staff/external-tools", icon: ExternalLink, permission: "can_view_overview" as StaffPermissionKey },
-  { title: "Tax Coach AI", url: "/dashboard/staff/tax-coach-ai", icon: Sparkles, permission: "can_view_overview" as StaffPermissionKey },
 ];
 
 export function AppSidebar() {
