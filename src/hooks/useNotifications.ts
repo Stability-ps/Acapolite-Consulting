@@ -77,6 +77,32 @@ function sanitizePractitionerNotification(notification: AppNotification) {
   } satisfies AppNotification;
 }
 
+function isVisibleToPractitioner(notification: AppNotification, profileId?: string) {
+  if (!profileId) {
+    return false;
+  }
+
+  if (notification.section !== "documents") {
+    return true;
+  }
+
+  if (notification.category === "document_uploaded") {
+    const assignedPractitionerId = typeof notification.metadata === "object" && notification.metadata
+      && "assigned_practitioner_id" in notification.metadata
+      && typeof notification.metadata.assigned_practitioner_id === "string"
+      ? notification.metadata.assigned_practitioner_id
+      : null;
+
+    return assignedPractitionerId === profileId;
+  }
+
+  if (notification.category === "document_status_changed") {
+    return false;
+  }
+
+  return true;
+}
+
 export function useNotifications() {
   const { user, role } = useAuth();
   const queryClient = useQueryClient();
@@ -135,8 +161,10 @@ export function useNotifications() {
       }));
     }
 
-    return items.map((notification) => sanitizePractitionerNotification(notification));
-  }, [query.data, role]);
+    return items
+      .filter((notification) => isVisibleToPractitioner(notification, user?.id))
+      .map((notification) => sanitizePractitionerNotification(notification));
+  }, [query.data, role, user?.id]);
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.is_read).length,
