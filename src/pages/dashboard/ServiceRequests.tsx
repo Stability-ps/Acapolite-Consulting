@@ -314,6 +314,17 @@ export default function ClientServiceRequests() {
   const getPractitionerDisplayName = (practitionerUser?: Profile | null, practitionerProfile?: PractitionerProfile | null) =>
     practitionerProfile?.business_name || practitionerUser?.full_name || "Practitioner";
 
+  const getPractitionerDisplayNameById = (practitionerProfileId?: string | null) => {
+    if (!practitionerProfileId) {
+      return "Practitioner";
+    }
+
+    const practitionerProfile = practitionerProfileMap.get(practitionerProfileId);
+    const practitionerUser = practitionerUserMap.get(practitionerProfileId);
+
+    return getPractitionerDisplayName(practitionerUser, practitionerProfile);
+  };
+
   const getPractitionerFullName = (practitionerUser?: Profile | null, practitionerProfile?: PractitionerProfile | null) =>
     practitionerUser?.full_name
     || practitionerProfile?.bank_account_holder_name
@@ -525,7 +536,13 @@ export default function ClientServiceRequests() {
       ) : (requests ?? []).length ? (
         <div className="space-y-4">
           {(requests ?? []).map((request) => {
-            const responseCount = (responsesByRequest.get(request.id) ?? []).length;
+            const requestResponses = responsesByRequest.get(request.id) ?? [];
+            const responseCount = requestResponses.length;
+            const responderNames = Array.from(new Set(
+              requestResponses
+                .map((response) => getPractitionerDisplayNameById(response.practitioner_profile_id))
+                .filter(Boolean),
+            ));
 
             return (
               <button
@@ -548,6 +565,15 @@ export default function ClientServiceRequests() {
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground font-body">{request.description}</p>
+                    {responseCount > 0 ? (
+                      <p className="text-sm text-foreground font-body">
+                        {responderNames.length === 1
+                          ? `${responderNames[0]} has responded`
+                          : responderNames.length > 1
+                            ? `${responderNames.slice(0, 2).join(" and ")}${responderNames.length > 2 ? ` +${responderNames.length - 2} more` : ""} have responded`
+                            : `${responseCount} practitioner response${responseCount === 1 ? "" : "s"} received`}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="text-sm text-muted-foreground font-body">
                     {responseCount} practitioner response{responseCount === 1 ? "" : "s"}
