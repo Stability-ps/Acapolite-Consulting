@@ -93,6 +93,7 @@ type SubscriptionRevenueTransactionRow = {
   subscription_id: string | null;
   practitioner_profile_id: string;
   created_at: string;
+  description: string | null;
   metadata?: {
     plan_code?: string | null;
     plan_name?: string | null;
@@ -108,6 +109,18 @@ type RevenueHistoryItem = {
   amount: number;
   createdAt: string;
 };
+
+function getSubscriptionMetadataValue(
+  metadata: SubscriptionRevenueTransactionRow["metadata"],
+  key: "plan_code" | "plan_name" | "expires_at",
+) {
+  if (!metadata || typeof metadata !== "object" || !(key in metadata)) {
+    return null;
+  }
+
+  const value = metadata[key];
+  return typeof value === "string" ? value : null;
+}
 
 type RiskDocumentRequest = {
   client_id: string;
@@ -328,7 +341,7 @@ export default function AdminOverview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("practitioner_credit_transactions")
-        .select("id, subscription_id, practitioner_profile_id, created_at, metadata")
+        .select("id, subscription_id, practitioner_profile_id, created_at, description, metadata")
         .eq("transaction_type", "subscription_credit")
         .order("created_at", { ascending: false });
 
@@ -362,6 +375,31 @@ export default function AdminOverview() {
     },
     enabled: Boolean(subscriptionRevenueTransactions?.length),
   });
+
+  const dedupedSubscriptionRevenueTransactions = useMemo(() => {
+    const rows = subscriptionRevenueTransactions ?? [];
+    const latestByRevenueEvent = new Map<string, SubscriptionRevenueTransactionRow>();
+
+    for (const row of rows) {
+      const expiresAt = getSubscriptionMetadataValue(row.metadata, "expires_at");
+      const dedupeKey = row.subscription_id && expiresAt
+        ? `${row.subscription_id}:${expiresAt}`
+        : row.id;
+      const existing = latestByRevenueEvent.get(dedupeKey);
+
+      if (!existing || new Date(row.created_at).getTime() > new Date(existing.created_at).getTime()) {
+        latestByRevenueEvent.set(dedupeKey, row);
+      }
+    }
+
+    return Array.from(latestByRevenueEvent.values());
+  }, [subscriptionRevenueTransactions]);
+
+  const renewalSubscriptionRevenueTransactions = useMemo(
+    () => dedupedSubscriptionRevenueTransactions.filter((row) =>
+      (row.description ?? "").toLowerCase().includes("new billing cycle")),
+    [dedupedSubscriptionRevenueTransactions],
+  );
 
   const { data: subscriptionPlanRows } = useQuery({
     queryKey: ["staff-overview-subscription-plans"],
@@ -621,22 +659,24 @@ export default function AdminOverview() {
     const subscriptionPlanCodeById = new Map(
       (subscriptionRevenueRows ?? []).map((subscription) => [subscription.id, subscription.plan_code]),
     );
-    const subscriptionRevenueThisMonth = (subscriptionRevenueTransactions ?? []).reduce((sum, transaction) => {
+    const initialSubscriptionRevenueThisMonth = (subscriptionRevenueRows ?? []).reduce((sum, subscription) => {
+      if (!subscription.created_at || subscription.created_at < monthStartIso) {
+        return sum;
+      }
+
+      return sum + (subscriptionPlanPriceMap.get(subscription.plan_code) ?? 0);
+    }, 0);
+
+    const renewalSubscriptionRevenueThisMonth = renewalSubscriptionRevenueTransactions.reduce((sum, transaction) => {
       if (!transaction.created_at || transaction.created_at < monthStartIso) {
         return sum;
       }
 
-      const metadataPlanCode =
-        transaction.metadata &&
-        typeof transaction.metadata === "object" &&
-        "plan_code" in transaction.metadata &&
-        typeof transaction.metadata.plan_code === "string"
-          ? transaction.metadata.plan_code
-          : null;
+      const metadataPlanCode = getSubscriptionMetadataValue(transaction.metadata, "plan_code");
       const planCode = metadataPlanCode || (transaction.subscription_id ? subscriptionPlanCodeById.get(transaction.subscription_id) : null);
       return sum + (planCode ? (subscriptionPlanPriceMap.get(planCode) ?? 0) : 0);
     }, 0);
-    const monthlyRevenue = invoiceRevenueThisMonth + subscriptionRevenueThisMonth;
+    const monthlyRevenue = invoiceRevenueThisMonth + initialSubscriptionRevenueThisMonth + renewalSubscriptionRevenueThisMonth;
 
     const completedCasesThisMonth = (caseRows ?? []).filter((caseRow) => {
       if (!["resolved", "closed"].includes(caseRow.status)) {
@@ -661,7 +701,7 @@ export default function AdminOverview() {
       clientGrowth,
       outstandingInvoices,
     };
-  }, [caseRows, clientGrowthRows, invoiceRows, subscriptionPlanRows, subscriptionRevenueRows, subscriptionRevenueTransactions]);
+  }, [caseRows, clientGrowthRows, invoiceRows, renewalSubscriptionRevenueTransactions, subscriptionPlanRows, subscriptionRevenueRows]);
 
   const revenueHistory = useMemo(() => {
     const subscriptionPlanPriceMap = new Map(
@@ -689,22 +729,30 @@ export default function AdminOverview() {
         createdAt: invoice.created_at!,
       }));
 
-    const subscriptionHistory: RevenueHistoryItem[] = (subscriptionRevenueTransactions ?? [])
+    const initialSubscriptionHistory: RevenueHistoryItem[] = (subscriptionRevenueRows ?? []).map((subscription) => {
+      const profile = profileById.get(subscription.practitioner_profile_id);
+      const subscriberName = profile?.full_name || profile?.email || `Practitioner ${subscription.practitioner_profile_id.slice(0, 8)}`;
+
+      return {
+        id: `subscription-initial-${subscription.id}`,
+        type: "subscription" as const,
+        label: "Subscription payment",
+        details: formatLabel(subscription.plan_code),
+        subdetails: [
+          `Subscriber: ${subscriberName}`,
+          profile?.email ? `Email: ${profile.email}` : null,
+          `Current status: ${formatLabel(subscription.status)}`,
+          "Billing event: Initial subscription",
+        ].filter(Boolean) as string[],
+        amount: subscriptionPlanPriceMap.get(subscription.plan_code) ?? 0,
+        createdAt: subscription.created_at,
+      };
+    }).filter((item) => item.amount > 0);
+
+    const renewalSubscriptionHistory: RevenueHistoryItem[] = renewalSubscriptionRevenueTransactions
       .map((transaction) => {
-        const metadataPlanCode =
-          transaction.metadata &&
-          typeof transaction.metadata === "object" &&
-          "plan_code" in transaction.metadata &&
-          typeof transaction.metadata.plan_code === "string"
-            ? transaction.metadata.plan_code
-            : null;
-        const metadataPlanName =
-          transaction.metadata &&
-          typeof transaction.metadata === "object" &&
-          "plan_name" in transaction.metadata &&
-          typeof transaction.metadata.plan_name === "string"
-            ? transaction.metadata.plan_name
-            : null;
+        const metadataPlanCode = getSubscriptionMetadataValue(transaction.metadata, "plan_code");
+        const metadataPlanName = getSubscriptionMetadataValue(transaction.metadata, "plan_name");
         const planCode = metadataPlanCode || (transaction.subscription_id ? subscriptionPlanCodeById.get(transaction.subscription_id) : null);
         const amount = planCode ? (subscriptionPlanPriceMap.get(planCode) ?? 0) : 0;
         const profile = profileById.get(transaction.practitioner_profile_id);
@@ -720,6 +768,7 @@ export default function AdminOverview() {
             `Subscriber: ${subscriberName}`,
             profile?.email ? `Email: ${profile.email}` : null,
             subscriptionStatus ? `Current status: ${formatLabel(subscriptionStatus)}` : null,
+            "Billing event: Renewal",
           ].filter(Boolean) as string[],
           amount,
           createdAt: transaction.created_at,
@@ -727,10 +776,10 @@ export default function AdminOverview() {
       })
       .filter((item) => item.amount > 0);
 
-    return [...subscriptionHistory, ...invoiceHistory].sort(
+    return [...renewalSubscriptionHistory, ...initialSubscriptionHistory, ...invoiceHistory].sort(
       (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
     );
-  }, [invoiceRows, subscriptionPlanRows, subscriptionRevenueProfiles, subscriptionRevenueRows, subscriptionRevenueTransactions]);
+  }, [invoiceRows, renewalSubscriptionRevenueTransactions, subscriptionPlanRows, subscriptionRevenueProfiles, subscriptionRevenueRows]);
 
   const attentionClients = useMemo(() => {
     const outstandingInvoicesByClient = new Map<string, number>();
