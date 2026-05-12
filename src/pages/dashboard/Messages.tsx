@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Paperclip, Search, Send, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -430,12 +431,17 @@ export default function Messages() {
                     >
                       <Paperclip className="h-4 w-4" />
                     </Button>
-                    <Input
+                    <Textarea
                       value={newMessage}
                       onChange={(event) => setNewMessage(event.target.value)}
-                      placeholder="Type a message..."
-                      className="flex-1 rounded-xl"
-                      onKeyDown={(event) => event.key === "Enter" && !event.shiftKey && sendMessage()}
+                      placeholder="Type a message... Press Ctrl+Enter to send."
+                      className="min-h-[104px] flex-1 resize-y rounded-xl"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                          event.preventDefault();
+                          void sendMessage();
+                        }
+                      }}
                     />
                     <Button onClick={sendMessage} className="rounded-xl shrink-0" disabled={sendingMessage || (!newMessage.trim() && !attachmentFile)}>
                       <Send className="h-4 w-4 mr-2" />

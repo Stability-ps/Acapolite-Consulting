@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Paperclip, Search, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -644,12 +645,17 @@ export default function AdminMessages() {
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
-                  <Input
+                  <Textarea
                     value={newMessage}
                     onChange={(event) => setNewMessage(event.target.value)}
-                    placeholder={canReplyMessages ? "Type a reply..." : "View-only messaging access"}
-                    className="flex-1 rounded-xl"
-                    onKeyDown={(event) => event.key === "Enter" && !event.shiftKey && sendMessage()}
+                    placeholder={canReplyMessages ? "Type a reply... Press Ctrl+Enter to send." : "View-only messaging access"}
+                    className="min-h-[104px] flex-1 resize-y rounded-xl"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                        event.preventDefault();
+                        void sendMessage();
+                      }
+                    }}
                     disabled={!canReplyMessages}
                   />
                   <Button onClick={sendMessage} className="rounded-xl shrink-0" disabled={!canReplyMessages || sendingMessage || (!newMessage.trim() && !attachmentFile)}>
