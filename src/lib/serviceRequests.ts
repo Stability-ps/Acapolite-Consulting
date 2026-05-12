@@ -90,6 +90,8 @@ export const serviceRequestStatusOptions: { value: Enums<"service_request_status
   { value: "in_progress", label: "In Progress" },
   { value: "waiting_response", label: "Waiting Response" },
   { value: "dead_lead", label: "Dead Lead" },
+  { value: "pending_client_confirmation", label: "Pending Client Confirmation" },
+  { value: "expired", label: "Expired" },
   { value: "converted_to_client", label: "Converted to Client" },
   { value: "closed", label: "Closed" },
 ];
@@ -121,6 +123,10 @@ export function getServiceRequestStatusClass(status?: string | null) {
       return "border-violet-200 bg-violet-50 text-violet-700";
     case "dead_lead":
       return "border-red-200 bg-red-50 text-red-700";
+    case "expired":
+      return "border-red-200 bg-red-50 text-red-700";
+    case "pending_client_confirmation":
+      return "border-orange-200 bg-orange-50 text-orange-700";
     case "viewed":
       return "border-amber-200 bg-amber-50 text-amber-700";
     default:

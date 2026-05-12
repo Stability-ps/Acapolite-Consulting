@@ -35,11 +35,17 @@ import {
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, getAssignmentTypeLabel, getResponseStatusClass } from "@/lib/practitionerMarketplace";
+import {
+  formatLifecycleStageLabel,
+  getLifecycleCountdownLabel,
+  getLifecycleStageBadgeClass,
+} from "@/lib/serviceRequestLifecycle";
 
 type ServiceRequestRecord = Tables<"service_requests">;
 type ServiceRequestDocument = Tables<"service_request_documents">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
 type ServiceRequestAssignmentHistory = Tables<"service_request_assignment_history">;
+type ServiceRequestLifecycleHistory = Tables<"service_request_lifecycle_history">;
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type PractitionerUser = Tables<"profiles">;
 
@@ -57,18 +63,31 @@ export default function AdminServiceRequests() {
   const [assignmentFilter, setAssignmentFilter] = useState<string>("all");
   const [issueFilter, setIssueFilter] = useState<string>("all");
   const [leadView, setLeadView] = useState<"active" | "archived">("active");
+  const [lifecycleTab, setLifecycleTab] = useState<"active" | "business" | "professional" | "open" | "reactivated" | "pending" | "expired" | "archived">("active");
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [assigningRequestId, setAssigningRequestId] = useState<string | null>(null);
   const [selectedPractitionerId, setSelectedPractitionerId] = useState<string>("");
   const [convertingRequestId, setConvertingRequestId] = useState<string | null>(null);
+  const [revivingLeadId, setRevivingLeadId] = useState<string | null>(null);
   const [leadArchiveReason, setLeadArchiveReason] = useState<string>("inactive");
   const [leadArchiveNotes, setLeadArchiveNotes] = useState("");
   const [archivingLeadId, setArchivingLeadId] = useState<string | null>(null);
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
   const [confirmDeleteLeadOpen, setConfirmDeleteLeadOpen] = useState(false);
   const leadIdFromQuery = searchParams.get("leadId");
+
+  useQuery({
+    queryKey: ["service-request-lifecycle-refresh", role, "staff"],
+    queryFn: async () => {
+      const { error } = await supabase.rpc("process_service_request_lifecycles");
+      if (error) throw error;
+      return true;
+    },
+    enabled: role !== "consultant",
+    refetchOnWindowFocus: false,
+  });
 
   if (role === "consultant") {
     return <PractitionerLeads />;
@@ -123,6 +142,19 @@ export default function AdminServiceRequests() {
 
       if (error) throw error;
       return (data ?? []) as ServiceRequestAssignmentHistory[];
+    },
+  });
+
+  const { data: lifecycleHistory } = useQuery({
+    queryKey: ["staff-service-request-lifecycle-history"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_request_lifecycle_history")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as ServiceRequestLifecycleHistory[];
     },
   });
 
@@ -193,6 +225,18 @@ export default function AdminServiceRequests() {
     return map;
   }, [assignmentHistory]);
 
+  const lifecycleHistoryByRequest = useMemo(() => {
+    const map = new Map<string, ServiceRequestLifecycleHistory[]>();
+
+    for (const item of lifecycleHistory ?? []) {
+      const current = map.get(item.service_request_id) ?? [];
+      current.push(item);
+      map.set(item.service_request_id, current);
+    }
+
+    return map;
+  }, [lifecycleHistory]);
+
   const practitionerMap = useMemo(
     () => new Map((practitioners ?? []).map((practitioner) => [practitioner.user.id, practitioner])),
     [practitioners],
@@ -250,6 +294,38 @@ export default function AdminServiceRequests() {
       }
 
       if (leadView === "archived" && !request.is_archived) {
+        return false;
+      }
+
+      if (lifecycleTab === "active" && (request.is_archived || request.lifecycle_stage === "expired" || request.status === "expired")) {
+        return false;
+      }
+
+      if (lifecycleTab === "business" && request.lifecycle_stage !== "business_exclusive") {
+        return false;
+      }
+
+      if (lifecycleTab === "professional" && request.lifecycle_stage !== "professional_access") {
+        return false;
+      }
+
+      if (lifecycleTab === "open" && request.lifecycle_stage !== "open_marketplace") {
+        return false;
+      }
+
+      if (lifecycleTab === "reactivated" && request.lifecycle_reactivation_count < 1) {
+        return false;
+      }
+
+      if (lifecycleTab === "pending" && request.lifecycle_stage !== "pending_client_confirmation") {
+        return false;
+      }
+
+      if (lifecycleTab === "expired" && request.lifecycle_stage !== "expired") {
+        return false;
+      }
+
+      if (lifecycleTab === "archived" && !request.is_archived) {
         return false;
       }
 
@@ -311,6 +387,7 @@ export default function AdminServiceRequests() {
     clientTypeFilter,
     issueFilter,
     leadView,
+    lifecycleTab,
     practitionerMap,
     priorityFilter,
     requests,
@@ -325,6 +402,7 @@ export default function AdminServiceRequests() {
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
   const selectedResponses = selectedRequest ? responsesByRequest.get(selectedRequest.id) ?? [] : [];
   const selectedAssignments = selectedRequest ? assignmentHistoryByRequest.get(selectedRequest.id) ?? [] : [];
+  const selectedLifecycleHistory = selectedRequest ? lifecycleHistoryByRequest.get(selectedRequest.id) ?? [] : [];
 
   useEffect(() => {
     setSelectedPractitionerId(selectedRequest?.assigned_practitioner_id ?? "");
@@ -348,9 +426,17 @@ export default function AdminServiceRequests() {
       active: rows.filter((request) => !request.is_archived).length,
       archived: rows.filter((request) => request.is_archived).length,
       highRisk: rows.filter((request) => request.risk_indicator === "high").length,
-      deadLeads: rows.filter((request) => request.status === "dead_lead").length,
+      deadLeads: rows.filter((request) => request.status === "dead_lead" || request.status === "expired").length,
+      business: rows.filter((request) => request.lifecycle_stage === "business_exclusive" && !request.is_archived).length,
+      professional: rows.filter((request) => request.lifecycle_stage === "professional_access" && !request.is_archived).length,
+      openMarketplace: rows.filter((request) => request.lifecycle_stage === "open_marketplace" && !request.is_archived).length,
+      reactivated: rows.filter((request) => request.lifecycle_reactivation_count > 0 && !request.is_archived).length,
+      pendingConfirmation: rows.filter((request) => request.lifecycle_stage === "pending_client_confirmation").length,
+      expired: rows.filter((request) => request.lifecycle_stage === "expired").length,
+      unattended: rows.filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) === 0 && !request.is_archived).length,
+      practitionerResponses: (responses ?? []).length,
     };
-  }, [requests]);
+  }, [requests, responses, responsesByRequest]);
 
   const openRequest = async (request: ServiceRequestRecord) => {
     setSelectedRequestId(request.id);
@@ -536,6 +622,25 @@ export default function AdminServiceRequests() {
     await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
   };
 
+  const reviveLead = async (requestId: string) => {
+    setRevivingLeadId(requestId);
+    const { error } = await supabase.rpc("admin_revive_service_request", {
+      p_request_id: requestId,
+    });
+    setRevivingLeadId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Lead returned to the active marketplace.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-request-lifecycle-history"] }),
+    ]);
+  };
+
   const openDocument = async (document: ServiceRequestDocument) => {
     setOpeningDocumentId(document.id);
 
@@ -597,6 +702,29 @@ export default function AdminServiceRequests() {
           >
             Archived Leads
           </Button>
+        </div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            { value: "active", label: "Active Leads" },
+            { value: "business", label: "Business Leads" },
+            { value: "professional", label: "Professional Leads" },
+            { value: "open", label: "Open Marketplace" },
+            { value: "reactivated", label: "Reactivated Leads" },
+            { value: "pending", label: "Pending Confirmation" },
+            { value: "expired", label: "Expired Leads" },
+            { value: "archived", label: "Archived Leads" },
+          ].map((tab) => (
+            <Button
+              key={tab.value}
+              type="button"
+              size="sm"
+              variant={lifecycleTab === tab.value ? "default" : "outline"}
+              className="rounded-full"
+              onClick={() => setLifecycleTab(tab.value as typeof lifecycleTab)}
+            >
+              {tab.label}
+            </Button>
+          ))}
         </div>
         <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
           <div className="relative xl:col-span-2">
@@ -712,22 +840,30 @@ export default function AdminServiceRequests() {
         </div>
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Total Requests</p>
           <p className="font-display text-3xl text-foreground">{requestMetrics.total}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Active Leads</p>
-          <p className="font-display text-3xl text-foreground">{requestMetrics.active}</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Reactivated Leads</p>
+          <p className="font-display text-3xl text-violet-700">{requestMetrics.reactivated}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">High Risk</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Pending Confirmation</p>
+          <p className="font-display text-3xl text-orange-700">{requestMetrics.pendingConfirmation}</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Expired Leads</p>
+          <p className="font-display text-3xl text-red-700">{requestMetrics.expired}</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Unattended Leads</p>
+          <p className="font-display text-3xl text-foreground">{requestMetrics.unattended}</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Critical SARS Leads</p>
           <p className="font-display text-3xl text-red-700">{requestMetrics.highRisk}</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Archived / Dead</p>
-          <p className="font-display text-3xl text-foreground">{requestMetrics.archived}</p>
         </div>
       </div>
 
@@ -755,9 +891,17 @@ export default function AdminServiceRequests() {
                       <Badge variant="outline" className={getServiceRequestStatusClass(request.status)}>
                         {formatServiceRequestLabel(request.status)}
                       </Badge>
+                      <Badge variant="outline" className={getLifecycleStageBadgeClass(request.lifecycle_stage)}>
+                        {formatLifecycleStageLabel(request.lifecycle_stage)}
+                      </Badge>
                       <Badge variant="outline" className={getServiceRequestRiskClass(request.risk_indicator)}>
                         {formatServiceRequestLabel(request.risk_indicator)} Risk
                       </Badge>
+                      {request.lifecycle_reactivation_count > 0 ? (
+                        <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700">
+                          Reactivated x{request.lifecycle_reactivation_count}
+                        </Badge>
+                      ) : null}
                     </div>
 
                     <p className="text-sm text-muted-foreground font-body">
@@ -765,6 +909,9 @@ export default function AdminServiceRequests() {
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground font-body">
                       {formatServiceRequestLabel(request.client_type)} | {formatServiceList(resolveServiceList(request))} | Priority {formatServiceRequestLabel(request.priority_level)}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground font-body">
+                      {getLifecycleCountdownLabel(request) || "No active countdown"}
                     </p>
                     <p className="mt-3 line-clamp-2 text-sm text-foreground font-body">{request.description}</p>
 
@@ -831,7 +978,7 @@ export default function AdminServiceRequests() {
       >
         {selectedRequest ? (
           <div className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Contact</p>
                 <p className="font-body text-foreground">{selectedRequest.email}</p>
@@ -884,6 +1031,27 @@ export default function AdminServiceRequests() {
                   ))}
                 </div>
               </div>
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Lifecycle</p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline" className={getLifecycleStageBadgeClass(selectedRequest.lifecycle_stage)}>
+                    {formatLifecycleStageLabel(selectedRequest.lifecycle_stage)}
+                  </Badge>
+                  {selectedRequest.lifecycle_reactivation_count > 0 ? (
+                    <Badge className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
+                      Reactivated x{selectedRequest.lifecycle_reactivation_count}
+                    </Badge>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-sm text-foreground font-body">
+                  {getLifecycleCountdownLabel(selectedRequest) || "No active countdown"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground font-body">
+                  Last client activity: {selectedRequest.lifecycle_last_client_activity_at
+                    ? new Date(selectedRequest.lifecycle_last_client_activity_at).toLocaleString()
+                    : "Not recorded"}
+                </p>
+              </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -913,7 +1081,53 @@ export default function AdminServiceRequests() {
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Issue Description</p>
               <div className="rounded-2xl border border-border p-4">
-                <p className="whitespace-pre-wrap font-body text-foreground">{selectedRequest.description}</p>
+                <p className="whitespace-pre-wrap font-body text-foreground">{selectedRequest.description || "No description was provided with this request."}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-1">Lifecycle History</p>
+                  <p className="text-sm text-muted-foreground font-body">
+                    Track automatic stage changes, reactivations, and client confirmation outcomes.
+                  </p>
+                </div>
+                {role === "admin" && selectedRequest.lifecycle_stage === "expired" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => void reviveLead(selectedRequest.id)}
+                    disabled={revivingLeadId === selectedRequest.id}
+                  >
+                    {revivingLeadId === selectedRequest.id ? "Reviving..." : "Revive Lead"}
+                  </Button>
+                ) : null}
+              </div>
+              <div className="mt-4 space-y-3">
+                {selectedLifecycleHistory.length ? selectedLifecycleHistory.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-border bg-accent/20 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {item.lifecycle_stage ? (
+                        <Badge variant="outline" className={getLifecycleStageBadgeClass(item.lifecycle_stage)}>
+                          {formatLifecycleStageLabel(item.lifecycle_stage)}
+                        </Badge>
+                      ) : null}
+                      <Badge className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                        {formatServiceRequestLabel(item.event_type)}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground font-body">{new Date(item.created_at).toLocaleString()}</span>
+                    </div>
+                    {item.notes ? <p className="mt-2 text-sm text-foreground font-body">{item.notes}</p> : null}
+                    <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground font-body">
+                      <span>Reactivation count: {item.reactivation_count}</span>
+                      {item.triggered_by ? <span>Triggered by: {item.triggered_by}</span> : null}
+                    </div>
+                  </div>
+                )) : (
+                  <p className="text-sm text-muted-foreground font-body">No lifecycle history has been recorded yet.</p>
+                )}
               </div>
             </div>
 

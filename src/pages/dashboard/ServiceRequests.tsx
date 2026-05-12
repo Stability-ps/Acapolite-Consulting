@@ -18,6 +18,7 @@ import { serviceCategoryOptions, serviceNeededOptions, formatServiceRequestLabel
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, getResponseStatusClass } from "@/lib/practitionerMarketplace";
 import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
 import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
+import { formatLifecycleStageLabel, getLifecycleCountdownLabel, getLifecycleStageBadgeClass } from "@/lib/serviceRequestLifecycle";
 
 type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
@@ -44,6 +45,18 @@ export default function ClientServiceRequests() {
   const [isChangePractitionerOpen, setIsChangePractitionerOpen] = useState(false);
   const [changeReason, setChangeReason] = useState("");
   const [changingPractitioner, setChangingPractitioner] = useState(false);
+  const [respondingToConfirmation, setRespondingToConfirmation] = useState<"yes" | "no" | null>(null);
+
+  const { isFetching: isRefreshingLifecycle } = useQuery({
+    queryKey: ["service-request-lifecycle-refresh", user?.id, "client"],
+    queryFn: async () => {
+      const { error } = await supabase.rpc("process_service_request_lifecycles");
+      if (error) throw error;
+      return true;
+    },
+    enabled: !!user?.id,
+    refetchOnWindowFocus: false,
+  });
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["client-service-requests", user?.email],
@@ -57,7 +70,7 @@ export default function ClientServiceRequests() {
       if (error) throw error;
       return (data ?? []) as ServiceRequest[];
     },
-    enabled: !!user?.email,
+    enabled: !!user?.email && !isRefreshingLifecycle,
   });
 
   const requestIds = useMemo(() => (requests ?? []).map((request) => request.id), [requests]);
@@ -366,6 +379,39 @@ export default function ClientServiceRequests() {
     }
   };
 
+  const respondToLifecycleConfirmation = async (requiresAssistance: boolean) => {
+    if (!selectedRequest) {
+      return;
+    }
+
+    setRespondingToConfirmation(requiresAssistance ? "yes" : "no");
+
+    try {
+      const { data, error } = await supabase.rpc("respond_service_request_confirmation", {
+        p_request_id: selectedRequest.id,
+        p_requires_assistance: requiresAssistance,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["client-service-requests", user?.email] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications", user?.id] }),
+      ]);
+
+      toast.success(data === "reactivated"
+        ? "Your request was reactivated and returned to the marketplace."
+        : "Your request was expired and removed from the active marketplace.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to submit your confirmation.";
+      toast.error(message);
+    } finally {
+      setRespondingToConfirmation(null);
+    }
+  };
+
   const respondToAccessRequest = async (accessRequestId: string, action: "approve" | "decline") => {
     setRespondingAccessId(accessRequestId);
     const { error } = await supabase.rpc("respond_to_service_request_access", {
@@ -561,7 +607,14 @@ export default function ClientServiceRequests() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Status</p>
-                  <p className="mt-1">{formatServiceRequestLabel(selectedRequest.status)}</p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestStatusClass(selectedRequest.status)}`}>
+                      {formatServiceRequestLabel(selectedRequest.status)}
+                    </Badge>
+                    <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(selectedRequest.lifecycle_stage)}`}>
+                      {formatLifecycleStageLabel(selectedRequest.lifecycle_stage)}
+                    </Badge>
+                  </div>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Priority</p>
@@ -620,8 +673,41 @@ export default function ClientServiceRequests() {
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Missing Documents</p>
                   <p className="mt-1">{selectedRequest.missing_documents_flag ? "Yes" : "No"}</p>
                 </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Lifecycle Countdown</p>
+                  <p className="mt-1">{getLifecycleCountdownLabel(selectedRequest) || "No active countdown"}</p>
+                </div>
               </div>
             </div>
+
+            {selectedRequest.status === "pending_client_confirmation" ? (
+              <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-orange-700 font-body">Client Confirmation Required</p>
+                <p className="mt-2 text-sm text-orange-900 font-body">
+                  Do you still require assistance with this matter? If you confirm, the lead returns to the marketplace.
+                  If you decline, or if no response is received within 24 hours, the lead will expire.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    className="rounded-xl"
+                    disabled={respondingToConfirmation !== null}
+                    onClick={() => void respondToLifecycleConfirmation(true)}
+                  >
+                    {respondingToConfirmation === "yes" ? "Submitting..." : "Yes, I still need assistance"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    disabled={respondingToConfirmation !== null}
+                    onClick={() => void respondToLifecycleConfirmation(false)}
+                  >
+                    {respondingToConfirmation === "no" ? "Submitting..." : "No, expire this request"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="rounded-2xl border border-border bg-card p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Request Summary</p>

@@ -1391,6 +1391,15 @@ export type Database = {
           assigned_at: string | null;
           assigned_practitioner_id: string | null;
           selected_response_id: string | null;
+          lifecycle_stage: Database["public"]["Enums"]["service_request_lifecycle_stage"];
+          lifecycle_stage_started_at: string | null;
+          lifecycle_stage_expires_at: string | null;
+          lifecycle_reactivation_count: number;
+          lifecycle_last_client_activity_at: string | null;
+          client_confirmation_requested_at: string | null;
+          client_confirmation_due_at: string | null;
+          client_confirmation_answered_at: string | null;
+          expired_at: string | null;
           converted_case_id: string | null;
           closed_at: string | null;
           created_at: string;
@@ -1437,6 +1446,15 @@ export type Database = {
           assigned_at?: string | null;
           assigned_practitioner_id?: string | null;
           selected_response_id?: string | null;
+          lifecycle_stage?: Database["public"]["Enums"]["service_request_lifecycle_stage"];
+          lifecycle_stage_started_at?: string | null;
+          lifecycle_stage_expires_at?: string | null;
+          lifecycle_reactivation_count?: number;
+          lifecycle_last_client_activity_at?: string | null;
+          client_confirmation_requested_at?: string | null;
+          client_confirmation_due_at?: string | null;
+          client_confirmation_answered_at?: string | null;
+          expired_at?: string | null;
           converted_case_id?: string | null;
           closed_at?: string | null;
           created_at?: string;
@@ -1483,10 +1501,49 @@ export type Database = {
           assigned_at?: string | null;
           assigned_practitioner_id?: string | null;
           selected_response_id?: string | null;
+          lifecycle_stage?: Database["public"]["Enums"]["service_request_lifecycle_stage"];
+          lifecycle_stage_started_at?: string | null;
+          lifecycle_stage_expires_at?: string | null;
+          lifecycle_reactivation_count?: number;
+          lifecycle_last_client_activity_at?: string | null;
+          client_confirmation_requested_at?: string | null;
+          client_confirmation_due_at?: string | null;
+          client_confirmation_answered_at?: string | null;
+          expired_at?: string | null;
           converted_case_id?: string | null;
           closed_at?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      service_request_lifecycle_history: {
+        Row: {
+          id: string;
+          service_request_id: string;
+          lifecycle_stage: Database["public"]["Enums"]["service_request_lifecycle_stage"] | null;
+          event_type: string;
+          note: string | null;
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          service_request_id: string;
+          lifecycle_stage?: Database["public"]["Enums"]["service_request_lifecycle_stage"] | null;
+          event_type: string;
+          note?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          service_request_id?: string;
+          lifecycle_stage?: Database["public"]["Enums"]["service_request_lifecycle_stage"] | null;
+          event_type?: string;
+          note?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -1742,6 +1799,12 @@ export type Database = {
         };
         Returns: boolean;
       };
+      admin_revive_service_request: {
+        Args: {
+          p_request_id: string;
+        };
+        Returns: string;
+      };
       accept_service_request_response: {
         Args: {
           p_response_id: string;
@@ -1783,9 +1846,20 @@ export type Database = {
         };
         Returns: Database["public"]["Enums"]["case_type"];
       };
+      process_service_request_lifecycles: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
       refresh_system_alerts: {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
+      };
+      respond_service_request_confirmation: {
+        Args: {
+          p_request_id: string;
+          p_requires_assistance: boolean;
+        };
+        Returns: string;
       };
       request_practitioner_change: {
         Args: {
@@ -1855,8 +1929,16 @@ export type Database = {
         | "in_progress"
         | "waiting_response"
         | "dead_lead"
+        | "pending_client_confirmation"
+        | "expired"
         | "converted_to_client"
         | "closed";
+      service_request_lifecycle_stage:
+        | "business_exclusive"
+        | "professional_access"
+        | "open_marketplace"
+        | "pending_client_confirmation"
+        | "expired";
       service_request_client_type: "individual" | "company";
       service_request_identity_document_type: "id_number" | "passport_number";
       service_request_category: "individual_tax" | "business_tax" | "accounting" | "business_support";
@@ -2024,8 +2106,17 @@ export const Constants = {
         "in_progress",
         "waiting_response",
         "dead_lead",
+        "pending_client_confirmation",
+        "expired",
         "converted_to_client",
         "closed",
+      ],
+      service_request_lifecycle_stage: [
+        "business_exclusive",
+        "professional_access",
+        "open_marketplace",
+        "pending_client_confirmation",
+        "expired",
       ],
       service_request_client_type: ["individual", "company"],
       service_request_identity_document_type: ["id_number", "passport_number"],

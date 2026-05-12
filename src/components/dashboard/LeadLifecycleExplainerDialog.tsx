@@ -5,6 +5,7 @@ import {
   FileText,
   RefreshCcw,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { Badge } from "@/components/ui/badge";
@@ -15,35 +16,58 @@ interface LeadLifecycleExplainerDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const goals = [
+  "Protect urgent SARS matters",
+  "Improve response rates",
+  "Reward active practitioners",
+  "Create fair marketplace exposure",
+  "Prevent leads from being ignored",
+] as const;
+
+const stageRules = [
+  "Lead status automatically changes",
+  "Access expands to the next subscription level",
+  "Countdown timer resets for the next stage",
+  "Practitioner permissions update automatically",
+  "Lead visibility updates automatically",
+  "New notifications may be triggered automatically",
+] as const;
+
 const lifecycleStages = [
   {
+    step: "1",
     title: "Business Exclusive",
     duration: "0 - 12 Hours",
     access: "Business Plan practitioners only",
+    purpose: "This gives premium practitioners priority access to high-value and urgent opportunities.",
+    timerExample: "Expires in 12 hours",
     accent: "border-amber-200 bg-amber-50",
     badgeClassName: "bg-amber-100 text-amber-800 hover:bg-amber-100",
-    description: "Business practitioners receive first-priority access to high-value and urgent SARS matters.",
-    points: [
+    during: [
       "Lead displays a Business Exclusive badge",
-      "Countdown timer stays active for 12 hours",
-      "Professional and Starter plans cannot respond yet",
+      "Countdown timer is active",
+      "Professional and Starter users cannot respond",
       "Lead remains protected for Business subscribers",
     ],
     expiry: [
       "Status changes to Professional Access",
-      "Professional practitioners gain access",
-      "Countdown resets to the next 24-hour window",
-      "Visibility and notifications expand automatically",
+      "Access permissions update",
+      "Professional practitioners may unlock and respond",
+      "Countdown resets to 24 hours",
+      "Lead visibility expands",
+      "New notifications may be triggered",
     ],
   },
   {
+    step: "2",
     title: "Professional Access",
     duration: "12 - 36 Hours",
     access: "Business + Professional practitioners",
+    purpose: "If no Business practitioner attends to the lead, access automatically expands to Professional subscribers.",
+    timerExample: "Expires in 24 hours",
     accent: "border-sky-200 bg-sky-50",
     badgeClassName: "bg-sky-100 text-sky-800 hover:bg-sky-100",
-    description: "If no Business practitioner responds, access expands to Professional subscribers.",
-    points: [
+    during: [
       "Lead status changes to Professional Access",
       "More practitioners gain visibility",
       "Additional notifications may be sent",
@@ -53,62 +77,80 @@ const lifecycleStages = [
       "Status changes to Open Marketplace",
       "Starter practitioners may unlock and respond",
       "Access expands to all qualifying practitioners",
-      "Visibility increases again",
+      "Countdown resets again",
+      "Visibility increases further",
+      "Additional notifications may be triggered",
     ],
   },
   {
+    step: "3",
     title: "Open Marketplace",
     duration: "36 - 60 Hours",
     access: "All practitioners including Starter plans",
+    purpose: "This ensures important leads never remain locked or hidden for too long.",
+    timerExample: "Expires in 24 hours",
     accent: "border-emerald-200 bg-emerald-50",
     badgeClassName: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
-    description: "This stage ensures important leads never remain locked or hidden for too long.",
-    points: [
-      "Lead becomes available across the marketplace",
-      "All qualifying plans may respond",
+    during: [
+      "Lead becomes publicly accessible inside the marketplace",
+      "All qualifying practitioners may respond",
       "Marketplace visibility increases significantly",
-      "This is the final standard access window",
     ],
     expiry: [
-      "Lead moves into Reactivated Lead status",
-      "Lead returns to the top of the marketplace",
+      "Status changes to Reactivated Lead",
+      "Lead moves back to the top of the marketplace",
+      "Visibility is boosted again",
       "Fresh notifications may be triggered",
-      "Visibility receives another boost",
     ],
   },
   {
+    step: "4",
     title: "Reactivated Lead",
     duration: "After 60 Hours Unattended",
     access: "Reintroduced to the marketplace",
+    purpose: "This prevents valuable SARS matters from being buried or forgotten.",
+    timerExample: "Boosted back to the top of the feed",
     accent: "border-violet-200 bg-violet-50",
     badgeClassName: "bg-violet-100 text-violet-800 hover:bg-violet-100",
-    description: "If no practitioner responds after all stages, the system boosts the lead again instead of letting it disappear.",
-    points: [
-      "Lead receives a Reactivated badge",
-      "Lead returns to the top of the feed",
+    during: [
+      "Lead status changes to Reactivated Lead",
+      "Lead returns to the top of the marketplace feed",
       "Visibility is boosted again",
-      "Fresh practitioner notifications may be sent",
+      "Practitioners may receive fresh notifications",
     ],
     expiry: [
-      "After a second full unattended lifecycle, client confirmation is required",
-      "Unconfirmed leads are removed from the active marketplace",
+      "First full lifecycle expiry reactivates immediately",
+      "Second full lifecycle expiry requires client confirmation first",
     ],
   },
 ] as const;
 
-const whyLifecycleExists = [
-  "Protect urgent SARS matters",
-  "Improve response rates",
-  "Reward active practitioners",
-  "Create fair marketplace exposure",
-  "Prevent leads from being ignored",
-] as const;
-
-const activityBoosts = [
+const leadActivityMatters = [
   "Client uploads documents",
   "Client replies to messages",
   "Client updates information",
   "Client becomes active again",
+] as const;
+
+const indicators = [
+  "High Priority",
+  "Medium Risk",
+  "Urgent SARS Matter",
+  "Documents Available",
+  "Debt Assistance Required",
+] as const;
+
+const expiredLeadFields = [
+  "Lead title",
+  "Original lead type",
+  "Total lifecycle duration",
+  "Number of views",
+  "Number of responses",
+  "Reactivation count",
+  "Last client activity",
+  "Expired date",
+  "Risk level",
+  "Reason for expiry",
 ] as const;
 
 export function LeadLifecycleExplainerDialog({
@@ -120,7 +162,7 @@ export function LeadLifecycleExplainerDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Lead Lifecycle Explained"
-      description="A practitioner-facing overview of how Acapolite escalates unattended marketplace leads."
+      description="How the Acapolite marketplace escalates unattended leads and keeps urgent SARS matters visible."
     >
       <div className="space-y-6">
         <section className="rounded-[24px] border border-border bg-gradient-to-br from-slate-50 via-white to-slate-100 p-5 shadow-sm">
@@ -128,17 +170,21 @@ export function LeadLifecycleExplainerDialog({
             <div className="max-w-3xl">
               <div className="flex items-center gap-2 text-sm font-semibold text-primary">
                 <ShieldCheck className="h-4 w-4" />
-                How the marketplace works
+                How the Acapolite Marketplace Works
               </div>
               <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-                Every marketplace lead moves through timed access stages when no practitioner responds.
-                The system expands visibility automatically, resets the countdown for each stage, and
-                keeps urgent SARS matters from being forgotten.
+                To ensure that important SARS matters are never left unattended, Acapolite uses a smart
+                Lead Lifecycle system. Marketplace leads automatically escalate between subscription
+                levels if no practitioner responds within the allocated stage window.
+              </p>
+              <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
+                Every lead moves through different lifecycle stages automatically. Each stage has its own
+                countdown timer, and everything is handled by the lifecycle system.
               </p>
             </div>
 
-            <div className="grid min-w-[220px] gap-2">
-              {whyLifecycleExists.map((item) => (
+            <div className="grid min-w-[230px] gap-2">
+              {goals.map((item) => (
                 <div key={item} className="rounded-2xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground">
                   {item}
                 </div>
@@ -151,55 +197,63 @@ export function LeadLifecycleExplainerDialog({
           <div className="rounded-[22px] border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Clock3 className="h-4 w-4 text-primary" />
-              Each stage has its own timer
+              Each stage has a countdown
             </div>
             <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-              When a timer expires, the lead automatically changes stage, access expands to more
-              practitioners, and the countdown resets for the new stage.
+              Each lead stage has its own timer. When a stage expires, the next stage opens automatically.
             </p>
           </div>
 
           <div className="rounded-[22px] border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <BellRing className="h-4 w-4 text-primary" />
-              Visibility updates automatically
+              Access and visibility expand
             </div>
             <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-              Permissions, marketplace placement, and notifications update automatically as the lead
-              moves through the lifecycle.
+              Practitioner permissions, lead visibility, and notifications can all update automatically
+              when a stage changes.
             </p>
           </div>
 
           <div className="rounded-[22px] border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <RefreshCcw className="h-4 w-4 text-primary" />
-              Leads never stay locked forever
+              Leads do not stay hidden forever
             </div>
             <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-              If a lead is unattended, it escalates automatically instead of remaining hidden behind
-              one subscription tier.
+              The lifecycle is designed to recycle unattended leads so valuable client matters keep
+              getting visibility.
             </p>
           </div>
         </section>
 
+        <section className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
+          <p className="text-sm font-semibold text-foreground">When a stage expires</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {stageRules.map((rule) => (
+              <div key={rule} className="rounded-2xl border border-border bg-accent/20 px-4 py-3 text-sm text-foreground font-body">
+                {rule}
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="space-y-4">
-          {lifecycleStages.map((stage, index) => (
+          {lifecycleStages.map((stage) => (
             <article key={stage.title} className={`rounded-[24px] border p-5 shadow-sm ${stage.accent}`}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="max-w-3xl">
                   <div className="flex flex-wrap items-center gap-3">
-                    <Badge className={stage.badgeClassName}>{`${index + 1}. ${stage.title}`}</Badge>
+                    <Badge className={stage.badgeClassName}>{`${stage.step}. ${stage.title}`}</Badge>
                     <span className="text-sm font-medium text-foreground">{stage.duration}</span>
                   </div>
 
                   <p className="mt-3 text-sm font-semibold text-foreground">Access: {stage.access}</p>
-                  <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-                    {stage.description}
-                  </p>
+                  <p className="mt-2 text-sm leading-7 text-muted-foreground font-body">{stage.purpose}</p>
                 </div>
 
                 <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 text-sm font-semibold text-foreground shadow-sm">
-                  Timer example: "Expires in {index === 0 ? "12 hours" : "24 hours"}"
+                  Timer Example: "{stage.timerExample}"
                 </div>
               </div>
 
@@ -207,8 +261,8 @@ export function LeadLifecycleExplainerDialog({
                 <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
                   <p className="text-sm font-semibold text-foreground">During this stage</p>
                   <ul className="mt-3 space-y-2 text-sm leading-6 text-muted-foreground font-body">
-                    {stage.points.map((point) => (
-                      <li key={point}>• {point}</li>
+                    {stage.during.map((point) => (
+                      <li key={point}>- {point}</li>
                     ))}
                   </ul>
                 </div>
@@ -217,7 +271,7 @@ export function LeadLifecycleExplainerDialog({
                   <p className="text-sm font-semibold text-foreground">If no practitioner responds</p>
                   <ul className="mt-3 space-y-2 text-sm leading-6 text-muted-foreground font-body">
                     {stage.expiry.map((point) => (
-                      <li key={point}>• {point}</li>
+                      <li key={point}>- {point}</li>
                     ))}
                   </ul>
                 </div>
@@ -229,40 +283,69 @@ export function LeadLifecycleExplainerDialog({
         <section className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Activity className="h-4 w-4 text-primary" />
-            After the second full unattended lifecycle
+            Update to lead expiry and client confirmation logic
           </div>
           <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-            The first full expiry reactivates the lead immediately. The second full expiry does not.
-            Before a second reactivation, the system must confirm with the client that assistance is
-            still required.
+            When a lead completes its first full lifecycle without any practitioner response, the system
+            reactivates it immediately. When the same lead completes its second full lifecycle without a
+            response, it must not reactivate immediately. The client must first confirm that assistance
+            is still required.
           </p>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-sm font-semibold text-emerald-900">First full lifecycle expiry</p>
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-emerald-800 font-body">
+                <li>- Lead is reactivated immediately</li>
+                <li>- Lead returns to the top of the marketplace</li>
+                <li>- Reactivation count becomes 1</li>
+                <li>- Lifecycle timer restarts</li>
+                <li>- Practitioners may receive email and in-platform notifications</li>
+                <li>- Current lifecycle access rules still apply</li>
+              </ul>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900">Second full lifecycle expiry</p>
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-800 font-body">
+                <li>- Lead status changes to Pending Client Confirmation</li>
+                <li>- Lead is removed from the active marketplace temporarily</li>
+                <li>- The client receives an email notification</li>
+                <li>- The client receives an in-platform notification</li>
+                <li>- Client confirmation is required before another reactivation</li>
+              </ul>
+            </div>
+          </div>
 
           <div className="mt-5 grid gap-4 xl:grid-cols-3">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-semibold text-emerald-900">Client clicks YES</p>
+              <p className="text-sm font-semibold text-emerald-900">If client clicks YES</p>
               <ul className="mt-3 space-y-2 text-sm leading-6 text-emerald-800 font-body">
-                <li>• Lead is reactivated</li>
-                <li>• Lifecycle timers restart</li>
-                <li>• Practitioners receive notifications again</li>
-                <li>• Visibility increases again</li>
+                <li>- Lead is reactivated</li>
+                <li>- Lead returns to the top of the marketplace</li>
+                <li>- Lifecycle timers restart</li>
+                <li>- Practitioner notifications may be sent again</li>
+                <li>- Visibility increases again</li>
               </ul>
             </div>
 
             <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-              <p className="text-sm font-semibold text-rose-900">Client clicks NO</p>
+              <p className="text-sm font-semibold text-rose-900">If client clicks NO</p>
               <ul className="mt-3 space-y-2 text-sm leading-6 text-rose-800 font-body">
-                <li>• Lead expires permanently</li>
-                <li>• Lead moves out of the active marketplace</li>
-                <li>• Further practitioner responses are blocked</li>
+                <li>- Lead expires permanently</li>
+                <li>- Lead moves to Expired Leads</li>
+                <li>- Lead is removed from the active marketplace</li>
+                <li>- Further practitioner responses are blocked</li>
               </ul>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">No reply within 24 hours</p>
+              <p className="text-sm font-semibold text-slate-900">If the client does not respond within 24 hours</p>
               <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700 font-body">
-                <li>• Lead expires permanently</li>
-                <li>• Lead is removed from the active marketplace</li>
-                <li>• Practitioner time and credits are protected</li>
+                <li>- Lead expires permanently</li>
+                <li>- Lead moves to Expired Leads</li>
+                <li>- Lead is removed from the active marketplace</li>
+                <li>- Further practitioner responses are blocked</li>
               </ul>
             </div>
           </div>
@@ -272,31 +355,82 @@ export function LeadLifecycleExplainerDialog({
           <div className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <FileText className="h-4 w-4 text-primary" />
-              Lead activity can boost visibility
+              Lead activity matters
             </div>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
+              If a client becomes active again, the lead may receive increased visibility again.
+            </p>
             <ul className="mt-4 space-y-2 text-sm leading-6 text-muted-foreground font-body">
-              {activityBoosts.map((item) => (
-                <li key={item}>• {item}</li>
+              {leadActivityMatters.map((item) => (
+                <li key={item}>- {item}</li>
               ))}
             </ul>
           </div>
 
           <div className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
-            <p className="text-sm font-semibold text-foreground">Important notes</p>
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Priority and risk indicators
+            </div>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
+              Some leads may display indicators that help practitioners assess urgency quickly.
+            </p>
             <ul className="mt-4 space-y-2 text-sm leading-6 text-muted-foreground font-body">
-              <li>• Timers reset automatically at every stage.</li>
-              <li>• Practitioner permissions update automatically as access expands.</li>
-              <li>• Priority, risk, and document indicators help you assess urgency quickly.</li>
-              <li>• The system is designed to keep the marketplace active and efficient.</li>
+              {indicators.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
             </ul>
+          </div>
+        </section>
+
+        <section className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
+          <p className="text-sm font-semibold text-foreground">Important notes</p>
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-accent/20 p-4">
+              <p className="text-sm font-semibold text-foreground">Leads never die silently</p>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground font-body">
+                The lifecycle system continuously escalates and recycles unattended leads to maximize the
+                chance of client assistance.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-accent/20 p-4">
+              <p className="text-sm font-semibold text-foreground">Only active client matters should recycle</p>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground font-body">
+                After the second lifecycle, the lead should only continue if the client confirms they
+                still require assistance. This protects practitioner time and improves marketplace quality.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
+          <p className="text-sm font-semibold text-foreground">Expired leads and admin handling</p>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
+            Expired leads are not deleted. They should move into an archived or expired section instead of
+            remaining in the live marketplace.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {expiredLeadFields.map((item) => (
+              <div key={item} className="rounded-2xl border border-border bg-accent/20 px-4 py-3 text-sm text-foreground font-body">
+                {item}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-2xl border border-dashed border-border bg-background p-4">
+            <p className="text-sm font-semibold text-foreground">Admin-only revive feature</p>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground font-body">
+              Admin should be able to manually reactivate expired leads, push them back into the marketplace,
+              and reset lifecycle timing when client activity or urgent SARS confirmation justifies it.
+            </p>
           </div>
         </section>
 
         <section className="rounded-[24px] border border-border bg-slate-50 p-5 shadow-sm">
           <p className="text-sm font-semibold text-foreground">Close this window</p>
           <p className="mt-2 text-sm leading-7 text-muted-foreground font-body">
-            Click <span className="font-semibold text-foreground">Close</span>, use the top-right close
-            button, or click outside the popup to return to the marketplace.
+            Click <span className="font-semibold text-foreground">Close</span>, use the top-right close button,
+            or click outside the popup to return to the marketplace. You can reopen this explanation at any time.
           </p>
           <div className="mt-4">
             <Button type="button" className="rounded-xl" onClick={() => onOpenChange(false)}>

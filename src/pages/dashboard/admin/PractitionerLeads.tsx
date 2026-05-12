@@ -26,6 +26,14 @@ import {
 import { getResponseStatusClass } from "@/lib/practitionerMarketplace";
 import { calculateServiceRequestCreditCost } from "@/lib/practitionerCredits";
 import { sendLeadUnlockedNotification } from "@/lib/leadUnlockNotifications";
+import {
+  canPlanAccessLifecycleStage,
+  formatLifecycleStageLabel,
+  getLifecycleAvailabilityMessage,
+  getLifecycleCountdownLabel,
+  getLifecycleStageBadgeClass,
+  getLifecycleStageRequiredTier,
+} from "@/lib/serviceRequestLifecycle";
 
 type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestDocument = Tables<"service_request_documents">;
@@ -47,35 +55,13 @@ function getLeadResponseLimit(leadTier?: string | null) {
   return LEAD_RESPONSE_LIMITS[leadTier ?? "basic"] ?? 4;
 }
 
-function getLeadTierLabel(leadTier?: string | null) {
-  switch (leadTier ?? "basic") {
-    case "business":
-      return "Business";
-    case "professional":
-      return "Professional";
-    default:
-      return "Basic";
-  }
-}
-
-function getLeadTierAccessRank(leadTier?: string | null) {
-  switch (leadTier ?? "basic") {
-    case "business":
-      return 3;
-    case "professional":
-      return 2;
-    default:
-      return 1;
-  }
-}
-
 function getUpgradePrompt(requiredTier?: string | null) {
   if ((requiredTier ?? "basic") === "business") {
-    return "Upgrade to Business to access premium SARS business matters.";
+    return "Upgrade to Business to access this lead during the Business Exclusive stage.";
   }
 
   if ((requiredTier ?? "basic") === "professional") {
-    return "Upgrade to Professional to unlock higher-value SARS matters.";
+    return "Upgrade to Professional to access this lead during the Professional Access stage.";
   }
 
   return null;
@@ -107,6 +93,17 @@ export default function PractitionerLeads() {
   });
   const leadIdFromQuery = searchParams.get("leadId");
   const leadAction = searchParams.get("action");
+
+  const { isFetching: isRefreshingLifecycle } = useQuery({
+    queryKey: ["service-request-lifecycle-refresh", user?.id, "practitioner"],
+    queryFn: async () => {
+      const { error } = await supabase.rpc("process_service_request_lifecycles");
+      if (error) throw error;
+      return true;
+    },
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+  });
 
   const { data: practitionerProfile } = useQuery({
     queryKey: ["practitioner-profile", user?.id],
@@ -147,14 +144,15 @@ export default function PractitionerLeads() {
       const { data, error } = await supabase
         .from("service_requests")
         .select("*")
-        .neq("status", "closed")
+        .eq("is_archived", false)
+        .not("status", "in", "(closed,converted_to_client,expired,pending_client_confirmation)")
         .is("assigned_practitioner_id", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return (data ?? []) as ServiceRequest[];
     },
-    enabled: !!user,
+    enabled: !!user && !isRefreshingLifecycle,
   });
 
   const { data: documents } = useQuery({
@@ -338,6 +336,13 @@ export default function PractitionerLeads() {
     return `${value} B`;
   };
 
+  const practitionerLeadTier = activeSubscription?.plan_code === "business"
+    ? "business"
+    : activeSubscription?.plan_code === "professional"
+      ? "professional"
+      : "basic";
+  const hasActiveSubscription = Boolean(activeSubscription);
+
   const filteredRequests = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
     const servicesOffered = new Set(practitionerProfile?.services_offered ?? []);
@@ -380,6 +385,7 @@ export default function PractitionerLeads() {
   }, [
     documentMap,
     filters,
+    practitionerLeadTier,
     practitionerProfile?.services_offered,
     requests,
     responseMap,
@@ -400,20 +406,16 @@ export default function PractitionerLeads() {
   const hasApprovedAccess = Boolean(selectedResponse || selectedAccessRequest?.status === "approved");
   const canSendNewResponse = Boolean(selectedResponse || selectedAccessRequest?.status === "approved") && !selectedResponseLimitReached;
   const isLeadAccessDisabled = practitionerProfile?.lead_access_enabled === false || profile?.is_active === false;
-  const practitionerLeadTier = activeSubscription?.plan_code === "business"
-    ? "business"
-    : activeSubscription?.plan_code === "professional"
-      ? "professional"
-      : "basic";
-  const hasActiveSubscription = Boolean(activeSubscription);
-  const selectedLeadTier = selectedRequest?.lead_tier ?? "basic";
+  const selectedLifecycleRequiredTier = selectedRequest
+    ? getLifecycleStageRequiredTier(selectedRequest.lifecycle_stage)
+    : "basic";
   const selectedLeadLocked = Boolean(
     selectedRequest
     && !hasApprovedAccess
-    && getLeadTierAccessRank(practitionerLeadTier) < getLeadTierAccessRank(selectedLeadTier),
+    && !canPlanAccessLifecycleStage(practitionerLeadTier, selectedRequest.lifecycle_stage),
   );
-  const selectedUpgradePrompt = selectedLeadLocked ? getUpgradePrompt(selectedLeadTier) : null;
-  const selectedUpgradeTarget = selectedLeadTier === "business" ? "Business" : "Professional";
+  const selectedUpgradePrompt = selectedLeadLocked ? getUpgradePrompt(selectedLifecycleRequiredTier) : null;
+  const selectedUpgradeTarget = selectedLifecycleRequiredTier === "business" ? "Business" : "Professional";
 
   const getDescriptionPreview = (description: string, accessApproved: boolean) => {
     if (accessApproved) {
@@ -822,11 +824,12 @@ export default function PractitionerLeads() {
               const creditCost = getDisplayedCreditCost(request);
               const accessRequest = accessRequestMap.get(request.id);
               const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
-              const requiredTier = request.lead_tier ?? "basic";
+              const requiredTier = getLifecycleStageRequiredTier(request.lifecycle_stage);
               const tierLocked = !accessApproved
-                && getLeadTierAccessRank(practitionerLeadTier) < getLeadTierAccessRank(requiredTier);
+                && !canPlanAccessLifecycleStage(practitionerLeadTier, request.lifecycle_stage);
               const upgradePrompt = tierLocked ? getUpgradePrompt(requiredTier) : null;
-              const displayName = accessApproved ? request.full_name : `${getLeadTierLabel(requiredTier)} Lead`;
+              const displayName = accessApproved ? request.full_name : `${formatLifecycleStageLabel(request.lifecycle_stage)} Lead`;
+              const countdownLabel = getLifecycleCountdownLabel(request);
 
               return (
                 <button
@@ -840,7 +843,10 @@ export default function PractitionerLeads() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-display text-xl text-foreground">{displayName}</h2>
                       <Badge className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
-                        {getLeadTierLabel(requiredTier)} Lead
+                        {formatLifecycleStageLabel(request.lifecycle_stage)}
+                      </Badge>
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
+                        {formatServiceRequestLabel(request.lifecycle_stage)}
                       </Badge>
                       <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestStatusClass(request.status)}`}>
                         {formatServiceRequestLabel(request.status)}
@@ -869,6 +875,11 @@ export default function PractitionerLeads() {
                           {tierLocked ? "Locked" : "Available"}
                         </Badge>
                       ) : null}
+                      {request.lifecycle_reactivation_count > 0 ? (
+                        <Badge className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
+                          Reactivated x{request.lifecycle_reactivation_count}
+                        </Badge>
+                      ) : null}
                     </div>
                     <p className="text-sm text-muted-foreground font-body">
                       {formatServiceList(resolveServiceList(request))}
@@ -881,6 +892,9 @@ export default function PractitionerLeads() {
                     </p>
                     {upgradePrompt ? (
                       <p className="text-sm font-semibold text-amber-700 font-body">{upgradePrompt}</p>
+                    ) : null}
+                    {countdownLabel ? (
+                      <p className="text-sm font-semibold text-sky-700 font-body">{countdownLabel}</p>
                     ) : null}
                     {responseLimitReached ? (
                       <p className="text-sm font-semibold text-red-700 font-body">Response limit reached ({responseLimit} max)</p>
@@ -926,11 +940,11 @@ export default function PractitionerLeads() {
           }
         }}
         title={selectedRequest
-          ? (hasApprovedAccess ? selectedRequest.full_name : `${getLeadTierLabel(selectedLeadTier)} Lead`)
+          ? (hasApprovedAccess ? selectedRequest.full_name : `${formatLifecycleStageLabel(selectedRequest.lifecycle_stage)} Lead`)
           : "Lead"}
         description={selectedRequest
           ? selectedLeadLocked
-            ? "This lead is visible on your plan, but requires an upgrade before it can be unlocked."
+            ? getLifecycleAvailabilityMessage(selectedRequest.lifecycle_stage)
             : "Review this lead and send your practitioner introduction."
           : undefined}
       >
@@ -1016,6 +1030,19 @@ export default function PractitionerLeads() {
                     <p className="mt-1 text-sm text-foreground font-body">{formatServiceRequestLabel(selectedRequest.priority_level)}</p>
                   </div>
                   <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Lifecycle Stage</p>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(selectedRequest.lifecycle_stage)}`}>
+                        {formatLifecycleStageLabel(selectedRequest.lifecycle_stage)}
+                      </Badge>
+                      {selectedRequest.lifecycle_reactivation_count > 0 ? (
+                        <Badge className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
+                          Reactivated x{selectedRequest.lifecycle_reactivation_count}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div>
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Status</p>
                     <div className="mt-1 flex flex-wrap gap-2">
                       <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestStatusClass(selectedRequest.status)}`}>
@@ -1033,6 +1060,20 @@ export default function PractitionerLeads() {
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Time Requested</p>
                     <p className="mt-1 text-sm text-foreground font-body">{formatRequestTime(selectedRequest.created_at)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Stage Countdown</p>
+                    <p className="mt-1 text-sm text-foreground font-body">
+                      {getLifecycleCountdownLabel(selectedRequest) || "No active countdown"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Last Client Activity</p>
+                    <p className="mt-1 text-sm text-foreground font-body">
+                      {selectedRequest.lifecycle_last_client_activity_at
+                        ? formatRequestDate(selectedRequest.lifecycle_last_client_activity_at)
+                        : "Not available"}
+                    </p>
                   </div>
                 </div>
               </div>
