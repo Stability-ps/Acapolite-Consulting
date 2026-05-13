@@ -1,6 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BadgeCheck, ExternalLink, File, FileText, Image, Search, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  Bell,
+  CalendarDays,
+  ChevronRight,
+  Clock3,
+  Crown,
+  Ellipsis,
+  ExternalLink,
+  Eye,
+  File,
+  FileText,
+  Image,
+  Megaphone,
+  RefreshCcw,
+  Search,
+  ShieldAlert,
+  Sparkles,
+  Target,
+  TriangleAlert,
+  UserCheck,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
@@ -16,8 +39,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import type { Tables, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,18 +66,79 @@ import {
   getLifecycleCountdownLabel,
   getLifecycleStageBadgeClass,
 } from "@/lib/serviceRequestLifecycle";
+import { Cell, Pie, PieChart } from "recharts";
 
 type ServiceRequestRecord = Tables<"service_requests">;
 type ServiceRequestDocument = Tables<"service_request_documents">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
 type ServiceRequestAssignmentHistory = Tables<"service_request_assignment_history">;
 type ServiceRequestLifecycleHistory = Tables<"service_request_lifecycle_history">;
+type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
+type NotificationRecord = Tables<"notifications">;
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type PractitionerUser = Tables<"profiles">;
 
+const STATUS_CHART_COLORS = {
+  active: "#2563EB",
+  reactivated: "#22C55E",
+  pending: "#F59E0B",
+  expired: "#8B5CF6",
+  archived: "#06B6D4",
+} as const;
+
+const SUMMARY_CARD_STYLES = [
+  { key: "active", title: "Active Leads", color: "bg-blue-50 text-blue-600", icon: Target },
+  { key: "reactivated", title: "Reactivated Leads", color: "bg-green-50 text-green-600", icon: RefreshCcw },
+  { key: "pendingConfirmation", title: "Pending Confirmation", color: "bg-orange-50 text-orange-600", icon: Clock3 },
+  { key: "expired", title: "Expired Leads", color: "bg-violet-50 text-violet-600", icon: TriangleAlert },
+  { key: "practitionerResponses", title: "Total Responses", color: "bg-cyan-50 text-cyan-600", icon: Megaphone },
+  { key: "avgResponseTime", title: "Avg. Response Time", color: "bg-amber-50 text-amber-600", icon: Clock3 },
+  { key: "activePractitioners", title: "Active Practitioners", color: "bg-emerald-50 text-emerald-600", icon: Users },
+  { key: "highRisk", title: "Critical SARS Leads", color: "bg-rose-50 text-rose-600", icon: ShieldAlert },
+] as const;
+
+function formatCompactDuration(minutes: number | null) {
+  if (minutes === null || !Number.isFinite(minutes)) {
+    return "—";
+  }
+
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+
+  if (hours === 0) {
+    return `${remainingMinutes}m`;
+  }
+
+  return `${hours}h ${remainingMinutes}m`;
+}
+
+function formatTrendPercentage(current: number, previous: number) {
+  if (previous <= 0) {
+    return current > 0 ? 100 : 0;
+  }
+
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+function getTrendTone(delta: number) {
+  return delta >= 0
+    ? "text-emerald-600 bg-emerald-50 border-emerald-100"
+    : "text-rose-600 bg-rose-50 border-rose-100";
+}
+
+function getInitials(value?: string | null) {
+  const parts = value?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (!parts.length) {
+    return "SM";
+  }
+
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
+}
+
 export default function AdminServiceRequests() {
   useNotificationSectionRead("requests");
-  const { role, user } = useAuth();
+  const { role, user, profile } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
@@ -145,6 +232,19 @@ export default function AdminServiceRequests() {
     },
   });
 
+  const { data: accessRequests } = useQuery({
+    queryKey: ["staff-service-request-access-requests"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_request_access_requests")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as ServiceRequestAccessRequest[];
+    },
+  });
+
   const { data: lifecycleHistory } = useQuery({
     queryKey: ["staff-service-request-lifecycle-history"],
     queryFn: async () => {
@@ -187,6 +287,35 @@ export default function AdminServiceRequests() {
         activeCaseCount: activeCaseCountByPractitioner.get(profile.id) ?? 0,
       }));
     },
+  });
+
+  const { data: practitionerSubscriptions } = useQuery({
+    queryKey: ["staff-practitioner-subscriptions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("practitioner_subscriptions")
+        .select("practitioner_profile_id, plan_code, status, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: requestNotifications } = useQuery({
+    queryKey: ["staff-request-notifications"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("section", "requests")
+        .order("created_at", { ascending: false })
+        .limit(8);
+
+      if (error) throw error;
+      return (data ?? []) as NotificationRecord[];
+    },
+    enabled: role === "admin",
   });
 
   const documentMap = useMemo(() => {
@@ -237,10 +366,34 @@ export default function AdminServiceRequests() {
     return map;
   }, [lifecycleHistory]);
 
+  const accessRequestsByPractitioner = useMemo(() => {
+    const map = new Map<string, ServiceRequestAccessRequest[]>();
+
+    for (const item of accessRequests ?? []) {
+      const current = map.get(item.practitioner_profile_id) ?? [];
+      current.push(item);
+      map.set(item.practitioner_profile_id, current);
+    }
+
+    return map;
+  }, [accessRequests]);
+
   const practitionerMap = useMemo(
     () => new Map((practitioners ?? []).map((practitioner) => [practitioner.user.id, practitioner])),
     [practitioners],
   );
+
+  const practitionerPlanMap = useMemo(() => {
+    const map = new Map<string, string>();
+
+    for (const subscription of practitionerSubscriptions ?? []) {
+      if (!map.has(subscription.practitioner_profile_id) && subscription.status === "active") {
+        map.set(subscription.practitioner_profile_id, subscription.plan_code);
+      }
+    }
+
+    return map;
+  }, [practitionerSubscriptions]);
 
   const serviceLabelMap = useMemo(
     () => new Map(serviceNeededOptions.map((option) => [option.value, option.label])),
@@ -420,10 +573,51 @@ export default function AdminServiceRequests() {
 
   const requestMetrics = useMemo(() => {
     const rows = requests ?? [];
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const fourteenDaysAgo = now - 14 * 24 * 60 * 60 * 1000;
+
+    const getWindowRows = (from: number, to: number) =>
+      rows.filter((request) => {
+        const createdAt = new Date(request.created_at).getTime();
+        return createdAt >= from && createdAt < to;
+      });
+
+    const currentRows = getWindowRows(sevenDaysAgo, now);
+    const previousRows = getWindowRows(fourteenDaysAgo, sevenDaysAgo);
+    const currentResponses = (responses ?? []).filter((response) => {
+      const createdAt = new Date(response.created_at).getTime();
+      return createdAt >= sevenDaysAgo && createdAt < now;
+    });
+    const previousResponses = (responses ?? []).filter((response) => {
+      const createdAt = new Date(response.created_at).getTime();
+      return createdAt >= fourteenDaysAgo && createdAt < sevenDaysAgo;
+    });
+
+    const averageResponseTimeFor = (responseRows: ServiceRequestResponse[]) => {
+      const requestById = new Map(rows.map((row) => [row.id, row]));
+      const durations = responseRows
+        .map((response) => {
+          const request = requestById.get(response.service_request_id);
+          if (!request) return null;
+          return (new Date(response.created_at).getTime() - new Date(request.created_at).getTime()) / (1000 * 60);
+        })
+        .filter((value): value is number => value !== null && value >= 0);
+
+      if (!durations.length) {
+        return null;
+      }
+
+      return durations.reduce((sum, value) => sum + value, 0) / durations.length;
+    };
+
+    const avgResponseTime = averageResponseTimeFor(responses ?? []);
+    const previousAvgResponseTime = averageResponseTimeFor(previousResponses);
 
     return {
       total: rows.length,
-      active: rows.filter((request) => !request.is_archived).length,
+      active: rows.filter((request) => !request.is_archived && request.lifecycle_stage !== "expired").length,
+      completed: rows.filter((request) => request.status === "closed" || request.status === "converted_to_client").length,
       archived: rows.filter((request) => request.is_archived).length,
       highRisk: rows.filter((request) => request.risk_indicator === "high").length,
       deadLeads: rows.filter((request) => request.status === "dead_lead" || request.status === "expired").length,
@@ -435,8 +629,134 @@ export default function AdminServiceRequests() {
       expired: rows.filter((request) => request.lifecycle_stage === "expired").length,
       unattended: rows.filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) === 0 && !request.is_archived).length,
       practitionerResponses: (responses ?? []).length,
+      activePractitioners: (practitioners ?? []).filter((practitioner) => practitioner.user.is_active).length,
+      avgResponseTime,
+      trends: {
+        active: formatTrendPercentage(
+          currentRows.filter((request) => !request.is_archived && request.lifecycle_stage !== "expired").length,
+          previousRows.filter((request) => !request.is_archived && request.lifecycle_stage !== "expired").length,
+        ),
+        reactivated: formatTrendPercentage(
+          currentRows.filter((request) => request.lifecycle_reactivation_count > 0 && !request.is_archived).length,
+          previousRows.filter((request) => request.lifecycle_reactivation_count > 0 && !request.is_archived).length,
+        ),
+        pendingConfirmation: formatTrendPercentage(
+          currentRows.filter((request) => request.lifecycle_stage === "pending_client_confirmation").length,
+          previousRows.filter((request) => request.lifecycle_stage === "pending_client_confirmation").length,
+        ),
+        expired: formatTrendPercentage(
+          currentRows.filter((request) => request.lifecycle_stage === "expired").length,
+          previousRows.filter((request) => request.lifecycle_stage === "expired").length,
+        ),
+        practitionerResponses: formatTrendPercentage(currentResponses.length, previousResponses.length),
+        avgResponseTime: formatTrendPercentage(
+          avgResponseTime === null ? 0 : Math.round(avgResponseTime),
+          previousAvgResponseTime === null ? 0 : Math.round(previousAvgResponseTime),
+        ),
+        activePractitioners: formatTrendPercentage(
+          (practitioners ?? []).filter((practitioner) => practitioner.user.is_active && new Date(practitioner.user.created_at).getTime() >= sevenDaysAgo).length,
+          (practitioners ?? []).filter((practitioner) => practitioner.user.is_active && new Date(practitioner.user.created_at).getTime() >= fourteenDaysAgo && new Date(practitioner.user.created_at).getTime() < sevenDaysAgo).length,
+        ),
+        highRisk: formatTrendPercentage(
+          currentRows.filter((request) => request.risk_indicator === "high").length,
+          previousRows.filter((request) => request.risk_indicator === "high").length,
+        ),
+      },
     };
-  }, [requests, responses, responsesByRequest]);
+  }, [practitioners, requests, responses, responsesByRequest]);
+
+  const statusChartData = useMemo(() => {
+    const activeLeads = (requests ?? []).filter((request) => (
+      !request.is_archived
+      && request.lifecycle_stage !== "expired"
+      && request.lifecycle_stage !== "pending_client_confirmation"
+      && request.status !== "closed"
+      && request.status !== "converted_to_client"
+      && request.lifecycle_reactivation_count === 0
+    )).length;
+    const reactivatedLeads = (requests ?? []).filter((request) => (
+      !request.is_archived
+      && request.lifecycle_stage !== "expired"
+      && request.lifecycle_stage !== "pending_client_confirmation"
+      && request.status !== "closed"
+      && request.status !== "converted_to_client"
+      && request.lifecycle_reactivation_count > 0
+    )).length;
+    const total = requestMetrics.total || 1;
+
+    return [
+      { key: "active", label: "Active Leads", value: activeLeads, fill: STATUS_CHART_COLORS.active, percentage: Math.round((activeLeads / total) * 100) },
+      { key: "reactivated", label: "Reactivated Leads", value: reactivatedLeads, fill: STATUS_CHART_COLORS.reactivated, percentage: Math.round((reactivatedLeads / total) * 100) },
+      { key: "pending", label: "Pending Confirmation", value: requestMetrics.pendingConfirmation, fill: STATUS_CHART_COLORS.pending, percentage: Math.round((requestMetrics.pendingConfirmation / total) * 100) },
+      { key: "expired", label: "Expired Leads", value: requestMetrics.expired, fill: STATUS_CHART_COLORS.expired, percentage: Math.round((requestMetrics.expired / total) * 100) },
+      { key: "archived", label: "Archived Leads", value: requestMetrics.archived, fill: STATUS_CHART_COLORS.archived, percentage: Math.round((requestMetrics.archived / total) * 100) },
+      { key: "completed", label: "Completed Leads", value: requestMetrics.completed, fill: "#14B8A6", percentage: Math.round((requestMetrics.completed / total) * 100) },
+    ];
+  }, [requestMetrics, requests]);
+
+  const pendingConfirmationRows = useMemo(
+    () => (requests ?? [])
+      .filter((request) => request.lifecycle_stage === "pending_client_confirmation")
+      .sort((left, right) => {
+        const leftTime = left.client_confirmation_due_at ? new Date(left.client_confirmation_due_at).getTime() : Number.MAX_SAFE_INTEGER;
+        const rightTime = right.client_confirmation_due_at ? new Date(right.client_confirmation_due_at).getTime() : Number.MAX_SAFE_INTEGER;
+        return leftTime - rightTime;
+      })
+      .slice(0, 5),
+    [requests],
+  );
+
+  const recentLeads = useMemo(
+    () => filteredRequests.slice(0, 8),
+    [filteredRequests],
+  );
+
+  const practitionerActivityRows = useMemo(() => {
+    const requestById = new Map((requests ?? []).map((request) => [request.id, request]));
+    return (practitioners ?? [])
+      .map((practitioner) => {
+        const practitionerResponses = (responses ?? []).filter((response) => response.practitioner_profile_id === practitioner.user.id);
+        const viewedCount = accessRequestsByPractitioner.get(practitioner.user.id)?.length ?? 0;
+        const responseDurations = practitionerResponses
+          .map((response) => {
+            const request = requestById.get(response.service_request_id);
+            if (!request) return null;
+            return (new Date(response.created_at).getTime() - new Date(request.created_at).getTime()) / (1000 * 60);
+          })
+          .filter((value): value is number => value !== null && value >= 0);
+        const averageMinutes = responseDurations.length
+          ? responseDurations.reduce((sum, value) => sum + value, 0) / responseDurations.length
+          : null;
+
+        return {
+          id: practitioner.user.id,
+          name: practitioner.user.full_name || practitioner.user.email || "Practitioner",
+          initials: getInitials(practitioner.user.full_name || practitioner.user.email),
+          plan: practitionerPlanMap.get(practitioner.user.id) || "starter",
+          leadsViewed: viewedCount,
+          responses: practitionerResponses.length,
+          averageMinutes,
+          status: practitioner.user.is_active ? "active" : "inactive",
+        };
+      })
+      .sort((left, right) => right.responses - left.responses)
+      .slice(0, 6);
+  }, [accessRequestsByPractitioner, practitionerPlanMap, practitioners, requests, responses]);
+
+  const marketplaceHealth = useMemo(() => {
+    const total = requestMetrics.total || 1;
+    const responseRate = Math.round((requests ?? []).filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) > 0).length / total * 100);
+    const reactivationRate = Math.round((requestMetrics.reactivated / total) * 100);
+    const expiryRate = Math.round((requestMetrics.expired / total) * 100);
+    const conversionRate = Math.round(((requests ?? []).filter((request) => Boolean(request.converted_case_id)).length / total) * 100);
+
+    return [
+      { label: "Response Rate", value: responseRate, trend: requestMetrics.trends.practitionerResponses },
+      { label: "Reactivation Rate", value: reactivationRate, trend: requestMetrics.trends.reactivated },
+      { label: "Expiry Rate", value: expiryRate, trend: -Math.abs(requestMetrics.trends.expired) },
+      { label: "Conversion Rate", value: conversionRate, trend: formatTrendPercentage((requests ?? []).filter((request) => Boolean(request.converted_case_id)).length, 0) },
+    ];
+  }, [requestMetrics, requests, responsesByRequest]);
 
   const openRequest = async (request: ServiceRequestRecord) => {
     setSelectedRequestId(request.id);
@@ -673,16 +993,433 @@ export default function AdminServiceRequests() {
     setIssueFilter("all");
   };
 
+  const adminInitials = getInitials(profile?.full_name || user?.email);
+  const dateRangeLabel = "20 May 2025 - 20 May 2025";
+  const unreadRequestNotificationCount = (requestNotifications ?? []).filter((item) => !item.is_read).length;
+
+  const summaryCards = [
+    { title: "Active Leads", value: requestMetrics.active.toLocaleString(), delta: requestMetrics.trends.active, icon: Target, color: "bg-blue-50 text-blue-600" },
+    { title: "Reactivated Leads", value: requestMetrics.reactivated.toLocaleString(), delta: requestMetrics.trends.reactivated, icon: RefreshCcw, color: "bg-green-50 text-green-600" },
+    { title: "Pending Confirmation", value: requestMetrics.pendingConfirmation.toLocaleString(), delta: requestMetrics.trends.pendingConfirmation, icon: Clock3, color: "bg-orange-50 text-orange-600" },
+    { title: "Expired Leads", value: requestMetrics.expired.toLocaleString(), delta: requestMetrics.trends.expired, icon: TriangleAlert, color: "bg-violet-50 text-violet-600" },
+    { title: "Total Responses", value: requestMetrics.practitionerResponses.toLocaleString(), delta: requestMetrics.trends.practitionerResponses, icon: Megaphone, color: "bg-cyan-50 text-cyan-600" },
+    { title: "Avg. Response Time", value: formatCompactDuration(requestMetrics.avgResponseTime), delta: -Math.abs(requestMetrics.trends.avgResponseTime), icon: Clock3, color: "bg-amber-50 text-amber-600" },
+    { title: "Active Practitioners", value: requestMetrics.activePractitioners.toLocaleString(), delta: requestMetrics.trends.activePractitioners, icon: UserCheck, color: "bg-emerald-50 text-emerald-600" },
+    { title: "Critical SARS Leads", value: requestMetrics.highRisk.toLocaleString(), delta: requestMetrics.trends.highRisk, icon: ShieldAlert, color: "bg-rose-50 text-rose-600" },
+  ] as const;
+
+  const lifecycleStages = [
+    {
+      title: "Business Exclusive",
+      time: "0–12 Hours",
+      description: "Business Plan Only",
+      icon: Crown,
+      iconClassName: "bg-amber-50 text-amber-600",
+    },
+    {
+      title: "Professional Access",
+      time: "12–36 Hours",
+      description: "Business + Professional",
+      icon: Users,
+      iconClassName: "bg-sky-50 text-sky-600",
+    },
+    {
+      title: "Open Marketplace",
+      time: "36–60 Hours",
+      description: "All Plans (Including Starter)",
+      icon: Target,
+      iconClassName: "bg-emerald-50 text-emerald-600",
+    },
+    {
+      title: "Reactivated Lead",
+      time: "After 60 Hours",
+      description: "Returns to Original Priority Level",
+      icon: RefreshCcw,
+      iconClassName: "bg-violet-50 text-violet-600",
+    },
+  ] as const;
+
   return (
-    <div>
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-foreground mb-1">Service Requests</h1>
-          <p className="text-muted-foreground font-body text-sm">Manage public tax-assistance requests and assess their risk before assignment.</p>
+    <div className="space-y-8 bg-[#F5F7FB] px-1 pb-8">
+      <div className="sticky top-0 z-20 -mx-1 border-b border-slate-200/80 bg-[#F5F7FB]/95 px-1 py-4 backdrop-blur">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <SidebarTrigger className="mt-1 rounded-xl border border-slate-200 bg-white shadow-sm hover:bg-slate-50" />
+            <div>
+              <h1 className="font-display text-3xl font-semibold tracking-tight text-slate-900">Leads Dashboard</h1>
+              <p className="mt-1 text-sm text-slate-500">Overview of all leads and marketplace activity</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" className="rounded-2xl border-slate-200 bg-white px-4 text-slate-600 shadow-sm hover:bg-slate-50">
+              <CalendarDays className="mr-2 h-4 w-4" />
+              {dateRangeLabel}
+            </Button>
+            <button
+              type="button"
+              className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50"
+            >
+              <Bell className="h-5 w-5" />
+              {unreadRequestNotificationCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
+                  {unreadRequestNotificationCount}
+                </span>
+              ) : null}
+            </button>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-sm font-semibold text-white shadow-sm">
+              {adminInitials}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="mb-8 rounded-2xl border border-border bg-card p-4 shadow-card">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={card.title}
+              className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl ${card.color}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getTrendTone(card.delta)}`}>
+                  {card.delta >= 0 ? "↑" : "↓"} {Math.abs(card.delta)}%
+                </div>
+              </div>
+              <p className="mt-4 text-sm font-medium text-slate-500">{card.title}</p>
+              <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">{card.value}</p>
+              <p className="mt-2 text-xs text-slate-400">from last 7 days</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-6 2xl:grid-cols-12">
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Lead Lifecycle Overview</h2>
+              <p className="mt-1 text-sm text-slate-500">How unattended leads move through the marketplace automatically.</p>
+            </div>
+            <button type="button" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
+              Learn more
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {lifecycleStages.map((stage, index) => {
+              const Icon = stage.icon;
+              return (
+                <div key={stage.title} className="relative rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  {index < lifecycleStages.length - 1 ? (
+                    <div className="absolute -right-3 top-1/2 hidden h-0.5 w-6 -translate-y-1/2 bg-slate-200 md:block" />
+                  ) : null}
+                  <div className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${stage.iconClassName}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <p className="mt-4 text-sm font-semibold text-slate-900">{stage.title}</p>
+                  <p className="mt-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{stage.time}</p>
+                  <p className="mt-3 text-sm text-slate-500">{stage.description}</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            When a stage expires, the system automatically updates lead status, access permissions, notifications and countdown timers.
+          </div>
+        </div>
+
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Leads by Status</h2>
+              <p className="mt-1 text-sm text-slate-500">A clean breakdown of every lead state, including completed leads.</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Tracked States</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{statusChartData.length}</p>
+            </div>
+          </div>
+          <div className="mt-5 space-y-5">
+            <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)] md:items-center">
+              <div className="relative mx-auto w-full max-w-[220px]">
+              <ChartContainer
+                config={{
+                  active: { label: "Active Leads", color: STATUS_CHART_COLORS.active },
+                  reactivated: { label: "Reactivated Leads", color: STATUS_CHART_COLORS.reactivated },
+                  pending: { label: "Pending Confirmation", color: STATUS_CHART_COLORS.pending },
+                  expired: { label: "Expired Leads", color: STATUS_CHART_COLORS.expired },
+                  archived: { label: "Archived Leads", color: STATUS_CHART_COLORS.archived },
+                  completed: { label: "Completed Leads", color: "#14B8A6" },
+                }}
+                className="h-[220px] w-full"
+              >
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent hideLabel formatter={(value, name) => (
+                    <div className="flex items-center justify-between gap-4">
+                      <span>{name}</span>
+                      <span className="font-semibold text-slate-900">{value}</span>
+                    </div>
+                  )} />} />
+                  <Pie data={statusChartData} dataKey="value" nameKey="label" innerRadius={58} outerRadius={86} paddingAngle={3}>
+                    {statusChartData.map((entry) => (
+                      <Cell key={entry.key} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Total Leads</span>
+                <span className="mt-1 text-4xl font-semibold tracking-tight text-slate-900">{requestMetrics.total}</span>
+              </div>
+              </div>
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                {statusChartData.map((item) => (
+                  <div key={item.key} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.fill }} />
+                        <span className="truncate text-sm font-medium text-slate-700">{item.label}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-base font-semibold text-slate-900">{item.value}</p>
+                        <p className="text-xs text-slate-400">{item.percentage}%</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${Math.max(item.percentage, item.value > 0 ? 6 : 0)}%`, backgroundColor: item.fill }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Pending Client Confirmation</h2>
+              <p className="mt-1 text-sm text-slate-500">Leads waiting for client confirmation before reactivation.</p>
+            </div>
+            <button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => setLifecycleTab("pending")}>
+              View all pending
+            </button>
+          </div>
+          <div className="mt-5 space-y-3">
+            {pendingConfirmationRows.length ? pendingConfirmationRows.map((request) => (
+              <button
+                key={request.id}
+                type="button"
+                onClick={() => openRequest(request)}
+                className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-sm font-semibold text-white">
+                    {getInitials(request.full_name)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{request.full_name}</p>
+                    <p className="text-xs text-slate-500">{formatServiceList(resolveServiceList(request))}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">Expiry countdown</p>
+                  <p className="mt-1 text-sm font-medium text-rose-600">{getLifecycleCountdownLabel(request) || "Expires soon"}</p>
+                </div>
+              </button>
+            )) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                No pending confirmations right now.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6 2xl:grid-cols-12">
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Recent Active Leads</h2>
+              <p className="mt-1 text-sm text-slate-500">Latest marketplace leads with stage, priority, responses and visibility.</p>
+            </div>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-200">
+                  <TableHead>Lead Title</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Stage</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Time Left</TableHead>
+                  <TableHead>Responses</TableHead>
+                  <TableHead>Views</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentLeads.map((request) => (
+                  <TableRow key={request.id} className="border-slate-100">
+                    <TableCell className="min-w-[220px]">
+                      <div>
+                        <p className="font-medium text-slate-900">{formatServiceList(resolveServiceList(request))}</p>
+                        <p className="mt-1 text-xs text-slate-500">{request.id}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>{request.full_name}</TableCell>
+                    <TableCell>
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
+                        {formatLifecycleStageLabel(request.lifecycle_stage)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${request.priority_level === "high" || request.priority_level === "urgent" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                        {formatServiceRequestLabel(request.priority_level)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{getLifecycleCountdownLabel(request) || "—"}</TableCell>
+                    <TableCell>{responsesByRequest.get(request.id)?.length ?? 0}</TableCell>
+                    <TableCell>{request.viewed_at ? 1 : 0}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => void openRequest(request)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setSelectedRequestId(request.id)}>
+                          <Ellipsis className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Practitioner Activity</h2>
+              <p className="mt-1 text-sm text-slate-500">Recent engagement and response performance across the marketplace.</p>
+            </div>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-200">
+                  <TableHead>Practitioner</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Viewed</TableHead>
+                  <TableHead>Responses</TableHead>
+                  <TableHead>Avg Time</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {practitionerActivityRows.map((row) => (
+                  <TableRow key={row.id} className="border-slate-100">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900 text-xs font-semibold text-white">
+                          {row.initials}
+                        </div>
+                        <span className="font-medium text-slate-900">{row.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="capitalize">{row.plan}</TableCell>
+                    <TableCell>{row.leadsViewed}</TableCell>
+                    <TableCell>{row.responses}</TableCell>
+                    <TableCell>{formatCompactDuration(row.averageMinutes)}</TableCell>
+                    <TableCell>
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${row.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                        {row.status === "active" ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Notifications Center</h2>
+              <p className="mt-1 text-sm text-slate-500">Latest lifecycle and marketplace events.</p>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {(requestNotifications ?? []).length ? (requestNotifications ?? []).map((notification) => (
+              <button
+                key={notification.id}
+                type="button"
+                onClick={() => {
+                  if (notification.entity_id) setSelectedRequestId(notification.entity_id);
+                }}
+                className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40"
+              >
+                <div className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                  <Bell className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
+                  <p className="mt-1 text-sm text-slate-500">{notification.body || "Marketplace activity updated."}</p>
+                  <p className="mt-2 text-xs text-slate-400">{new Date(notification.created_at).toLocaleString()}</p>
+                </div>
+              </button>
+            )) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                No request notifications yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6">
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
+          <h2 className="text-lg font-semibold text-slate-900">Marketplace Health</h2>
+          <p className="mt-1 text-sm text-slate-500">High-level performance and quality signals across the marketplace.</p>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {marketplaceHealth.map((metric) => (
+              <div key={metric.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">{metric.label}</p>
+                    <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{metric.value}%</p>
+                  </div>
+                  <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getTrendTone(metric.trend)}`}>
+                    {metric.trend >= 0 ? "↑" : "↓"} {Math.abs(metric.trend)}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Lead Management Workspace</h2>
+            <p className="mt-1 text-sm text-slate-500">Search, filter and manage the full marketplace lead list below.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
         <div className="mb-4 flex flex-wrap items-center gap-3 border-b border-border pb-4">
           <Button
             type="button"
