@@ -1001,15 +1001,15 @@ export default function PractitionerLeads() {
               const accessRequest = accessRequestMap.get(request.id);
               const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
               const leadTier = request.lead_tier ?? "basic";
+              const leadTypeLabel = formatLeadType(leadTier);
               const requiredTier = getLifecycleStageRequiredTier(request.lifecycle_stage);
               const tierLocked = !accessApproved
                 && !canPlanAccessLifecycleStage(practitionerLeadTier, request.lifecycle_stage);
               const upgradePrompt = tierLocked ? getUpgradePrompt(requiredTier) : null;
-              const displayName = accessApproved ? request.full_name : "Lead Opportunity";
+              const displayName = accessApproved ? request.full_name : leadTypeLabel;
               const countdownLabel = getLifecycleCountdownLabel(request);
               const theme = getLeadCardTheme(leadTier);
               const initials = getNameInitials(displayName);
-              const leadTypeLabel = formatLeadType(leadTier);
               const documentCount = (documentMap.get(request.id) ?? []).length;
               const isViewed = Boolean(request.viewed_at || accessApproved || ownResponse || request.status === "viewed" || request.status === "responded");
               const actionLabel = ownResponse
