@@ -18,12 +18,10 @@ import type { Tables, Enums } from "@/integrations/supabase/types";
 import {
   formatServiceRequestLabel,
   getServiceRequestIssueFlags,
-  getServiceRequestRiskClass,
   getServiceRequestStatusClass,
   serviceCategoryOptions,
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
-import { getResponseStatusClass } from "@/lib/practitionerMarketplace";
 import { calculateServiceRequestCreditCost } from "@/lib/practitionerCredits";
 import { sendLeadUnlockedNotification } from "@/lib/leadUnlockNotifications";
 import {
@@ -1072,12 +1070,12 @@ export default function PractitionerLeads() {
                             <div className="flex flex-wrap items-center gap-2">
                               <h2 className="truncate text-lg font-semibold text-slate-900">{displayName}</h2>
                               {request.lifecycle_reactivation_count > 0 ? (
-                                <Badge className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
+                                <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.leadBadge}`}>
                                   Reactivated x{request.lifecycle_reactivation_count}
                                 </Badge>
                               ) : null}
                               {ownResponse ? (
-                                <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getResponseStatusClass(ownResponse.response_status)}`}>
+                                <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.leadBadge}`}>
                                   {formatServiceRequestLabel(ownResponse.response_status)}
                                 </Badge>
                               ) : null}
@@ -1086,10 +1084,10 @@ export default function PractitionerLeads() {
                               <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.leadBadge}`}>
                                 {leadTypeLabel}
                               </Badge>
-                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestRiskClass(request.risk_indicator)}`}>
+                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.leadBadge}`}>
                                 {formatServiceRequestLabel(request.risk_indicator)} risk
                               </Badge>
-                              <Badge className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.leadBadge}`}>
                                 {formatLeadResponseCount(responseCount)}
                               </Badge>
                             </div>
@@ -1135,9 +1133,7 @@ export default function PractitionerLeads() {
                         <div className="flex items-center gap-2">
                           <Eye className="h-4 w-4 text-slate-400" />
                           <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                            isViewed
-                              ? "border-amber-200 bg-amber-50 text-amber-700"
-                              : "border-slate-200 bg-white text-slate-600"
+                            isViewed ? theme.leadBadge : "border-slate-200 bg-white text-slate-600"
                           }`}>
                             {isViewed ? "Viewed" : "New"}
                           </Badge>
