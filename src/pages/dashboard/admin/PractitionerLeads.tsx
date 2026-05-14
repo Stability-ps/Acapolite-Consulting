@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Clock3, Coins, ExternalLink, Search, SendHorizonal, ShieldCheck, Target } from "lucide-react";
+import { ChevronDown, Clock3, Coins, ExternalLink, Eye, FileText, Lock, Search, SendHorizonal, ShieldCheck, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -65,6 +65,65 @@ function getUpgradePrompt(requiredTier?: string | null) {
   }
 
   return null;
+}
+
+function getLeadCardTheme(requiredTier?: string | null) {
+  if ((requiredTier ?? "basic") === "business") {
+    return {
+      border: "border-l-amber-500",
+      avatar: "bg-amber-100 text-amber-700",
+      leadBadge: "border-amber-200 bg-amber-50 text-amber-700",
+      credit: "text-amber-700",
+      action: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
+      actionSubtext: "text-amber-700",
+    };
+  }
+
+  if ((requiredTier ?? "basic") === "professional") {
+    return {
+      border: "border-l-violet-500",
+      avatar: "bg-violet-100 text-violet-700",
+      leadBadge: "border-violet-200 bg-violet-50 text-violet-700",
+      credit: "text-violet-700",
+      action: "border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100",
+      actionSubtext: "text-violet-700",
+    };
+  }
+
+  return {
+    border: "border-l-sky-500",
+    avatar: "bg-sky-100 text-sky-700",
+    leadBadge: "border-sky-200 bg-sky-50 text-sky-700",
+    credit: "text-sky-700",
+    action: "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500",
+    actionSubtext: "text-white/75",
+  };
+}
+
+function formatLeadType(requiredTier?: string | null) {
+  if ((requiredTier ?? "basic") === "business") {
+    return "Business Lead";
+  }
+
+  if ((requiredTier ?? "basic") === "professional") {
+    return "Professional Lead";
+  }
+
+  return "Basic Lead";
+}
+
+function getNameInitials(name: string) {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (!words.length) {
+    return "LD";
+  }
+
+  return words.map((word) => word[0]?.toUpperCase() ?? "").join("");
 }
 
 export default function PractitionerLeads() {
@@ -320,6 +379,32 @@ export default function PractitionerLeads() {
       hour: "2-digit",
       minute: "2-digit",
     });
+
+  const formatRelativeTime = (value: string) => {
+    const target = new Date(value).getTime();
+    const diffMinutes = Math.round((target - Date.now()) / (1000 * 60));
+    const absoluteMinutes = Math.abs(diffMinutes);
+
+    if (absoluteMinutes < 60) {
+      return diffMinutes >= 0
+        ? `in ${absoluteMinutes} min`
+        : `${absoluteMinutes} min ago`;
+    }
+
+    const diffHours = Math.round(diffMinutes / 60);
+    const absoluteHours = Math.abs(diffHours);
+    if (absoluteHours < 24) {
+      return diffHours >= 0
+        ? `in ${absoluteHours}h`
+        : `${absoluteHours}h ago`;
+    }
+
+    const diffDays = Math.round(diffHours / 24);
+    const absoluteDays = Math.abs(diffDays);
+    return diffDays >= 0
+      ? `in ${absoluteDays}d`
+      : `${absoluteDays}d ago`;
+  };
 
   const formatFileSize = (value: number | null) => {
     if (!value || value <= 0) {
@@ -921,94 +1006,170 @@ export default function PractitionerLeads() {
               const upgradePrompt = tierLocked ? getUpgradePrompt(requiredTier) : null;
               const displayName = accessApproved ? request.full_name : `${formatLifecycleStageLabel(request.lifecycle_stage)} Lead`;
               const countdownLabel = getLifecycleCountdownLabel(request);
+              const theme = getLeadCardTheme(requiredTier);
+              const initials = getNameInitials(displayName);
+              const documentCount = (documentMap.get(request.id) ?? []).length;
+              const isViewed = Boolean(request.viewed_at || accessApproved || ownResponse || request.status === "viewed" || request.status === "responded");
+              const actionLabel = ownResponse
+                ? "View Your Response"
+                : accessApproved
+                  ? "Open Unlocked Lead"
+                  : tierLocked
+                    ? requiredTier === "business"
+                      ? "Upgrade to Business"
+                      : "Upgrade to Professional"
+                    : responseLimitReached
+                      ? "View Lead Details"
+                      : "Unlock & Respond";
+              const actionSubtitle = ownResponse
+                ? "Review the lead and your submitted introduction"
+                : accessApproved
+                  ? "Full lead details are already available"
+                  : tierLocked
+                    ? requiredTier === "business"
+                      ? "Business plan required for this stage"
+                      : "Professional plan required for this stage"
+                    : responseLimitReached
+                      ? `Response limit reached (${responseLimit} max)`
+                      : "Use credits to unlock full lead details";
+              const actionClassName = tierLocked
+                ? theme.action
+                : responseLimitReached && !accessApproved
+                  ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                  : "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500";
+              const actionSubtextClassName = tierLocked
+                ? theme.actionSubtext
+                : responseLimitReached && !accessApproved
+                  ? "text-slate-500"
+                  : "text-white/75";
 
               return (
-                <button
-                key={request.id}
-                type="button"
-                onClick={() => setSelectedRequestId(request.id)}
-                className="w-full rounded-2xl border border-border bg-card p-5 text-left shadow-card transition-all hover:border-primary/30 hover:shadow-elevated"
-              >
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-display text-xl text-foreground">{displayName}</h2>
-                      <Badge className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
-                        {formatLifecycleStageLabel(request.lifecycle_stage)}
-                      </Badge>
-                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
-                        {formatServiceRequestLabel(request.lifecycle_stage)}
-                      </Badge>
-                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestStatusClass(request.status)}`}>
-                        {formatServiceRequestLabel(request.status)}
-                      </Badge>
-                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestRiskClass(request.risk_indicator)}`}>
-                        {formatServiceRequestLabel(request.risk_indicator)} risk
-                      </Badge>
-                      {ownResponse ? (
-                        <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getResponseStatusClass(ownResponse.response_status)}`}>
-                          {formatServiceRequestLabel(ownResponse.response_status)}
-                        </Badge>
-                      ) : null}
-                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                        responseLimitReached
-                          ? "border-red-200 bg-red-50 text-red-700"
-                          : "border-sky-200 bg-sky-50 text-sky-700"
-                      }`}>
-                        {formatLeadResponseCount(responseCount)}
-                      </Badge>
-                      {!accessApproved ? (
-                        <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                          tierLocked
-                            ? "border-amber-200 bg-amber-50 text-amber-700"
-                            : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        }`}>
-                          {tierLocked ? "Locked" : "Available"}
-                        </Badge>
-                      ) : null}
-                      {request.lifecycle_reactivation_count > 0 ? (
-                        <Badge className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
-                          Reactivated x{request.lifecycle_reactivation_count}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <p className="text-sm text-muted-foreground font-body">
-                      {formatServiceList(resolveServiceList(request))}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-body">
-                      Cost: {creditCost} credit{creditCost === 1 ? "" : "s"}
-                    </p>
-                    <p className="line-clamp-2 text-sm text-foreground font-body">
-                      {getDescriptionPreview(request.description, accessApproved)}
-                    </p>
-                    {upgradePrompt ? (
-                      <p className="text-sm font-semibold text-amber-700 font-body">{upgradePrompt}</p>
-                    ) : null}
-                    {countdownLabel ? (
-                      <p className="text-sm font-semibold text-sky-700 font-body">{countdownLabel}</p>
-                    ) : null}
-                    {responseLimitReached ? (
-                      <p className="text-sm font-semibold text-red-700 font-body">Response limit reached ({responseLimit} max)</p>
-                    ) : null}
-                    <div className="flex flex-wrap gap-2">
-                      {flags.length ? flags.map((flag) => (
-                        <Badge key={flag} className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
-                          {flag}
-                        </Badge>
-                      )) : (
-                        <Badge className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                          No active issue flags
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
+                <div
+                  key={request.id}
+                  className={`rounded-xl border border-slate-200 border-l-4 ${theme.border} bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(15,23,42,0.08)]`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRequestId(request.id)}
+                    className="w-full text-left"
+                  >
+                    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+                      <div className="min-w-0 space-y-4">
+                        <div className="flex flex-wrap items-start gap-3">
+                          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${theme.avatar}`}>
+                            {initials}
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="truncate text-lg font-semibold text-slate-900">{displayName}</h2>
+                              {request.lifecycle_reactivation_count > 0 ? (
+                                <Badge className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
+                                  Reactivated x{request.lifecycle_reactivation_count}
+                                </Badge>
+                              ) : null}
+                              {ownResponse ? (
+                                <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getResponseStatusClass(ownResponse.response_status)}`}>
+                                  {formatServiceRequestLabel(ownResponse.response_status)}
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.leadBadge}`}>
+                                {formatLeadType(requiredTier)}
+                              </Badge>
+                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestRiskClass(request.risk_indicator)}`}>
+                                {formatServiceRequestLabel(request.risk_indicator)} risk
+                              </Badge>
+                              <Badge className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+                                {formatLeadResponseCount(responseCount)}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
 
-                  <div className="text-sm text-muted-foreground font-body">
-                    {(documentMap.get(request.id) ?? []).length} document{(documentMap.get(request.id) ?? []).length === 1 ? "" : "s"}
-                  </div>
+                        <div className="space-y-2">
+                          <p className="text-sm text-slate-600 font-body">
+                            {formatServiceList(resolveServiceList(request))}
+                          </p>
+                          <p className={`text-sm font-semibold ${theme.credit}`}>
+                            {creditCost} credit{creditCost === 1 ? "" : "s"}
+                          </p>
+                          <p className="line-clamp-2 text-sm font-semibold text-slate-900 font-body">
+                            {getDescriptionPreview(request.description, accessApproved)}
+                          </p>
+                        </div>
+
+                        {upgradePrompt ? (
+                          <p className="text-sm font-semibold text-amber-700 font-body">{upgradePrompt}</p>
+                        ) : null}
+                        {responseLimitReached ? (
+                          <p className="text-sm font-semibold text-red-700 font-body">Response limit reached ({responseLimit} max)</p>
+                        ) : null}
+                        {flags.length ? (
+                          <div className="flex flex-wrap gap-2">
+                            {flags.map((flag) => (
+                              <Badge key={flag} className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
+                                {flag}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-slate-400" />
+                          <span>{documentCount} document{documentCount === 1 ? "" : "s"}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock3 className="h-4 w-4 text-slate-400" />
+                          <span>Posted {formatRelativeTime(request.created_at)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock3 className="h-4 w-4 text-slate-400" />
+                          <span>{countdownLabel || `Posted ${formatRequestDate(request.created_at)}`}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-4 w-4 text-slate-400" />
+                          <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                            isViewed
+                              ? "border-amber-200 bg-amber-50 text-amber-700"
+                              : "border-slate-200 bg-white text-slate-600"
+                          }`}>
+                            {isViewed ? "Viewed" : "New"}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <Button
+                    type="button"
+                    onClick={() => setSelectedRequestId(request.id)}
+                    className={`mt-5 h-auto w-full rounded-xl border px-4 py-3 ${actionClassName}`}
+                  >
+                    <div className="flex w-full items-center justify-between gap-4 text-left">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{actionLabel}</p>
+                        <p className={`mt-1 text-xs ${actionSubtextClassName}`}>{actionSubtitle}</p>
+                      </div>
+                      <div className="shrink-0">
+                        {tierLocked ? (
+                          <Lock className="h-4 w-4" />
+                        ) : accessApproved || ownResponse ? (
+                          <span className="text-xs font-semibold uppercase tracking-[0.16em]">
+                            {ownResponse ? "Sent" : "Unlocked"}
+                          </span>
+                        ) : (
+                          <span className="text-sm font-semibold">
+                            {creditCost} credit{creditCost === 1 ? "" : "s"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Button>
                 </div>
-              </button>
-            );
+              );
           })}
         </div>
       ) : (
