@@ -18,6 +18,7 @@ import type { Tables, Enums } from "@/integrations/supabase/types";
 import {
   formatServiceRequestLabel,
   getServiceRequestIssueFlags,
+  getServiceRequestRiskClass,
   getServiceRequestStatusClass,
   serviceCategoryOptions,
   serviceNeededOptions,
