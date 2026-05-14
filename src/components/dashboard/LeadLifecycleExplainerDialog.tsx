@@ -1,14 +1,11 @@
 import {
   BellRing,
   Clock3,
-  FileText,
   RefreshCcw,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 interface LeadLifecycleExplainerDialogProps {
   open: boolean;
@@ -122,21 +119,6 @@ const lifecycleStages = [
       "Second full lifecycle expiry requires client confirmation first",
     ],
   },
-] as const;
-
-const leadActivityMatters = [
-  "Client uploads documents",
-  "Client replies to messages",
-  "Client updates information",
-  "Client becomes active again",
-] as const;
-
-const indicators = [
-  "High Priority",
-  "Medium Risk",
-  "Urgent SARS Matter",
-  "Documents Available",
-  "Debt Assistance Required",
 ] as const;
 
 export function LeadLifecycleExplainerDialog({
@@ -266,71 +248,6 @@ export function LeadLifecycleExplainerDialog({
           ))}
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <FileText className="h-4 w-4 text-primary" />
-              Lead activity matters
-            </div>
-            <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-              If a client becomes active again, the lead may receive increased visibility again.
-            </p>
-            <ul className="mt-4 space-y-2 text-sm leading-6 text-muted-foreground font-body">
-              {leadActivityMatters.map((item) => (
-                <li key={item}>- {item}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Priority and risk indicators
-            </div>
-            <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-              Some leads may display indicators that help practitioners assess urgency quickly.
-            </p>
-            <ul className="mt-4 space-y-2 text-sm leading-6 text-muted-foreground font-body">
-              {indicators.map((item) => (
-                <li key={item}>- {item}</li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        <section className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
-          <p className="text-sm font-semibold text-foreground">Important notes</p>
-          <div className="mt-4 grid gap-4 xl:grid-cols-2">
-            <div className="rounded-2xl border border-border bg-accent/20 p-4">
-              <p className="text-sm font-semibold text-foreground">Leads never die silently</p>
-              <p className="mt-2 text-sm leading-7 text-muted-foreground font-body">
-                The lifecycle system continuously escalates and recycles unattended leads to maximize the
-                chance of client assistance.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-border bg-accent/20 p-4">
-              <p className="text-sm font-semibold text-foreground">Only active client matters should recycle</p>
-              <p className="mt-2 text-sm leading-7 text-muted-foreground font-body">
-                After the second lifecycle, the lead should only continue if the client confirms they
-                still require assistance. This protects practitioner time and improves marketplace quality.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-[24px] border border-border bg-slate-50 p-5 shadow-sm">
-          <p className="text-sm font-semibold text-foreground">Close this window</p>
-          <p className="mt-2 text-sm leading-7 text-muted-foreground font-body">
-            Click <span className="font-semibold text-foreground">Close</span>, use the top-right close button,
-            or click outside the popup to return to the marketplace. You can reopen this explanation at any time.
-          </p>
-          <div className="mt-4">
-            <Button type="button" className="rounded-xl" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-          </div>
-        </section>
       </div>
     </DashboardItemDialog>
   );
