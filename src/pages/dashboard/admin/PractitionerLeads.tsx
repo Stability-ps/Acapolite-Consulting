@@ -33,6 +33,7 @@ import {
   getLifecycleCountdownLabel,
   getLifecycleStageBadgeClass,
   getLifecycleStageRequiredTier,
+  getTierRank,
 } from "@/lib/serviceRequestLifecycle";
 
 type ServiceRequest = Tables<"service_requests">;
@@ -110,6 +111,14 @@ function formatLeadType(leadTier?: string | null) {
   }
 
   return "Starter Lead";
+}
+
+function normalizeLeadTier(leadTier?: string | null) {
+  if (leadTier === "business" || leadTier === "professional") {
+    return leadTier;
+  }
+
+  return "basic";
 }
 
 function getNameInitials(name: string) {
@@ -546,13 +555,31 @@ export default function PractitionerLeads() {
   const selectedLifecycleRequiredTier = selectedRequest
     ? getLifecycleStageRequiredTier(selectedRequest.lifecycle_stage)
     : "basic";
+  const selectedLeadTier = normalizeLeadTier(selectedRequest?.lead_tier ?? null);
+  const selectedPackageLocked = Boolean(
+    selectedRequest
+    && !hasApprovedAccess
+    && getTierRank(practitionerLeadTier) < getTierRank(selectedLeadTier),
+  );
+  const selectedLifecycleLocked = Boolean(
+    selectedRequest
+    && !hasApprovedAccess
+    && !selectedPackageLocked
+    && !canPlanAccessLifecycleStage(practitionerLeadTier, selectedRequest.lifecycle_stage),
+  );
   const selectedLeadLocked = Boolean(
     selectedRequest
     && !hasApprovedAccess
-    && !canPlanAccessLifecycleStage(practitionerLeadTier, selectedRequest.lifecycle_stage),
+    && (selectedPackageLocked || selectedLifecycleLocked),
   );
-  const selectedUpgradePrompt = selectedLeadLocked ? getUpgradePrompt(selectedLifecycleRequiredTier) : null;
-  const selectedUpgradeTarget = selectedLifecycleRequiredTier === "business" ? "Business" : "Professional";
+  const selectedUpgradePrompt = selectedPackageLocked
+    ? getUpgradePrompt(selectedLeadTier)
+    : selectedLifecycleLocked && selectedRequest
+      ? getLifecycleAvailabilityMessage(selectedRequest.lifecycle_stage)
+      : null;
+  const selectedUpgradeTarget = (selectedPackageLocked ? selectedLeadTier : selectedLifecycleRequiredTier) === "business"
+    ? "Business"
+    : "Professional";
 
   const getDescriptionPreview = (description: string, accessApproved: boolean) => {
     if (accessApproved) {
@@ -1003,9 +1030,12 @@ export default function PractitionerLeads() {
               const leadTier = request.lead_tier ?? "basic";
               const leadTypeLabel = formatLeadType(leadTier);
               const requiredTier = getLifecycleStageRequiredTier(request.lifecycle_stage);
-              const tierLocked = !accessApproved
+              const packageRequiredTier = normalizeLeadTier(leadTier);
+              const packageLocked = !accessApproved
+                && getTierRank(practitionerLeadTier) < getTierRank(packageRequiredTier);
+              const lifecycleLocked = !accessApproved
+                && !packageLocked
                 && !canPlanAccessLifecycleStage(practitionerLeadTier, request.lifecycle_stage);
-              const upgradePrompt = tierLocked ? getUpgradePrompt(requiredTier) : null;
               const displayName = accessApproved ? request.full_name : leadTypeLabel;
               const countdownLabel = getLifecycleCountdownLabel(request);
               const theme = getLeadCardTheme(leadTier);
@@ -1016,10 +1046,12 @@ export default function PractitionerLeads() {
                 ? "View Your Response"
                 : accessApproved
                   ? "Open Unlocked Lead"
-                  : tierLocked
-                    ? requiredTier === "business"
+                  : packageLocked
+                    ? packageRequiredTier === "business"
                       ? "Upgrade to Business"
                       : "Upgrade to Professional"
+                    : lifecycleLocked
+                      ? "Currently Locked"
                     : responseLimitReached
                       ? "View Lead Details"
                       : "Unlock & Respond";
@@ -1027,20 +1059,26 @@ export default function PractitionerLeads() {
                 ? "Review the lead and your submitted introduction"
                 : accessApproved
                   ? "Full lead details are already available"
-                  : tierLocked
-                    ? requiredTier === "business"
+                  : packageLocked
+                    ? packageRequiredTier === "business"
                       ? "Business plan required for this stage"
                       : "Professional plan required for this stage"
+                    : lifecycleLocked
+                      ? getLifecycleAvailabilityMessage(request.lifecycle_stage)
                     : responseLimitReached
                       ? `Response limit reached (${responseLimit} max)`
                       : "Use credits to unlock full lead details";
-              const actionClassName = tierLocked
+              const actionClassName = packageLocked
                 ? theme.action
+                : lifecycleLocked
+                  ? "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
                 : responseLimitReached && !accessApproved
                   ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
                   : "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500";
-              const actionSubtextClassName = tierLocked
+              const actionSubtextClassName = packageLocked
                 ? theme.actionSubtext
+                : lifecycleLocked
+                  ? "text-slate-500"
                 : responseLimitReached && !accessApproved
                   ? "text-slate-500"
                   : "text-white/75";
@@ -1153,7 +1191,7 @@ export default function PractitionerLeads() {
                         <p className={`mt-1 text-xs ${actionSubtextClassName}`}>{actionSubtitle}</p>
                       </div>
                       <div className="shrink-0">
-                        {tierLocked ? (
+                        {packageLocked || lifecycleLocked ? (
                           <Lock className="h-4 w-4" />
                         ) : accessApproved || ownResponse ? (
                           <span className="text-xs font-semibold uppercase tracking-[0.16em]">
