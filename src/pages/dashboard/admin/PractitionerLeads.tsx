@@ -32,6 +32,7 @@ import {
   getLifecycleCountdownLabel,
   getLifecycleStageBadgeClass,
   getLifecycleStageRequiredTier,
+  getTierRank,
 } from "@/lib/serviceRequestLifecycle";
 
 type ServiceRequest = Tables<"service_requests">;
@@ -115,6 +116,14 @@ function formatLeadType(leadTier?: string | null) {
   }
 
   return "Starter Lead";
+}
+
+function normalizeLeadTier(leadTier?: string | null) {
+  if (leadTier === "business" || leadTier === "professional") {
+    return leadTier;
+  }
+
+  return "basic";
 }
 
 function getNameInitials(name: string) {
@@ -551,15 +560,35 @@ export default function PractitionerLeads() {
   const selectedLifecycleRequiredTier = selectedRequest
     ? getLifecycleStageRequiredTier(selectedRequest.lifecycle_stage)
     : "basic";
+  const selectedLeadTier = normalizeLeadTier(selectedRequest?.lead_tier ?? null);
+  const selectedPackageLocked = Boolean(
+    selectedRequest
+    && !hasApprovedAccess
+    && getTierRank(practitionerLeadTier) < getTierRank(selectedLeadTier),
+  );
+  const selectedLifecycleLocked = Boolean(
+    selectedRequest
+    && !hasApprovedAccess
+    && !selectedPackageLocked
+    && !canPlanAccessLifecycleStage(practitionerLeadTier, selectedRequest.lifecycle_stage),
+  );
   const selectedLeadLocked = Boolean(
     selectedRequest
     && !hasApprovedAccess
-    && !canPlanAccessLifecycleStage(practitionerLeadTier, selectedRequest.lifecycle_stage),
+    && (selectedPackageLocked || selectedLifecycleLocked),
   );
-  const selectedUpgradePrompt = selectedLeadLocked ? getUpgradePrompt(selectedLifecycleRequiredTier) : null;
-  const selectedUpgradeTarget = selectedLifecycleRequiredTier === "business"
+  const selectedUpgradePrompt = selectedPackageLocked
+    ? getUpgradePrompt(selectedLeadTier)
+    : selectedLifecycleLocked
+      ? selectedLeadTier === "professional"
+        ? "This Professional Lead is temporarily in Business Exclusive stage. It will unlock when Professional Access begins."
+        : "This Starter Lead is temporarily in an early access stage. It will unlock when Open Marketplace begins."
+      : null;
+  const selectedUpgradeTarget = selectedLeadTier === "business"
     ? "Business"
-    : "Professional";
+    : selectedLeadTier === "professional"
+      ? "Professional"
+      : null;
 
   const getDescriptionPreview = (description: string, accessApproved: boolean) => {
     if (accessApproved) {
@@ -1008,9 +1037,13 @@ export default function PractitionerLeads() {
               const accessRequest = accessRequestMap.get(request.id);
               const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
               const leadTier = request.lead_tier ?? "basic";
+              const normalizedLeadTier = normalizeLeadTier(leadTier);
               const leadTypeLabel = formatLeadType(leadTier);
               const requiredTier = getLifecycleStageRequiredTier(request.lifecycle_stage);
+              const packageLocked = !accessApproved
+                && getTierRank(practitionerLeadTier) < getTierRank(normalizedLeadTier);
               const lifecycleLocked = !accessApproved
+                && !packageLocked
                 && !canPlanAccessLifecycleStage(practitionerLeadTier, request.lifecycle_stage);
               const displayName = accessApproved ? request.full_name : leadTypeLabel;
               const countdownLabel = getLifecycleCountdownLabel(request);
@@ -1018,14 +1051,22 @@ export default function PractitionerLeads() {
               const initials = getNameInitials(displayName);
               const documentCount = (documentMap.get(request.id) ?? []).length;
               const isViewed = Boolean(request.viewed_at || accessApproved || ownResponse || request.status === "viewed" || request.status === "responded");
+              const lifecycleLockedLabel = requiredTier === "business"
+                ? "Business Exclusive Active"
+                : "Professional Access Active";
+              const lifecycleLockedSubtitle = normalizedLeadTier === "professional"
+                ? "This Professional Lead is temporarily in Business Exclusive stage. It will unlock when Professional Access begins."
+                : "This Starter Lead is temporarily in an early access stage. It will unlock when Open Marketplace begins.";
               const actionLabel = ownResponse
                 ? "View Your Response"
                 : accessApproved
                   ? "Open Unlocked Lead"
-                  : lifecycleLocked
-                    ? requiredTier === "business"
+                  : packageLocked
+                    ? normalizedLeadTier === "business"
                       ? "Upgrade to Business"
                       : "Upgrade to Professional"
+                  : lifecycleLocked
+                    ? lifecycleLockedLabel
                     : responseLimitReached
                       ? "View Lead Details"
                       : "Unlock & Respond";
@@ -1033,19 +1074,21 @@ export default function PractitionerLeads() {
                 ? "Review the lead and your submitted introduction"
                 : accessApproved
                   ? "Full lead details are already available"
+                  : packageLocked
+                    ? normalizedLeadTier === "business"
+                      ? "Business plan required for this lead."
+                      : "Professional plan required for this lead."
                   : lifecycleLocked
-                    ? requiredTier === "business"
-                      ? "Upgrade to Business to unlock this lead."
-                      : "Professional plan or higher required."
+                    ? lifecycleLockedSubtitle
                     : responseLimitReached
                       ? `Response limit reached (${responseLimit} max)`
                       : "Use credits to unlock full lead details";
-              const actionClassName = lifecycleLocked
+              const actionClassName = packageLocked || lifecycleLocked
                 ? theme.lockedAction
                 : responseLimitReached && !accessApproved
                   ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
                   : theme.primaryAction;
-              const actionSubtextClassName = lifecycleLocked
+              const actionSubtextClassName = packageLocked || lifecycleLocked
                 ? theme.lockedActionSubtext
                 : responseLimitReached && !accessApproved
                   ? "text-slate-500"
@@ -1154,7 +1197,7 @@ export default function PractitionerLeads() {
                         <p className={`mt-1 text-xs ${actionSubtextClassName}`}>{actionSubtitle}</p>
                       </div>
                       <div className="shrink-0">
-                        {lifecycleLocked ? (
+                        {packageLocked || lifecycleLocked ? (
                           <Lock className="h-4 w-4" />
                         ) : accessApproved || ownResponse ? (
                           <span className="text-xs font-semibold uppercase tracking-[0.16em]">
@@ -1511,13 +1554,17 @@ export default function PractitionerLeads() {
                         ? "Update Response"
                         : "Respond to Lead"}
                   </Button>
-                ) : selectedLeadLocked || !hasActiveSubscription ? (
+                ) : selectedPackageLocked || !hasActiveSubscription ? (
                   <Button asChild type="button" className="rounded-xl">
                     <Link to="/dashboard/staff/credits">
-                      {selectedLeadLocked
+                      {selectedPackageLocked
                         ? `Upgrade to ${selectedUpgradeTarget}`
                         : "Subscribe to Use Credits"}
                     </Link>
+                  </Button>
+                ) : selectedLifecycleLocked ? (
+                  <Button type="button" className="rounded-xl" disabled>
+                    {selectedLeadTier === "professional" ? "Available at Professional Access" : "Available at Open Marketplace"}
                   </Button>
                 ) : (
                   <Button
