@@ -1099,9 +1099,6 @@ export default function PractitionerLeads() {
                           </p>
                         </div>
 
-                        {upgradePrompt ? (
-                          <p className="text-sm font-semibold text-amber-700 font-body">{upgradePrompt}</p>
-                        ) : null}
                         {responseLimitReached ? (
                           <p className="text-sm font-semibold text-red-700 font-body">Response limit reached ({responseLimit} max)</p>
                         ) : null}
