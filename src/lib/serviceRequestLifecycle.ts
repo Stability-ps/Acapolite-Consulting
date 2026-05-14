@@ -84,7 +84,7 @@ export function getLifecycleCountdownLabel(
   const remainingMs = expiresAt - now;
 
   if (remainingMs <= 0) {
-    return "Expires soon";
+    return "Stage update pending";
   }
 
   const totalMinutes = Math.floor(remainingMs / (1000 * 60));
