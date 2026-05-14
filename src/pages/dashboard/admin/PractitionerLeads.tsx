@@ -1094,9 +1094,6 @@ export default function PractitionerLeads() {
                           <p className={`text-sm font-semibold ${theme.credit}`}>
                             {creditCost} credit{creditCost === 1 ? "" : "s"}
                           </p>
-                          <p className="line-clamp-2 text-sm font-semibold text-slate-900 font-body">
-                            {getDescriptionPreview(request.description, accessApproved)}
-                          </p>
                         </div>
 
                         {responseLimitReached ? (
