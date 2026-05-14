@@ -1084,7 +1084,6 @@ export default function AdminServiceRequests() {
     setIssueFilter("all");
   };
 
-  const adminInitials = getInitials(profile?.full_name || user?.email);
   const dateRangeLabel = dashboardRange.label;
   const comparisonLabel = dashboardDateRange === "today"
     ? "vs yesterday"
@@ -1170,9 +1169,6 @@ export default function AdminServiceRequests() {
                   {unreadRequestNotificationCount}
                 </span>
               ) : null}
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-sm font-semibold text-white shadow-sm">
-              {adminInitials}
             </div>
           </div>
         </div>
