@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Clock3, Coins, Crown, ExternalLink, Search, SendHorizonal, ShieldCheck, Sparkles, Target } from "lucide-react";
+import { ChevronDown, Clock3, Coins, ExternalLink, Search, SendHorizonal, ShieldCheck, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,6 +80,7 @@ export default function PractitionerLeads() {
   const [startingQuickPurchase, setStartingQuickPurchase] = useState(false);
   const [requestingAccessId, setRequestingAccessId] = useState<string | null>(null);
   const [isLifecycleDialogOpen, setIsLifecycleDialogOpen] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filters, setFilters] = useState({
     status: "all",
     risk: "all",
@@ -639,100 +640,17 @@ export default function PractitionerLeads() {
 
   return (
     <div className="space-y-8 bg-[#F5F7FB] pb-6">
-      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] sm:p-8">
-        <p className="text-sm uppercase tracking-[0.2em] text-primary/70 font-body">Lead Response Flow</p>
-        <h1 className="mt-2 font-display text-3xl text-foreground">Marketplace Leads</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground font-body">
-          Review open client requests that match your services, respond with your introduction, and follow the assignments you win.
-        </p>
-      </section>
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            title: "Visible Leads",
-            value: practitionerMetrics.visibleLeads,
-            note: `${practitionerMetrics.highPriority} high priority`,
-            icon: Target,
-            iconClassName: "bg-blue-50 text-blue-600",
-          },
-          {
-            title: "Unlocked Leads",
-            value: practitionerMetrics.unlockedLeadCount,
-            note: `${practitionerMetrics.responsesSent} responses sent`,
-            icon: ShieldCheck,
-            iconClassName: "bg-emerald-50 text-emerald-600",
-          },
-          {
-            title: "Available Credits",
-            value: availableCredits,
-            note: hasActiveSubscription ? `${formatServiceRequestLabel(practitionerLeadTier)} plan active` : "No active subscription",
-            icon: Coins,
-            iconClassName: "bg-amber-50 text-amber-600",
-          },
-          {
-            title: "Expiring Soon",
-            value: practitionerMetrics.expiringSoonCount,
-            note: `${practitionerMetrics.reactivated} reactivated leads`,
-            icon: Clock3,
-            iconClassName: "bg-violet-50 text-violet-600",
-          },
-        ].map((card) => {
-          const Icon = card.icon;
-          return (
-            <div
-              key={card.title}
-              className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]"
-            >
-              <div className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl ${card.iconClassName}`}>
-                <Icon className="h-5 w-5" />
-              </div>
-              <p className="mt-4 text-sm font-medium text-slate-500">{card.title}</p>
-              <p className="mt-1 font-display text-3xl text-slate-900">{card.value}</p>
-              <p className="mt-2 text-sm text-slate-500">{card.note}</p>
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-12">
-        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)] xl:col-span-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Your Access</h2>
-              <p className="mt-1 text-sm text-slate-500">Your current practitioner marketplace position.</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Plan</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">{formatServiceRequestLabel(practitionerLeadTier)}</p>
-            </div>
+      <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.2em] text-primary/70 font-body">Lead Response Flow</p>
+            <h1 className="mt-2 font-display text-3xl text-foreground">Marketplace Leads</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground font-body">
+              Review open client requests that match your services and respond quickly without unnecessary scrolling.
+            </p>
           </div>
 
-          <div className="mt-5 grid gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Lead Access</p>
-              <p className="mt-2 text-sm font-semibold text-slate-900">
-                {isLeadAccessDisabled ? "Paused" : "Active"}
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                {isLeadAccessDisabled
-                  ? "Marketplace lead access is currently paused for this profile."
-                  : "You can review and unlock leads that match your plan and services."}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Service Match Setup</p>
-              <p className="mt-2 text-sm font-semibold text-slate-900">
-                {practitionerMetrics.servicesConfigured} configured service{practitionerMetrics.servicesConfigured === 1 ? "" : "s"}
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Leads shown here are filtered against the services on your practitioner profile.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3">
             <Button type="button" variant="secondary" className="rounded-xl" onClick={() => setIsLifecycleDialogOpen(true)}>
               Lead Lifecycle Explained
             </Button>
@@ -747,85 +665,71 @@ export default function PractitionerLeads() {
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)] xl:col-span-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Lifecycle Snapshot</h2>
-              <p className="mt-1 text-sm text-slate-500">What is currently available in the marketplace.</p>
-            </div>
-            <BarChart3 className="h-5 w-5 text-slate-400" />
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {[
-              { label: "Business Exclusive", value: practitionerMetrics.businessExclusive, tone: "border-amber-200 bg-amber-50 text-amber-700", icon: Crown },
-              { label: "Professional Access", value: practitionerMetrics.professionalAccess, tone: "border-sky-200 bg-sky-50 text-sky-700", icon: ShieldCheck },
-              { label: "Open Marketplace", value: practitionerMetrics.openMarketplace, tone: "border-emerald-200 bg-emerald-50 text-emerald-700", icon: Sparkles },
-              { label: "Docs Available", value: practitionerMetrics.documentsAvailable, tone: "border-violet-200 bg-violet-50 text-violet-700", icon: Coins },
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.label} className={`rounded-2xl border p-4 ${item.tone}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold">{item.label}</p>
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <p className="mt-3 font-display text-2xl">{item.value}</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {[
+            { label: "Visible Leads", value: practitionerMetrics.visibleLeads, icon: Target },
+            { label: "Credits", value: availableCredits, icon: Coins },
+            { label: "Responses", value: practitionerMetrics.responsesSent, icon: ShieldCheck },
+            { label: "Expiring Soon", value: practitionerMetrics.expiringSoonCount, icon: Clock3 },
+            { label: "Plan", value: formatServiceRequestLabel(practitionerLeadTier), icon: ShieldCheck },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  <Icon className="h-4 w-4 text-slate-500" />
+                  {item.label}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)] xl:col-span-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Recommended Leads</h2>
-              <p className="mt-1 text-sm text-slate-500">Priority opportunities based on urgency, docs, and freshness.</p>
-            </div>
-            <Target className="h-5 w-5 text-slate-400" />
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {recommendedLeads.length ? recommendedLeads.map((request) => (
-              <button
-                key={request.id}
-                type="button"
-                onClick={() => setSelectedRequestId(request.id)}
-                className="flex w-full items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-primary/30 hover:bg-white"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">{formatServiceList(resolveServiceList(request))}</p>
-                  <p className="mt-1 text-xs text-slate-500">{formatLifecycleStageLabel(request.lifecycle_stage)}</p>
-                  <p className="mt-2 text-xs text-slate-500">{getLifecycleCountdownLabel(request) || "No active countdown"}</p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-xs font-semibold text-slate-900">{formatServiceRequestLabel(request.priority_level)}</p>
-                  <p className="mt-1 text-xs text-slate-500">{documentMap.get(request.id)?.length ?? 0} docs</p>
-                </div>
-              </button>
-            )) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
-                No recommended leads right now.
+                <p className="mt-2 text-lg font-semibold text-slate-900">{item.value}</p>
               </div>
-            )}
-          </div>
+            );
+          })}
         </div>
       </section>
 
       <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search leads..."
-              className="rounded-xl pl-10"
+              className="rounded-xl pl-10 lg:w-[360px]"
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setShowAdvancedFilters((current) => !current)}
+            >
+              Filters
+              <ChevronDown className={`h-4 w-4 transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
+            </Button>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              {practitionerMetrics.highPriority} high priority
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              {practitionerMetrics.documentsAvailable} with documents
+            </div>
+            {recommendedLeads[0] ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-xl text-primary"
+                onClick={() => setSelectedRequestId(recommendedLeads[0].id)}
+              >
+                Open top recommended lead
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {showAdvancedFilters ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">Status</label>
               <Select
@@ -934,50 +838,49 @@ export default function PractitionerLeads() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="sm:col-span-2 lg:col-span-3 mt-1 flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground font-body">
+                <Checkbox
+                  checked={filters.onlyMyResponses}
+                  onCheckedChange={(checked) => setFilters((current) => ({ ...current, onlyMyResponses: checked === true }))}
+                />
+                My responses only
+              </label>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground font-body">
+                <Checkbox
+                  checked={filters.hasDocuments}
+                  onCheckedChange={(checked) => setFilters((current) => ({ ...current, hasDocuments: checked === true }))}
+                />
+                Has documents
+              </label>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground font-body">
+                <Checkbox
+                  checked={filters.hasIssueFlags}
+                  onCheckedChange={(checked) => setFilters((current) => ({ ...current, hasIssueFlags: checked === true }))}
+                />
+                Issue flags only
+              </label>
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-xl text-xs uppercase tracking-[0.18em]"
+                onClick={() => setFilters({
+                  status: "all",
+                  risk: "all",
+                  priority: "all",
+                  clientType: "all",
+                  category: "all",
+                  service: "all",
+                  hasDocuments: false,
+                  hasIssueFlags: false,
+                  onlyMyResponses: false,
+                })}
+              >
+                Reset Filters
+              </Button>
+            </div>
           </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-4">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground font-body">
-            <Checkbox
-              checked={filters.onlyMyResponses}
-              onCheckedChange={(checked) => setFilters((current) => ({ ...current, onlyMyResponses: checked === true }))}
-            />
-            My responses only
-          </label>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground font-body">
-            <Checkbox
-              checked={filters.hasDocuments}
-              onCheckedChange={(checked) => setFilters((current) => ({ ...current, hasDocuments: checked === true }))}
-            />
-            Has documents
-          </label>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground font-body">
-            <Checkbox
-              checked={filters.hasIssueFlags}
-              onCheckedChange={(checked) => setFilters((current) => ({ ...current, hasIssueFlags: checked === true }))}
-            />
-            Issue flags only
-          </label>
-          <Button
-            type="button"
-            variant="ghost"
-            className="rounded-xl text-xs uppercase tracking-[0.18em]"
-            onClick={() => setFilters({
-              status: "all",
-              risk: "all",
-              priority: "all",
-              clientType: "all",
-              category: "all",
-              service: "all",
-              hasDocuments: false,
-              hasIssueFlags: false,
-              onlyMyResponses: false,
-            })}
-          >
-            Reset Filters
-          </Button>
-        </div>
+        ) : null}
       </section>
 
       {isLeadAccessDisabled ? (
