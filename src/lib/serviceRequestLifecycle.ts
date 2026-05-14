@@ -84,7 +84,18 @@ export function getLifecycleCountdownLabel(
   const remainingMs = expiresAt - now;
 
   if (remainingMs <= 0) {
-    return "Stage update pending";
+    switch (request.lifecycle_stage) {
+      case "business_exclusive":
+        return "Opening Professional Access";
+      case "professional_access":
+        return "Opening Open Marketplace";
+      case "open_marketplace":
+        return "Reactivating lead";
+      case "pending_client_confirmation":
+        return "Waiting for client confirmation";
+      default:
+        return "Updating access";
+    }
   }
 
   const totalMinutes = Math.floor(remainingMs / (1000 * 60));
@@ -107,9 +118,9 @@ export function getLifecycleCountdownLabel(
 export function getLifecycleAvailabilityMessage(stage?: ServiceRequestLifecycleStage | null) {
   switch (stage) {
     case "business_exclusive":
-      return "This lead is currently reserved for Business plan practitioners.";
+      return "Business practitioners currently have temporary early access to this lead.";
     case "professional_access":
-      return "This lead is currently available to Business and Professional practitioners.";
+      return "Professional and Business practitioners currently have access to this lead.";
     case "open_marketplace":
       return "This lead is currently open to all qualifying practitioners.";
     case "pending_client_confirmation":

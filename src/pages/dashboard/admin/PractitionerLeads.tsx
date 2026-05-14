@@ -1051,11 +1051,18 @@ export default function PractitionerLeads() {
               const initials = getNameInitials(displayName);
               const documentCount = (documentMap.get(request.id) ?? []).length;
               const isViewed = Boolean(request.viewed_at || accessApproved || ownResponse || request.status === "viewed" || request.status === "responded");
+              const stageSummary = request.lifecycle_stage === "business_exclusive"
+                ? "Business early access"
+                : request.lifecycle_stage === "professional_access"
+                  ? "Professional early access"
+                  : request.lifecycle_stage === "open_marketplace"
+                    ? "Open marketplace"
+                    : formatLifecycleStageLabel(request.lifecycle_stage);
               const lifecycleLockedLabel = requiredTier === "business"
-                ? "Business Exclusive Active"
+                ? "Business Early Access"
                 : "Professional Access Active";
               const lifecycleLockedSubtitle = normalizedLeadTier === "professional"
-                ? "This Professional Lead is temporarily in Business Exclusive stage. It will unlock when Professional Access begins."
+                ? "Business members have early access first. This Professional Lead opens to you at Professional Access."
                 : "This Starter Lead is temporarily in an early access stage. It will unlock when Open Marketplace begins.";
               const actionLabel = ownResponse
                 ? "View Your Response"
@@ -1172,7 +1179,7 @@ export default function PractitionerLeads() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Clock3 className="h-4 w-4 text-slate-400" />
-                          <span>{countdownLabel || `Posted ${formatRequestDate(request.created_at)}`}</span>
+                          <span>{countdownLabel ? `${stageSummary} · ${countdownLabel}` : `Posted ${formatRequestDate(request.created_at)}`}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Eye className="h-4 w-4 text-slate-400" />
