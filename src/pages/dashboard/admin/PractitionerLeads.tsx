@@ -76,6 +76,8 @@ function getLeadCardTheme(leadTier?: string | null) {
       credit: "text-amber-700",
       lockedAction: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
       lockedActionSubtext: "text-amber-700",
+      primaryAction: "bg-amber-500 text-slate-950 hover:bg-amber-400",
+      primaryActionSubtext: "text-slate-900/70",
     };
   }
 
@@ -87,6 +89,8 @@ function getLeadCardTheme(leadTier?: string | null) {
       credit: "text-blue-700",
       lockedAction: "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100",
       lockedActionSubtext: "text-blue-700",
+      primaryAction: "bg-blue-600 text-white hover:bg-blue-500",
+      primaryActionSubtext: "text-white/75",
     };
   }
 
@@ -97,6 +101,8 @@ function getLeadCardTheme(leadTier?: string | null) {
     credit: "text-emerald-700",
     lockedAction: "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
     lockedActionSubtext: "text-emerald-700",
+    primaryAction: "bg-emerald-600 text-white hover:bg-emerald-500",
+    primaryActionSubtext: "text-white/75",
   };
 }
 
@@ -1039,12 +1045,12 @@ export default function PractitionerLeads() {
                 ? theme.lockedAction
                 : responseLimitReached && !accessApproved
                   ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
-                  : "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500";
+                  : theme.primaryAction;
               const actionSubtextClassName = lifecycleLocked
                 ? theme.lockedActionSubtext
                 : responseLimitReached && !accessApproved
                   ? "text-slate-500"
-                  : "text-white/75";
+                  : theme.primaryActionSubtext;
 
               return (
                 <div
@@ -1079,9 +1085,6 @@ export default function PractitionerLeads() {
                             <div className="flex flex-wrap gap-2">
                               <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.leadBadge}`}>
                                 {leadTypeLabel}
-                              </Badge>
-                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
-                                {formatLifecycleStageLabel(request.lifecycle_stage)} Stage
                               </Badge>
                               <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestRiskClass(request.risk_indicator)}`}>
                                 {formatServiceRequestLabel(request.risk_indicator)} risk
