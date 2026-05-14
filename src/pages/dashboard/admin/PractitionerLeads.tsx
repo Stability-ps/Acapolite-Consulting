@@ -74,6 +74,7 @@ function getLeadCardTheme(leadTier?: string | null) {
       border: "border-l-amber-500",
       avatar: "bg-amber-100 text-amber-700",
       leadBadge: "border-amber-200 bg-amber-50 text-amber-700",
+      packageBadge: "border-amber-200 bg-amber-50 text-amber-700",
       credit: "text-amber-700",
       action: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
       actionSubtext: "text-amber-700",
@@ -82,20 +83,22 @@ function getLeadCardTheme(leadTier?: string | null) {
 
   if ((leadTier ?? "basic") === "professional") {
     return {
-      border: "border-l-violet-500",
-      avatar: "bg-violet-100 text-violet-700",
-      leadBadge: "border-violet-200 bg-violet-50 text-violet-700",
-      credit: "text-violet-700",
-      action: "border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100",
-      actionSubtext: "text-violet-700",
+      border: "border-l-blue-500",
+      avatar: "bg-blue-100 text-blue-700",
+      leadBadge: "border-blue-200 bg-blue-50 text-blue-700",
+      packageBadge: "border-blue-200 bg-blue-50 text-blue-700",
+      credit: "text-blue-700",
+      action: "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100",
+      actionSubtext: "text-blue-700",
     };
   }
 
   return {
-    border: "border-l-sky-500",
-    avatar: "bg-sky-100 text-sky-700",
-    leadBadge: "border-sky-200 bg-sky-50 text-sky-700",
-    credit: "text-sky-700",
+    border: "border-l-emerald-500",
+    avatar: "bg-emerald-100 text-emerald-700",
+    leadBadge: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    packageBadge: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    credit: "text-emerald-700",
     action: "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500",
     actionSubtext: "text-white/75",
   };
@@ -1120,10 +1123,10 @@ export default function PractitionerLeads() {
                               <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
                                 {formatLifecycleStageLabel(request.lifecycle_stage)}
                               </Badge>
-                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestRiskClass(request.risk_indicator)}`}>
+                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.packageBadge}`}>
                                 {formatServiceRequestLabel(request.risk_indicator)} risk
                               </Badge>
-                              <Badge className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.packageBadge}`}>
                                 {formatLeadResponseCount(responseCount)}
                               </Badge>
                             </div>
