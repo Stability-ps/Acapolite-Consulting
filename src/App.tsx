@@ -56,7 +56,14 @@ import AdminActivityLog from "./pages/dashboard/admin/AdminActivityLog";
 import TaxCoachAIStaff from "./pages/dashboard/admin/TaxCoachAIStaff";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

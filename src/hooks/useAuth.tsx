@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import type { Tables } from "@/integrations/supabase/types";
@@ -51,6 +51,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [staffPermissions, setStaffPermissions] = useState<StaffPermissions | null>(null);
+  const userRef = useRef<User | null>(null);
+  const profileRef = useRef<Profile | null>(null);
+
+  useEffect(() => {
+    userRef.current = user;
+    profileRef.current = profile;
+  }, [profile, user]);
 
   useEffect(() => {
     let isActive = true;
@@ -58,6 +65,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const loadAccessState = async (nextSession: Session | null) => {
       const currentRequest = ++requestSequence;
+      const sameUser = userRef.current?.id === nextSession?.user?.id;
+      const shouldShowLoadingState = !sameUser || !profileRef.current;
 
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
@@ -70,7 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setLoading(true);
+      if (shouldShowLoadingState) {
+        setLoading(true);
+      }
 
       const userId = nextSession.user.id;
       const { data: profileData } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
