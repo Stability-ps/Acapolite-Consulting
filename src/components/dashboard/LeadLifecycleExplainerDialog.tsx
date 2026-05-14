@@ -1,5 +1,4 @@
 import {
-  Activity,
   BellRing,
   Clock3,
   FileText,
@@ -140,19 +139,6 @@ const indicators = [
   "Debt Assistance Required",
 ] as const;
 
-const expiredLeadFields = [
-  "Lead title",
-  "Original lead type",
-  "Total lifecycle duration",
-  "Number of views",
-  "Number of responses",
-  "Reactivation count",
-  "Last client activity",
-  "Expired date",
-  "Risk level",
-  "Reason for expiry",
-] as const;
-
 export function LeadLifecycleExplainerDialog({
   open,
   onOpenChange,
@@ -280,77 +266,6 @@ export function LeadLifecycleExplainerDialog({
           ))}
         </section>
 
-        <section className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Activity className="h-4 w-4 text-primary" />
-            Update to lead expiry and client confirmation logic
-          </div>
-          <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-            When a lead completes its first full lifecycle without any practitioner response, the system
-            reactivates it immediately. When the same lead completes its second full lifecycle without a
-            response, it must not reactivate immediately. The client must first confirm that assistance
-            is still required.
-          </p>
-
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-semibold text-emerald-900">First full lifecycle expiry</p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-emerald-800 font-body">
-                <li>- Lead is reactivated immediately</li>
-                <li>- Lead returns to the top of the marketplace</li>
-                <li>- Reactivation count becomes 1</li>
-                <li>- Lifecycle timer restarts</li>
-                <li>- Practitioners may receive email and in-platform notifications</li>
-                <li>- Current lifecycle access rules still apply</li>
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-semibold text-amber-900">Second full lifecycle expiry</p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-800 font-body">
-                <li>- Lead status changes to Pending Client Confirmation</li>
-                <li>- Lead is removed from the active marketplace temporarily</li>
-                <li>- The client receives an email notification</li>
-                <li>- The client receives an in-platform notification</li>
-                <li>- Client confirmation is required before another reactivation</li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-4 xl:grid-cols-3">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-semibold text-emerald-900">If client clicks YES</p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-emerald-800 font-body">
-                <li>- Lead is reactivated</li>
-                <li>- Lead returns to the top of the marketplace</li>
-                <li>- Lifecycle timers restart</li>
-                <li>- Practitioner notifications may be sent again</li>
-                <li>- Visibility increases again</li>
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-              <p className="text-sm font-semibold text-rose-900">If client clicks NO</p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-rose-800 font-body">
-                <li>- Lead expires permanently</li>
-                <li>- Lead moves to Expired Leads</li>
-                <li>- Lead is removed from the active marketplace</li>
-                <li>- Further practitioner responses are blocked</li>
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">If the client does not respond within 24 hours</p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700 font-body">
-                <li>- Lead expires permanently</li>
-                <li>- Lead moves to Expired Leads</li>
-                <li>- Lead is removed from the active marketplace</li>
-                <li>- Further practitioner responses are blocked</li>
-              </ul>
-            </div>
-          </div>
-        </section>
-
         <section className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -401,28 +316,6 @@ export function LeadLifecycleExplainerDialog({
                 still require assistance. This protects practitioner time and improves marketplace quality.
               </p>
             </div>
-          </div>
-        </section>
-
-        <section className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
-          <p className="text-sm font-semibold text-foreground">Expired leads and admin handling</p>
-          <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-            Expired leads are not deleted. They should move into an archived or expired section instead of
-            remaining in the live marketplace.
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {expiredLeadFields.map((item) => (
-              <div key={item} className="rounded-2xl border border-border bg-accent/20 px-4 py-3 text-sm text-foreground font-body">
-                {item}
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 rounded-2xl border border-dashed border-border bg-background p-4">
-            <p className="text-sm font-semibold text-foreground">Admin-only revive feature</p>
-            <p className="mt-2 text-sm leading-7 text-muted-foreground font-body">
-              Admin should be able to manually reactivate expired leads, push them back into the marketplace,
-              and reset lifecycle timing when client activity or urgent SARS confirmation justifies it.
-            </p>
           </div>
         </section>
 
