@@ -33,7 +33,6 @@ import {
   getLifecycleCountdownLabel,
   getLifecycleStageBadgeClass,
   getLifecycleStageRequiredTier,
-  getTierRank,
 } from "@/lib/serviceRequestLifecycle";
 
 type ServiceRequest = Tables<"service_requests">;
@@ -74,10 +73,9 @@ function getLeadCardTheme(leadTier?: string | null) {
       border: "border-l-amber-500",
       avatar: "bg-amber-100 text-amber-700",
       leadBadge: "border-amber-200 bg-amber-50 text-amber-700",
-      packageBadge: "border-amber-200 bg-amber-50 text-amber-700",
       credit: "text-amber-700",
-      action: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
-      actionSubtext: "text-amber-700",
+      lockedAction: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
+      lockedActionSubtext: "text-amber-700",
     };
   }
 
@@ -86,10 +84,9 @@ function getLeadCardTheme(leadTier?: string | null) {
       border: "border-l-blue-500",
       avatar: "bg-blue-100 text-blue-700",
       leadBadge: "border-blue-200 bg-blue-50 text-blue-700",
-      packageBadge: "border-blue-200 bg-blue-50 text-blue-700",
       credit: "text-blue-700",
-      action: "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100",
-      actionSubtext: "text-blue-700",
+      lockedAction: "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100",
+      lockedActionSubtext: "text-blue-700",
     };
   }
 
@@ -97,10 +94,9 @@ function getLeadCardTheme(leadTier?: string | null) {
     border: "border-l-emerald-500",
     avatar: "bg-emerald-100 text-emerald-700",
     leadBadge: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    packageBadge: "border-emerald-200 bg-emerald-50 text-emerald-700",
     credit: "text-emerald-700",
-    action: "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500",
-    actionSubtext: "text-white/75",
+    lockedAction: "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
+    lockedActionSubtext: "text-emerald-700",
   };
 }
 
@@ -114,14 +110,6 @@ function formatLeadType(leadTier?: string | null) {
   }
 
   return "Starter Lead";
-}
-
-function normalizeLeadTier(leadTier?: string | null) {
-  if (leadTier === "business" || leadTier === "professional") {
-    return leadTier;
-  }
-
-  return "basic";
 }
 
 function getNameInitials(name: string) {
@@ -558,29 +546,13 @@ export default function PractitionerLeads() {
   const selectedLifecycleRequiredTier = selectedRequest
     ? getLifecycleStageRequiredTier(selectedRequest.lifecycle_stage)
     : "basic";
-  const selectedLeadTier = normalizeLeadTier(selectedRequest?.lead_tier ?? null);
-  const selectedPackageLocked = Boolean(
-    selectedRequest
-    && !hasApprovedAccess
-    && getTierRank(practitionerLeadTier) < getTierRank(selectedLeadTier),
-  );
-  const selectedLifecycleLocked = Boolean(
-    selectedRequest
-    && !hasApprovedAccess
-    && !selectedPackageLocked
-    && !canPlanAccessLifecycleStage(practitionerLeadTier, selectedRequest.lifecycle_stage),
-  );
   const selectedLeadLocked = Boolean(
     selectedRequest
     && !hasApprovedAccess
-    && (selectedPackageLocked || selectedLifecycleLocked),
+    && !canPlanAccessLifecycleStage(practitionerLeadTier, selectedRequest.lifecycle_stage),
   );
-  const selectedUpgradePrompt = selectedPackageLocked
-    ? getUpgradePrompt(selectedLeadTier)
-    : selectedLifecycleLocked && selectedRequest
-      ? getLifecycleAvailabilityMessage(selectedRequest.lifecycle_stage)
-      : null;
-  const selectedUpgradeTarget = (selectedPackageLocked ? selectedLeadTier : selectedLifecycleRequiredTier) === "business"
+  const selectedUpgradePrompt = selectedLeadLocked ? getUpgradePrompt(selectedLifecycleRequiredTier) : null;
+  const selectedUpgradeTarget = selectedLifecycleRequiredTier === "business"
     ? "Business"
     : "Professional";
 
@@ -1033,11 +1005,7 @@ export default function PractitionerLeads() {
               const leadTier = request.lead_tier ?? "basic";
               const leadTypeLabel = formatLeadType(leadTier);
               const requiredTier = getLifecycleStageRequiredTier(request.lifecycle_stage);
-              const packageRequiredTier = normalizeLeadTier(leadTier);
-              const packageLocked = !accessApproved
-                && getTierRank(practitionerLeadTier) < getTierRank(packageRequiredTier);
               const lifecycleLocked = !accessApproved
-                && !packageLocked
                 && !canPlanAccessLifecycleStage(practitionerLeadTier, request.lifecycle_stage);
               const displayName = accessApproved ? request.full_name : leadTypeLabel;
               const countdownLabel = getLifecycleCountdownLabel(request);
@@ -1049,12 +1017,10 @@ export default function PractitionerLeads() {
                 ? "View Your Response"
                 : accessApproved
                   ? "Open Unlocked Lead"
-                  : packageLocked
-                    ? packageRequiredTier === "business"
+                  : lifecycleLocked
+                    ? requiredTier === "business"
                       ? "Upgrade to Business"
                       : "Upgrade to Professional"
-                    : lifecycleLocked
-                      ? "Currently Locked"
                     : responseLimitReached
                       ? "View Lead Details"
                       : "Unlock & Respond";
@@ -1062,26 +1028,20 @@ export default function PractitionerLeads() {
                 ? "Review the lead and your submitted introduction"
                 : accessApproved
                   ? "Full lead details are already available"
-                  : packageLocked
-                    ? packageRequiredTier === "business"
-                      ? "Business plan required for this stage"
-                      : "Professional plan required for this stage"
-                    : lifecycleLocked
-                      ? getLifecycleAvailabilityMessage(request.lifecycle_stage)
+                  : lifecycleLocked
+                    ? requiredTier === "business"
+                      ? "Upgrade to Business to unlock this lead."
+                      : "Professional plan or higher required."
                     : responseLimitReached
                       ? `Response limit reached (${responseLimit} max)`
                       : "Use credits to unlock full lead details";
-              const actionClassName = packageLocked
-                ? theme.action
-                : lifecycleLocked
-                  ? "border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
+              const actionClassName = lifecycleLocked
+                ? theme.lockedAction
                 : responseLimitReached && !accessApproved
                   ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
                   : "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500";
-              const actionSubtextClassName = packageLocked
-                ? theme.actionSubtext
-                : lifecycleLocked
-                  ? "text-slate-500"
+              const actionSubtextClassName = lifecycleLocked
+                ? theme.lockedActionSubtext
                 : responseLimitReached && !accessApproved
                   ? "text-slate-500"
                   : "text-white/75";
@@ -1121,12 +1081,12 @@ export default function PractitionerLeads() {
                                 {leadTypeLabel}
                               </Badge>
                               <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
-                                {formatLifecycleStageLabel(request.lifecycle_stage)}
+                                {formatLifecycleStageLabel(request.lifecycle_stage)} Stage
                               </Badge>
-                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.packageBadge}`}>
+                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestRiskClass(request.risk_indicator)}`}>
                                 {formatServiceRequestLabel(request.risk_indicator)} risk
                               </Badge>
-                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.packageBadge}`}>
+                              <Badge className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
                                 {formatLeadResponseCount(responseCount)}
                               </Badge>
                             </div>
@@ -1194,7 +1154,7 @@ export default function PractitionerLeads() {
                         <p className={`mt-1 text-xs ${actionSubtextClassName}`}>{actionSubtitle}</p>
                       </div>
                       <div className="shrink-0">
-                        {packageLocked || lifecycleLocked ? (
+                        {lifecycleLocked ? (
                           <Lock className="h-4 w-4" />
                         ) : accessApproved || ownResponse ? (
                           <span className="text-xs font-semibold uppercase tracking-[0.16em]">
