@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   BadgeCheck,
   Bell,
   CalendarDays,
-  ChevronRight,
   Clock3,
   Crown,
   Ellipsis,
@@ -27,6 +26,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { LeadLifecycleExplainerDialog } from "@/components/dashboard/LeadLifecycleExplainerDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,6 +77,7 @@ type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
 type NotificationRecord = Tables<"notifications">;
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type PractitionerUser = Tables<"profiles">;
+type DashboardDateRange = "today" | "last7" | "last30" | "all";
 
 const STATUS_CHART_COLORS = {
   active: "#2563EB",
@@ -136,6 +137,34 @@ function getInitials(value?: string | null) {
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
 }
 
+function getDashboardRangeBounds(range: DashboardDateRange) {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  if (range === "today") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    return { start, end, comparisonDays: 1, label: `${start.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}` };
+  }
+
+  if (range === "last7") {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    return { start, end, comparisonDays: 7, label: `${start.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} - ${end.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}` };
+  }
+
+  if (range === "last30") {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 29);
+    start.setHours(0, 0, 0, 0);
+    return { start, end, comparisonDays: 30, label: `${start.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} - ${end.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}` };
+  }
+
+  return { start: null, end, comparisonDays: 30, label: "All Time" };
+}
+
 export default function AdminServiceRequests() {
   useNotificationSectionRead("requests");
   const { role, user, profile } = useAuth();
@@ -163,9 +192,12 @@ export default function AdminServiceRequests() {
   const [archivingLeadId, setArchivingLeadId] = useState<string | null>(null);
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
   const [confirmDeleteLeadOpen, setConfirmDeleteLeadOpen] = useState(false);
+  const [dashboardDateRange, setDashboardDateRange] = useState<DashboardDateRange>("last7");
+  const [isLifecycleDialogOpen, setIsLifecycleDialogOpen] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
   const leadIdFromQuery = searchParams.get("leadId");
 
-  useQuery({
+  const { isFetching: isRefreshingLifecycle } = useQuery({
     queryKey: ["service-request-lifecycle-refresh", role, "staff"],
     queryFn: async () => {
       const { error } = await supabase.rpc("process_service_request_lifecycles");
@@ -191,6 +223,7 @@ export default function AdminServiceRequests() {
       if (error) throw error;
       return data ?? [];
     },
+    enabled: role !== "consultant" && !isRefreshingLifecycle,
   });
 
   const { data: documents } = useQuery({
@@ -571,27 +604,83 @@ export default function AdminServiceRequests() {
     setSelectedRequestId(leadIdFromQuery);
   }, [leadIdFromQuery, requests]);
 
-  const requestMetrics = useMemo(() => {
+  const dashboardRange = useMemo(
+    () => getDashboardRangeBounds(dashboardDateRange),
+    [dashboardDateRange],
+  );
+
+  const dashboardRequests = useMemo(() => {
     const rows = requests ?? [];
+    if (!dashboardRange.start) {
+      return rows;
+    }
+
+    const startTime = dashboardRange.start.getTime();
+    const endTime = dashboardRange.end.getTime();
+    return rows.filter((request) => {
+      const createdAt = new Date(request.created_at).getTime();
+      return createdAt >= startTime && createdAt <= endTime;
+    });
+  }, [dashboardRange.end, dashboardRange.start, requests]);
+
+  const dashboardResponses = useMemo(() => {
+    const rows = responses ?? [];
+    if (!dashboardRange.start) {
+      return rows;
+    }
+
+    const startTime = dashboardRange.start.getTime();
+    const endTime = dashboardRange.end.getTime();
+    return rows.filter((response) => {
+      const createdAt = new Date(response.created_at).getTime();
+      return createdAt >= startTime && createdAt <= endTime;
+    });
+  }, [dashboardRange.end, dashboardRange.start, responses]);
+
+  const dashboardRequestNotifications = useMemo(() => {
+    const rows = requestNotifications ?? [];
+    if (!dashboardRange.start) {
+      return rows;
+    }
+
+    const startTime = dashboardRange.start.getTime();
+    const endTime = dashboardRange.end.getTime();
+    return rows.filter((notification) => {
+      const createdAt = new Date(notification.created_at).getTime();
+      return createdAt >= startTime && createdAt <= endTime;
+    });
+  }, [dashboardRange.end, dashboardRange.start, requestNotifications]);
+
+  const moveToWorkspaceTab = (tab: typeof lifecycleTab) => {
+    setLeadView(tab === "archived" ? "archived" : "active");
+    setLifecycleTab(tab);
+    requestAnimationFrame(() => {
+      workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const requestMetrics = useMemo(() => {
+    const rows = dashboardRequests;
     const now = Date.now();
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-    const fourteenDaysAgo = now - 14 * 24 * 60 * 60 * 1000;
+    const comparisonMs = dashboardRange.comparisonDays * 24 * 60 * 60 * 1000;
+    const currentWindowStart = now - comparisonMs;
+    const previousWindowStart = currentWindowStart - comparisonMs;
 
     const getWindowRows = (from: number, to: number) =>
-      rows.filter((request) => {
+      (requests ?? []).filter((request) => {
         const createdAt = new Date(request.created_at).getTime();
         return createdAt >= from && createdAt < to;
       });
 
-    const currentRows = getWindowRows(sevenDaysAgo, now);
-    const previousRows = getWindowRows(fourteenDaysAgo, sevenDaysAgo);
+    const currentRows = getWindowRows(currentWindowStart, now);
+    const previousRows = getWindowRows(previousWindowStart, currentWindowStart);
     const currentResponses = (responses ?? []).filter((response) => {
       const createdAt = new Date(response.created_at).getTime();
-      return createdAt >= sevenDaysAgo && createdAt < now;
+      return createdAt >= currentWindowStart && createdAt < now;
     });
     const previousResponses = (responses ?? []).filter((response) => {
       const createdAt = new Date(response.created_at).getTime();
-      return createdAt >= fourteenDaysAgo && createdAt < sevenDaysAgo;
+      return createdAt >= previousWindowStart && createdAt < currentWindowStart;
     });
 
     const averageResponseTimeFor = (responseRows: ServiceRequestResponse[]) => {
@@ -611,7 +700,7 @@ export default function AdminServiceRequests() {
       return durations.reduce((sum, value) => sum + value, 0) / durations.length;
     };
 
-    const avgResponseTime = averageResponseTimeFor(responses ?? []);
+    const avgResponseTime = averageResponseTimeFor(dashboardResponses);
     const previousAvgResponseTime = averageResponseTimeFor(previousResponses);
 
     return {
@@ -628,7 +717,7 @@ export default function AdminServiceRequests() {
       pendingConfirmation: rows.filter((request) => request.lifecycle_stage === "pending_client_confirmation").length,
       expired: rows.filter((request) => request.lifecycle_stage === "expired").length,
       unattended: rows.filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) === 0 && !request.is_archived).length,
-      practitionerResponses: (responses ?? []).length,
+      practitionerResponses: dashboardResponses.length,
       activePractitioners: (practitioners ?? []).filter((practitioner) => practitioner.user.is_active).length,
       avgResponseTime,
       trends: {
@@ -654,8 +743,8 @@ export default function AdminServiceRequests() {
           previousAvgResponseTime === null ? 0 : Math.round(previousAvgResponseTime),
         ),
         activePractitioners: formatTrendPercentage(
-          (practitioners ?? []).filter((practitioner) => practitioner.user.is_active && new Date(practitioner.user.created_at).getTime() >= sevenDaysAgo).length,
-          (practitioners ?? []).filter((practitioner) => practitioner.user.is_active && new Date(practitioner.user.created_at).getTime() >= fourteenDaysAgo && new Date(practitioner.user.created_at).getTime() < sevenDaysAgo).length,
+          (practitioners ?? []).filter((practitioner) => practitioner.user.is_active && new Date(practitioner.user.created_at).getTime() >= currentWindowStart).length,
+          (practitioners ?? []).filter((practitioner) => practitioner.user.is_active && new Date(practitioner.user.created_at).getTime() >= previousWindowStart && new Date(practitioner.user.created_at).getTime() < currentWindowStart).length,
         ),
         highRisk: formatTrendPercentage(
           currentRows.filter((request) => request.risk_indicator === "high").length,
@@ -663,10 +752,10 @@ export default function AdminServiceRequests() {
         ),
       },
     };
-  }, [practitioners, requests, responses, responsesByRequest]);
+  }, [dashboardRange.comparisonDays, dashboardRequests, dashboardResponses, practitioners, requests, responses, responsesByRequest]);
 
   const statusChartData = useMemo(() => {
-    const activeLeads = (requests ?? []).filter((request) => (
+    const activeLeads = dashboardRequests.filter((request) => (
       !request.is_archived
       && request.lifecycle_stage !== "expired"
       && request.lifecycle_stage !== "pending_client_confirmation"
@@ -674,7 +763,7 @@ export default function AdminServiceRequests() {
       && request.status !== "converted_to_client"
       && request.lifecycle_reactivation_count === 0
     )).length;
-    const reactivatedLeads = (requests ?? []).filter((request) => (
+    const reactivatedLeads = dashboardRequests.filter((request) => (
       !request.is_archived
       && request.lifecycle_stage !== "expired"
       && request.lifecycle_stage !== "pending_client_confirmation"
@@ -692,10 +781,10 @@ export default function AdminServiceRequests() {
       { key: "archived", label: "Archived Leads", value: requestMetrics.archived, fill: STATUS_CHART_COLORS.archived, percentage: Math.round((requestMetrics.archived / total) * 100) },
       { key: "completed", label: "Completed Leads", value: requestMetrics.completed, fill: "#14B8A6", percentage: Math.round((requestMetrics.completed / total) * 100) },
     ];
-  }, [requestMetrics, requests]);
+  }, [dashboardRequests, requestMetrics]);
 
   const pendingConfirmationRows = useMemo(
-    () => (requests ?? [])
+    () => dashboardRequests
       .filter((request) => request.lifecycle_stage === "pending_client_confirmation")
       .sort((left, right) => {
         const leftTime = left.client_confirmation_due_at ? new Date(left.client_confirmation_due_at).getTime() : Number.MAX_SAFE_INTEGER;
@@ -703,19 +792,21 @@ export default function AdminServiceRequests() {
         return leftTime - rightTime;
       })
       .slice(0, 5),
-    [requests],
+    [dashboardRequests],
   );
 
   const recentLeads = useMemo(
-    () => filteredRequests.slice(0, 8),
-    [filteredRequests],
+    () => filteredRequests
+      .filter((request) => !dashboardRange.start || new Date(request.created_at).getTime() >= dashboardRange.start.getTime())
+      .slice(0, 8),
+    [dashboardRange.start, filteredRequests],
   );
 
   const practitionerActivityRows = useMemo(() => {
-    const requestById = new Map((requests ?? []).map((request) => [request.id, request]));
+    const requestById = new Map(dashboardRequests.map((request) => [request.id, request]));
     return (practitioners ?? [])
       .map((practitioner) => {
-        const practitionerResponses = (responses ?? []).filter((response) => response.practitioner_profile_id === practitioner.user.id);
+        const practitionerResponses = dashboardResponses.filter((response) => response.practitioner_profile_id === practitioner.user.id);
         const viewedCount = accessRequestsByPractitioner.get(practitioner.user.id)?.length ?? 0;
         const responseDurations = practitionerResponses
           .map((response) => {
@@ -741,22 +832,22 @@ export default function AdminServiceRequests() {
       })
       .sort((left, right) => right.responses - left.responses)
       .slice(0, 6);
-  }, [accessRequestsByPractitioner, practitionerPlanMap, practitioners, requests, responses]);
+  }, [accessRequestsByPractitioner, dashboardRequests, dashboardResponses, practitionerPlanMap, practitioners]);
 
   const marketplaceHealth = useMemo(() => {
     const total = requestMetrics.total || 1;
-    const responseRate = Math.round((requests ?? []).filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) > 0).length / total * 100);
+    const responseRate = Math.round(dashboardRequests.filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) > 0).length / total * 100);
     const reactivationRate = Math.round((requestMetrics.reactivated / total) * 100);
     const expiryRate = Math.round((requestMetrics.expired / total) * 100);
-    const conversionRate = Math.round(((requests ?? []).filter((request) => Boolean(request.converted_case_id)).length / total) * 100);
+    const conversionRate = Math.round((dashboardRequests.filter((request) => Boolean(request.converted_case_id)).length / total) * 100);
 
     return [
       { label: "Response Rate", value: responseRate, trend: requestMetrics.trends.practitionerResponses },
       { label: "Reactivation Rate", value: reactivationRate, trend: requestMetrics.trends.reactivated },
       { label: "Expiry Rate", value: expiryRate, trend: -Math.abs(requestMetrics.trends.expired) },
-      { label: "Conversion Rate", value: conversionRate, trend: formatTrendPercentage((requests ?? []).filter((request) => Boolean(request.converted_case_id)).length, 0) },
+      { label: "Conversion Rate", value: conversionRate, trend: formatTrendPercentage(dashboardRequests.filter((request) => Boolean(request.converted_case_id)).length, 0) },
     ];
-  }, [requestMetrics, requests, responsesByRequest]);
+  }, [dashboardRequests, requestMetrics, responsesByRequest]);
 
   const openRequest = async (request: ServiceRequestRecord) => {
     setSelectedRequestId(request.id);
@@ -994,7 +1085,14 @@ export default function AdminServiceRequests() {
   };
 
   const adminInitials = getInitials(profile?.full_name || user?.email);
-  const dateRangeLabel = "20 May 2025 - 20 May 2025";
+  const dateRangeLabel = dashboardRange.label;
+  const comparisonLabel = dashboardDateRange === "today"
+    ? "vs yesterday"
+    : dashboardDateRange === "last7"
+      ? "vs previous 7 days"
+      : dashboardDateRange === "last30"
+        ? "vs previous 30 days"
+        : "vs previous 30 days";
   const unreadRequestNotificationCount = (requestNotifications ?? []).filter((item) => !item.is_read).length;
 
   const summaryCards = [
@@ -1051,21 +1149,28 @@ export default function AdminServiceRequests() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" variant="outline" className="rounded-2xl border-slate-200 bg-white px-4 text-slate-600 shadow-sm hover:bg-slate-50">
-              <CalendarDays className="mr-2 h-4 w-4" />
-              {dateRangeLabel}
-            </Button>
-            <button
-              type="button"
-              className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50"
-            >
+            <Select value={dashboardDateRange} onValueChange={(value) => setDashboardDateRange(value as DashboardDateRange)}>
+              <SelectTrigger className="h-11 w-auto min-w-[220px] rounded-2xl border-slate-200 bg-white px-4 text-slate-600 shadow-sm">
+                <div className="inline-flex items-center">
+                  <CalendarDays className="mr-2 h-4 w-4" />
+                  <SelectValue>{dateRangeLabel}</SelectValue>
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="last7">Last 7 Days</SelectItem>
+                <SelectItem value="last30">Last 30 Days</SelectItem>
+                <SelectItem value="all">All Time</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm">
               <Bell className="h-5 w-5" />
               {unreadRequestNotificationCount > 0 ? (
                 <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
                   {unreadRequestNotificationCount}
                 </span>
               ) : null}
-            </button>
+            </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-sm font-semibold text-white shadow-sm">
               {adminInitials}
             </div>
@@ -1091,7 +1196,7 @@ export default function AdminServiceRequests() {
               </div>
               <p className="mt-4 text-sm font-medium text-slate-500">{card.title}</p>
               <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">{card.value}</p>
-              <p className="mt-2 text-xs text-slate-400">from last 7 days</p>
+              <p className="mt-2 text-xs text-slate-400">{comparisonLabel}</p>
             </div>
           );
         })}
@@ -1104,10 +1209,9 @@ export default function AdminServiceRequests() {
               <h2 className="text-lg font-semibold text-slate-900">Lead Lifecycle Overview</h2>
               <p className="mt-1 text-sm text-slate-500">How unattended leads move through the marketplace automatically.</p>
             </div>
-            <button type="button" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
+            <Button type="button" variant="outline" className="rounded-2xl border-slate-200" onClick={() => setIsLifecycleDialogOpen(true)}>
               Learn more
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </button>
+            </Button>
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {lifecycleStages.map((stage, index) => {
@@ -1210,7 +1314,7 @@ export default function AdminServiceRequests() {
               <h2 className="text-lg font-semibold text-slate-900">Pending Client Confirmation</h2>
               <p className="mt-1 text-sm text-slate-500">Leads waiting for client confirmation before reactivation.</p>
             </div>
-            <button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => setLifecycleTab("pending")}>
+            <button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => moveToWorkspaceTab("pending")}>
               View all pending
             </button>
           </div>
@@ -1238,7 +1342,10 @@ export default function AdminServiceRequests() {
               </button>
             )) : (
               <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
-                No pending confirmations right now.
+                <p>No pending confirmations right now.</p>
+                <Button type="button" variant="outline" className="mt-4 rounded-xl" onClick={() => moveToWorkspaceTab("pending")}>
+                  Open pending tab
+                </Button>
               </div>
             )}
           </div>
@@ -1361,7 +1468,7 @@ export default function AdminServiceRequests() {
             </div>
           </div>
           <div className="mt-5 space-y-3">
-            {(requestNotifications ?? []).length ? (requestNotifications ?? []).map((notification) => (
+            {dashboardRequestNotifications.length ? dashboardRequestNotifications.map((notification) => (
               <button
                 key={notification.id}
                 type="button"
@@ -1410,7 +1517,7 @@ export default function AdminServiceRequests() {
         </div>
       </div>
 
-      <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
+      <div ref={workspaceRef} className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Lead Management Workspace</h2>
@@ -2133,6 +2240,11 @@ export default function AdminServiceRequests() {
           </div>
         ) : null}
       </DashboardItemDialog>
+
+      <LeadLifecycleExplainerDialog
+        open={isLifecycleDialogOpen}
+        onOpenChange={setIsLifecycleDialogOpen}
+      />
 
       <AlertDialog open={confirmDeleteLeadOpen} onOpenChange={setConfirmDeleteLeadOpen}>
         <AlertDialogContent>
