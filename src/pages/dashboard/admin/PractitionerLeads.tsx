@@ -67,8 +67,8 @@ function getUpgradePrompt(requiredTier?: string | null) {
   return null;
 }
 
-function getLeadCardTheme(requiredTier?: string | null) {
-  if ((requiredTier ?? "basic") === "business") {
+function getLeadCardTheme(leadTier?: string | null) {
+  if ((leadTier ?? "basic") === "business") {
     return {
       border: "border-l-amber-500",
       avatar: "bg-amber-100 text-amber-700",
@@ -79,7 +79,7 @@ function getLeadCardTheme(requiredTier?: string | null) {
     };
   }
 
-  if ((requiredTier ?? "basic") === "professional") {
+  if ((leadTier ?? "basic") === "professional") {
     return {
       border: "border-l-violet-500",
       avatar: "bg-violet-100 text-violet-700",
@@ -100,16 +100,16 @@ function getLeadCardTheme(requiredTier?: string | null) {
   };
 }
 
-function formatLeadType(requiredTier?: string | null) {
-  if ((requiredTier ?? "basic") === "business") {
+function formatLeadType(leadTier?: string | null) {
+  if ((leadTier ?? "basic") === "business") {
     return "Business Lead";
   }
 
-  if ((requiredTier ?? "basic") === "professional") {
+  if ((leadTier ?? "basic") === "professional") {
     return "Professional Lead";
   }
 
-  return "Basic Lead";
+  return "Starter Lead";
 }
 
 function getNameInitials(name: string) {
@@ -1000,14 +1000,16 @@ export default function PractitionerLeads() {
               const creditCost = getDisplayedCreditCost(request);
               const accessRequest = accessRequestMap.get(request.id);
               const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
+              const leadTier = request.lead_tier ?? "basic";
               const requiredTier = getLifecycleStageRequiredTier(request.lifecycle_stage);
               const tierLocked = !accessApproved
                 && !canPlanAccessLifecycleStage(practitionerLeadTier, request.lifecycle_stage);
               const upgradePrompt = tierLocked ? getUpgradePrompt(requiredTier) : null;
-              const displayName = accessApproved ? request.full_name : `${formatLifecycleStageLabel(request.lifecycle_stage)} Lead`;
+              const displayName = accessApproved ? request.full_name : "Lead Opportunity";
               const countdownLabel = getLifecycleCountdownLabel(request);
-              const theme = getLeadCardTheme(requiredTier);
+              const theme = getLeadCardTheme(leadTier);
               const initials = getNameInitials(displayName);
+              const leadTypeLabel = formatLeadType(leadTier);
               const documentCount = (documentMap.get(request.id) ?? []).length;
               const isViewed = Boolean(request.viewed_at || accessApproved || ownResponse || request.status === "viewed" || request.status === "responded");
               const actionLabel = ownResponse
@@ -1075,7 +1077,10 @@ export default function PractitionerLeads() {
                             </div>
                             <div className="flex flex-wrap gap-2">
                               <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${theme.leadBadge}`}>
-                                {formatLeadType(requiredTier)}
+                                {leadTypeLabel}
+                              </Badge>
+                              <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
+                                {formatLifecycleStageLabel(request.lifecycle_stage)}
                               </Badge>
                               <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getServiceRequestRiskClass(request.risk_indicator)}`}>
                                 {formatServiceRequestLabel(request.risk_indicator)} risk
