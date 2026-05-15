@@ -475,125 +475,6 @@ export default function AdminServiceRequests() {
     issueFilter,
   ].some((value) => value && value !== "all");
 
-  const filteredRequests = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-
-    return (requests ?? []).filter((request) => {
-      const practitionerVisibility = getPractitionerMarketplaceVisibility(request);
-
-      if (lifecycleTab !== "hidden" && leadView === "active" && request.is_archived) {
-        return false;
-      }
-
-      if (lifecycleTab !== "hidden" && leadView === "archived" && !request.is_archived) {
-        return false;
-      }
-
-      if (lifecycleTab === "active" && (request.is_archived || request.lifecycle_stage === "expired" || request.status === "expired")) {
-        return false;
-      }
-
-      if (lifecycleTab === "business" && request.lifecycle_stage !== "business_exclusive") {
-        return false;
-      }
-
-      if (lifecycleTab === "professional" && request.lifecycle_stage !== "professional_access") {
-        return false;
-      }
-
-      if (lifecycleTab === "open" && request.lifecycle_stage !== "open_marketplace") {
-        return false;
-      }
-
-      if (lifecycleTab === "reactivated" && !isMarketplaceReactivatedLead(request)) {
-        return false;
-      }
-
-      if (lifecycleTab === "pending" && request.lifecycle_stage !== "pending_client_confirmation") {
-        return false;
-      }
-
-      if (lifecycleTab === "expired" && request.lifecycle_stage !== "expired") {
-        return false;
-      }
-
-      if (lifecycleTab === "hidden" && practitionerVisibility.visible) {
-        return false;
-      }
-
-      if (lifecycleTab === "archived" && !request.is_archived) {
-        return false;
-      }
-
-      const issueFlags = getServiceRequestIssueFlags({
-        hasDebtFlag: request.has_debt_flag,
-        missingReturnsFlag: request.missing_returns_flag,
-        missingDocumentsFlag: request.missing_documents_flag,
-      });
-      const assignedPractitionerName = request.assigned_practitioner_id
-        ? (practitionerMap.get(request.assigned_practitioner_id)?.user.full_name
-          || practitionerMap.get(request.assigned_practitioner_id)?.user.email
-          || "")
-        : "";
-      const responseCount = responsesByRequest.get(request.id)?.length ?? 0;
-      const serviceLabels = formatServiceList(resolveServiceList(request));
-      const categoryLabels = formatCategoryList(resolveCategoryList(request));
-      const matchesSearch = !normalizedSearch || [
-        request.full_name,
-        request.email,
-        request.phone,
-        request.id_number || "",
-        formatServiceRequestLabel(request.identity_document_type),
-        assignedPractitionerName,
-        serviceLabels,
-        categoryLabels,
-        formatServiceRequestLabel(request.status),
-        formatServiceRequestLabel(request.priority_level),
-        formatServiceRequestLabel(request.client_type),
-        formatServiceRequestLabel(request.risk_indicator),
-      ].some((value) => value.toLowerCase().includes(normalizedSearch));
-      const matchesStatus = statusFilter === "all" || request.status === statusFilter;
-      const matchesService = serviceFilter === "all" || resolveServiceList(request).includes(serviceFilter as Enums<"service_request_service_needed">);
-      const matchesRisk = riskFilter === "all" || request.risk_indicator === riskFilter;
-      const matchesPriority = priorityFilter === "all" || request.priority_level === priorityFilter;
-      const matchesClientType = clientTypeFilter === "all" || request.client_type === clientTypeFilter;
-      const matchesAssignment = assignmentFilter === "all"
-        || (assignmentFilter === "assigned" && Boolean(request.assigned_practitioner_id))
-        || (assignmentFilter === "unassigned" && !request.assigned_practitioner_id)
-        || (assignmentFilter === "responded" && responseCount > 0)
-        || (assignmentFilter === "no_responses" && responseCount === 0)
-        || (assignmentFilter === "converted" && Boolean(request.converted_case_id));
-      const matchesIssue = issueFilter === "all"
-        || (issueFilter === "debt" && request.has_debt_flag)
-        || (issueFilter === "returns" && request.missing_returns_flag)
-        || (issueFilter === "documents" && request.missing_documents_flag)
-        || (issueFilter === "clean" && issueFlags.length === 0);
-
-      return matchesSearch
-        && matchesStatus
-        && matchesService
-        && matchesRisk
-        && matchesPriority
-        && matchesClientType
-        && matchesAssignment
-        && matchesIssue;
-    });
-  }, [
-    assignmentFilter,
-    clientTypeFilter,
-    issueFilter,
-    leadView,
-    lifecycleTab,
-    practitionerMap,
-    priorityFilter,
-    requests,
-    responsesByRequest,
-    riskFilter,
-    searchQuery,
-    serviceFilter,
-    statusFilter,
-  ]);
-
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
   const selectedResponses = selectedRequest ? responsesByRequest.get(selectedRequest.id) ?? [] : [];
@@ -791,6 +672,53 @@ export default function AdminServiceRequests() {
     };
   }
 
+  function matchesLifecycleWorkspaceTab(
+    request: ServiceRequestRecord,
+    tab: typeof lifecycleTab,
+  ) {
+    const practitionerVisibility = getPractitionerMarketplaceVisibility(request);
+
+    if (tab === "active") {
+      return !request.is_archived
+        && request.lifecycle_stage !== "expired"
+        && request.status !== "expired";
+    }
+
+    if (tab === "business") {
+      return request.lifecycle_stage === "business_exclusive";
+    }
+
+    if (tab === "professional") {
+      return request.lifecycle_stage === "professional_access";
+    }
+
+    if (tab === "open") {
+      return request.lifecycle_stage === "open_marketplace";
+    }
+
+    if (tab === "reactivated") {
+      return isMarketplaceReactivatedLead(request);
+    }
+
+    if (tab === "pending") {
+      return request.lifecycle_stage === "pending_client_confirmation";
+    }
+
+    if (tab === "expired") {
+      return request.lifecycle_stage === "expired";
+    }
+
+    if (tab === "hidden") {
+      return !practitionerVisibility.visible;
+    }
+
+    if (tab === "archived") {
+      return request.is_archived;
+    }
+
+    return true;
+  }
+
   const moveToWorkspaceTab = (tab: typeof lifecycleTab) => {
     setLeadView(tab === "archived" ? "archived" : "active");
     setLifecycleTab(tab);
@@ -798,6 +726,106 @@ export default function AdminServiceRequests() {
       workspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
+
+  const workspaceBaseRequests = useMemo(() => {
+    if (lifecycleTab === "hidden") {
+      return dashboardRequests;
+    }
+
+    if (lifecycleTab === "archived" || leadView === "archived") {
+      return dashboardRequests.filter((request) => request.is_archived);
+    }
+
+    return dashboardRequests.filter((request) => !request.is_archived);
+  }, [dashboardRequests, leadView, lifecycleTab]);
+
+  const workspaceFilteredRequests = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+
+    return workspaceBaseRequests.filter((request) => {
+      const issueFlags = getServiceRequestIssueFlags({
+        hasDebtFlag: request.has_debt_flag,
+        missingReturnsFlag: request.missing_returns_flag,
+        missingDocumentsFlag: request.missing_documents_flag,
+      });
+      const assignedPractitionerName = request.assigned_practitioner_id
+        ? (practitionerMap.get(request.assigned_practitioner_id)?.user.full_name
+          || practitionerMap.get(request.assigned_practitioner_id)?.user.email
+          || "")
+        : "";
+      const responseCount = responsesByRequest.get(request.id)?.length ?? 0;
+      const serviceLabels = formatServiceList(resolveServiceList(request));
+      const categoryLabels = formatCategoryList(resolveCategoryList(request));
+      const matchesSearch = !normalizedSearch || [
+        request.full_name,
+        request.email,
+        request.phone,
+        request.id_number || "",
+        formatServiceRequestLabel(request.identity_document_type),
+        assignedPractitionerName,
+        serviceLabels,
+        categoryLabels,
+        formatServiceRequestLabel(request.status),
+        formatServiceRequestLabel(request.priority_level),
+        formatServiceRequestLabel(request.client_type),
+        formatServiceRequestLabel(request.risk_indicator),
+      ].some((value) => value.toLowerCase().includes(normalizedSearch));
+      const matchesStatus = statusFilter === "all" || request.status === statusFilter;
+      const matchesService = serviceFilter === "all" || resolveServiceList(request).includes(serviceFilter as Enums<"service_request_service_needed">);
+      const matchesRisk = riskFilter === "all" || request.risk_indicator === riskFilter;
+      const matchesPriority = priorityFilter === "all" || request.priority_level === priorityFilter;
+      const matchesClientType = clientTypeFilter === "all" || request.client_type === clientTypeFilter;
+      const matchesAssignment = assignmentFilter === "all"
+        || (assignmentFilter === "assigned" && Boolean(request.assigned_practitioner_id))
+        || (assignmentFilter === "unassigned" && !request.assigned_practitioner_id)
+        || (assignmentFilter === "responded" && responseCount > 0)
+        || (assignmentFilter === "no_responses" && responseCount === 0)
+        || (assignmentFilter === "converted" && Boolean(request.converted_case_id));
+      const matchesIssue = issueFilter === "all"
+        || (issueFilter === "debt" && request.has_debt_flag)
+        || (issueFilter === "returns" && request.missing_returns_flag)
+        || (issueFilter === "documents" && request.missing_documents_flag)
+        || (issueFilter === "clean" && issueFlags.length === 0);
+
+      return matchesSearch
+        && matchesStatus
+        && matchesService
+        && matchesRisk
+        && matchesPriority
+        && matchesClientType
+        && matchesAssignment
+        && matchesIssue;
+    });
+  }, [
+    assignmentFilter,
+    clientTypeFilter,
+    issueFilter,
+    practitionerMap,
+    priorityFilter,
+    responsesByRequest,
+    riskFilter,
+    searchQuery,
+    serviceFilter,
+    statusFilter,
+    workspaceBaseRequests,
+  ]);
+
+  const workspaceTabCounts = useMemo(() => ({
+    active: workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, "active")).length,
+    business: workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, "business")).length,
+    professional: workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, "professional")).length,
+    open: workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, "open")).length,
+    reactivated: workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, "reactivated")).length,
+    pending: workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, "pending")).length,
+    expired: workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, "expired")).length,
+    hidden: workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, "hidden")).length,
+    archived: workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, "archived")).length,
+  }), [workspaceFilteredRequests]);
+
+  const filteredRequests = useMemo(
+    () => workspaceFilteredRequests.filter((request) => matchesLifecycleWorkspaceTab(request, lifecycleTab)),
+    [lifecycleTab, workspaceFilteredRequests],
+  );
 
   const requestMetrics = useMemo(() => {
     const rows = dashboardRequests;
@@ -850,9 +878,9 @@ export default function AdminServiceRequests() {
       archived: rows.filter((request) => request.is_archived).length,
       highRisk: rows.filter((request) => request.risk_indicator === "high").length,
       deadLeads: rows.filter((request) => request.status === "dead_lead" || request.status === "expired").length,
-      business: rows.filter((request) => request.lifecycle_stage === "business_exclusive" && !request.is_archived).length,
-      professional: rows.filter((request) => request.lifecycle_stage === "professional_access" && !request.is_archived).length,
-      openMarketplace: rows.filter((request) => request.lifecycle_stage === "open_marketplace" && !request.is_archived).length,
+      business: rows.filter((request) => matchesLifecycleWorkspaceTab(request, "business") && !request.is_archived).length,
+      professional: rows.filter((request) => matchesLifecycleWorkspaceTab(request, "professional") && !request.is_archived).length,
+      openMarketplace: rows.filter((request) => matchesLifecycleWorkspaceTab(request, "open") && !request.is_archived).length,
       reactivated: rows.filter(isMarketplaceReactivatedLead).length,
       pendingConfirmation: rows.filter((request) => request.lifecycle_stage === "pending_client_confirmation").length,
       expired: rows.filter((request) => request.lifecycle_stage === "expired").length,
@@ -2021,6 +2049,7 @@ export default function AdminServiceRequests() {
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Lead Management Workspace</h2>
             <p className="mt-1 text-sm text-slate-500">Search, filter and manage the full marketplace lead list below.</p>
+            <p className="mt-2 text-xs text-slate-400">Lifecycle filters use lead stage, not service category or lead type, and they follow the selected dashboard date range.</p>
           </div>
         </div>
       </div>
@@ -2049,8 +2078,8 @@ export default function AdminServiceRequests() {
         <div className="mb-4 flex flex-wrap gap-2">
           {[
             { value: "active", label: "Active Leads" },
-            { value: "business", label: "Business Leads" },
-            { value: "professional", label: "Professional Leads" },
+            { value: "business", label: "Business Stage" },
+            { value: "professional", label: "Professional Stage" },
             { value: "open", label: "Open Marketplace" },
             { value: "reactivated", label: "Reactivated Leads" },
             { value: "pending", label: "Pending Confirmation" },
@@ -2064,9 +2093,9 @@ export default function AdminServiceRequests() {
               size="sm"
               variant={lifecycleTab === tab.value ? "default" : "outline"}
               className="rounded-full"
-              onClick={() => setLifecycleTab(tab.value as typeof lifecycleTab)}
+              onClick={() => moveToWorkspaceTab(tab.value as typeof lifecycleTab)}
             >
-              {tab.label}
+              {tab.label} <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-[11px]">{workspaceTabCounts[tab.value as keyof typeof workspaceTabCounts]}</span>
             </Button>
           ))}
         </div>
@@ -2170,7 +2199,7 @@ export default function AdminServiceRequests() {
 
         <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground font-body">
-            Showing <span className="font-semibold text-foreground">{filteredRequests.length}</span> of <span className="font-semibold text-foreground">{requests?.length ?? 0}</span> requests
+            Showing <span className="font-semibold text-foreground">{filteredRequests.length}</span> of <span className="font-semibold text-foreground">{workspaceFilteredRequests.length}</span> requests in <span className="font-semibold text-foreground">{dateRangeLabel}</span>
           </p>
           <Button
             type="button"
