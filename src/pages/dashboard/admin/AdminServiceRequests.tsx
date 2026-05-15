@@ -786,6 +786,7 @@ export default function AdminServiceRequests() {
   const practitionerActivityRows = useMemo(() => {
     const requestById = new Map((requests ?? []).map((request) => [request.id, request]));
     return (practitioners ?? [])
+      .filter((practitioner) => practitionerPlanMap.has(practitioner.user.id))
       .map((practitioner) => {
         const practitionerResponses = dashboardResponses.filter((response) => response.practitioner_profile_id === practitioner.user.id);
         const viewedCount = dashboardApprovedAccessCountByPractitioner.get(practitioner.user.id) ?? 0;
