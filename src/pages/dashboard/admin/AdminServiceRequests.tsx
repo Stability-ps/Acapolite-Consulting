@@ -194,7 +194,7 @@ export default function AdminServiceRequests() {
   const [resettingTimerId, setResettingTimerId] = useState<string | null>(null);
   const [returningToMarketplaceId, setReturningToMarketplaceId] = useState<string | null>(null);
   const [openingMarketplaceId, setOpeningMarketplaceId] = useState<string | null>(null);
-  const [selectedReviveStage, setSelectedReviveStage] = useState<Enums<"service_request_lifecycle_stage">>("business_exclusive");
+  const [selectedReviveStage, setSelectedReviveStage] = useState<Enums<"service_request_lifecycle_stage">>("open_marketplace");
   const [leadArchiveReason, setLeadArchiveReason] = useState<string>("inactive");
   const [leadArchiveNotes, setLeadArchiveNotes] = useState("");
   const [archivingLeadId, setArchivingLeadId] = useState<string | null>(null);
@@ -609,7 +609,7 @@ export default function AdminServiceRequests() {
     setSelectedPractitionerId(selectedRequest?.assigned_practitioner_id ?? "");
     setLeadArchiveReason(selectedRequest?.archive_reason ?? "inactive");
     setLeadArchiveNotes(selectedRequest?.archive_notes ?? "");
-    setSelectedReviveStage("business_exclusive");
+    setSelectedReviveStage("open_marketplace");
   }, [selectedRequest?.id]);
 
   useEffect(() => {
@@ -1382,21 +1382,21 @@ export default function AdminServiceRequests() {
     {
       title: "Business Exclusive",
       time: formatStageHours(lifecycleSettings?.business_stage_hours ?? 48),
-      description: "Business Plan Only",
+      description: "Optional Admin-Only Re-entry",
       icon: Crown,
       iconClassName: "bg-amber-50 text-amber-600",
     },
     {
       title: "Professional Access",
       time: formatStageHours(lifecycleSettings?.professional_stage_hours ?? 48),
-      description: "Business + Professional",
+      description: "Optional Admin-Only Re-entry",
       icon: Users,
       iconClassName: "bg-sky-50 text-sky-600",
     },
     {
       title: "Open Marketplace",
       time: formatStageHours(lifecycleSettings?.open_marketplace_hours ?? 72),
-      description: "All Plans (Including Starter)",
+      description: "Default For New Leads",
       icon: Target,
       iconClassName: "bg-emerald-50 text-emerald-600",
     },
@@ -1468,7 +1468,7 @@ export default function AdminServiceRequests() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Lead Lifecycle Overview</h2>
-              <p className="mt-1 text-sm text-slate-500">How unattended leads move through the marketplace automatically.</p>
+              <p className="mt-1 text-sm text-slate-500">New client-submitted leads open to all practitioners automatically, with optional restricted re-entry stages for admin.</p>
             </div>
             <Button type="button" variant="outline" className="rounded-2xl border-slate-200" onClick={() => setIsLifecycleDialogOpen(true)}>
               Learn more
@@ -1493,7 +1493,7 @@ export default function AdminServiceRequests() {
             })}
           </div>
           <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-            When a stage expires, the system automatically updates lead status, access permissions, notifications and countdown timers.
+            New leads now enter Open Marketplace automatically. When a stage expires, the system updates lead status, access permissions, notifications and countdown timers without admin action.
           </div>
         </div>
 

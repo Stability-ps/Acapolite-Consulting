@@ -18,7 +18,7 @@ export function formatLifecycleStageLabel(stage?: ServiceRequestLifecycleStage |
     case "expired":
       return "Expired";
     default:
-      return "Business Exclusive";
+      return "Open Marketplace";
   }
 }
 

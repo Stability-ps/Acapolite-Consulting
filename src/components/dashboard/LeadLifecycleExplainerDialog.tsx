@@ -28,6 +28,7 @@ const goals = [
 ] as const;
 
 const stageRules = [
+  "New client-submitted leads now enter Open Marketplace automatically",
   "Lead status changes automatically when a stage timer expires",
   "Access expands to the next marketplace stage without staff intervention",
   "Each new stage starts with a fresh timer",
@@ -72,15 +73,15 @@ export function LeadLifecycleExplainerDialog({
         title: "Business Exclusive",
         duration: formatHoursLabel(businessHours, 48),
         access: "Business plan practitioners only",
-        purpose: "New marketplace leads begin here so Business practitioners receive the earliest access window.",
+        purpose: "This is now an optional admin re-entry stage for old or revived leads that should go back to Business-only visibility first.",
         timerExample: `Expires in ${formatHoursLabel(businessHours, 48)}`,
         accent: "border-amber-200 bg-amber-50",
         badgeClassName: "bg-amber-100 text-amber-800 hover:bg-amber-100",
         during: [
           "Lead displays a Business Exclusive badge",
           "Only Business subscribers can unlock the lead",
-          "The lifecycle countdown starts immediately after validation",
-          "No staff action is required while the timer runs",
+          "Admins can place a lead here when they want narrower visibility first",
+          "The Business-stage timer starts immediately after the move",
         ],
         expiry: [
           "Status changes to Professional Access",
@@ -94,7 +95,7 @@ export function LeadLifecycleExplainerDialog({
         title: "Professional Access",
         duration: formatHoursLabel(professionalHours, 48),
         access: "Business + Professional practitioners",
-        purpose: "If the lead is still unattended, access expands to Professional subscribers without removing Business access.",
+        purpose: "This is an optional admin-controlled restricted stage that expands access beyond Business without opening the lead to every practitioner yet.",
         timerExample: `Expires in ${formatHoursLabel(professionalHours, 48)}`,
         accent: "border-sky-200 bg-sky-50",
         badgeClassName: "bg-sky-100 text-sky-800 hover:bg-sky-100",
@@ -116,12 +117,12 @@ export function LeadLifecycleExplainerDialog({
         title: "Open Marketplace",
         duration: formatHoursLabel(openHours, 72),
         access: "All qualifying practitioners",
-        purpose: "This is the broadest visibility window and the final unattended marketplace stage before expiry.",
+        purpose: "New client-submitted leads start here automatically so all qualifying practitioners can see them immediately.",
         timerExample: `Expires in ${formatHoursLabel(openHours, 72)}`,
         accent: "border-emerald-200 bg-emerald-50",
         badgeClassName: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
         during: [
-          "The lead is visible across the marketplace",
+          "The lead is visible across the marketplace by default",
           "Eligible practitioners may unlock and respond",
           "The lead remains active until the Open Marketplace timer ends",
         ],
@@ -173,11 +174,11 @@ export function LeadLifecycleExplainerDialog({
                 How the Acapolite Marketplace Works
               </div>
               <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-                Marketplace leads move through Business Exclusive, Professional Access, and Open Marketplace automatically.
-                Each stage uses its own timer, and the lifecycle processor advances or expires unattended leads without staff intervention.
+                New client-submitted leads now enter Open Marketplace automatically so they become visible to all qualifying practitioners immediately.
+                Business Exclusive and Professional Access remain available as optional admin re-entry stages for revived or manually repositioned leads.
               </p>
               <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-                Staff can change the stage durations, reset timers, and revive expired leads from the dashboard.
+                Each stage still uses its own timer, and the lifecycle processor advances or expires unattended leads without staff intervention.
               </p>
             </div>
 
