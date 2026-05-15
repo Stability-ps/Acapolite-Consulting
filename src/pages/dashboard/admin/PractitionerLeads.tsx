@@ -443,11 +443,20 @@ export default function PractitionerLeads() {
       : "basic";
   const hasActiveSubscription = Boolean(activeSubscription);
 
+  const visibleRequests = useMemo(() => {
+    return (requests ?? []).filter((request) => {
+      const accessRequest = accessRequestMap.get(request.id);
+      const accessApproved = Boolean(responseMap.get(request.id) || accessRequest?.status === "approved");
+
+      return accessApproved || canPlanAccessLifecycleStage(practitionerLeadTier, request.lifecycle_stage);
+    });
+  }, [accessRequestMap, practitionerLeadTier, requests, responseMap]);
+
   const filteredRequests = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
     const servicesOffered = new Set(practitionerProfile?.services_offered ?? []);
 
-    return (requests ?? [])
+    return visibleRequests
       .filter((request) => {
         const matchesService = servicesOffered.size === 0 || resolveServiceList(request).some((service) => servicesOffered.has(service));
         return matchesService;
@@ -487,9 +496,9 @@ export default function PractitionerLeads() {
     filters,
     practitionerLeadTier,
     practitionerProfile?.services_offered,
-    requests,
     responseMap,
     searchQuery,
+    visibleRequests,
   ]);
 
   const practitionerMetrics = useMemo(() => {
@@ -544,7 +553,7 @@ export default function PractitionerLeads() {
   }, [documentMap, filteredRequests, responseMap]);
 
   const selectedRequest = filteredRequests.find((request) => request.id === selectedRequestId)
-    || requests?.find((request) => request.id === selectedRequestId)
+    || visibleRequests.find((request) => request.id === selectedRequestId)
     || null;
   const selectedResponse = selectedRequest ? responseMap.get(selectedRequest.id) ?? null : null;
   const selectedResponseCount = selectedRequest ? responseCountMap.get(selectedRequest.id) ?? 0 : 0;
