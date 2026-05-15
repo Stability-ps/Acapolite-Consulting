@@ -7,12 +7,13 @@ type ActivityAction =
   | "document_uploaded"
   | "document_approved"
   | "document_rejected"
+  | "document_deleted"
   | "document_missing_requested"
   | "invoice_created"
   | "invoice_sent"
   | "invoice_marked_paid";
 
-type ActivityTarget = "case" | "document" | "invoice";
+type ActivityTarget = "case" | "document" | "invoice" | "practitioner_profile";
 
 type LogActivityInput = {
   actorProfileId: string;

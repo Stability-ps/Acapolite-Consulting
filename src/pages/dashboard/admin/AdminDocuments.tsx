@@ -1,15 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ExternalLink,
   FileCheck2,
   FileText,
   Search,
   ShieldCheck,
+  Trash2,
   Wallet,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +47,11 @@ type InvoiceStatus = Enums<"invoice_status">;
 
 type GroupKey = "client" | "practitioner" | "case" | "payment";
 type ReviewAction = "uploaded" | "pending_review" | "approved" | "rejected";
+type PractitionerDocumentField =
+  | "id_document_path"
+  | "certificate_document_path"
+  | "proof_of_address_path"
+  | "bank_confirmation_document_path";
 
 type ClientInfo = {
   id?: string;
@@ -83,6 +100,7 @@ type StaffInvoiceRow = {
   invoice_number: string;
   title: string | null;
   description: string | null;
+  discount_amount?: number | null;
   subtotal: number;
   tax_amount: number;
   total_amount: number;
@@ -134,6 +152,7 @@ type UnifiedItem = {
   practitionerProfileId: string | null;
   practitionerVerificationStatus: string | null;
   practitionerBusinessName: string | null;
+  practitionerDocumentField: PractitionerDocumentField | null;
 };
 
 const groupLabels: Record<GroupKey, string> = {
@@ -290,24 +309,28 @@ function buildPractitionerVerificationItems(
       title: "ID Copy",
       filePath: profile.id_document_path,
       subtitle: "Identity verification",
+      field: "id_document_path" as const,
     },
     {
       key: "certificate",
       title: "Practitioner Certificate",
       filePath: profile.certificate_document_path,
       subtitle: "Professional certificate",
+      field: "certificate_document_path" as const,
     },
     {
       key: "proof-of-address",
       title: "Proof of Address",
       filePath: profile.proof_of_address_path,
       subtitle: "Business or residential address",
+      field: "proof_of_address_path" as const,
     },
     {
       key: "bank-letter",
       title: "Bank Letter",
       filePath: profile.bank_confirmation_document_path,
       subtitle: "Bank confirmation letter",
+      field: "bank_confirmation_document_path" as const,
     },
   ];
 
@@ -318,6 +341,7 @@ function buildPractitionerVerificationItems(
       title: item.title,
       subtitle: item.subtitle,
       filePath: item.filePath,
+      practitionerDocumentField: item.field,
       ...base,
     }));
 }
@@ -342,8 +366,11 @@ export default function AdminDocuments() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [savingReview, setSavingReview] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<UnifiedItem | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   const canReviewDocuments = hasStaffPermission("can_review_documents");
+  const canDeleteDocuments = role === "admin";
   const practitionerIdFilter = searchParams.get("practitionerId");
   const documentStateFilter = searchParams.get("documentState");
   const documentIdFromQuery = searchParams.get("documentId");
@@ -461,6 +488,7 @@ export default function AdminDocuments() {
         practitionerProfileId: null,
         practitionerVerificationStatus: null,
         practitionerBusinessName: null,
+        practitionerDocumentField: null,
       };
     });
 
@@ -493,6 +521,7 @@ export default function AdminDocuments() {
       practitionerProfileId: null,
       practitionerVerificationStatus: null,
       practitionerBusinessName: null,
+      practitionerDocumentField: null,
     }));
 
     return [...documentItems, ...practitionerItems, ...invoiceItems];
@@ -653,6 +682,108 @@ export default function AdminDocuments() {
     setReviewNotes(item.reviewerNotes);
     setRejectionReason(item.rejectionReason);
     setIsReviewDialogOpen(true);
+  };
+
+  const canDeleteItem = (item: UnifiedItem) =>
+    canDeleteDocuments &&
+    Boolean(item.filePath) &&
+    (item.sourceType === "document" || item.sourceType === "practitioner");
+
+  const deleteItem = async () => {
+    if (!deleteTarget || !deleteTarget.filePath || !canDeleteItem(deleteTarget) || !user || !role) {
+      return;
+    }
+
+    setDeletingItemId(deleteTarget.id);
+
+    try {
+      const { error: storageError } = await supabase.storage
+        .from("documents")
+        .remove([deleteTarget.filePath]);
+
+      if (storageError) {
+        throw storageError;
+      }
+
+      if (deleteTarget.sourceType === "document" && deleteTarget.documentId) {
+        const { error } = await supabase
+          .from("documents")
+          .delete()
+          .eq("id", deleteTarget.documentId);
+
+        if (error) {
+          throw error;
+        }
+
+        await logSystemActivity({
+          actorProfileId: user.id,
+          actorRole: role,
+          action: "document_deleted",
+          targetType: "document",
+          targetId: deleteTarget.documentId,
+          metadata: {
+            title: deleteTarget.title,
+            file_path: deleteTarget.filePath,
+            source_type: deleteTarget.sourceType,
+          },
+        });
+      } else if (
+        deleteTarget.sourceType === "practitioner" &&
+        deleteTarget.practitionerProfileId &&
+        deleteTarget.practitionerDocumentField
+      ) {
+        const update = {
+          [deleteTarget.practitionerDocumentField]: null,
+        } as Database["public"]["Tables"]["practitioner_profiles"]["Update"];
+
+        const { error } = await supabase
+          .from("practitioner_profiles")
+          .update(update)
+          .eq("profile_id", deleteTarget.practitionerProfileId);
+
+        if (error) {
+          throw error;
+        }
+
+        await logSystemActivity({
+          actorProfileId: user.id,
+          actorRole: role,
+          action: "document_deleted",
+          targetType: "practitioner_profile",
+          targetId: deleteTarget.practitionerProfileId,
+          metadata: {
+            title: deleteTarget.title,
+            file_path: deleteTarget.filePath,
+            source_type: deleteTarget.sourceType,
+            practitioner_document_field: deleteTarget.practitionerDocumentField,
+          },
+        });
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["staff-documents"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["staff-practitioner-verification-documents"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["staff-payment-documents"],
+        }),
+      ]);
+
+      if (selectedItem?.id === deleteTarget.id) {
+        setSelectedItem(null);
+        setIsReviewDialogOpen(false);
+      }
+
+      toast.success("Document deleted.");
+      setDeleteTarget(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to delete document.",
+      );
+    } finally {
+      setDeletingItemId(null);
+    }
   };
 
   const saveReview = async () => {
@@ -866,10 +997,8 @@ export default function AdminDocuments() {
         ) : filteredItems.length > 0 ? (
           <div className="grid gap-3">
             {filteredItems.map((item) => (
-              <button
+              <div
                 key={item.id}
-                type="button"
-                onClick={() => void openItem(item)}
                 className="w-full text-left bg-card rounded-xl border border-border shadow-card p-5 hover:shadow-elevated hover:border-primary/30 transition-all"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -891,7 +1020,41 @@ export default function AdminDocuments() {
                     <p>{item.caseLabel}</p>
                   </div>
                 </div>
-              </button>
+                <div className="mt-4 flex flex-wrap justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => void openItem(item)}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Open
+                  </Button>
+                  {canReviewDocuments && item.sourceType !== "invoice" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => openReviewDialog(item)}
+                    >
+                      <FileCheck2 className="mr-2 h-4 w-4" />
+                      Review
+                    </Button>
+                  ) : null}
+                  {canDeleteItem(item) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                      onClick={() => setDeleteTarget(item)}
+                      disabled={deletingItemId === item.id}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {deletingItemId === item.id ? "Deleting..." : "Delete"}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
             ))}
           </div>
         ) : (
@@ -1012,6 +1175,42 @@ export default function AdminDocuments() {
           </div>
         </div>
       </DashboardItemDialog>
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deletingItemId) {
+            setDeleteTarget(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the file from storage and deletes its reference from the admin documents page. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-xl border border-border bg-accent/20 p-4 text-sm text-foreground">
+            <p className="font-semibold">{deleteTarget?.title}</p>
+            <p className="mt-1 text-muted-foreground">{deleteTarget?.subtitle}</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(deletingItemId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteItem();
+              }}
+              disabled={Boolean(deletingItemId)}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {deletingItemId ? "Deleting..." : "Delete document"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
