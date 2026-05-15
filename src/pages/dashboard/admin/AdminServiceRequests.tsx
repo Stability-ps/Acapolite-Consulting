@@ -193,6 +193,7 @@ export default function AdminServiceRequests() {
   const [revivingLeadId, setRevivingLeadId] = useState<string | null>(null);
   const [resettingTimerId, setResettingTimerId] = useState<string | null>(null);
   const [returningToMarketplaceId, setReturningToMarketplaceId] = useState<string | null>(null);
+  const [openingMarketplaceId, setOpeningMarketplaceId] = useState<string | null>(null);
   const [selectedReviveStage, setSelectedReviveStage] = useState<Enums<"service_request_lifecycle_stage">>("business_exclusive");
   const [leadArchiveReason, setLeadArchiveReason] = useState<string>("inactive");
   const [leadArchiveNotes, setLeadArchiveNotes] = useState("");
@@ -767,7 +768,7 @@ export default function AdminServiceRequests() {
         label: "Visible to Business",
         description: "Only Business practitioners can currently see this lead.",
         toneClass: "border-amber-200 bg-amber-50 text-amber-700",
-        action: null,
+        action: "move_to_open_marketplace" as const,
       };
     }
 
@@ -777,7 +778,7 @@ export default function AdminServiceRequests() {
         label: "Visible to Professional+",
         description: "Professional and Business practitioners can currently see this lead.",
         toneClass: "border-sky-200 bg-sky-50 text-sky-700",
-        action: null,
+        action: "move_to_open_marketplace" as const,
       };
     }
 
@@ -1226,6 +1227,25 @@ export default function AdminServiceRequests() {
     }
 
     toast.success("Lead returned to the marketplace.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-request-lifecycle-history"] }),
+    ]);
+  };
+
+  const moveLeadToOpenMarketplace = async (requestId: string) => {
+    setOpeningMarketplaceId(requestId);
+    const { error } = await supabase.rpc("admin_move_service_request_to_open_marketplace", {
+      p_request_id: requestId,
+    });
+    setOpeningMarketplaceId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Lead moved to Open Marketplace.");
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-service-request-lifecycle-history"] }),
@@ -2145,6 +2165,8 @@ export default function AdminServiceRequests() {
                         ? " Open this lead and use Restart cycle."
                         : !practitionerVisibility.visible && practitionerVisibility.action === "return_to_marketplace"
                           ? " Open this lead and use Return to Marketplace."
+                          : practitionerVisibility.action === "move_to_open_marketplace"
+                            ? " Open this lead and use Move to Open Marketplace if you want all practitioners to see it now."
                           : ""}
                     </p>
                     <p className="mt-3 line-clamp-2 text-sm text-foreground font-body">{request.description}</p>
@@ -2314,6 +2336,9 @@ export default function AdminServiceRequests() {
                 {!practitionerVisibility.visible && practitionerVisibility.action === "return_to_marketplace" ? (
                   <p className="mt-1 text-xs text-muted-foreground font-body">Use Return to Marketplace to reopen this lead for practitioners.</p>
                 ) : null}
+                {practitionerVisibility.action === "move_to_open_marketplace" ? (
+                  <p className="mt-1 text-xs text-muted-foreground font-body">Use Move to Open Marketplace if you want all practitioners to see this lead immediately.</p>
+                ) : null}
               </div>
             </div>
               );
@@ -2359,6 +2384,17 @@ export default function AdminServiceRequests() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  {role === "admin" && getPractitionerMarketplaceVisibility(selectedRequest).action === "move_to_open_marketplace" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => void moveLeadToOpenMarketplace(selectedRequest.id)}
+                      disabled={openingMarketplaceId === selectedRequest.id}
+                    >
+                      {openingMarketplaceId === selectedRequest.id ? "Opening..." : "Move to Open Marketplace"}
+                    </Button>
+                  ) : null}
                   {role === "admin" && selectedRequest.lifecycle_stage === "pending_client_confirmation" ? (
                     <Button
                       type="button"
