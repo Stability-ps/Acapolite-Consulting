@@ -90,9 +90,9 @@ export function getLifecycleCountdownLabel(
       case "professional_access":
         return "Opening Open Marketplace";
       case "open_marketplace":
-        return "Reactivating lead";
+        return "Expiring lead";
       case "pending_client_confirmation":
-        return "Waiting for client confirmation";
+        return "Returning to marketplace";
       default:
         return "Updating access";
     }
@@ -124,7 +124,7 @@ export function getLifecycleAvailabilityMessage(stage?: ServiceRequestLifecycleS
     case "open_marketplace":
       return "This lead is currently open to all qualifying practitioners.";
     case "pending_client_confirmation":
-      return "This lead is waiting for the client to confirm they still need assistance.";
+      return "This lead is waiting for the client to respond before it returns to the marketplace or expires.";
     case "expired":
       return "This lead has expired and is no longer available in the marketplace.";
     default:

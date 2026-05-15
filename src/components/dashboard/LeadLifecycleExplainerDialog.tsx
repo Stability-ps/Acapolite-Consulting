@@ -1,16 +1,23 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   BellRing,
   Clock3,
   RefreshCcw,
   ShieldCheck,
+  TriangleAlert,
 } from "lucide-react";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 
 interface LeadLifecycleExplainerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+type LifecycleSettings = Tables<"service_request_lifecycle_settings">;
 
 const goals = [
   "Protect urgent SARS matters",
@@ -21,116 +28,141 @@ const goals = [
 ] as const;
 
 const stageRules = [
-  "Lead status automatically changes",
-  "Access expands to the next subscription level",
-  "Countdown timer resets for the next stage",
-  "Practitioner permissions update automatically",
-  "Lead visibility updates automatically",
-  "New notifications may be triggered automatically",
+  "Lead status changes automatically when a stage timer expires",
+  "Access expands to the next marketplace stage without staff intervention",
+  "Each new stage starts with a fresh timer",
+  "Expired leads leave practitioner visibility immediately",
+  "Staff can revive expired leads and reset active timers when needed",
+  "Practitioner and client notifications can fire as the lifecycle changes",
 ] as const;
 
-const lifecycleStages = [
-  {
-    step: "1",
-    title: "Business Exclusive",
-    duration: "0 - 12 Hours",
-    access: "Business Plan practitioners only",
-    purpose: "This gives premium practitioners priority access to high-value and urgent opportunities.",
-    timerExample: "Expires in 12 hours",
-    accent: "border-amber-200 bg-amber-50",
-    badgeClassName: "bg-amber-100 text-amber-800 hover:bg-amber-100",
-    during: [
-      "Lead displays a Business Exclusive badge",
-      "Countdown timer is active",
-      "Professional and Starter users cannot respond",
-      "Lead remains protected for Business subscribers",
-    ],
-    expiry: [
-      "Status changes to Professional Access",
-      "Access permissions update",
-      "Professional practitioners may unlock and respond",
-      "Countdown resets to 24 hours",
-      "Lead visibility expands",
-      "New notifications may be triggered",
-    ],
-  },
-  {
-    step: "2",
-    title: "Professional Access",
-    duration: "12 - 36 Hours",
-    access: "Business + Professional practitioners",
-    purpose: "If no Business practitioner attends to the lead, access automatically expands to Professional subscribers.",
-    timerExample: "Expires in 24 hours",
-    accent: "border-sky-200 bg-sky-50",
-    badgeClassName: "bg-sky-100 text-sky-800 hover:bg-sky-100",
-    during: [
-      "Lead status changes to Professional Access",
-      "More practitioners gain visibility",
-      "Additional notifications may be sent",
-      "The stage timer resets automatically",
-    ],
-    expiry: [
-      "Status changes to Open Marketplace",
-      "Starter practitioners may unlock and respond",
-      "Access expands to all qualifying practitioners",
-      "Countdown resets again",
-      "Visibility increases further",
-      "Additional notifications may be triggered",
-    ],
-  },
-  {
-    step: "3",
-    title: "Open Marketplace",
-    duration: "36 - 60 Hours",
-    access: "All practitioners including Starter plans",
-    purpose: "This ensures important leads never remain locked or hidden for too long.",
-    timerExample: "Expires in 24 hours",
-    accent: "border-emerald-200 bg-emerald-50",
-    badgeClassName: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
-    during: [
-      "Lead becomes publicly accessible inside the marketplace",
-      "All qualifying practitioners may respond",
-      "Marketplace visibility increases significantly",
-    ],
-    expiry: [
-      "Status changes to Reactivated Lead",
-      "Lead moves back to the top of the marketplace",
-      "Visibility is boosted again",
-      "Fresh notifications may be triggered",
-    ],
-  },
-  {
-    step: "4",
-    title: "Reactivated Lead",
-    duration: "After 60 Hours Unattended",
-    access: "Reintroduced to the marketplace",
-    purpose: "This prevents valuable SARS matters from being buried or forgotten.",
-    timerExample: "Boosted back to the top of the feed",
-    accent: "border-violet-200 bg-violet-50",
-    badgeClassName: "bg-violet-100 text-violet-800 hover:bg-violet-100",
-    during: [
-      "Lead status changes to Reactivated Lead",
-      "Lead returns to the top of the marketplace feed",
-      "Visibility is boosted again",
-      "Practitioners may receive fresh notifications",
-    ],
-    expiry: [
-      "First full lifecycle expiry reactivates immediately",
-      "Second full lifecycle expiry requires client confirmation first",
-    ],
-  },
-] as const;
+function formatHoursLabel(hours: number | null | undefined, fallback: number) {
+  const safeHours = typeof hours === "number" && hours > 0 ? hours : fallback;
+  return safeHours === 1 ? "1 hour" : `${safeHours} hours`;
+}
 
 export function LeadLifecycleExplainerDialog({
   open,
   onOpenChange,
 }: LeadLifecycleExplainerDialogProps) {
+  const { data: lifecycleSettings } = useQuery({
+    queryKey: ["service-request-lifecycle-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_request_lifecycle_settings")
+        .select("*")
+        .eq("settings_key", "default")
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data ?? null) as LifecycleSettings | null;
+    },
+    staleTime: 60_000,
+  });
+
+  const lifecycleStages = useMemo(() => {
+    const businessHours = lifecycleSettings?.business_stage_hours ?? 48;
+    const professionalHours = lifecycleSettings?.professional_stage_hours ?? 48;
+    const openHours = lifecycleSettings?.open_marketplace_hours ?? 72;
+    const confirmationHours = lifecycleSettings?.pending_client_confirmation_hours ?? 24;
+
+    return [
+      {
+        step: "1",
+        title: "Business Exclusive",
+        duration: formatHoursLabel(businessHours, 48),
+        access: "Business plan practitioners only",
+        purpose: "New marketplace leads begin here so Business practitioners receive the earliest access window.",
+        timerExample: `Expires in ${formatHoursLabel(businessHours, 48)}`,
+        accent: "border-amber-200 bg-amber-50",
+        badgeClassName: "bg-amber-100 text-amber-800 hover:bg-amber-100",
+        during: [
+          "Lead displays a Business Exclusive badge",
+          "Only Business subscribers can unlock the lead",
+          "The lifecycle countdown starts immediately after validation",
+          "No staff action is required while the timer runs",
+        ],
+        expiry: [
+          "Status changes to Professional Access",
+          "Professional practitioners gain visibility automatically",
+          "The next stage timer starts from zero",
+          "Notifications can be sent to newly eligible practitioners",
+        ],
+      },
+      {
+        step: "2",
+        title: "Professional Access",
+        duration: formatHoursLabel(professionalHours, 48),
+        access: "Business + Professional practitioners",
+        purpose: "If the lead is still unattended, access expands to Professional subscribers without removing Business access.",
+        timerExample: `Expires in ${formatHoursLabel(professionalHours, 48)}`,
+        accent: "border-sky-200 bg-sky-50",
+        badgeClassName: "bg-sky-100 text-sky-800 hover:bg-sky-100",
+        during: [
+          "Business practitioners keep access",
+          "Professional practitioners become eligible automatically",
+          "The stage uses its own independent timer",
+          "Lifecycle history records the stage change",
+        ],
+        expiry: [
+          "Status changes to Open Marketplace",
+          "All qualifying practitioners gain visibility",
+          "The final unattended marketplace timer starts",
+          "Further notifications can be sent automatically",
+        ],
+      },
+      {
+        step: "3",
+        title: "Open Marketplace",
+        duration: formatHoursLabel(openHours, 72),
+        access: "All qualifying practitioners",
+        purpose: "This is the broadest visibility window and the final unattended marketplace stage before expiry.",
+        timerExample: `Expires in ${formatHoursLabel(openHours, 72)}`,
+        accent: "border-emerald-200 bg-emerald-50",
+        badgeClassName: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
+        during: [
+          "The lead is visible across the marketplace",
+          "Eligible practitioners may unlock and respond",
+          "The lead remains active until the Open Marketplace timer ends",
+        ],
+        expiry: [
+          "Status changes to Expired if the lead is still unattended",
+          "The lead leaves practitioner visibility",
+          "The full lifecycle history stays available to staff",
+          "Staff may manually reactivate the lead later",
+        ],
+      },
+      {
+        step: "4",
+        title: "Pending Client Confirmation",
+        duration: formatHoursLabel(confirmationHours, 24),
+        access: "Client action required",
+        purpose: "When client confirmation is requested, the lead pauses here until the client responds or the deadline closes.",
+        timerExample: `Client response due in ${formatHoursLabel(confirmationHours, 24)}`,
+        accent: "border-orange-200 bg-orange-50",
+        badgeClassName: "bg-orange-100 text-orange-800 hover:bg-orange-100",
+        during: [
+          "The lead is hidden from new practitioner access",
+          "The client receives an in-platform confirmation request",
+          "A confirmation deadline is tracked separately from marketplace timers",
+        ],
+        expiry: [
+          "If the client confirms they still need assistance, the lead returns to the marketplace with a reset timer",
+          "If the client declines, the lead expires and leaves the marketplace",
+        ],
+      },
+    ] as const;
+  }, [lifecycleSettings]);
+
+  const reminderHours = lifecycleSettings?.reminder_hours ?? 6;
+  const reactivationAlertThreshold = lifecycleSettings?.reactivation_alert_threshold ?? 3;
+
   return (
     <DashboardItemDialog
       open={open}
       onOpenChange={onOpenChange}
       title="Lead Lifecycle Explained"
-      description="How the Acapolite marketplace escalates unattended leads and keeps urgent SARS matters visible."
+      description="How Acapolite escalates unattended marketplace leads, expires them, and lets staff revive them when needed."
     >
       <div className="space-y-6">
         <section className="rounded-[24px] border border-border bg-gradient-to-br from-slate-50 via-white to-slate-100 p-5 shadow-sm">
@@ -141,13 +173,11 @@ export function LeadLifecycleExplainerDialog({
                 How the Acapolite Marketplace Works
               </div>
               <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-                To ensure that important SARS matters are never left unattended, Acapolite uses a smart
-                Lead Lifecycle system. Marketplace leads automatically escalate between subscription
-                levels if no practitioner responds within the allocated stage window.
+                Marketplace leads move through Business Exclusive, Professional Access, and Open Marketplace automatically.
+                Each stage uses its own timer, and the lifecycle processor advances or expires unattended leads without staff intervention.
               </p>
               <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-                Every lead moves through different lifecycle stages automatically. Each stage has its own
-                countdown timer, and everything is handled by the lifecycle system.
+                Staff can change the stage durations, reset timers, and revive expired leads from the dashboard.
               </p>
             </div>
 
@@ -165,38 +195,36 @@ export function LeadLifecycleExplainerDialog({
           <div className="rounded-[22px] border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Clock3 className="h-4 w-4 text-primary" />
-              Each stage has a countdown
+              Each stage has a configurable timer
             </div>
             <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-              Each lead stage has its own timer. When a stage expires, the next stage opens automatically.
+              Staff can adjust Business, Professional, Open Marketplace, and client confirmation timers from the admin dashboard.
             </p>
           </div>
 
           <div className="rounded-[22px] border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <BellRing className="h-4 w-4 text-primary" />
-              Access and visibility expand
+              Notifications follow stage changes
             </div>
             <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-              Practitioner permissions, lead visibility, and notifications can all update automatically
-              when a stage changes.
+              Newly eligible practitioners can be notified as access expands, and clients can be notified when lifecycle actions affect their lead.
             </p>
           </div>
 
           <div className="rounded-[22px] border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <RefreshCcw className="h-4 w-4 text-primary" />
-              Leads do not stay hidden forever
+              Expired leads can be revived manually
             </div>
             <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-              The lifecycle is designed to recycle unattended leads so valuable client matters keep
-              getting visibility.
+              Staff can re-enter an expired lead at Business, Professional, or Open Marketplace and reset its timer instantly.
             </p>
           </div>
         </section>
 
         <section className="rounded-[24px] border border-border bg-card p-5 shadow-sm">
-          <p className="text-sm font-semibold text-foreground">When a stage expires</p>
+          <p className="text-sm font-semibold text-foreground">When a lifecycle action triggers</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {stageRules.map((rule) => (
               <div key={rule} className="rounded-2xl border border-border bg-accent/20 px-4 py-3 text-sm text-foreground font-body">
@@ -236,7 +264,7 @@ export function LeadLifecycleExplainerDialog({
                 </div>
 
                 <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
-                  <p className="text-sm font-semibold text-foreground">If no practitioner responds</p>
+                  <p className="text-sm font-semibold text-foreground">If the timer ends</p>
                   <ul className="mt-3 space-y-2 text-sm leading-6 text-muted-foreground font-body">
                     {stage.expiry.map((point) => (
                       <li key={point}>- {point}</li>
@@ -248,6 +276,17 @@ export function LeadLifecycleExplainerDialog({
           ))}
         </section>
 
+        <section className="rounded-[24px] border border-violet-200 bg-violet-50 p-5 shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-semibold text-violet-900">
+            <TriangleAlert className="h-4 w-4" />
+            Expired Leads and Reactivation
+          </div>
+          <p className="mt-3 text-sm leading-7 text-violet-900/80 font-body">
+            Once a lead expires, it leaves practitioner visibility and stays archived until staff revive it.
+            The lifecycle configuration stores {formatHoursLabel(reminderHours, 6)} as the reminder window
+            before expiry and a threshold of {reactivationAlertThreshold} unsuccessful cycles for repeated reactivation review.
+          </p>
+        </section>
       </div>
     </DashboardItemDialog>
   );

@@ -710,8 +710,8 @@ export default function ClientServiceRequests() {
               <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-orange-700 font-body">Client Confirmation Required</p>
                 <p className="mt-2 text-sm text-orange-900 font-body">
-                  Do you still require assistance with this matter? If you confirm, the lead returns to the marketplace.
-                  If you decline, or if no response is received within 24 hours, the lead will expire.
+                  Do you still require assistance with this matter? If you confirm, the lead returns to its prior marketplace stage with a fresh timer.
+                  If you decline, the lead expires. If you do not respond before the deadline, the lead returns to the marketplace automatically.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <Button

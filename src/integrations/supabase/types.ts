@@ -1399,6 +1399,7 @@ export type Database = {
           client_confirmation_requested_at: string | null;
           client_confirmation_due_at: string | null;
           client_confirmation_answered_at: string | null;
+          client_confirmation_origin_stage: Database["public"]["Enums"]["service_request_lifecycle_stage"] | null;
           expired_at: string | null;
           converted_case_id: string | null;
           closed_at: string | null;
@@ -1454,6 +1455,7 @@ export type Database = {
           client_confirmation_requested_at?: string | null;
           client_confirmation_due_at?: string | null;
           client_confirmation_answered_at?: string | null;
+          client_confirmation_origin_stage?: Database["public"]["Enums"]["service_request_lifecycle_stage"] | null;
           expired_at?: string | null;
           converted_case_id?: string | null;
           closed_at?: string | null;
@@ -1509,6 +1511,7 @@ export type Database = {
           client_confirmation_requested_at?: string | null;
           client_confirmation_due_at?: string | null;
           client_confirmation_answered_at?: string | null;
+          client_confirmation_origin_stage?: Database["public"]["Enums"]["service_request_lifecycle_stage"] | null;
           expired_at?: string | null;
           converted_case_id?: string | null;
           closed_at?: string | null;
@@ -1544,6 +1547,39 @@ export type Database = {
           note?: string | null;
           metadata?: Json | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      service_request_lifecycle_settings: {
+        Row: {
+          settings_key: string;
+          business_stage_hours: number;
+          professional_stage_hours: number;
+          open_marketplace_hours: number;
+          pending_client_confirmation_hours: number;
+          reminder_hours: number;
+          reactivation_alert_threshold: number;
+          updated_at: string;
+        };
+        Insert: {
+          settings_key?: string;
+          business_stage_hours?: number;
+          professional_stage_hours?: number;
+          open_marketplace_hours?: number;
+          pending_client_confirmation_hours?: number;
+          reminder_hours?: number;
+          reactivation_alert_threshold?: number;
+          updated_at?: string;
+        };
+        Update: {
+          settings_key?: string;
+          business_stage_hours?: number;
+          professional_stage_hours?: number;
+          open_marketplace_hours?: number;
+          pending_client_confirmation_hours?: number;
+          reminder_hours?: number;
+          reactivation_alert_threshold?: number;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -1802,8 +1838,19 @@ export type Database = {
       admin_revive_service_request: {
         Args: {
           p_request_id: string;
+          p_restart_stage?: Database["public"]["Enums"]["service_request_lifecycle_stage"] | null;
         };
         Returns: string;
+      };
+      admin_reset_service_request_lifecycle_timer: {
+        Args: {
+          p_request_id: string;
+        };
+        Returns: string;
+      };
+      admin_apply_service_request_lifecycle_settings: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
       };
       accept_service_request_response: {
         Args: {

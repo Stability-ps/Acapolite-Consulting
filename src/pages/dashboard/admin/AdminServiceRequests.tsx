@@ -13,7 +13,9 @@ import {
   FileText,
   Image,
   Megaphone,
+  RotateCcw,
   RefreshCcw,
+  Save,
   Search,
   ShieldAlert,
   Sparkles,
@@ -71,6 +73,7 @@ type ServiceRequestDocument = Tables<"service_request_documents">;
 type ServiceRequestResponse = Tables<"service_request_responses">;
 type ServiceRequestAssignmentHistory = Tables<"service_request_assignment_history">;
 type ServiceRequestLifecycleHistory = Tables<"service_request_lifecycle_history">;
+type ServiceRequestLifecycleSettings = Tables<"service_request_lifecycle_settings">;
 type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type PractitionerUser = Tables<"profiles">;
@@ -134,6 +137,11 @@ function getInitials(value?: string | null) {
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
 }
 
+function formatStageHours(hours: number | null | undefined) {
+  const safeHours = typeof hours === "number" && hours > 0 ? hours : 0;
+  return safeHours === 1 ? "1 Hour" : `${safeHours} Hours`;
+}
+
 function getDashboardRangeBounds(range: DashboardDateRange) {
   const now = new Date();
   const end = new Date(now);
@@ -183,6 +191,8 @@ export default function AdminServiceRequests() {
   const [selectedPractitionerId, setSelectedPractitionerId] = useState<string>("");
   const [convertingRequestId, setConvertingRequestId] = useState<string | null>(null);
   const [revivingLeadId, setRevivingLeadId] = useState<string | null>(null);
+  const [resettingTimerId, setResettingTimerId] = useState<string | null>(null);
+  const [selectedReviveStage, setSelectedReviveStage] = useState<Enums<"service_request_lifecycle_stage">>("business_exclusive");
   const [leadArchiveReason, setLeadArchiveReason] = useState<string>("inactive");
   const [leadArchiveNotes, setLeadArchiveNotes] = useState("");
   const [archivingLeadId, setArchivingLeadId] = useState<string | null>(null);
@@ -190,6 +200,15 @@ export default function AdminServiceRequests() {
   const [confirmDeleteLeadOpen, setConfirmDeleteLeadOpen] = useState(false);
   const [dashboardDateRange, setDashboardDateRange] = useState<DashboardDateRange>("last7");
   const [isLifecycleDialogOpen, setIsLifecycleDialogOpen] = useState(false);
+  const [savingLifecycleSettings, setSavingLifecycleSettings] = useState(false);
+  const [lifecycleSettingsForm, setLifecycleSettingsForm] = useState({
+    businessStageHours: "48",
+    professionalStageHours: "48",
+    openMarketplaceHours: "72",
+    pendingClientConfirmationHours: "24",
+    reminderHours: "6",
+    reactivationAlertThreshold: "3",
+  });
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const leadIdFromQuery = searchParams.get("leadId");
 
@@ -202,6 +221,22 @@ export default function AdminServiceRequests() {
     },
     enabled: role !== "consultant",
     refetchOnWindowFocus: false,
+  });
+
+  const { data: lifecycleSettings } = useQuery({
+    queryKey: ["service-request-lifecycle-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_request_lifecycle_settings")
+        .select("*")
+        .eq("settings_key", "default")
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data ?? null) as ServiceRequestLifecycleSettings | null;
+    },
+    enabled: role !== "consultant",
+    staleTime: 60_000,
   });
 
   if (role === "consultant") {
@@ -466,7 +501,7 @@ export default function AdminServiceRequests() {
         return false;
       }
 
-      if (lifecycleTab === "reactivated" && request.lifecycle_reactivation_count < 1) {
+      if (lifecycleTab === "reactivated" && !isMarketplaceReactivatedLead(request)) {
         return false;
       }
 
@@ -556,12 +591,33 @@ export default function AdminServiceRequests() {
   const selectedResponses = selectedRequest ? responsesByRequest.get(selectedRequest.id) ?? [] : [];
   const selectedAssignments = selectedRequest ? assignmentHistoryByRequest.get(selectedRequest.id) ?? [] : [];
   const selectedLifecycleHistory = selectedRequest ? lifecycleHistoryByRequest.get(selectedRequest.id) ?? [] : [];
+  const canResetSelectedTimer = Boolean(
+    selectedRequest
+    && selectedRequest.lifecycle_stage !== "expired"
+    && !["closed", "converted_to_client", "expired"].includes(selectedRequest.status),
+  );
 
   useEffect(() => {
     setSelectedPractitionerId(selectedRequest?.assigned_practitioner_id ?? "");
     setLeadArchiveReason(selectedRequest?.archive_reason ?? "inactive");
     setLeadArchiveNotes(selectedRequest?.archive_notes ?? "");
-  }, [selectedRequest?.assigned_practitioner_id]);
+    setSelectedReviveStage("business_exclusive");
+  }, [selectedRequest?.id]);
+
+  useEffect(() => {
+    if (!lifecycleSettings) {
+      return;
+    }
+
+    setLifecycleSettingsForm({
+      businessStageHours: String(lifecycleSettings.business_stage_hours),
+      professionalStageHours: String(lifecycleSettings.professional_stage_hours),
+      openMarketplaceHours: String(lifecycleSettings.open_marketplace_hours),
+      pendingClientConfirmationHours: String(lifecycleSettings.pending_client_confirmation_hours),
+      reminderHours: String(lifecycleSettings.reminder_hours),
+      reactivationAlertThreshold: String(lifecycleSettings.reactivation_alert_threshold),
+    });
+  }, [lifecycleSettings]);
 
   useEffect(() => {
     if (!leadIdFromQuery || !(requests ?? []).some((request) => request.id === leadIdFromQuery)) {
@@ -632,6 +688,21 @@ export default function AdminServiceRequests() {
     return map;
   }, [dashboardAccessRequests]);
 
+  function isActiveMarketplaceLead(request: ServiceRequestRecord) {
+    return !request.is_archived
+      && request.lifecycle_stage !== "expired"
+      && request.lifecycle_stage !== "pending_client_confirmation"
+      && request.status !== "closed"
+      && request.status !== "converted_to_client"
+      && request.status !== "expired"
+      && !request.assigned_practitioner_id;
+  }
+
+  function isMarketplaceReactivatedLead(request: ServiceRequestRecord) {
+    return isActiveMarketplaceLead(request)
+      && request.lifecycle_reactivation_count > 0;
+  }
+
   const moveToWorkspaceTab = (tab: typeof lifecycleTab) => {
     setLeadView(tab === "archived" ? "archived" : "active");
     setLifecycleTab(tab);
@@ -694,7 +765,7 @@ export default function AdminServiceRequests() {
       business: rows.filter((request) => request.lifecycle_stage === "business_exclusive" && !request.is_archived).length,
       professional: rows.filter((request) => request.lifecycle_stage === "professional_access" && !request.is_archived).length,
       openMarketplace: rows.filter((request) => request.lifecycle_stage === "open_marketplace" && !request.is_archived).length,
-      reactivated: rows.filter((request) => request.lifecycle_reactivation_count > 0 && !request.is_archived).length,
+      reactivated: rows.filter(isMarketplaceReactivatedLead).length,
       pendingConfirmation: rows.filter((request) => request.lifecycle_stage === "pending_client_confirmation").length,
       expired: rows.filter((request) => request.lifecycle_stage === "expired").length,
       unattended: rows.filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) === 0 && !request.is_archived).length,
@@ -707,8 +778,8 @@ export default function AdminServiceRequests() {
           previousRows.filter((request) => !request.is_archived && request.lifecycle_stage !== "expired").length,
         ),
         reactivated: formatTrendPercentage(
-          currentRows.filter((request) => request.lifecycle_reactivation_count > 0 && !request.is_archived).length,
-          previousRows.filter((request) => request.lifecycle_reactivation_count > 0 && !request.is_archived).length,
+          currentRows.filter(isMarketplaceReactivatedLead).length,
+          previousRows.filter(isMarketplaceReactivatedLead).length,
         ),
         pendingConfirmation: formatTrendPercentage(
           currentRows.filter((request) => request.lifecycle_stage === "pending_client_confirmation").length,
@@ -737,21 +808,10 @@ export default function AdminServiceRequests() {
 
   const statusChartData = useMemo(() => {
     const activeLeads = dashboardRequests.filter((request) => (
-      !request.is_archived
-      && request.lifecycle_stage !== "expired"
-      && request.lifecycle_stage !== "pending_client_confirmation"
-      && request.status !== "closed"
-      && request.status !== "converted_to_client"
+      isActiveMarketplaceLead(request)
       && request.lifecycle_reactivation_count === 0
     )).length;
-    const reactivatedLeads = dashboardRequests.filter((request) => (
-      !request.is_archived
-      && request.lifecycle_stage !== "expired"
-      && request.lifecycle_stage !== "pending_client_confirmation"
-      && request.status !== "closed"
-      && request.status !== "converted_to_client"
-      && request.lifecycle_reactivation_count > 0
-    )).length;
+    const reactivatedLeads = dashboardRequests.filter(isMarketplaceReactivatedLead).length;
     const total = requestMetrics.total || 1;
 
     return [
@@ -771,6 +831,18 @@ export default function AdminServiceRequests() {
         const leftTime = left.client_confirmation_due_at ? new Date(left.client_confirmation_due_at).getTime() : Number.MAX_SAFE_INTEGER;
         const rightTime = right.client_confirmation_due_at ? new Date(right.client_confirmation_due_at).getTime() : Number.MAX_SAFE_INTEGER;
         return leftTime - rightTime;
+      })
+      .slice(0, 5),
+    [dashboardRequests],
+  );
+
+  const expiredLeadRows = useMemo(
+    () => dashboardRequests
+      .filter((request) => request.lifecycle_stage === "expired" || request.status === "expired")
+      .sort((left, right) => {
+        const leftTime = new Date(left.expired_at || left.updated_at || left.created_at).getTime();
+        const rightTime = new Date(right.expired_at || right.updated_at || right.created_at).getTime();
+        return rightTime - leftTime;
       })
       .slice(0, 5),
     [dashboardRequests],
@@ -1019,6 +1091,7 @@ export default function AdminServiceRequests() {
     setRevivingLeadId(requestId);
     const { error } = await supabase.rpc("admin_revive_service_request", {
       p_request_id: requestId,
+      p_restart_stage: selectedReviveStage,
     });
     setRevivingLeadId(null);
 
@@ -1031,6 +1104,80 @@ export default function AdminServiceRequests() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-service-request-lifecycle-history"] }),
+    ]);
+  };
+
+  const resetLeadTimer = async (requestId: string) => {
+    setResettingTimerId(requestId);
+    const { error } = await supabase.rpc("admin_reset_service_request_lifecycle_timer", {
+      p_request_id: requestId,
+    });
+    setResettingTimerId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Lead timer reset.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-request-lifecycle-history"] }),
+    ]);
+  };
+
+  const saveLifecycleSettings = async () => {
+    const businessStageHours = Number(lifecycleSettingsForm.businessStageHours);
+    const professionalStageHours = Number(lifecycleSettingsForm.professionalStageHours);
+    const openMarketplaceHours = Number(lifecycleSettingsForm.openMarketplaceHours);
+    const pendingClientConfirmationHours = Number(lifecycleSettingsForm.pendingClientConfirmationHours);
+    const reminderHours = Number(lifecycleSettingsForm.reminderHours);
+    const reactivationAlertThreshold = Number(lifecycleSettingsForm.reactivationAlertThreshold);
+
+    if (
+      [businessStageHours, professionalStageHours, openMarketplaceHours, pendingClientConfirmationHours, reactivationAlertThreshold]
+        .some((value) => Number.isNaN(value) || value <= 0)
+      || Number.isNaN(reminderHours)
+      || reminderHours < 0
+    ) {
+      toast.error("Enter valid lifecycle settings before saving.");
+      return;
+    }
+
+    const nextSettings = {
+      business_stage_hours: businessStageHours,
+      professional_stage_hours: professionalStageHours,
+      open_marketplace_hours: openMarketplaceHours,
+      pending_client_confirmation_hours: pendingClientConfirmationHours,
+      reminder_hours: reminderHours,
+      reactivation_alert_threshold: reactivationAlertThreshold,
+      updated_at: new Date().toISOString(),
+    };
+
+    setSavingLifecycleSettings(true);
+    const { error } = await supabase
+      .from("service_request_lifecycle_settings")
+      .update(nextSettings)
+      .eq("settings_key", "default");
+
+    if (error) {
+      setSavingLifecycleSettings(false);
+      toast.error(error.message);
+      return;
+    }
+
+    const { error: applyError } = await supabase.rpc("admin_apply_service_request_lifecycle_settings");
+    setSavingLifecycleSettings(false);
+
+    if (applyError) {
+      toast.error(applyError.message);
+      return;
+    }
+
+    toast.success("Lifecycle settings updated.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["service-request-lifecycle-settings"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
     ]);
   };
 
@@ -1086,36 +1233,36 @@ export default function AdminServiceRequests() {
     { title: "Critical SARS Leads", value: requestMetrics.highRisk.toLocaleString(), delta: requestMetrics.trends.highRisk, icon: ShieldAlert, color: "bg-rose-50 text-rose-600" },
   ] as const;
 
-  const lifecycleStages = [
+  const lifecycleStages = useMemo(() => [
     {
       title: "Business Exclusive",
-      time: "0–12 Hours",
+      time: formatStageHours(lifecycleSettings?.business_stage_hours ?? 48),
       description: "Business Plan Only",
       icon: Crown,
       iconClassName: "bg-amber-50 text-amber-600",
     },
     {
       title: "Professional Access",
-      time: "12–36 Hours",
+      time: formatStageHours(lifecycleSettings?.professional_stage_hours ?? 48),
       description: "Business + Professional",
       icon: Users,
       iconClassName: "bg-sky-50 text-sky-600",
     },
     {
       title: "Open Marketplace",
-      time: "36–60 Hours",
+      time: formatStageHours(lifecycleSettings?.open_marketplace_hours ?? 72),
       description: "All Plans (Including Starter)",
       icon: Target,
       iconClassName: "bg-emerald-50 text-emerald-600",
     },
     {
-      title: "Reactivated Lead",
-      time: "After 60 Hours",
-      description: "Returns to Original Priority Level",
-      icon: RefreshCcw,
-      iconClassName: "bg-violet-50 text-violet-600",
+      title: "Pending Client Confirmation",
+      time: formatStageHours(lifecycleSettings?.pending_client_confirmation_hours ?? 24),
+      description: "Client Response Deadline",
+      icon: Clock3,
+      iconClassName: "bg-orange-50 text-orange-600",
     },
-  ] as const;
+  ] as const, [lifecycleSettings]);
 
   return (
     <div className="space-y-8 bg-[#F5F7FB] px-1 pb-8">
@@ -1281,7 +1428,7 @@ export default function AdminServiceRequests() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Pending Client Confirmation</h2>
-              <p className="mt-1 text-sm text-slate-500">Leads waiting for client confirmation before reactivation.</p>
+              <p className="mt-1 text-sm text-slate-500">Leads waiting for a client decision before they return to the marketplace or expire.</p>
             </div>
             <button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => moveToWorkspaceTab("pending")}>
               View all pending
@@ -1318,6 +1465,175 @@ export default function AdminServiceRequests() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Expired Leads</h2>
+              <p className="mt-1 text-sm text-slate-500">Revive expired leads directly from the dashboard and restart their cycle at the selected stage.</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {role === "admin" ? (
+                <Select value={selectedReviveStage} onValueChange={(value) => setSelectedReviveStage(value as Enums<"service_request_lifecycle_stage">)}>
+                  <SelectTrigger className="min-w-[220px] rounded-2xl border-slate-200 bg-white">
+                    <SelectValue placeholder="Choose re-entry stage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="business_exclusive">Business Exclusive</SelectItem>
+                    <SelectItem value="professional_access">Professional Access</SelectItem>
+                    <SelectItem value="open_marketplace">Open Marketplace</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : null}
+              <Button type="button" variant="outline" className="rounded-2xl border-slate-200" onClick={() => moveToWorkspaceTab("expired")}>
+                View all expired
+              </Button>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {expiredLeadRows.length ? expiredLeadRows.map((request) => (
+              <div
+                key={request.id}
+                className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <button
+                    type="button"
+                    onClick={() => openRequest(request)}
+                    className="min-w-0 text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-100 text-sm font-semibold text-violet-700">
+                        {getInitials(request.full_name)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">{request.full_name}</p>
+                        <p className="truncate text-xs text-slate-500">{formatServiceList(resolveServiceList(request))}</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Expired {new Date(request.expired_at || request.updated_at || request.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Button type="button" variant="outline" className="rounded-xl" onClick={() => openRequest(request)}>
+                      Review lead
+                    </Button>
+                    {role === "admin" ? (
+                      <Button
+                        type="button"
+                        className="rounded-xl"
+                        onClick={() => void reviveLead(request.id)}
+                        disabled={revivingLeadId === request.id}
+                      >
+                        {revivingLeadId === request.id ? "Reviving..." : "Restart cycle"}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                <p>No expired leads in the current date range.</p>
+                <Button type="button" variant="outline" className="mt-4 rounded-xl" onClick={() => moveToWorkspaceTab("expired")}>
+                  Open expired tab
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Lifecycle Settings</h2>
+            <p className="mt-1 text-sm text-slate-500">Control the default stage timers, reminder window, and repeated reactivation threshold.</p>
+          </div>
+          <Button
+            type="button"
+            className="rounded-2xl"
+            onClick={() => void saveLifecycleSettings()}
+            disabled={savingLifecycleSettings || role !== "admin"}
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {savingLifecycleSettings ? "Saving..." : "Save Settings"}
+          </Button>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <label className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Business Stage</p>
+            <Input
+              type="number"
+              min="1"
+              value={lifecycleSettingsForm.businessStageHours}
+              onChange={(event) => setLifecycleSettingsForm((current) => ({ ...current, businessStageHours: event.target.value }))}
+              className="mt-3 rounded-xl bg-white"
+            />
+            <p className="mt-2 text-xs text-slate-500">Hours before the lead opens to Professional practitioners.</p>
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Professional Stage</p>
+            <Input
+              type="number"
+              min="1"
+              value={lifecycleSettingsForm.professionalStageHours}
+              onChange={(event) => setLifecycleSettingsForm((current) => ({ ...current, professionalStageHours: event.target.value }))}
+              className="mt-3 rounded-xl bg-white"
+            />
+            <p className="mt-2 text-xs text-slate-500">Hours before the lead opens to the full marketplace.</p>
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Open Marketplace</p>
+            <Input
+              type="number"
+              min="1"
+              value={lifecycleSettingsForm.openMarketplaceHours}
+              onChange={(event) => setLifecycleSettingsForm((current) => ({ ...current, openMarketplaceHours: event.target.value }))}
+              className="mt-3 rounded-xl bg-white"
+            />
+            <p className="mt-2 text-xs text-slate-500">Hours before an unattended open lead expires.</p>
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Client Confirmation</p>
+            <Input
+              type="number"
+              min="1"
+              value={lifecycleSettingsForm.pendingClientConfirmationHours}
+              onChange={(event) => setLifecycleSettingsForm((current) => ({ ...current, pendingClientConfirmationHours: event.target.value }))}
+              className="mt-3 rounded-xl bg-white"
+            />
+            <p className="mt-2 text-xs text-slate-500">Hours the client has to respond before the lead returns to the marketplace.</p>
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Reminder Window</p>
+            <Input
+              type="number"
+              min="0"
+              value={lifecycleSettingsForm.reminderHours}
+              onChange={(event) => setLifecycleSettingsForm((current) => ({ ...current, reminderHours: event.target.value }))}
+              className="mt-3 rounded-xl bg-white"
+            />
+            <p className="mt-2 text-xs text-slate-500">Hours before expiry reserved for reminder or warning workflows.</p>
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Reactivation Alert Threshold</p>
+            <Input
+              type="number"
+              min="1"
+              value={lifecycleSettingsForm.reactivationAlertThreshold}
+              onChange={(event) => setLifecycleSettingsForm((current) => ({ ...current, reactivationAlertThreshold: event.target.value }))}
+              className="mt-3 rounded-xl bg-white"
+            />
+            <p className="mt-2 text-xs text-slate-500">How many unsuccessful cycles a lead can go through before staff should review it.</p>
+          </label>
         </div>
       </div>
 
@@ -1873,17 +2189,43 @@ export default function AdminServiceRequests() {
                     Track automatic stage changes, reactivations, and client confirmation outcomes.
                   </p>
                 </div>
-                {role === "admin" && selectedRequest.lifecycle_stage === "expired" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-xl"
-                    onClick={() => void reviveLead(selectedRequest.id)}
-                    disabled={revivingLeadId === selectedRequest.id}
-                  >
-                    {revivingLeadId === selectedRequest.id ? "Reviving..." : "Revive Lead"}
-                  </Button>
-                ) : null}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  {role === "admin" && canResetSelectedTimer ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => void resetLeadTimer(selectedRequest.id)}
+                      disabled={resettingTimerId === selectedRequest.id}
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      {resettingTimerId === selectedRequest.id ? "Resetting..." : "Reset Timer"}
+                    </Button>
+                  ) : null}
+                  {role === "admin" && selectedRequest.lifecycle_stage === "expired" ? (
+                    <>
+                      <Select value={selectedReviveStage} onValueChange={(value) => setSelectedReviveStage(value as Enums<"service_request_lifecycle_stage">)}>
+                        <SelectTrigger className="min-w-[220px] rounded-xl">
+                          <SelectValue placeholder="Choose re-entry stage" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="business_exclusive">Business Exclusive</SelectItem>
+                          <SelectItem value="professional_access">Professional Access</SelectItem>
+                          <SelectItem value="open_marketplace">Open Marketplace</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => void reviveLead(selectedRequest.id)}
+                        disabled={revivingLeadId === selectedRequest.id}
+                      >
+                        {revivingLeadId === selectedRequest.id ? "Reviving..." : "Revive Lead"}
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
               </div>
               <div className="mt-4 space-y-3">
                 {selectedLifecycleHistory.length ? selectedLifecycleHistory.map((item) => (
@@ -1899,7 +2241,7 @@ export default function AdminServiceRequests() {
                       </Badge>
                       <span className="text-xs text-muted-foreground font-body">{new Date(item.created_at).toLocaleString()}</span>
                     </div>
-                    {item.notes ? <p className="mt-2 text-sm text-foreground font-body">{item.notes}</p> : null}
+                    {item.note ? <p className="mt-2 text-sm text-foreground font-body">{item.note}</p> : null}
                     <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground font-body">
                       <span>Reactivation count: {item.reactivation_count}</span>
                       {item.triggered_by ? <span>Triggered by: {item.triggered_by}</span> : null}
