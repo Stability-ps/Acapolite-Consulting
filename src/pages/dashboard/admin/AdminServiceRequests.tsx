@@ -323,8 +323,8 @@ export default function AdminServiceRequests() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("practitioner_subscriptions")
-        .select("practitioner_profile_id, plan_code, status, created_at")
-        .order("created_at", { ascending: false });
+        .select("practitioner_profile_id, plan_code, cancelled_at")
+        .eq("status", "active");
 
       if (error) throw error;
       return data ?? [];
@@ -379,18 +379,6 @@ export default function AdminServiceRequests() {
     return map;
   }, [lifecycleHistory]);
 
-  const accessRequestsByPractitioner = useMemo(() => {
-    const map = new Map<string, ServiceRequestAccessRequest[]>();
-
-    for (const item of accessRequests ?? []) {
-      const current = map.get(item.practitioner_profile_id) ?? [];
-      current.push(item);
-      map.set(item.practitioner_profile_id, current);
-    }
-
-    return map;
-  }, [accessRequests]);
-
   const practitionerMap = useMemo(
     () => new Map((practitioners ?? []).map((practitioner) => [practitioner.user.id, practitioner])),
     [practitioners],
@@ -400,9 +388,8 @@ export default function AdminServiceRequests() {
     const map = new Map<string, string>();
 
     for (const subscription of practitionerSubscriptions ?? []) {
-      if (!map.has(subscription.practitioner_profile_id) && subscription.status === "active") {
-        map.set(subscription.practitioner_profile_id, subscription.plan_code);
-      }
+      if (subscription.cancelled_at) continue;
+      map.set(subscription.practitioner_profile_id, subscription.plan_code);
     }
 
     return map;
@@ -617,6 +604,34 @@ export default function AdminServiceRequests() {
     });
   }, [dashboardRange.end, dashboardRange.start, responses]);
 
+  const dashboardAccessRequests = useMemo(() => {
+    const rows = accessRequests ?? [];
+    if (!dashboardRange.start) {
+      return rows;
+    }
+
+    const startTime = dashboardRange.start.getTime();
+    const endTime = dashboardRange.end.getTime();
+    return rows.filter((accessRequest) => {
+      const createdAt = new Date(accessRequest.created_at).getTime();
+      return createdAt >= startTime && createdAt <= endTime;
+    });
+  }, [accessRequests, dashboardRange.end, dashboardRange.start]);
+
+  const dashboardApprovedAccessCountByPractitioner = useMemo(() => {
+    const map = new Map<string, number>();
+
+    for (const accessRequest of dashboardAccessRequests) {
+      if (accessRequest.status !== "approved") continue;
+      map.set(
+        accessRequest.practitioner_profile_id,
+        (map.get(accessRequest.practitioner_profile_id) ?? 0) + 1,
+      );
+    }
+
+    return map;
+  }, [dashboardAccessRequests]);
+
   const moveToWorkspaceTab = (tab: typeof lifecycleTab) => {
     setLeadView(tab === "archived" ? "archived" : "active");
     setLifecycleTab(tab);
@@ -650,7 +665,7 @@ export default function AdminServiceRequests() {
     });
 
     const averageResponseTimeFor = (responseRows: ServiceRequestResponse[]) => {
-      const requestById = new Map(rows.map((row) => [row.id, row]));
+      const requestById = new Map((requests ?? []).map((row) => [row.id, row]));
       const durations = responseRows
         .map((response) => {
           const request = requestById.get(response.service_request_id);
@@ -769,11 +784,11 @@ export default function AdminServiceRequests() {
   );
 
   const practitionerActivityRows = useMemo(() => {
-    const requestById = new Map(dashboardRequests.map((request) => [request.id, request]));
+    const requestById = new Map((requests ?? []).map((request) => [request.id, request]));
     return (practitioners ?? [])
       .map((practitioner) => {
         const practitionerResponses = dashboardResponses.filter((response) => response.practitioner_profile_id === practitioner.user.id);
-        const viewedCount = accessRequestsByPractitioner.get(practitioner.user.id)?.length ?? 0;
+        const viewedCount = dashboardApprovedAccessCountByPractitioner.get(practitioner.user.id) ?? 0;
         const responseDurations = practitionerResponses
           .map((response) => {
             const request = requestById.get(response.service_request_id);
@@ -789,7 +804,7 @@ export default function AdminServiceRequests() {
           id: practitioner.user.id,
           name: practitioner.user.full_name || practitioner.user.email || "Practitioner",
           initials: getInitials(practitioner.user.full_name || practitioner.user.email),
-          plan: practitionerPlanMap.get(practitioner.user.id) || "starter",
+          plan: practitionerPlanMap.get(practitioner.user.id) ?? null,
           leadsViewed: viewedCount,
           responses: practitionerResponses.length,
           averageMinutes,
@@ -798,7 +813,7 @@ export default function AdminServiceRequests() {
       })
       .sort((left, right) => right.responses - left.responses)
       .slice(0, 6);
-  }, [accessRequestsByPractitioner, dashboardRequests, dashboardResponses, practitionerPlanMap, practitioners]);
+  }, [dashboardApprovedAccessCountByPractitioner, dashboardResponses, practitionerPlanMap, practitioners, requests]);
 
   const marketplaceHealth = useMemo(() => {
     const total = requestMetrics.total || 1;
@@ -1397,7 +1412,7 @@ export default function AdminServiceRequests() {
                         <span className="font-medium text-slate-900">{row.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="capitalize">{row.plan}</TableCell>
+                    <TableCell>{row.plan ? formatServiceRequestLabel(row.plan) : "No active plan"}</TableCell>
                     <TableCell>{row.leadsViewed}</TableCell>
                     <TableCell>{row.responses}</TableCell>
                     <TableCell>{formatCompactDuration(row.averageMinutes)}</TableCell>

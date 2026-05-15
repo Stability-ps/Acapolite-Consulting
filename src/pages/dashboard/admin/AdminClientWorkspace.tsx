@@ -596,6 +596,17 @@ export default function AdminClientWorkspace() {
     };
   }, [clientCases, clientDetails, clientDocumentRequests, clientDocuments, clientInvoices, clientConversations]);
 
+  const tabCounts = useMemo(
+    () => ({
+      cases: clientCases?.length ?? 0,
+      documents: clientDocuments?.length ?? 0,
+      messages: clientConversations?.length ?? 0,
+      invoices: clientInvoices?.length ?? 0,
+      alerts: clientAlerts?.length ?? 0,
+    }),
+    [clientAlerts, clientCases, clientConversations, clientDocuments, clientInvoices],
+  );
+
   const selectedConversationRecord = clientConversations?.find((conversation) => conversation.id === selectedConversation) ?? null;
 
   const openDocument = async (filePath: string) => {
@@ -1501,11 +1512,36 @@ export default function AdminClientWorkspace() {
           <Tabs defaultValue="overview" className="space-y-6">
             <TabsList className="flex h-auto w-full flex-wrap justify-start gap-2 rounded-2xl border border-border bg-card p-2">
               <TabsTrigger value="overview" className="rounded-xl">Overview</TabsTrigger>
-              <TabsTrigger value="cases" className="rounded-xl">Cases</TabsTrigger>
-              <TabsTrigger value="documents" className="rounded-xl">Documents</TabsTrigger>
-              <TabsTrigger value="messages" className="rounded-xl">Messages</TabsTrigger>
-              <TabsTrigger value="invoices" className="rounded-xl">Invoices</TabsTrigger>
-              <TabsTrigger value="alerts" className="rounded-xl">Alerts</TabsTrigger>
+              <TabsTrigger value="cases" className="rounded-xl">
+                Cases
+                <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
+                  {tabCounts.cases}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="rounded-xl">
+                Documents
+                <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
+                  {tabCounts.documents}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="messages" className="rounded-xl">
+                Messages
+                <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
+                  {tabCounts.messages}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="invoices" className="rounded-xl">
+                Invoices
+                <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
+                  {tabCounts.invoices}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="alerts" className="rounded-xl">
+                Alerts
+                <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
+                  {tabCounts.alerts}
+                </span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
