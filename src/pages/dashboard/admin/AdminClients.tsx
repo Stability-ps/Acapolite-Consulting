@@ -343,6 +343,7 @@ export default function AdminClients() {
     || clients?.find((client) => client.id === selectedClientId)
     || null;
   const canEditSelectedClient = canEditClientRecord(selectedClient, role, user?.id);
+  const detailValueClass = "font-body text-foreground break-words [overflow-wrap:anywhere]";
 
   useEffect(() => {
     setShowInvoiceWarningActions(false);
@@ -1270,85 +1271,85 @@ export default function AdminClients() {
             })()}
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+              <div className="min-w-0 rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Full Name</p>
-                <p className="font-body text-foreground">{selectedClient.profiles?.full_name || [selectedClient.first_name, selectedClient.last_name].filter(Boolean).join(" ") || "Not provided"}</p>
+                <p className={detailValueClass}>{selectedClient.profiles?.full_name || [selectedClient.first_name, selectedClient.last_name].filter(Boolean).join(" ") || "Not provided"}</p>
               </div>
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+              <div className="min-w-0 rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Type</p>
-                <p className="font-body text-foreground">{getClientTypeLabel(selectedClient.client_type)}</p>
+                <p className={detailValueClass}>{getClientTypeLabel(selectedClient.client_type)}</p>
                 {selectedClient.is_archived ? (
                   <p className="mt-2 text-xs text-red-600 font-body">
                     Archived{selectedClient.archive_reason ? ` · ${selectedClient.archive_reason}` : ""}
                   </p>
                 ) : null}
               </div>
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+              <div className="min-w-0 rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Email</p>
-                <p className="break-all font-body text-foreground">{selectedClient.profiles?.email || "Not provided"}</p>
+                <p className={detailValueClass}>{selectedClient.profiles?.email || "Not provided"}</p>
               </div>
-              <div className="rounded-2xl border border-border bg-accent/30 p-4">
+              <div className="min-w-0 rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Phone</p>
-                <p className="font-body text-foreground">{selectedClient.profiles?.phone || "Not provided"}</p>
+                <p className={detailValueClass}>{selectedClient.profiles?.phone || "Not provided"}</p>
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Company Name</p>
-                <p className="font-body text-foreground">{selectedClient.company_name || "Not provided"}</p>
+                <p className={detailValueClass}>{selectedClient.company_name || "Not provided"}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">{getClientIdentityFieldLabel(selectedClient.client_type)}</p>
-                <p className="font-body text-foreground">{getClientIdentityLabel(selectedClient)}</p>
+                <p className={detailValueClass}>{getClientIdentityLabel(selectedClient)}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Tax Number</p>
-                <p className="font-body text-foreground">{selectedClient.tax_number || "Not provided"}</p>
+                <p className={detailValueClass}>{selectedClient.tax_number || "Not provided"}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">VAT Number</p>
-                <p className="font-body text-foreground">{selectedClient.vat_number || "Not provided"}</p>
+                <p className={detailValueClass}>{selectedClient.vat_number || "Not provided"}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">SARS Reference</p>
-                <p className="font-body text-foreground">{selectedClient.sars_reference_number || "Not provided"}</p>
+                <p className={detailValueClass}>{selectedClient.sars_reference_number || "Not provided"}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">SARS Outstanding / Debt</p>
-                <p className="font-body text-foreground">{formatCurrency(selectedClient.sars_outstanding_debt)}</p>
+                <p className={detailValueClass}>{formatCurrency(selectedClient.sars_outstanding_debt)}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Returns Filed</p>
-                <p className="font-body text-foreground">{selectedClient.returns_filed ? "Filed" : "Not filed"}</p>
+                <p className={detailValueClass}>{selectedClient.returns_filed ? "Filed" : "Not filed"}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Client Code</p>
-                <p className="font-body text-foreground">{selectedClient.client_code || "Not assigned"}</p>
+                <p className={detailValueClass}>{selectedClient.client_code || "Not assigned"}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Assigned Consultant</p>
-                <p className="font-body text-foreground">{selectedClient.assigned_consultant?.full_name || selectedClient.assigned_consultant?.email || "Not assigned"}</p>
+                <p className={detailValueClass}>{selectedClient.assigned_consultant?.full_name || selectedClient.assigned_consultant?.email || "Not assigned"}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Joined</p>
-                <p className="font-body text-foreground">{new Date(selectedClient.created_at).toLocaleString()}</p>
+                <p className={detailValueClass}>{new Date(selectedClient.created_at).toLocaleString()}</p>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border p-4">
+            <div className="min-w-0 rounded-2xl border border-border p-4">
               <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Address</p>
-              <p className="font-body text-foreground">{getAddress(selectedClient) || "No address details added yet."}</p>
+              <p className={detailValueClass}>{getAddress(selectedClient) || "No address details added yet."}</p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Created By</p>
-                <p className="font-body text-foreground">{selectedClient.created_by_profile?.full_name || selectedClient.created_by_profile?.email || "Not recorded"}</p>
+                <p className={detailValueClass}>{selectedClient.created_by_profile?.full_name || selectedClient.created_by_profile?.email || "Not recorded"}</p>
               </div>
-              <div className="rounded-2xl border border-border p-4">
+              <div className="min-w-0 rounded-2xl border border-border p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Notes</p>
-                <p className="whitespace-pre-wrap font-body text-foreground">{selectedClient.notes || "No internal notes yet."}</p>
+                <p className="whitespace-pre-wrap font-body text-foreground break-words [overflow-wrap:anywhere]">{selectedClient.notes || "No internal notes yet."}</p>
               </div>
             </div>
 
@@ -1361,13 +1362,13 @@ export default function AdminClients() {
                       This client is archived and hidden from the active client list.
                     </p>
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-xl border border-border bg-accent/20 p-3">
+                      <div className="min-w-0 rounded-xl border border-border bg-accent/20 p-3">
                         <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Archive Reason</p>
-                        <p className="text-sm text-foreground font-body">{selectedClient.archive_reason || "Not provided"}</p>
+                        <p className="text-sm text-foreground font-body break-words [overflow-wrap:anywhere]">{selectedClient.archive_reason || "Not provided"}</p>
                       </div>
-                      <div className="rounded-xl border border-border bg-accent/20 p-3">
+                      <div className="min-w-0 rounded-xl border border-border bg-accent/20 p-3">
                         <p className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Archive Notes</p>
-                        <p className="text-sm text-foreground font-body">{selectedClient.archive_notes || "No notes added."}</p>
+                        <p className="text-sm text-foreground font-body break-words [overflow-wrap:anywhere]">{selectedClient.archive_notes || "No notes added."}</p>
                       </div>
                     </div>
                     <div className="flex justify-end">
