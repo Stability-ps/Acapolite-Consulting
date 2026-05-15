@@ -1848,6 +1848,12 @@ export type Database = {
         };
         Returns: string;
       };
+      admin_return_service_request_to_marketplace: {
+        Args: {
+          p_request_id: string;
+        };
+        Returns: string;
+      };
       admin_apply_service_request_lifecycle_settings: {
         Args: Record<PropertyKey, never>;
         Returns: number;

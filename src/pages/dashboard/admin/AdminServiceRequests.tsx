@@ -183,7 +183,7 @@ export default function AdminServiceRequests() {
   const [assignmentFilter, setAssignmentFilter] = useState<string>("all");
   const [issueFilter, setIssueFilter] = useState<string>("all");
   const [leadView, setLeadView] = useState<"active" | "archived">("active");
-  const [lifecycleTab, setLifecycleTab] = useState<"active" | "business" | "professional" | "open" | "reactivated" | "pending" | "expired" | "archived">("active");
+  const [lifecycleTab, setLifecycleTab] = useState<"active" | "business" | "professional" | "open" | "reactivated" | "pending" | "expired" | "hidden" | "archived">("active");
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
@@ -192,6 +192,7 @@ export default function AdminServiceRequests() {
   const [convertingRequestId, setConvertingRequestId] = useState<string | null>(null);
   const [revivingLeadId, setRevivingLeadId] = useState<string | null>(null);
   const [resettingTimerId, setResettingTimerId] = useState<string | null>(null);
+  const [returningToMarketplaceId, setReturningToMarketplaceId] = useState<string | null>(null);
   const [selectedReviveStage, setSelectedReviveStage] = useState<Enums<"service_request_lifecycle_stage">>("business_exclusive");
   const [leadArchiveReason, setLeadArchiveReason] = useState<string>("inactive");
   const [leadArchiveNotes, setLeadArchiveNotes] = useState("");
@@ -477,11 +478,13 @@ export default function AdminServiceRequests() {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
     return (requests ?? []).filter((request) => {
-      if (leadView === "active" && request.is_archived) {
+      const practitionerVisibility = getPractitionerMarketplaceVisibility(request);
+
+      if (lifecycleTab !== "hidden" && leadView === "active" && request.is_archived) {
         return false;
       }
 
-      if (leadView === "archived" && !request.is_archived) {
+      if (lifecycleTab !== "hidden" && leadView === "archived" && !request.is_archived) {
         return false;
       }
 
@@ -510,6 +513,10 @@ export default function AdminServiceRequests() {
       }
 
       if (lifecycleTab === "expired" && request.lifecycle_stage !== "expired") {
+        return false;
+      }
+
+      if (lifecycleTab === "hidden" && practitionerVisibility.visible) {
         return false;
       }
 
@@ -701,6 +708,86 @@ export default function AdminServiceRequests() {
   function isMarketplaceReactivatedLead(request: ServiceRequestRecord) {
     return isActiveMarketplaceLead(request)
       && request.lifecycle_reactivation_count > 0;
+  }
+
+  function getPractitionerMarketplaceVisibility(request: ServiceRequestRecord) {
+    if (request.lifecycle_stage === "pending_client_confirmation") {
+      return {
+        visible: false,
+        label: "Hidden from practitioners",
+        description: "Waiting for client confirmation before the lead can return to the marketplace.",
+        toneClass: "border-orange-200 bg-orange-50 text-orange-700",
+        action: "return_to_marketplace" as const,
+      };
+    }
+
+    if (request.lifecycle_stage === "expired" || request.status === "expired") {
+      return {
+        visible: false,
+        label: "Hidden from practitioners",
+        description: "Expired leads stay out of the marketplace until an admin restarts the cycle.",
+        toneClass: "border-violet-200 bg-violet-50 text-violet-700",
+        action: "restart_cycle" as const,
+      };
+    }
+
+    if (request.is_archived) {
+      return {
+        visible: false,
+        label: "Hidden from practitioners",
+        description: "Archived leads are removed from practitioner visibility.",
+        toneClass: "border-slate-200 bg-slate-100 text-slate-700",
+        action: null,
+      };
+    }
+
+    if (request.status === "closed" || request.status === "converted_to_client") {
+      return {
+        visible: false,
+        label: "Hidden from practitioners",
+        description: "Completed leads do not appear in the practitioner marketplace.",
+        toneClass: "border-slate-200 bg-slate-100 text-slate-700",
+        action: null,
+      };
+    }
+
+    if (request.assigned_practitioner_id) {
+      return {
+        visible: false,
+        label: "Hidden from practitioners",
+        description: "Assigned leads are no longer shown in the open practitioner marketplace.",
+        toneClass: "border-sky-200 bg-sky-50 text-sky-700",
+        action: null,
+      };
+    }
+
+    if (request.lifecycle_stage === "business_exclusive") {
+      return {
+        visible: true,
+        label: "Visible to Business",
+        description: "Only Business practitioners can currently see this lead.",
+        toneClass: "border-amber-200 bg-amber-50 text-amber-700",
+        action: null,
+      };
+    }
+
+    if (request.lifecycle_stage === "professional_access") {
+      return {
+        visible: true,
+        label: "Visible to Professional+",
+        description: "Professional and Business practitioners can currently see this lead.",
+        toneClass: "border-sky-200 bg-sky-50 text-sky-700",
+        action: null,
+      };
+    }
+
+    return {
+      visible: true,
+      label: "Visible to all practitioners",
+      description: "This lead is currently in the open marketplace.",
+      toneClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      action: null,
+    };
   }
 
   const moveToWorkspaceTab = (tab: typeof lifecycleTab) => {
@@ -927,6 +1014,25 @@ export default function AdminServiceRequests() {
   };
 
   const updateStatus = async (requestId: string, status: Enums<"service_request_status">) => {
+    const currentRequest = (requests ?? []).find((request) => request.id === requestId);
+    if (
+      currentRequest
+      && currentRequest.status !== status
+      && currentRequest.lifecycle_stage === "pending_client_confirmation"
+    ) {
+      toast.error("This lead is still waiting for client confirmation. Use Return to Marketplace instead of changing status.");
+      return;
+    }
+
+    if (
+      currentRequest
+      && currentRequest.status !== status
+      && currentRequest.lifecycle_stage === "expired"
+    ) {
+      toast.error("This lead is expired. Use Restart cycle instead of changing status.");
+      return;
+    }
+
     setUpdatingStatus(requestId);
 
     const timestamp = new Date().toISOString();
@@ -1101,6 +1207,25 @@ export default function AdminServiceRequests() {
     }
 
     toast.success("Lead returned to the active marketplace.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-request-lifecycle-history"] }),
+    ]);
+  };
+
+  const returnLeadToMarketplace = async (requestId: string) => {
+    setReturningToMarketplaceId(requestId);
+    const { error } = await supabase.rpc("admin_return_service_request_to_marketplace", {
+      p_request_id: requestId,
+    });
+    setReturningToMarketplaceId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Lead returned to the marketplace.");
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-service-request-lifecycle-history"] }),
@@ -1808,6 +1933,7 @@ export default function AdminServiceRequests() {
             { value: "reactivated", label: "Reactivated Leads" },
             { value: "pending", label: "Pending Confirmation" },
             { value: "expired", label: "Expired Leads" },
+            { value: "hidden", label: "Hidden From Practitioners" },
             { value: "archived", label: "Archived Leads" },
           ].map((tab) => (
             <Button
@@ -1973,6 +2099,7 @@ export default function AdminServiceRequests() {
               missingReturnsFlag: request.missing_returns_flag,
               missingDocumentsFlag: request.missing_documents_flag,
             });
+            const practitionerVisibility = getPractitionerMarketplaceVisibility(request);
             return (
               <button
                 key={request.id}
@@ -1993,6 +2120,9 @@ export default function AdminServiceRequests() {
                       <Badge variant="outline" className={getServiceRequestRiskClass(request.risk_indicator)}>
                         {formatServiceRequestLabel(request.risk_indicator)} Risk
                       </Badge>
+                      <Badge variant="outline" className={practitionerVisibility.toneClass}>
+                        {practitionerVisibility.label}
+                      </Badge>
                       {request.lifecycle_reactivation_count > 0 ? (
                         <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700">
                           Reactivated x{request.lifecycle_reactivation_count}
@@ -2008,6 +2138,14 @@ export default function AdminServiceRequests() {
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground font-body">
                       {getLifecycleCountdownLabel(request) || "No active countdown"}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground font-body">
+                      {practitionerVisibility.description}
+                      {!practitionerVisibility.visible && practitionerVisibility.action === "restart_cycle"
+                        ? " Open this lead and use Restart cycle."
+                        : !practitionerVisibility.visible && practitionerVisibility.action === "return_to_marketplace"
+                          ? " Open this lead and use Return to Marketplace."
+                          : ""}
                     </p>
                     <p className="mt-3 line-clamp-2 text-sm text-foreground font-body">{request.description}</p>
 
@@ -2074,6 +2212,10 @@ export default function AdminServiceRequests() {
       >
         {selectedRequest ? (
           <div className="space-y-6">
+            {(() => {
+              const practitionerVisibility = getPractitionerMarketplaceVisibility(selectedRequest);
+
+              return (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-border bg-accent/20 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Contact</p>
@@ -2097,6 +2239,16 @@ export default function AdminServiceRequests() {
                 </Select>
                 {updatingStatus === selectedRequest.id ? (
                   <p className="mt-2 text-xs text-muted-foreground font-body">Saving status...</p>
+                ) : null}
+                {selectedRequest.lifecycle_stage === "pending_client_confirmation" ? (
+                  <p className="mt-2 text-xs text-orange-600 font-body">
+                    Use Return to Marketplace to make this lead visible again.
+                  </p>
+                ) : null}
+                {selectedRequest.lifecycle_stage === "expired" ? (
+                  <p className="mt-2 text-xs text-violet-600 font-body">
+                    Use Restart cycle to make this lead visible again.
+                  </p>
                 ) : null}
                 {selectedRequest.is_archived ? (
                   <p className="mt-2 text-xs text-red-600 font-body">
@@ -2148,7 +2300,24 @@ export default function AdminServiceRequests() {
                     : "Not recorded"}
                 </p>
               </div>
+              <div className="rounded-2xl border border-border bg-accent/20 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Practitioner Visibility</p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline" className={practitionerVisibility.toneClass}>
+                    {practitionerVisibility.label}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm text-foreground font-body">{practitionerVisibility.description}</p>
+                {!practitionerVisibility.visible && practitionerVisibility.action === "restart_cycle" ? (
+                  <p className="mt-1 text-xs text-muted-foreground font-body">Use Restart cycle to return this lead to the practitioner marketplace.</p>
+                ) : null}
+                {!practitionerVisibility.visible && practitionerVisibility.action === "return_to_marketplace" ? (
+                  <p className="mt-1 text-xs text-muted-foreground font-body">Use Return to Marketplace to reopen this lead for practitioners.</p>
+                ) : null}
+              </div>
             </div>
+              );
+            })()}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-border p-4">
@@ -2190,6 +2359,17 @@ export default function AdminServiceRequests() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  {role === "admin" && selectedRequest.lifecycle_stage === "pending_client_confirmation" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => void returnLeadToMarketplace(selectedRequest.id)}
+                      disabled={returningToMarketplaceId === selectedRequest.id}
+                    >
+                      {returningToMarketplaceId === selectedRequest.id ? "Returning..." : "Return to Marketplace"}
+                    </Button>
+                  ) : null}
                   {role === "admin" && canResetSelectedTimer ? (
                     <Button
                       type="button"
