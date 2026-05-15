@@ -24,6 +24,7 @@ import { sendCaseCreatedNotification } from "@/lib/caseCreatedNotifications";
 import { defaultInvoiceTerms } from "@/lib/invoiceUtils";
 import {
   AlertTriangle,
+  ArrowLeft,
   User,
   FolderOpen,
   Upload,
@@ -280,6 +281,7 @@ export default function AdminClientWorkspace() {
   const { accessibleClientIds, hasRestrictedClientScope, isLoadingAccessibleClientIds } = useAccessibleClientIds();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedConversation, setSelectedConversation] = useState("");
+  const [isMobileConversationOpen, setIsMobileConversationOpen] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [isEditClientOpen, setIsEditClientOpen] = useState(false);
   const [isCreateCaseOpen, setIsCreateCaseOpen] = useState(false);
@@ -1427,6 +1429,7 @@ export default function AdminClientWorkspace() {
 
     toast.success("Conversation created.");
     setSelectedConversation(data.id);
+    setIsMobileConversationOpen(true);
     setCreatingConversation(false);
     await refreshWorkspace();
   };
@@ -1452,6 +1455,7 @@ export default function AdminClientWorkspace() {
               value={selectedClientId}
               onValueChange={(value) => {
                 setSelectedConversation("");
+                setIsMobileConversationOpen(false);
                 setSearchParams({ clientId: value });
               }}
             >
@@ -1790,8 +1794,8 @@ export default function AdminClientWorkspace() {
             </TabsContent>
 
             <TabsContent value="messages" className="space-y-6">
-              <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
-                <div className="rounded-2xl border border-border bg-card shadow-card">
+              <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+                <div className={`rounded-2xl border border-border bg-card shadow-card ${isMobileConversationOpen ? "hidden lg:block" : "block"}`}>
                   <div className="border-b border-border px-5 py-4">
                     <div className="flex items-center justify-between gap-3">
                       <h2 className="font-display text-lg font-semibold text-foreground">Conversations</h2>
@@ -1807,7 +1811,10 @@ export default function AdminClientWorkspace() {
                       <button
                         key={conversation.id}
                         type="button"
-                        onClick={() => setSelectedConversation(conversation.id)}
+                        onClick={() => {
+                          setSelectedConversation(conversation.id);
+                          setIsMobileConversationOpen(true);
+                        }}
                         className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${selectedConversation === conversation.id ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30 hover:bg-accent/30"
                           }`}
                       >
@@ -1827,21 +1834,35 @@ export default function AdminClientWorkspace() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-border bg-card shadow-card">
+                <div className={isMobileConversationOpen
+                  ? "fixed inset-0 z-50 flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] lg:relative lg:inset-auto lg:z-auto lg:h-auto lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:pt-0 lg:shadow-card"
+                  : "hidden lg:flex lg:min-h-0 lg:flex-col lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-card"}>
                   {selectedConversationRecord ? (
                     <>
-                      <div className="border-b border-border px-6 py-5">
-                        <h2 className="font-display text-xl font-semibold text-foreground">{selectedConversationRecord.subject || "General Support"}</h2>
-                        <p className="mt-1 text-sm text-muted-foreground font-body">{selectedConversationRecord.is_closed ? "Closed conversation" : "Open conversation"}</p>
+                      <div className="border-b border-border bg-background px-4 py-4 sm:px-6 sm:py-5 lg:bg-card">
+                        <div className="flex items-start gap-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-9 w-9 shrink-0 rounded-xl p-0 lg:hidden"
+                            onClick={() => setIsMobileConversationOpen(false)}
+                          >
+                            <ArrowLeft className="h-4 w-4" />
+                          </Button>
+                          <div className="min-w-0">
+                            <h2 className="font-display text-xl font-semibold text-foreground">{selectedConversationRecord.subject || "General Support"}</h2>
+                            <p className="mt-1 text-sm text-muted-foreground font-body">{selectedConversationRecord.is_closed ? "Closed conversation" : "Open conversation"}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="max-h-[540px] overflow-y-auto p-6 space-y-4">
+                      <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4 sm:p-6 lg:max-h-[540px]">
                         {(selectedMessages ?? []).length > 0 ? (selectedMessages ?? []).map((message) => {
                           const isClientMessage = message.sender_type === "client";
                           return (
                             <div key={message.id} className={`flex ${isClientMessage ? "justify-start" : "justify-end"}`}>
-                              <div className={`max-w-[78%] rounded-3xl px-4 py-3 ${isClientMessage ? "bg-muted text-foreground" : "bg-primary text-primary-foreground"}`}>
+                              <div className={`max-w-[90%] rounded-3xl px-4 py-3 sm:max-w-[78%] ${isClientMessage ? "bg-muted text-foreground" : "bg-primary text-primary-foreground"}`}>
                                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] opacity-75">{getSenderLabel(message.sender_type)}</p>
-                                <p className="text-sm font-body whitespace-pre-wrap">{message.message_text}</p>
+                                <p className="text-sm font-body whitespace-pre-wrap break-words">{message.message_text}</p>
                                 <p className={`mt-3 text-xs ${isClientMessage ? "text-muted-foreground" : "text-primary-foreground/70"}`}>{new Date(message.created_at).toLocaleString()}</p>
                               </div>
                             </div>
@@ -1852,8 +1873,8 @@ export default function AdminClientWorkspace() {
                           </div>
                         )}
                       </div>
-                      <div className="border-t border-border p-4">
-                        <div className="flex gap-3">
+                      <div className="border-t border-border bg-background p-4 pb-[max(env(safe-area-inset-bottom),1rem)] lg:bg-card lg:pb-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                           <Textarea
                             value={newMessage}
                             onChange={(event) => setNewMessage(event.target.value)}
@@ -1867,7 +1888,7 @@ export default function AdminClientWorkspace() {
                               }
                             }}
                           />
-                          <Button type="button" className="rounded-xl" onClick={sendMessage} disabled={!canReplyMessages}>
+                          <Button type="button" className="w-full rounded-xl sm:w-auto" onClick={sendMessage} disabled={!canReplyMessages}>
                             {canReplyMessages ? "Send" : "View Only"}
                           </Button>
                         </div>

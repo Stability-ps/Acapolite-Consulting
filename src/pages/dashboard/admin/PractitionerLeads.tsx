@@ -1196,14 +1196,14 @@ export default function PractitionerLeads() {
                   <Button
                     type="button"
                     onClick={() => setSelectedRequestId(request.id)}
-                    className={`mt-5 h-auto w-full rounded-xl border px-4 py-3 ${actionClassName}`}
+                    className={`mt-5 h-auto w-full whitespace-normal rounded-xl border px-4 py-3 ${actionClassName}`}
                   >
-                    <div className="flex w-full items-center justify-between gap-4 text-left">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold">{actionLabel}</p>
-                        <p className={`mt-1 text-xs ${actionSubtextClassName}`}>{actionSubtitle}</p>
+                    <div className="flex w-full flex-col items-start gap-3 text-left sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-sm font-semibold whitespace-normal">{actionLabel}</p>
+                        <p className={`mt-1 break-words whitespace-normal text-xs leading-5 ${actionSubtextClassName}`}>{actionSubtitle}</p>
                       </div>
-                      <div className="shrink-0">
+                      <div className="shrink-0 self-end sm:self-auto">
                         {packageLocked || lifecycleLocked ? (
                           <Lock className="h-4 w-4" />
                         ) : accessApproved || ownResponse ? (

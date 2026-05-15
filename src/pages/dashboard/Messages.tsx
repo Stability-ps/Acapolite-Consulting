@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Paperclip, Search, Send, Shield } from "lucide-react";
+import { ArrowLeft, Paperclip, Search, Send, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +30,7 @@ export default function Messages() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
+  const [isMobileConversationOpen, setIsMobileConversationOpen] = useState(false);
   const conversationIdFromQuery = searchParams.get("conversationId") ?? "";
 
   const { data: conversations } = useQuery({
@@ -48,6 +49,7 @@ export default function Messages() {
   useEffect(() => {
     if (conversationIdFromQuery && conversations?.some((conversation) => conversation.id === conversationIdFromQuery)) {
       setSelectedConversation(conversationIdFromQuery);
+      setIsMobileConversationOpen(true);
       return;
     }
 
@@ -206,6 +208,7 @@ export default function Messages() {
     }
 
     setSelectedConversation(data.id);
+    setIsMobileConversationOpen(true);
     queryClient.invalidateQueries({ queryKey: ["conversations", client.id] });
   };
 
@@ -292,8 +295,8 @@ export default function Messages() {
           <p className="text-muted-foreground font-body">Your client record is not ready yet. Acapolite staff can complete it for you.</p>
         </div>
       ) : (
-        <div className="grid xl:grid-cols-[320px_1fr] gap-6 h-[72vh] min-h-0">
-          <div className="bg-card rounded-2xl border border-border shadow-card flex min-h-0 flex-col overflow-hidden">
+        <div className="grid min-h-0 gap-6 lg:h-[72vh] lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className={`min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card ${isMobileConversationOpen ? "hidden lg:flex" : "flex"}`}>
             <div className="border-b border-border p-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -316,7 +319,10 @@ export default function Messages() {
                     <button
                       key={conversation.id}
                       type="button"
-                      onClick={() => setSelectedConversation(conversation.id)}
+                      onClick={() => {
+                        setSelectedConversation(conversation.id);
+                        setIsMobileConversationOpen(true);
+                      }}
                       className={`w-full text-left rounded-2xl border px-4 py-3 transition-all ${
                         isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30 hover:bg-accent/30"
                       }`}
@@ -347,12 +353,22 @@ export default function Messages() {
             </div>
           </div>
 
-          <div className="bg-card rounded-2xl border border-border shadow-card flex min-h-0 flex-col overflow-hidden">
+          <div className={isMobileConversationOpen
+            ? "fixed inset-0 z-50 flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] lg:relative lg:inset-auto lg:z-auto lg:h-auto lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:pt-0 lg:shadow-card"
+            : "hidden min-h-0 lg:flex lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-card"}>
             {selectedConversationRecord ? (
               <>
-                <div className="border-b border-border px-6 py-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
+                <div className="border-b border-border bg-background px-4 py-4 sm:px-6 sm:py-5 lg:bg-card">
+                  <div className="flex items-start gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 w-9 shrink-0 rounded-xl p-0 lg:hidden"
+                      onClick={() => setIsMobileConversationOpen(false)}
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="min-w-0">
                       <h2 className="font-display text-xl font-semibold text-foreground">
                         {selectedConversationRecord.subject || "General Support"}
                       </h2>
@@ -363,13 +379,13 @@ export default function Messages() {
                   </div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-4">
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
                   {messages && messages.length > 0 ? messages.map((message) => {
                     const isOwnMessage = message.sender_profile_id === user?.id;
 
                     return (
                     <div key={message.id} className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
-                      <div className={`flex max-w-[84%] items-end gap-3 ${isOwnMessage ? "flex-row-reverse" : "flex-row"}`}>
+                      <div className={`flex max-w-[90%] items-end gap-3 sm:max-w-[84%] ${isOwnMessage ? "flex-row-reverse" : "flex-row"}`}>
                         {!isOwnMessage ? (
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(59,130,246,1),rgba(30,64,175,1))] text-white shadow-[0_12px_24px_rgba(30,64,175,0.22)]">
                             <Shield className="h-4 w-4" />
@@ -381,7 +397,7 @@ export default function Messages() {
                           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] opacity-75">
                             {getSenderLabel(isOwnMessage)}
                           </p>
-                          <p className="text-sm font-body whitespace-pre-wrap">{message.message_text}</p>
+                          <p className="text-sm font-body whitespace-pre-wrap break-words">{message.message_text}</p>
                           {message.attachment_document_id && attachmentMap.get(message.attachment_document_id) ? (
                             <button
                               type="button"
@@ -415,35 +431,37 @@ export default function Messages() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="border-t border-border p-4">
-                  <div className="flex gap-3">
+                <div className="border-t border-border bg-background p-4 pb-[max(env(safe-area-inset-bottom),1rem)] lg:bg-card lg:pb-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                     <input
                       ref={attachmentInputRef}
                       type="file"
                       className="hidden"
                       onChange={(event) => handleAttachmentChange(event.target.files?.[0] ?? null)}
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl shrink-0"
-                      onClick={() => attachmentInputRef.current?.click()}
-                    >
-                      <Paperclip className="h-4 w-4" />
-                    </Button>
-                    <Textarea
-                      value={newMessage}
-                      onChange={(event) => setNewMessage(event.target.value)}
-                      placeholder="Type a message... Press Ctrl+Enter to send."
-                      className="min-h-[104px] flex-1 resize-y rounded-xl"
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                          event.preventDefault();
-                          void sendMessage();
-                        }
-                      }}
-                    />
-                    <Button onClick={sendMessage} className="rounded-xl shrink-0" disabled={sendingMessage || (!newMessage.trim() && !attachmentFile)}>
+                    <div className="flex flex-1 gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl shrink-0"
+                        onClick={() => attachmentInputRef.current?.click()}
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </Button>
+                      <Textarea
+                        value={newMessage}
+                        onChange={(event) => setNewMessage(event.target.value)}
+                        placeholder="Type a message... Press Ctrl+Enter to send."
+                        className="min-h-[104px] flex-1 resize-y rounded-xl"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                            event.preventDefault();
+                            void sendMessage();
+                          }
+                        }}
+                      />
+                    </div>
+                    <Button onClick={sendMessage} className="w-full rounded-xl sm:w-auto sm:shrink-0" disabled={sendingMessage || (!newMessage.trim() && !attachmentFile)}>
                       <Send className="h-4 w-4 mr-2" />
                       {sendingMessage ? "Sending..." : "Send"}
                     </Button>

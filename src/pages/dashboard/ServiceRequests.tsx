@@ -907,16 +907,21 @@ export default function ClientServiceRequests() {
                           </span>
                         </div>
 
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-foreground font-body">
-                          {response.introduction_message}
-                        </p>
-
-                        {response.service_pitch ? (
+                        <div className="grid gap-3">
                           <div className="rounded-2xl border border-border bg-card p-4">
-                            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Service Pitch</p>
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">{response.service_pitch}</p>
+                            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Introduction Message</p>
+                            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-foreground font-body">
+                              {response.introduction_message}
+                            </p>
                           </div>
-                        ) : null}
+
+                          {response.service_pitch ? (
+                            <div className="rounded-2xl border border-border bg-card p-4">
+                              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Service Pitch</p>
+                              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-foreground font-body">{response.service_pitch}</p>
+                            </div>
+                          ) : null}
+                        </div>
 
                         {practitionerProfile?.profile_summary ? (
                           <div className="rounded-2xl border border-border bg-card p-4">

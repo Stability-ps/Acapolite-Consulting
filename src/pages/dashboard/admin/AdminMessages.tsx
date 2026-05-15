@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Paperclip, Search, Send } from "lucide-react";
+import { ArrowLeft, Paperclip, Search, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -93,6 +93,7 @@ export default function AdminMessages() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
+  const [isMobileConversationOpen, setIsMobileConversationOpen] = useState(false);
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canReplyMessages = hasStaffPermission("can_reply_messages");
@@ -135,6 +136,7 @@ export default function AdminMessages() {
   useEffect(() => {
     if (requestedConversationId && selectedConversation !== requestedConversationId) {
       setSelectedConversation(requestedConversationId);
+      setIsMobileConversationOpen(true);
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.delete("conversationId");
@@ -448,8 +450,8 @@ export default function AdminMessages() {
         {hasRestrictedClientScope ? "Manage communication for assigned client and practitioner conversations." : "Manage communication across all client and practitioner conversations."}
       </p>
 
-      <div className="grid xl:grid-cols-[360px_1fr] gap-6 h-[72vh] min-h-0">
-        <div className="bg-card rounded-2xl border border-border shadow-card flex min-h-0 flex-col overflow-hidden">
+      <div className="grid min-h-0 gap-6 lg:h-[72vh] lg:grid-cols-[360px_minmax(0,1fr)]">
+        <div className={`min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card ${isMobileConversationOpen ? "hidden lg:flex" : "flex"}`}>
           <div className="border-b border-border p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -494,7 +496,10 @@ export default function AdminMessages() {
                   <button
                     key={conversation.id}
                     type="button"
-                    onClick={() => setSelectedConversation(conversation.id)}
+                    onClick={() => {
+                      setSelectedConversation(conversation.id);
+                      setIsMobileConversationOpen(true);
+                    }}
                     className={`w-full text-left rounded-2xl border px-4 py-3 transition-all ${
                       isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30 hover:bg-accent/30"
                     }`}
@@ -545,12 +550,23 @@ export default function AdminMessages() {
           </div>
         </div>
 
-        <div className="bg-card rounded-2xl border border-border shadow-card flex min-h-0 flex-col overflow-hidden">
+        <div className={isMobileConversationOpen
+          ? "fixed inset-0 z-50 flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] lg:relative lg:inset-auto lg:z-auto lg:h-auto lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:pt-0 lg:shadow-card"
+          : "hidden min-h-0 lg:flex lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-card"}>
           {selectedConversationRecord ? (
             <>
-              <div className="border-b border-border px-6 py-5">
+              <div className="border-b border-border bg-background px-4 py-4 sm:px-6 sm:py-5 lg:bg-card">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 w-9 shrink-0 rounded-xl p-0 lg:hidden"
+                      onClick={() => setIsMobileConversationOpen(false)}
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="min-w-0">
                     <h2 className="font-display text-xl font-semibold text-foreground">
                       {getConversationName(selectedConversationRecord)}
                     </h2>
@@ -577,6 +593,7 @@ export default function AdminMessages() {
                         {formatCaseReference(selectedConversationRecord.case_id, selectedConversationRecord.cases?.case_number)}
                       </p>
                     ) : null}
+                    </div>
                   </div>
                   {selectedConversationRecord.clients?.client_code ? (
                     <span className="text-xs font-semibold px-3 py-1 rounded-full bg-accent text-accent-foreground font-body">
@@ -586,16 +603,16 @@ export default function AdminMessages() {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4 sm:p-6">
                 {messages && messages.length > 0 ? messages.map((message) => (
                   <div key={message.id} className={`flex ${message.sender_profile_id === user?.id ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[78%] rounded-3xl px-4 py-3 ${
+                    <div className={`max-w-[90%] rounded-3xl px-4 py-3 sm:max-w-[78%] ${
                       message.sender_profile_id === user?.id ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
                     }`}>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] mb-2 opacity-75">
                         {message.sender_profile_id === user?.id ? "You" : message.sender_type}
                       </p>
-                      <p className="text-sm font-body whitespace-pre-wrap">{message.message_text}</p>
+                      <p className="text-sm font-body whitespace-pre-wrap break-words">{message.message_text}</p>
                       {message.attachment_document_id && attachmentMap.get(message.attachment_document_id) ? (
                         <button
                           type="button"
@@ -628,37 +645,39 @@ export default function AdminMessages() {
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="border-t border-border p-4">
-                <div className="flex gap-3">
+              <div className="border-t border-border bg-background p-4 pb-[max(env(safe-area-inset-bottom),1rem)] lg:bg-card lg:pb-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                   <input
                     ref={attachmentInputRef}
                     type="file"
                     className="hidden"
                     onChange={(event) => handleAttachmentChange(event.target.files?.[0] ?? null)}
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-xl shrink-0"
-                    onClick={() => attachmentInputRef.current?.click()}
-                    disabled={!canReplyMessages}
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                  <Textarea
-                    value={newMessage}
-                    onChange={(event) => setNewMessage(event.target.value)}
-                    placeholder={canReplyMessages ? "Type a reply... Press Ctrl+Enter to send." : "View-only messaging access"}
-                    className="min-h-[104px] flex-1 resize-y rounded-xl"
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                        event.preventDefault();
-                        void sendMessage();
-                      }
-                    }}
-                    disabled={!canReplyMessages}
-                  />
-                  <Button onClick={sendMessage} className="rounded-xl shrink-0" disabled={!canReplyMessages || sendingMessage || (!newMessage.trim() && !attachmentFile)}>
+                  <div className="flex flex-1 gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl shrink-0"
+                      onClick={() => attachmentInputRef.current?.click()}
+                      disabled={!canReplyMessages}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <Textarea
+                      value={newMessage}
+                      onChange={(event) => setNewMessage(event.target.value)}
+                      placeholder={canReplyMessages ? "Type a reply... Press Ctrl+Enter to send." : "View-only messaging access"}
+                      className="min-h-[104px] flex-1 resize-y rounded-xl"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                          event.preventDefault();
+                          void sendMessage();
+                        }
+                      }}
+                      disabled={!canReplyMessages}
+                    />
+                  </div>
+                  <Button onClick={sendMessage} className="w-full rounded-xl sm:w-auto sm:shrink-0" disabled={!canReplyMessages || sendingMessage || (!newMessage.trim() && !attachmentFile)}>
                     <Send className="h-4 w-4 mr-2" />
                     {canReplyMessages ? (sendingMessage ? "Sending..." : "Send") : "View Only"}
                   </Button>

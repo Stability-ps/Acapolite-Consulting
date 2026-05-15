@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   BadgeCheck,
-  Bell,
   CalendarDays,
   Clock3,
   Crown,
@@ -49,7 +48,6 @@ import type { Tables, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router-dom";
 import PractitionerLeads from "./PractitionerLeads";
-import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 import {
   formatServiceRequestLabel,
   getServiceRequestIssueFlags,
@@ -74,7 +72,6 @@ type ServiceRequestResponse = Tables<"service_request_responses">;
 type ServiceRequestAssignmentHistory = Tables<"service_request_assignment_history">;
 type ServiceRequestLifecycleHistory = Tables<"service_request_lifecycle_history">;
 type ServiceRequestAccessRequest = Tables<"service_request_access_requests">;
-type NotificationRecord = Tables<"notifications">;
 type PractitionerProfile = Tables<"practitioner_profiles">;
 type PractitionerUser = Tables<"profiles">;
 type DashboardDateRange = "today" | "last7" | "last30" | "all";
@@ -166,7 +163,6 @@ function getDashboardRangeBounds(range: DashboardDateRange) {
 }
 
 export default function AdminServiceRequests() {
-  useNotificationSectionRead("requests");
   const { role, user, profile } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -333,22 +329,6 @@ export default function AdminServiceRequests() {
       if (error) throw error;
       return data ?? [];
     },
-  });
-
-  const { data: requestNotifications } = useQuery({
-    queryKey: ["staff-request-notifications"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("section", "requests")
-        .order("created_at", { ascending: false })
-        .limit(8);
-
-      if (error) throw error;
-      return (data ?? []) as NotificationRecord[];
-    },
-    enabled: role === "admin",
   });
 
   const documentMap = useMemo(() => {
@@ -636,20 +616,6 @@ export default function AdminServiceRequests() {
       return createdAt >= startTime && createdAt <= endTime;
     });
   }, [dashboardRange.end, dashboardRange.start, responses]);
-
-  const dashboardRequestNotifications = useMemo(() => {
-    const rows = requestNotifications ?? [];
-    if (!dashboardRange.start) {
-      return rows;
-    }
-
-    const startTime = dashboardRange.start.getTime();
-    const endTime = dashboardRange.end.getTime();
-    return rows.filter((notification) => {
-      const createdAt = new Date(notification.created_at).getTime();
-      return createdAt >= startTime && createdAt <= endTime;
-    });
-  }, [dashboardRange.end, dashboardRange.start, requestNotifications]);
 
   const moveToWorkspaceTab = (tab: typeof lifecycleTab) => {
     setLeadView(tab === "archived" ? "archived" : "active");
@@ -1092,7 +1058,6 @@ export default function AdminServiceRequests() {
       : dashboardDateRange === "last30"
         ? "vs previous 30 days"
         : "vs previous 30 days";
-  const unreadRequestNotificationCount = (requestNotifications ?? []).filter((item) => !item.is_read).length;
 
   const summaryCards = [
     { title: "Active Leads", value: requestMetrics.active.toLocaleString(), delta: requestMetrics.trends.active, icon: Target, color: "bg-blue-50 text-blue-600" },
@@ -1162,14 +1127,6 @@ export default function AdminServiceRequests() {
                 <SelectItem value="all">All Time</SelectItem>
               </SelectContent>
             </Select>
-            <div className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm">
-              <Bell className="h-5 w-5" />
-              {unreadRequestNotificationCount > 0 ? (
-                <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
-                  {unreadRequestNotificationCount}
-                </span>
-              ) : null}
-            </div>
           </div>
         </div>
       </div>
@@ -1304,7 +1261,7 @@ export default function AdminServiceRequests() {
           </div>
         </div>
 
-        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-3">
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Pending Client Confirmation</h2>
@@ -1456,39 +1413,6 @@ export default function AdminServiceRequests() {
           </div>
         </div>
 
-        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-3">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Notifications Center</h2>
-              <p className="mt-1 text-sm text-slate-500">Latest lifecycle and marketplace events.</p>
-            </div>
-          </div>
-          <div className="mt-5 space-y-3">
-            {dashboardRequestNotifications.length ? dashboardRequestNotifications.map((notification) => (
-              <button
-                key={notification.id}
-                type="button"
-                onClick={() => {
-                  if (notification.entity_id) setSelectedRequestId(notification.entity_id);
-                }}
-                className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40"
-              >
-                <div className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                  <Bell className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
-                  <p className="mt-1 text-sm text-slate-500">{notification.body || "Marketplace activity updated."}</p>
-                  <p className="mt-2 text-xs text-slate-400">{new Date(notification.created_at).toLocaleString()}</p>
-                </div>
-              </button>
-            )) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
-                No request notifications yet.
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       <div className="grid gap-6">
@@ -2170,10 +2094,20 @@ export default function AdminServiceRequests() {
                           <p className="text-sm text-muted-foreground font-body">
                             {practitioner?.activeCaseCount ?? 0} active case{(practitioner?.activeCaseCount ?? 0) === 1 ? "" : "s"} · {practitioner?.profile?.years_of_experience ?? 0} years experience
                           </p>
-                          <p className="whitespace-pre-wrap text-sm leading-6 text-foreground font-body">{response.introduction_message}</p>
-                          {response.service_pitch ? (
-                            <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground font-body">{response.service_pitch}</p>
-                          ) : null}
+                          <div className="grid gap-3">
+                            <div className="rounded-2xl border border-border bg-white p-4">
+                              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Introduction Message</p>
+                              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-foreground font-body">
+                                {response.introduction_message}
+                              </p>
+                            </div>
+                            {response.service_pitch ? (
+                              <div className="rounded-2xl border border-border bg-white p-4">
+                                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Service Pitch</p>
+                                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground font-body">{response.service_pitch}</p>
+                              </div>
+                            ) : null}
+                          </div>
                           {(practitioner?.profile?.services_offered ?? []).length ? (
                             <div className="flex flex-wrap gap-2">
                               {(practitioner?.profile?.services_offered ?? []).map((service) => (
