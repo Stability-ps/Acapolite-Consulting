@@ -1334,14 +1334,16 @@ export default function AdminCases() {
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
-                  <Input
+                  <Textarea
                     value={caseReply}
                     onChange={(event) => setCaseReply(event.target.value)}
-                    placeholder="Reply inside this case..."
-                    className="flex-1 rounded-xl"
+                    placeholder="Reply inside this case... Press Ctrl+Enter to send."
+                    autoResize
+                    maxAutoResizeHeight={320}
+                    className="min-h-[140px] flex-1 rounded-xl"
                     disabled={!canReplyMessages}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
+                      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
                         event.preventDefault();
                         void sendCaseReply();
                       }
@@ -1363,7 +1365,7 @@ export default function AdminCases() {
                   </p>
                 ) : (
                   <p className="mt-2 text-xs text-muted-foreground font-body">
-                    You can send a message, a file, or both. Maximum file size: 10 MB.
+                    You can send a message, a file, or both. Press Ctrl+Enter to send. Maximum file size: 10 MB.
                   </p>
                 )}
                 {!canReplyMessages ? (

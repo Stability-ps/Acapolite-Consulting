@@ -1915,7 +1915,9 @@ export default function AdminClientWorkspace() {
                             value={newMessage}
                             onChange={(event) => setNewMessage(event.target.value)}
                             placeholder={canReplyMessages ? "Type a message to this client... Press Ctrl+Enter to send." : "View-only messaging access"}
-                            className="min-h-[104px] flex-1 resize-y rounded-xl"
+                            autoResize
+                            maxAutoResizeHeight={320}
+                            className="min-h-[140px] flex-1 rounded-xl"
                             disabled={!canReplyMessages}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {

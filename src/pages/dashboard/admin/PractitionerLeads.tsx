@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Clock3, Coins, ExternalLink, Eye, FileText, Lock, Search, SendHorizonal, ShieldCheck, Target } from "lucide-react";
+import { ChevronDown, Clock3, Coins, ExternalLink, Eye, FileText, Lock, Search, SendHorizonal, ShieldCheck, Sparkles, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -552,6 +552,15 @@ export default function PractitionerLeads() {
       .slice(0, 4);
   }, [documentMap, filteredRequests, responseMap]);
 
+  const topRecommendedLead = recommendedLeads[0] ?? null;
+  const topRecommendedResponse = topRecommendedLead ? responseMap.get(topRecommendedLead.id) ?? null : null;
+  const topRecommendedAccessRequest = topRecommendedLead ? accessRequestMap.get(topRecommendedLead.id) ?? null : null;
+  const topRecommendedAccessApproved = Boolean(topRecommendedResponse || topRecommendedAccessRequest?.status === "approved");
+  const topRecommendedTheme = topRecommendedLead ? getLeadCardTheme(topRecommendedLead.lead_tier ?? null) : null;
+  const topRecommendedDisplayName = topRecommendedLead
+    ? (topRecommendedAccessApproved ? topRecommendedLead.full_name : formatLeadType(topRecommendedLead.lead_tier ?? null))
+    : null;
+
   const selectedRequest = filteredRequests.find((request) => request.id === selectedRequestId)
     || visibleRequests.find((request) => request.id === selectedRequestId)
     || null;
@@ -845,18 +854,62 @@ export default function PractitionerLeads() {
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
               {practitionerMetrics.documentsAvailable} with documents
             </div>
-            {recommendedLeads[0] ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className="rounded-xl text-primary"
-                onClick={() => setSelectedRequestId(recommendedLeads[0].id)}
-              >
-                Open top recommended lead
-              </Button>
-            ) : null}
           </div>
         </div>
+
+        {topRecommendedLead && topRecommendedTheme ? (
+          <div className={`mt-4 rounded-2xl border border-slate-200 ${topRecommendedTheme.border} bg-slate-50/70 p-4 shadow-sm`}>
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    Top Recommended Lead
+                  </Badge>
+                  <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${topRecommendedTheme.leadBadge}`}>
+                    {formatLeadType(topRecommendedLead.lead_tier ?? null)}
+                  </Badge>
+                  <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">
+                    {formatServiceRequestLabel(topRecommendedLead.priority_level)} priority
+                  </Badge>
+                </div>
+                <p className="mt-3 text-lg font-semibold text-slate-900">{topRecommendedDisplayName}</p>
+                <p className="mt-1 text-sm text-slate-600">{formatServiceList(resolveServiceList(topRecommendedLead))}</p>
+                <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
+                  {topRecommendedAccessApproved
+                    ? (topRecommendedLead.description || "No description was provided with this request.")
+                    : getDescriptionPreview(topRecommendedLead.description || "", false)}
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[360px]">
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Stage</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{formatLifecycleStageLabel(topRecommendedLead.lifecycle_stage)}</p>
+                  <p className="mt-1 text-xs text-slate-500">{getLifecycleCountdownLabel(topRecommendedLead) || "No active countdown"}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Documents</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{documentMap.get(topRecommendedLead.id)?.length ?? 0}</p>
+                  <p className="mt-1 text-xs text-slate-500">Supporting files available</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Posted</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{formatRelativeTime(topRecommendedLead.created_at)}</p>
+                  <p className="mt-1 text-xs text-slate-500">{formatRequestDate(topRecommendedLead.created_at)}</p>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                className={`w-full rounded-xl px-5 xl:w-auto ${topRecommendedTheme.primaryAction}`}
+                onClick={() => setSelectedRequestId(topRecommendedLead.id)}
+              >
+                Open Recommended Lead
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {showAdvancedFilters ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1546,7 +1599,9 @@ export default function PractitionerLeads() {
                   placeholder={leadAction === "respond"
                     ? "You came here to respond to this lead. Introduce yourself, explain how you can help, and set expectations for the client."
                     : "Introduce yourself, explain how you can help, and set expectations for the client."}
-                  className="min-h-[140px] rounded-xl"
+                  autoResize
+                  maxAutoResizeHeight={320}
+                  className="min-h-[160px] rounded-xl"
                 />
               </div>
               <div>
@@ -1555,7 +1610,9 @@ export default function PractitionerLeads() {
                   value={servicePitch}
                   onChange={(event) => setServicePitch(event.target.value)}
                   placeholder="Optional service summary, expertise fit, or next-step outline."
-                  className="min-h-[100px] rounded-xl"
+                  autoResize
+                  maxAutoResizeHeight={280}
+                  className="min-h-[136px] rounded-xl"
                 />
               </div>
               <div className="flex justify-end">

@@ -452,7 +452,9 @@ export default function Messages() {
                         value={newMessage}
                         onChange={(event) => setNewMessage(event.target.value)}
                         placeholder="Type a message... Press Ctrl+Enter to send."
-                        className="min-h-[104px] flex-1 resize-y rounded-xl"
+                        autoResize
+                        maxAutoResizeHeight={320}
+                        className="min-h-[140px] flex-1 rounded-xl"
                         onKeyDown={(event) => {
                           if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
                             event.preventDefault();

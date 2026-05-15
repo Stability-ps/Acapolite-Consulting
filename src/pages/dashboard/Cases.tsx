@@ -994,7 +994,7 @@ export default function Cases() {
                   )}
                 </div>
                 <div className="border-t border-border p-4">
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                     <input
                       ref={caseAttachmentInputRef}
                       type="file"
@@ -1011,20 +1011,23 @@ export default function Cases() {
                     >
                       <Paperclip className="h-4 w-4" />
                     </Button>
-                    <Input
+                    <Textarea
                       value={caseReply}
                       onChange={(event) => setCaseReply(event.target.value)}
-                      placeholder={`Reply on ${selectedCase.case_number || formatCaseReference(selectedCase.id)}...`}
-                      className="flex-1 rounded-xl"
-                      onKeyDown={(event) =>
-                        event.key === "Enter" &&
-                        !event.shiftKey &&
-                        sendCaseReply()
-                      }
+                      placeholder={`Reply on ${selectedCase.case_number || formatCaseReference(selectedCase.id)}... Press Ctrl+Enter to send.`}
+                      autoResize
+                      maxAutoResizeHeight={320}
+                      className="min-h-[140px] flex-1 rounded-xl"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                          event.preventDefault();
+                          void sendCaseReply();
+                        }
+                      }}
                     />
                     <Button
                       type="button"
-                      className="rounded-xl"
+                      className="w-full rounded-xl sm:w-auto"
                       onClick={sendCaseReply}
                       disabled={sendingCaseReply || (!caseReply.trim() && !caseAttachmentFile)}
                     >
@@ -1037,7 +1040,7 @@ export default function Cases() {
                     </p>
                   ) : (
                     <p className="mt-3 text-xs text-muted-foreground font-body">
-                      You can send a message, a file, or both. Maximum file size: 10 MB.
+                      You can send a message, a file, or both. Press Ctrl+Enter to send. Maximum file size: 10 MB.
                     </p>
                   )}
                 </div>
