@@ -535,6 +535,11 @@ export default function AdminServiceRequests() {
     });
   }, [dashboardRange.end, dashboardRange.start, requests]);
 
+  const operationalRequests = useMemo(
+    () => requests ?? [],
+    [requests],
+  );
+
   const dashboardResponses = useMemo(() => {
     const rows = responses ?? [];
     if (!dashboardRange.start) {
@@ -679,9 +684,7 @@ export default function AdminServiceRequests() {
     const practitionerVisibility = getPractitionerMarketplaceVisibility(request);
 
     if (tab === "active") {
-      return !request.is_archived
-        && request.lifecycle_stage !== "expired"
-        && request.status !== "expired";
+      return isActiveMarketplaceLead(request);
     }
 
     if (tab === "business") {
@@ -729,15 +732,15 @@ export default function AdminServiceRequests() {
 
   const workspaceBaseRequests = useMemo(() => {
     if (lifecycleTab === "hidden") {
-      return dashboardRequests;
+      return operationalRequests;
     }
 
     if (lifecycleTab === "archived" || leadView === "archived") {
-      return dashboardRequests.filter((request) => request.is_archived);
+      return operationalRequests.filter((request) => request.is_archived);
     }
 
-    return dashboardRequests.filter((request) => !request.is_archived);
-  }, [dashboardRequests, leadView, lifecycleTab]);
+    return operationalRequests.filter((request) => !request.is_archived);
+  }, [leadView, lifecycleTab, operationalRequests]);
 
   const workspaceFilteredRequests = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -828,7 +831,7 @@ export default function AdminServiceRequests() {
   );
 
   const requestMetrics = useMemo(() => {
-    const rows = dashboardRequests;
+    const rows = operationalRequests;
     const now = Date.now();
     const comparisonMs = dashboardRange.comparisonDays * 24 * 60 * 60 * 1000;
     const currentWindowStart = now - comparisonMs;
@@ -873,7 +876,7 @@ export default function AdminServiceRequests() {
 
     return {
       total: rows.length,
-      active: rows.filter((request) => !request.is_archived && request.lifecycle_stage !== "expired").length,
+      active: rows.filter(isActiveMarketplaceLead).length,
       completed: rows.filter((request) => request.status === "closed" || request.status === "converted_to_client").length,
       archived: rows.filter((request) => request.is_archived).length,
       highRisk: rows.filter((request) => request.risk_indicator === "high").length,
@@ -884,7 +887,7 @@ export default function AdminServiceRequests() {
       reactivated: rows.filter(isMarketplaceReactivatedLead).length,
       pendingConfirmation: rows.filter((request) => request.lifecycle_stage === "pending_client_confirmation").length,
       expired: rows.filter((request) => request.lifecycle_stage === "expired").length,
-      unattended: rows.filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) === 0 && !request.is_archived).length,
+      unattended: rows.filter((request) => isActiveMarketplaceLead(request) && (responsesByRequest.get(request.id)?.length ?? 0) === 0).length,
       practitionerResponses: dashboardResponses.length,
       activePractitioners: (practitioners ?? []).filter((practitioner) => practitioner.user.is_active).length,
       avgResponseTime,
@@ -920,14 +923,14 @@ export default function AdminServiceRequests() {
         ),
       },
     };
-  }, [dashboardRange.comparisonDays, dashboardRequests, dashboardResponses, practitioners, requests, responses, responsesByRequest]);
+  }, [dashboardRange.comparisonDays, dashboardResponses, operationalRequests, practitioners, requests, responses, responsesByRequest]);
 
   const statusChartData = useMemo(() => {
-    const activeLeads = dashboardRequests.filter((request) => (
+    const activeLeads = operationalRequests.filter((request) => (
       isActiveMarketplaceLead(request)
       && request.lifecycle_reactivation_count === 0
     )).length;
-    const reactivatedLeads = dashboardRequests.filter(isMarketplaceReactivatedLead).length;
+    const reactivatedLeads = operationalRequests.filter(isMarketplaceReactivatedLead).length;
     const total = requestMetrics.total || 1;
 
     return [
@@ -938,10 +941,10 @@ export default function AdminServiceRequests() {
       { key: "archived", label: "Archived Leads", value: requestMetrics.archived, fill: STATUS_CHART_COLORS.archived, percentage: Math.round((requestMetrics.archived / total) * 100) },
       { key: "completed", label: "Completed Leads", value: requestMetrics.completed, fill: "#14B8A6", percentage: Math.round((requestMetrics.completed / total) * 100) },
     ];
-  }, [dashboardRequests, requestMetrics]);
+  }, [operationalRequests, requestMetrics]);
 
   const pendingConfirmationRows = useMemo(
-    () => dashboardRequests
+    () => operationalRequests
       .filter((request) => request.lifecycle_stage === "pending_client_confirmation")
       .sort((left, right) => {
         const leftTime = left.client_confirmation_due_at ? new Date(left.client_confirmation_due_at).getTime() : Number.MAX_SAFE_INTEGER;
@@ -949,11 +952,11 @@ export default function AdminServiceRequests() {
         return leftTime - rightTime;
       })
       .slice(0, 5),
-    [dashboardRequests],
+    [operationalRequests],
   );
 
   const expiredLeadRows = useMemo(
-    () => dashboardRequests
+    () => operationalRequests
       .filter((request) => request.lifecycle_stage === "expired" || request.status === "expired")
       .sort((left, right) => {
         const leftTime = new Date(left.expired_at || left.updated_at || left.created_at).getTime();
@@ -961,14 +964,15 @@ export default function AdminServiceRequests() {
         return rightTime - leftTime;
       })
       .slice(0, 5),
-    [dashboardRequests],
+    [operationalRequests],
   );
 
   const recentLeads = useMemo(
-    () => filteredRequests
-      .filter((request) => !dashboardRange.start || new Date(request.created_at).getTime() >= dashboardRange.start.getTime())
+    () => operationalRequests
+      .filter(isActiveMarketplaceLead)
+      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
       .slice(0, 8),
-    [dashboardRange.start, filteredRequests],
+    [operationalRequests],
   );
 
   const practitionerActivityRows = useMemo(() => {
@@ -1006,18 +1010,18 @@ export default function AdminServiceRequests() {
 
   const marketplaceHealth = useMemo(() => {
     const total = requestMetrics.total || 1;
-    const responseRate = Math.round(dashboardRequests.filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) > 0).length / total * 100);
+    const responseRate = Math.round(operationalRequests.filter((request) => (responsesByRequest.get(request.id)?.length ?? 0) > 0).length / total * 100);
     const reactivationRate = Math.round((requestMetrics.reactivated / total) * 100);
     const expiryRate = Math.round((requestMetrics.expired / total) * 100);
-    const conversionRate = Math.round((dashboardRequests.filter((request) => Boolean(request.converted_case_id)).length / total) * 100);
+    const conversionRate = Math.round((operationalRequests.filter((request) => Boolean(request.converted_case_id)).length / total) * 100);
 
     return [
       { label: "Response Rate", value: responseRate, trend: requestMetrics.trends.practitionerResponses },
       { label: "Reactivation Rate", value: reactivationRate, trend: requestMetrics.trends.reactivated },
       { label: "Expiry Rate", value: expiryRate, trend: -Math.abs(requestMetrics.trends.expired) },
-      { label: "Conversion Rate", value: conversionRate, trend: formatTrendPercentage(dashboardRequests.filter((request) => Boolean(request.converted_case_id)).length, 0) },
+      { label: "Conversion Rate", value: conversionRate, trend: formatTrendPercentage(operationalRequests.filter((request) => Boolean(request.converted_case_id)).length, 0) },
     ];
-  }, [dashboardRequests, requestMetrics, responsesByRequest]);
+  }, [operationalRequests, requestMetrics, responsesByRequest]);
 
   const openRequest = async (request: ServiceRequestRecord) => {
     setSelectedRequestId(request.id);
@@ -2049,7 +2053,7 @@ export default function AdminServiceRequests() {
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Lead Management Workspace</h2>
             <p className="mt-1 text-sm text-slate-500">Search, filter and manage the full marketplace lead list below.</p>
-            <p className="mt-2 text-xs text-slate-400">Lifecycle filters use lead stage, not service category or lead type, and they follow the selected dashboard date range.</p>
+            <p className="mt-2 text-xs text-slate-400">Lifecycle filters use current lead stage, not service category or lead type, and they stay synchronized with the operational lead counts.</p>
           </div>
         </div>
       </div>
@@ -2199,7 +2203,7 @@ export default function AdminServiceRequests() {
 
         <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground font-body">
-            Showing <span className="font-semibold text-foreground">{filteredRequests.length}</span> of <span className="font-semibold text-foreground">{workspaceFilteredRequests.length}</span> requests in <span className="font-semibold text-foreground">{dateRangeLabel}</span>
+            Showing <span className="font-semibold text-foreground">{filteredRequests.length}</span> of <span className="font-semibold text-foreground">{workspaceFilteredRequests.length}</span> requests
           </p>
           <Button
             type="button"
