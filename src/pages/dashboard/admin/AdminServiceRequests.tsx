@@ -1636,7 +1636,7 @@ export default function AdminServiceRequests() {
               </Button>
             </div>
           </div>
-          <div className="mt-5 space-y-3">
+          <div className="mt-5 max-h-[720px] space-y-3 overflow-y-auto pr-1">
             {expiredLeadRows.length ? expiredLeadRows.map((request) => (
               <div
                 key={request.id}
@@ -1782,40 +1782,102 @@ export default function AdminServiceRequests() {
         </div>
       </div>
 
-      <div className="grid gap-6 2xl:grid-cols-12">
-        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+        <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Recent Active Leads</h2>
               <p className="mt-1 text-sm text-slate-500">Latest marketplace leads with stage, priority, responses and visibility.</p>
             </div>
           </div>
-          <div className="mt-5 overflow-x-auto">
-            <Table>
+          <div className="mt-5 max-h-[720px] space-y-3 overflow-y-auto pr-1">
+            {recentLeads.length ? recentLeads.map((request) => (
+              <div
+                key={request.id}
+                className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-slate-300 hover:bg-white"
+              >
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-sm font-semibold text-white">
+                        {getInitials(request.full_name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-900">{formatServiceList(resolveServiceList(request))}</p>
+                        <p className="mt-1 truncate text-xs text-slate-500">{request.id}</p>
+                        <p className="mt-2 text-sm font-medium text-slate-700">{request.full_name}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
+                        {formatLifecycleStageLabel(request.lifecycle_stage)}
+                      </Badge>
+                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${request.priority_level === "high" || request.priority_level === "urgent" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                        {formatServiceRequestLabel(request.priority_level)}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Time Left</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">{getLifecycleCountdownLabel(request) || "—"}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Responses</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">{responsesByRequest.get(request.id)?.length ?? 0}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Views</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">{request.viewed_at ? 1 : 0}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Visibility</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">{formatLifecycleStageLabel(request.lifecycle_stage)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center justify-end gap-2">
+                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={() => void openRequest(request)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={() => setSelectedRequestId(request.id)}>
+                      <Ellipsis className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                <p>No recent active leads in the selected date range.</p>
+              </div>
+            )}
+            <Table className="hidden table-fixed">
               <TableHeader>
                 <TableRow className="border-slate-200">
-                  <TableHead>Lead Title</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Stage</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Time Left</TableHead>
-                  <TableHead>Responses</TableHead>
-                  <TableHead>Views</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[29%]">Lead Title</TableHead>
+                  <TableHead className="w-[15%]">Client</TableHead>
+                  <TableHead className="w-[14%]">Stage</TableHead>
+                  <TableHead className="w-[10%]">Priority</TableHead>
+                  <TableHead className="w-[12%]">Time Left</TableHead>
+                  <TableHead className="w-[7%] text-center">Responses</TableHead>
+                  <TableHead className="w-[5%] text-center">Views</TableHead>
+                  <TableHead className="w-[8%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recentLeads.map((request) => (
                   <TableRow key={request.id} className="border-slate-100">
-                    <TableCell className="min-w-[220px]">
-                      <div>
-                        <p className="font-medium text-slate-900">{formatServiceList(resolveServiceList(request))}</p>
-                        <p className="mt-1 text-xs text-slate-500">{request.id}</p>
+                    <TableCell className="min-w-0">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-900">{formatServiceList(resolveServiceList(request))}</p>
+                        <p className="mt-1 truncate text-xs text-slate-500">{request.id}</p>
                       </div>
                     </TableCell>
-                    <TableCell>{request.full_name}</TableCell>
+                    <TableCell className="truncate font-medium text-slate-700">{request.full_name}</TableCell>
                     <TableCell>
-                      <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
+                      <Badge className={`max-w-full truncate rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
                         {formatLifecycleStageLabel(request.lifecycle_stage)}
                       </Badge>
                     </TableCell>
@@ -1824,9 +1886,9 @@ export default function AdminServiceRequests() {
                         {formatServiceRequestLabel(request.priority_level)}
                       </Badge>
                     </TableCell>
-                    <TableCell>{getLifecycleCountdownLabel(request) || "—"}</TableCell>
-                    <TableCell>{responsesByRequest.get(request.id)?.length ?? 0}</TableCell>
-                    <TableCell>{request.viewed_at ? 1 : 0}</TableCell>
+                    <TableCell className="whitespace-nowrap text-slate-700">{getLifecycleCountdownLabel(request) || "—"}</TableCell>
+                    <TableCell className="text-center font-medium text-slate-700">{responsesByRequest.get(request.id)?.length ?? 0}</TableCell>
+                    <TableCell className="text-center font-medium text-slate-700">{request.viewed_at ? 1 : 0}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => void openRequest(request)}>
@@ -1844,40 +1906,80 @@ export default function AdminServiceRequests() {
           </div>
         </div>
 
-        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] 2xl:col-span-3">
+        <div className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Practitioner Activity</h2>
               <p className="mt-1 text-sm text-slate-500">Recent engagement and response performance across the marketplace.</p>
             </div>
           </div>
-          <div className="mt-5 overflow-x-auto">
-            <Table>
+          <div className="mt-5 space-y-3">
+            {practitionerActivityRows.length ? practitionerActivityRows.map((row) => (
+              <div
+                key={row.id}
+                className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-slate-300 hover:bg-white"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-sm font-semibold text-white">
+                      {row.initials}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{row.name}</p>
+                      <p className="mt-1 truncate text-xs text-slate-500">{row.plan ? formatServiceRequestLabel(row.plan) : "No active plan"}</p>
+                    </div>
+                  </div>
+                  <Badge className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${row.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                    {row.status === "active" ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Viewed</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{row.leadsViewed}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Responses</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{row.responses}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Avg Time</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{formatCompactDuration(row.averageMinutes)}</p>
+                  </div>
+                </div>
+              </div>
+            )) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                <p>No practitioner activity in the selected date range.</p>
+              </div>
+            )}
+            <Table className="hidden table-fixed">
               <TableHeader>
                 <TableRow className="border-slate-200">
-                  <TableHead>Practitioner</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Viewed</TableHead>
-                  <TableHead>Responses</TableHead>
-                  <TableHead>Avg Time</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[36%]">Practitioner</TableHead>
+                  <TableHead className="w-[18%]">Plan</TableHead>
+                  <TableHead className="w-[10%] text-center">Viewed</TableHead>
+                  <TableHead className="w-[12%] text-center">Responses</TableHead>
+                  <TableHead className="w-[14%]">Avg Time</TableHead>
+                  <TableHead className="w-[10%]">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {practitionerActivityRows.map((row) => (
                   <TableRow key={row.id} className="border-slate-100">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
+                    <TableCell className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900 text-xs font-semibold text-white">
                           {row.initials}
                         </div>
-                        <span className="font-medium text-slate-900">{row.name}</span>
+                        <span className="truncate font-medium text-slate-900">{row.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell>{row.plan ? formatServiceRequestLabel(row.plan) : "No active plan"}</TableCell>
-                    <TableCell>{row.leadsViewed}</TableCell>
-                    <TableCell>{row.responses}</TableCell>
-                    <TableCell>{formatCompactDuration(row.averageMinutes)}</TableCell>
+                    <TableCell className="truncate text-slate-700">{row.plan ? formatServiceRequestLabel(row.plan) : "No plan"}</TableCell>
+                    <TableCell className="text-center font-medium text-slate-700">{row.leadsViewed}</TableCell>
+                    <TableCell className="text-center font-medium text-slate-700">{row.responses}</TableCell>
+                    <TableCell className="whitespace-nowrap text-slate-700">{formatCompactDuration(row.averageMinutes)}</TableCell>
                     <TableCell>
                       <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${row.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
                         {row.status === "active" ? "Active" : "Inactive"}
