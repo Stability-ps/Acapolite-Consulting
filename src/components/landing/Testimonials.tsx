@@ -48,7 +48,7 @@ export function Testimonials() {
               transition={{ delay: index * 0.1 }}
               className="rounded-2xl border border-border bg-card p-6 shadow-card"
             >
-              <Quote className="mb-4 h-6 w-6 text-primary" />
+              <Quote className="mb-4 h-6 w-6 text-gold" />
               <p className="text-sm leading-relaxed text-muted-foreground font-body">"{item.quote}"</p>
               <div className="mt-4">
                 <p className="text-sm font-semibold text-foreground">{item.name}</p>

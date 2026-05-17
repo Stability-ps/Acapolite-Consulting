@@ -1,69 +1,71 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ShieldCheck, Lock, MapPin, Briefcase } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
+
+const trustItems = [
+  { label: "Qualified Practitioners", icon: ShieldCheck },
+  { label: "Secure Documents", icon: Lock },
+  { label: "Nationwide Support", icon: MapPin },
+  { label: "Professional Service", icon: Briefcase },
+];
 
 export function Hero() {
   return (
-    <section
-      id="top"
-      className="relative flex items-center overflow-hidden bg-hero-gradient pb-8 pt-16 md:pt-24 md:aspect-[16/9]"
-    >
-      <div className="absolute inset-0 opacity-10">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `radial-gradient(circle at 25% 25%, rgba(255,255,255,0.1) 0%, transparent 50%),
-                             radial-gradient(circle at 75% 75%, rgba(255,255,255,0.05) 0%, transparent 50%)`,
-          }}
-        />
-      </div>
-      <div className="absolute inset-0">
-        <img
-          src="/MASS.png"
-          alt="Professional tax assistance"
-          className="h-full w-full object-cover object-center"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0b1f3a]/95 via-[#0b1f3a]/70 to-[#0b1f3a]/30" />
-      </div>
-
-      <div className="container relative z-10 mx-auto px-6">
+    <section id="top" className="bg-background py-24 mt-12 md:mt-16">
+      <div className="container mx-auto grid items-center gap-12 px-6 md:grid-cols-[1.05fr_0.95fr]">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 28 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          className="max-w-3xl"
+          className="max-w-2xl"
         >
-          <AcapoliteLogo className="mb-3 h-11 sm:h-16" />
+          <span className="inline-flex rounded-full bg-[#F4F4F2] px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-[#B8962E]">
+            ACAPOLITE CONSULTING
+          </span>
 
-          <h1 className="mb-3 font-display text-3xl font-bold leading-tight text-primary-foreground sm:text-4xl md:text-6xl lg:text-7xl">
-            Professional SARS Tax Assistance for Individuals and Businesses
+          <h1 className="mt-6 text-4xl font-black leading-tight tracking-[-0.03em] text-[#022D73] sm:text-5xl md:text-6xl">
+            Professional Tax, SARS & Business Assistance Across South Africa
           </h1>
 
-          <p className="mb-4 max-w-2xl text-base font-body leading-relaxed text-primary-foreground/75 sm:text-lg md:text-xl">
-            We help South African individuals and businesses resolve SARS issues, submit tax returns, manage compliance,
-            and work securely through one platform.
+          <p className="mt-6 max-w-xl text-lg leading-8 text-[#1E2A3C]">
+            Access qualified tax practitioners and accounting professionals for SARS matters, tax returns, bookkeeping,
+            company compliance and business support across South Africa.
           </p>
 
-          <div className="sm:hidden">
-            <Button asChild size="lg" className="w-full rounded-xl bg-primary px-6 py-5 text-sm font-semibold text-primary-foreground shadow-elevated hover:bg-primary/90">
-              <Link to="/request-tax-assistance">Request Tax Assistance</Link>
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+            <Button asChild className="rounded-full bg-[#B8962E] px-7 py-4 text-base font-semibold text-white shadow-lg transition hover:bg-[#A88633]">
+              <Link to="/request-tax-assistance">Request Assistance</Link>
+            </Button>
+            <Button asChild className="rounded-full border border-[#B8962E] bg-white px-7 py-4 text-base font-semibold text-[#022D73] transition hover:bg-[#F4F4F2]">
+              <Link to="/register?role=consultant">Join as a Professional</Link>
             </Button>
           </div>
 
-          <div className="hidden flex-col gap-4 sm:flex sm:flex-row">
-            <Button asChild size="lg" className="rounded-xl bg-primary px-8 py-6 text-base font-semibold text-primary-foreground shadow-elevated hover:bg-primary/90">
-              <Link to="/request-tax-assistance">Request Tax Assistance</Link>
-            </Button>
-            <Button asChild size="lg" className="rounded-xl border border-white/70 bg-white/95 px-8 py-6 text-base font-semibold !text-foreground hover:bg-white">
-              <Link to="/login">Log In to Portal</Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="rounded-xl border border-white/18 bg-transparent px-8 py-6 text-base font-semibold text-primary-foreground hover:bg-white/10 hover:text-primary-foreground">
-              <Link to="/register">
-                Create Account <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+          <div className="mt-12 grid gap-4 sm:grid-cols-2">
+            {trustItems.map((item) => (
+              <div key={item.label} className="flex items-center gap-4 rounded-[2rem] border border-[#E7E7E7] bg-white p-5 shadow-sm">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FBF0C1] text-[#B8962E]">
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <p className="font-semibold text-[#1E2A3C]">{item.label}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 28 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.1 }}
+          className="relative"
+        >
+          <div className="overflow-hidden rounded-[2rem] border border-[#E7E7E7] bg-white shadow-card">
+            <img
+              src="/oui.png"
+              alt="Professional woman working on a laptop"
+              className="h-[520px] w-full object-cover object-center sm:h-[680px]"
+            />
           </div>
         </motion.div>
       </div>

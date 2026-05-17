@@ -31,8 +31,8 @@ export function VerifiedPractitioners() {
             className="grid gap-4"
           >
             <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent">
-                <FileCheck2 className="h-5 w-5 text-primary" />
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gold/10">
+                <FileCheck2 className="h-5 w-5 text-gold" />
               </div>
               <p className="font-semibold text-foreground">Document Verification</p>
               <p className="mt-2 text-sm text-muted-foreground font-body">
@@ -40,8 +40,8 @@ export function VerifiedPractitioners() {
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent">
-                <ShieldCheck className="h-5 w-5 text-primary" />
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gold/10">
+                <ShieldCheck className="h-5 w-5 text-gold" />
               </div>
               <p className="font-semibold text-foreground">Credential Checks</p>
               <p className="mt-2 text-sm text-muted-foreground font-body">

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ChevronDown, Menu } from "lucide-react";
+import { ArrowRight, ChevronDown, Menu, UserCircle2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
 const navItems: { label: string; href: string }[] = [
-  { label: "Portal", href: "/login" },
+  { label: "Portal", href: "/portal" },
   { label: "How It Works", href: "#how-it-works" },
   { label: "Services", href: "#services" },
   { label: "Contact", href: "/contact-us" },
@@ -33,9 +33,7 @@ export function LandingHeader() {
       className="fixed inset-x-0 top-0 z-40"
     >
       <div className="container mx-auto px-6 pt-3 md:pt-4">
-        <div className="relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-[1.75rem] border border-sky-900/45 bg-[linear-gradient(135deg,rgba(59,130,246,0.24),rgba(30,64,175,0.22),rgba(15,23,42,0.30))] px-3 py-2 shadow-glow backdrop-blur-xl md:gap-4 md:px-6 md:py-3">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_32%),radial-gradient(circle_at_80%_20%,rgba(125,211,252,0.16),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.06),transparent)]" />
-          <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-sky-200/20 to-transparent" />
+        <div className="relative flex w-full flex-wrap items-center justify-between gap-3 rounded-[1.75rem] border border-[#E7E7E7] bg-white/95 px-4 py-3 shadow-sm backdrop-blur-xl md:flex-nowrap md:px-6 md:py-4">
           <div className="flex items-center gap-3">
             <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
               <SheetTrigger asChild>
@@ -91,18 +89,21 @@ export function LandingHeader() {
               </SheetContent>
             </Sheet>
 
-            <a href="#top" className="flex min-w-0 items-center gap-2 md:gap-3">
+            <a href="#top" className="flex min-w-0 items-center gap-3">
               <AcapoliteLogo className="relative z-10 h-10 transition-transform duration-300 hover:scale-[1.02] md:h-12" />
+              <span className="hidden text-sm font-semibold uppercase tracking-[0.34em] text-[#022D73] md:inline">
+                ACAPOLITE CONSULTING
+              </span>
             </a>
           </div>
 
           {navItems.length ? (
-            <nav className="relative z-10 hidden items-center gap-1 rounded-full border border-sky-300/12 bg-slate-950/18 p-1 md:flex">
+            <nav className="relative z-10 hidden flex-wrap items-center justify-center gap-1 md:flex md:px-2">
               {navItems.map((item) => (
                 <a
                   key={item.href}
                   href={item.href}
-                  className="rounded-full px-4 py-2 text-sm font-medium text-white !text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/14 hover:text-white hover:shadow-[0_8px_24px_rgba(255,255,255,0.10)]"
+                  className="rounded-full px-3 py-1.5 text-xs font-medium text-[#1E2A3C] transition-colors duration-200 hover:text-[#022D73] md:px-4 md:py-2 md:text-sm"
                 >
                   {item.label}
                 </a>
@@ -145,58 +146,18 @@ export function LandingHeader() {
             )}
           </div>
 
-          <div className="relative z-10 hidden items-center gap-2 md:flex">
-            {user ? (
-              <Button
-                asChild
-                className="rounded-full border border-sky-300/18 bg-white/95 px-5 text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_30px_rgba(255,255,255,0.18)]"
-              >
-                <Link to={dashboardPath}>
-                  Dashboard
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            ) : (
-              <>
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="hidden rounded-full border border-sky-300/16 bg-sky-100/12 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-sky-100/18 hover:text-white hover:shadow-[0_8px_24px_rgba(125,211,252,0.16)] lg:inline-flex"
-                >
-                  <Link to="/request-tax-assistance">Request Tax Assistance</Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="rounded-full border border-sky-300/12 bg-slate-950/22 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/14 hover:text-white hover:shadow-[0_8px_24px_rgba(255,255,255,0.10)]"
-                >
-                  <Link to="/login">Login</Link>
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button className="rounded-full border border-sky-300/18 bg-white/95 px-5 text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_12px_30px_rgba(255,255,255,0.18)]">
-                      Join
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="min-w-[220px]">
-                    <DropdownMenuItem asChild>
-                      <Link to="/register">Create Account (Client)</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/register?role=consultant">Join as Practitioner</Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="hidden rounded-full border border-sky-300/16 bg-sky-100/12 px-5 text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-sky-100/18 hover:text-white hover:shadow-[0_8px_24px_rgba(125,211,252,0.16)] sm:inline-flex"
-                >
-                  <Link to="/practitioners">For Practitioners</Link>
-                </Button>
-              </>
-            )}
+          <div className="relative z-10 hidden items-center gap-3 md:flex">
+            <Button asChild className="rounded-full bg-[#B8962E] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#A88633]">
+              <Link to="/request-tax-assistance">Request Assistance</Link>
+            </Button>
+            <Button asChild className="rounded-full border border-[#B8962E] bg-white px-5 py-3 text-sm font-semibold text-[#022D73] transition hover:bg-[#F4F4F2]">
+              <Link to="/register?role=consultant">Join as a Professional</Link>
+            </Button>
+            <Button asChild variant="ghost" className="rounded-full border border-[#E7E7E7] bg-white p-3 text-[#022D73] transition hover:bg-[#F4F4F2]">
+              <Link to="/login">
+                <UserCircle2 className="h-5 w-5" />
+              </Link>
+            </Button>
           </div>
         </div>
 

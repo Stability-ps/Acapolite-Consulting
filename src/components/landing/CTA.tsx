@@ -25,7 +25,7 @@ export function CTA() {
           viewport={{ once: true }}
           className="mx-auto max-w-3xl text-center"
         >
-          <span className="mb-3 inline-flex rounded-full border border-primary/12 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-primary/80 shadow-[0_10px_28px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
+          <span className="mb-3 inline-flex rounded-full border border-gold/20 bg-gold/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-gold/80 shadow-[0_10px_28px_-24px_rgba(15,23,42,0.35)] backdrop-blur">
             Get Started
           </span>
           <h2 className="mb-4 font-display text-3xl font-bold text-foreground md:text-5xl">
@@ -36,7 +36,7 @@ export function CTA() {
           </p>
 
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Button asChild size="lg" className="rounded-xl bg-primary px-8 py-6 text-base font-semibold text-primary-foreground shadow-elevated hover:bg-primary/90">
+            <Button asChild size="lg" className="rounded-xl bg-gold px-8 py-6 text-base font-semibold text-gold-foreground shadow-elevated hover:bg-[#A88633]">
               <Link to="/request-tax-assistance">Request Tax Assistance</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="rounded-xl border-primary/30 bg-white/90 px-8 py-6 text-base font-semibold text-foreground hover:bg-white">

@@ -1,6 +1,7 @@
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
 import { Hero } from "@/components/landing/Hero";
+import { StatsBar } from "@/components/landing/StatsBar";
 import { Features } from "@/components/landing/Features";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Services } from "@/components/landing/Services";
@@ -14,6 +15,7 @@ const Index = () => {
     <div className="min-h-screen">
       <LandingHeader />
       <Hero />
+      <StatsBar />
       <HowItWorks />
       <Services />
       <Features />
