@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { ArrowLeft } from "lucide-react";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +42,15 @@ export default function ContactUs() {
     <div className="min-h-screen bg-surface-gradient px-4 py-12 sm:py-16">
       <div className="mx-auto w-full max-w-4xl">
         <div className="rounded-[32px] border border-border bg-card p-6 shadow-elevated sm:p-10">
-          <AcapoliteLogo className="mb-6 h-12" />
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <AcapoliteLogo className="h-12" />
+            <Button asChild variant="outline" className="w-fit rounded-xl">
+              <Link to="/">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Home
+              </Link>
+            </Button>
+          </div>
           <p className="text-xs uppercase tracking-[0.2em] text-primary/70 font-body">Support</p>
           <h1 className="mt-2 font-display text-3xl text-foreground sm:text-4xl">Contact Us</h1>
           <p className="mt-4 text-sm leading-6 text-muted-foreground font-body sm:text-base">
@@ -51,9 +61,9 @@ export default function ContactUs() {
           <div className="mt-6 rounded-xl bg-accent/20 p-4 border border-border/60">
             <h3 className="text-sm font-semibold text-foreground font-body mb-3">Contact Information</h3>
             <div className="space-y-2 text-sm text-muted-foreground font-body">
-              <p><strong>General Support:</strong> <a href="mailto:support@acapoliteconsulting.co.za" className="text-primary hover:underline">support@acapoliteconsulting.co.za</a></p>
-              <p><strong>Billing & Refunds:</strong> <a href="mailto:accounts@acapoliteconsulting.co.za" className="text-primary hover:underline">accounts@acapoliteconsulting.co.za</a></p>
-              <p><strong>Office Phone:</strong> <a href="tel:+27102886912" className="text-primary hover:underline">+27 10 288 6912</a></p>
+              <p><strong>General Support:</strong> <a href="mailto:support@acapoliteconsulting.co.za" className="text-[#022D73] hover:underline">support@acapoliteconsulting.co.za</a></p>
+              <p><strong>Billing & Refunds:</strong> <a href="mailto:accounts@acapoliteconsulting.co.za" className="text-[#022D73] hover:underline">accounts@acapoliteconsulting.co.za</a></p>
+              <p><strong>Office Phone:</strong> <a href="tel:+27102886912" className="text-[#022D73] hover:underline">+27 10 288 6912</a></p>
             </div>
           </div>
 

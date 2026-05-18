@@ -14,7 +14,7 @@ export function Footer() {
               <p className="text-sm text-background/50 font-body">Copyright 2026 Acapolite Consulting. All rights reserved.</p>
               <a
                 href="mailto:support@acapoliteconsulting.co.za"
-                className="text-sm text-primary font-body hover:underline block"
+                className="block text-sm font-body text-background/80 transition hover:text-background hover:underline"
               >
                 support@acapoliteconsulting.co.za
               </a>

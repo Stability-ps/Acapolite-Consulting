@@ -2,6 +2,7 @@ import { LandingHeader } from "@/components/landing/LandingHeader";
 import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
 import { Hero } from "@/components/landing/Hero";
 import { StatsBar } from "@/components/landing/StatsBar";
+import { TaxSupportIntro } from "@/components/landing/TaxSupportIntro";
 import { Features } from "@/components/landing/Features";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Services } from "@/components/landing/Services";
@@ -16,6 +17,7 @@ const Index = () => {
       <LandingHeader />
       <Hero />
       <StatsBar />
+      <TaxSupportIntro />
       <HowItWorks />
       <Services />
       <Features />

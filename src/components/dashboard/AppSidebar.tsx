@@ -191,7 +191,7 @@ export function AppSidebar() {
                           }
                         }}
                         className="rounded-xl hover:bg-sidebar-accent/80"
-                        activeClassName="rounded-xl bg-white/10 text-sidebar-primary font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                        activeClassName="rounded-xl bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-[0_10px_24px_rgba(184,150,46,0.22)]"
                       >
                         <item.icon className="mr-2 h-4 w-4 shrink-0" />
                         {!collapsed && (
