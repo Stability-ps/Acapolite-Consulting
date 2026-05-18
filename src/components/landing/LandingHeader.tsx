@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ChevronDown, Menu, UserCircle2 } from "lucide-react";
+import { ChevronDown, Menu, UserCircle2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ export function LandingHeader() {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="md:hidden h-11 gap-2 rounded-full border border-sky-200/45 bg-slate-950/80 px-4 text-white shadow-[0_12px_26px_rgba(15,23,42,0.6)] ring-1 ring-white/40 hover:bg-slate-900/85"
+                  className="h-11 gap-2 rounded-full border border-[#E7E7E7] bg-white px-4 text-[#022D73] shadow-sm hover:bg-[#F4F4F2] lg:hidden"
                   aria-label="Open menu"
                 >
                   <Menu className="h-5 w-5" />
@@ -91,19 +91,19 @@ export function LandingHeader() {
 
             <a href="#top" className="flex min-w-0 items-center gap-3">
               <AcapoliteLogo className="relative z-10 h-10 transition-transform duration-300 hover:scale-[1.02] md:h-12" />
-              <span className="hidden text-sm font-semibold uppercase tracking-[0.34em] text-[#022D73] md:inline">
+              <span className="hidden text-sm font-semibold uppercase tracking-[0.34em] text-[#022D73] xl:inline">
                 ACAPOLITE CONSULTING
               </span>
             </a>
           </div>
 
           {navItems.length ? (
-            <nav className="relative z-10 hidden flex-wrap items-center justify-center gap-1 md:flex md:px-2">
+            <nav className="relative z-10 hidden flex-wrap items-center justify-center gap-1 lg:flex lg:px-2">
               {navItems.map((item) => (
                 <a
                   key={item.href}
                   href={item.href}
-                  className="rounded-full px-3 py-1.5 text-xs font-medium text-[#1E2A3C] transition-colors duration-200 hover:text-[#022D73] md:px-4 md:py-2 md:text-sm"
+                  className="rounded-full px-3 py-1.5 text-xs font-medium text-[#1E2A3C] transition-colors duration-200 hover:bg-[#F4F4F2] hover:text-[#022D73] lg:px-3 lg:py-2 xl:px-4 xl:text-sm"
                 >
                   {item.label}
                 </a>
@@ -111,9 +111,9 @@ export function LandingHeader() {
             </nav>
           ) : null}
 
-          <div className="relative z-10 flex items-center gap-2 md:hidden">
+          <div className="relative z-10 flex items-center gap-2 xl:hidden">
             {user ? (
-              <Button asChild size="sm" className="rounded-full bg-white text-slate-950">
+              <Button asChild size="sm" className="rounded-full bg-[#022D73] text-white hover:bg-[#05265c]">
                 <Link to={dashboardPath}>Dashboard</Link>
               </Button>
             ) : (
@@ -122,13 +122,13 @@ export function LandingHeader() {
                   asChild
                   size="sm"
                   variant="ghost"
-                  className="rounded-full border border-sky-300/25 bg-white/15 text-white hover:bg-white/20"
+                  className="rounded-full border border-[#D8E5EE] bg-white text-[#022D73] hover:bg-[#F4F4F2] hover:text-[#022D73]"
                 >
                   <Link to="/login">Login</Link>
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button size="sm" className="rounded-full bg-white text-slate-950">
+                    <Button size="sm" className="rounded-full bg-[#022D73] text-white hover:bg-[#05265c]">
                       Join
                       <ChevronDown className="h-3.5 w-3.5" />
                     </Button>
@@ -146,7 +146,7 @@ export function LandingHeader() {
             )}
           </div>
 
-          <div className="relative z-10 hidden items-center gap-3 md:flex">
+          <div className="relative z-10 hidden items-center gap-3 xl:flex">
             <Button asChild className="rounded-full bg-[#B8962E] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#A88633]">
               <Link to="/request-tax-assistance">Request Assistance</Link>
             </Button>
