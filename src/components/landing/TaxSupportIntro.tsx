@@ -13,9 +13,9 @@ const introSections = [
 
 export function TaxSupportIntro() {
   return (
-    <section className="bg-white py-20">
+    <section className="bg-[#F5F5F5] py-20 md:py-24">
       <div className="container mx-auto px-6">
-        <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
+        <div className="w-full space-y-14 md:space-y-16">
           {introSections.map((section, index) => (
             <motion.article
               key={section.title}
@@ -23,12 +23,12 @@ export function TaxSupportIntro() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.08 }}
-              className="border-l-4 border-[#B8962E] pl-6"
+              className="w-full"
             >
-              <h2 className="font-display text-2xl font-bold leading-tight text-[#022D73] md:text-3xl">
+              <h2 className="font-serif text-3xl font-bold leading-tight tracking-normal text-[#1E2A3C] md:text-4xl">
                 {section.title}
               </h2>
-              <p className="mt-5 text-base leading-8 text-[#1E2A3C] md:text-lg">
+              <p className="mt-5 text-base font-normal leading-8 text-[#5F6673] md:text-lg md:leading-9">
                 {section.body}
               </p>
             </motion.article>
