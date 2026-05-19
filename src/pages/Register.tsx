@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, CheckCircle2, Loader2, Paperclip } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Paperclip } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -184,6 +184,20 @@ export default function Register() {
     passwordRules.minLength &&
     passwordRules.hasUppercase &&
     passwordRules.hasNumber;
+  const passwordRequirementItems = [
+    {
+      label: "Minimum 8 characters",
+      met: passwordRules.minLength,
+    },
+    {
+      label: "At least 1 uppercase letter",
+      met: passwordRules.hasUppercase,
+    },
+    {
+      label: "At least 1 number",
+      met: passwordRules.hasNumber,
+    },
+  ];
   const canSubmit =
     acceptedTerms && acceptedPrivacy && isPasswordValid && !loading;
 
@@ -1046,24 +1060,41 @@ export default function Register() {
                 placeholder="Min. 8 characters"
                 minLength={8}
               />
-              <div className="mt-2 text-xs text-muted-foreground font-body space-y-1">
+              <div
+                className={`mt-3 rounded-2xl border p-4 font-body ${
+                  isPasswordValid
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-amber-200 bg-amber-50"
+                }`}
+              >
                 <p
-                  className={passwordRules.minLength ? "text-emerald-600" : ""}
+                  className={`text-sm font-semibold ${
+                    isPasswordValid ? "text-emerald-800" : "text-amber-900"
+                  }`}
                 >
-                  Minimum 8 characters
+                  {isPasswordValid
+                    ? "Password requirements complete"
+                    : "Password must meet these requirements before Create Account is enabled"}
                 </p>
-                <p
-                  className={
-                    passwordRules.hasUppercase ? "text-emerald-600" : ""
-                  }
-                >
-                  At least 1 uppercase letter
-                </p>
-                <p
-                  className={passwordRules.hasNumber ? "text-emerald-600" : ""}
-                >
-                  At least 1 number
-                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {passwordRequirementItems.map((item) => (
+                    <div
+                      key={item.label}
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                        item.met
+                          ? "border-emerald-200 bg-white text-emerald-700"
+                          : "border-amber-200 bg-white text-amber-900"
+                      }`}
+                    >
+                      {item.met ? (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                      )}
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             {accountType === "practitioner" ? (
@@ -1160,22 +1191,31 @@ export default function Register() {
                 </span>
               </label>
             </div>
-            <Button
-              type="submit"
-              disabled={!canSubmit}
-              className="min-h-12 w-full rounded-xl px-4 py-3 text-sm font-semibold sm:text-base"
-            >
-              {loading ? (
-                <span className="flex w-full items-center justify-center gap-2 leading-snug">
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                  <span className="max-w-[16rem] truncate">
-                    {loadingMessage}
+            <div className="space-y-2">
+              {!canSubmit && !loading ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 font-body">
+                  {!isPasswordValid
+                    ? "Create Account is disabled until the password includes 8 characters, 1 uppercase letter, and 1 number."
+                    : "Create Account is disabled until you accept the Terms & Conditions and Privacy Policy."}
+                </div>
+              ) : null}
+              <Button
+                type="submit"
+                disabled={!canSubmit}
+                className="min-h-12 w-full rounded-xl px-4 py-3 text-sm font-semibold sm:text-base"
+              >
+                {loading ? (
+                  <span className="flex w-full items-center justify-center gap-2 leading-snug">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                    <span className="max-w-[16rem] truncate">
+                      {loadingMessage}
+                    </span>
                   </span>
-                </span>
-              ) : (
-                "Create Account"
-              )}
-            </Button>
+                ) : (
+                  "Create Account"
+                )}
+              </Button>
+            </div>
           </form>
         </div>
       </div>

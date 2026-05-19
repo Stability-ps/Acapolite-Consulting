@@ -204,7 +204,7 @@ export default function AdminServiceRequests() {
   const [isLifecycleDialogOpen, setIsLifecycleDialogOpen] = useState(false);
   const [savingLifecycleSettings, setSavingLifecycleSettings] = useState(false);
   const [lifecycleSettingsForm, setLifecycleSettingsForm] = useState({
-    businessStageHours: "48",
+    businessStageHours: "12",
     professionalStageHours: "48",
     openMarketplaceHours: "72",
     pendingClientConfirmationHours: "24",
@@ -1413,22 +1413,22 @@ export default function AdminServiceRequests() {
   const lifecycleStages = useMemo(() => [
     {
       title: "Business Exclusive",
-      time: formatStageHours(lifecycleSettings?.business_stage_hours ?? 48),
-      description: "Optional Admin-Only Re-entry",
+      time: formatStageHours(lifecycleSettings?.business_stage_hours ?? 12),
+      description: "Business Lead First Access",
       icon: Crown,
       iconClassName: "bg-amber-50 text-amber-600",
     },
     {
       title: "Professional Access",
       time: formatStageHours(lifecycleSettings?.professional_stage_hours ?? 48),
-      description: "Optional Admin-Only Re-entry",
+      description: "Professional Lead First Access",
       icon: Users,
       iconClassName: "bg-sky-50 text-sky-600",
     },
     {
       title: "Open Marketplace",
       time: formatStageHours(lifecycleSettings?.open_marketplace_hours ?? 72),
-      description: "Default For New Leads",
+      description: "Basic Leads & Final Open Stage",
       icon: Target,
       iconClassName: "bg-emerald-50 text-emerald-600",
     },

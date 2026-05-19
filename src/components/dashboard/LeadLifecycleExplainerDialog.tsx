@@ -28,11 +28,12 @@ const goals = [
 ] as const;
 
 const stageRules = [
-  "New client-submitted leads now enter Open Marketplace automatically",
+  "New leads enter the lifecycle stage that matches their lead tier",
   "Lead status changes automatically when a stage timer expires",
   "Access expands to the next marketplace stage without staff intervention",
   "Each new stage starts with a fresh timer",
-  "Expired leads leave practitioner visibility immediately",
+  "Unattended Open Marketplace leads restart once before client confirmation",
+  "Pending confirmation leads are hidden from practitioner visibility",
   "Staff can revive expired leads and reset active timers when needed",
   "Practitioner and client notifications can fire as the lifecycle changes",
 ] as const;
@@ -62,7 +63,7 @@ export function LeadLifecycleExplainerDialog({
   });
 
   const lifecycleStages = useMemo(() => {
-    const businessHours = lifecycleSettings?.business_stage_hours ?? 48;
+    const businessHours = lifecycleSettings?.business_stage_hours ?? 12;
     const professionalHours = lifecycleSettings?.professional_stage_hours ?? 48;
     const openHours = lifecycleSettings?.open_marketplace_hours ?? 72;
     const confirmationHours = lifecycleSettings?.pending_client_confirmation_hours ?? 24;
@@ -71,10 +72,10 @@ export function LeadLifecycleExplainerDialog({
       {
         step: "1",
         title: "Business Exclusive",
-        duration: formatHoursLabel(businessHours, 48),
+        duration: formatHoursLabel(businessHours, 12),
         access: "Business plan practitioners only",
-        purpose: "This is now an optional admin re-entry stage for old or revived leads that should go back to Business-only visibility first.",
-        timerExample: `Expires in ${formatHoursLabel(businessHours, 48)}`,
+        purpose: "Business-tier leads start here so Business practitioners get the first response window before access expands.",
+        timerExample: `Expires in ${formatHoursLabel(businessHours, 12)}`,
         accent: "border-amber-200 bg-amber-50",
         badgeClassName: "bg-amber-100 text-amber-800 hover:bg-amber-100",
         during: [
@@ -95,7 +96,7 @@ export function LeadLifecycleExplainerDialog({
         title: "Professional Access",
         duration: formatHoursLabel(professionalHours, 48),
         access: "Business + Professional practitioners",
-        purpose: "This is an optional admin-controlled restricted stage that expands access beyond Business without opening the lead to every practitioner yet.",
+        purpose: "Professional-tier leads start here, and Business-tier leads move here after the Business Exclusive timer ends.",
         timerExample: `Expires in ${formatHoursLabel(professionalHours, 48)}`,
         accent: "border-sky-200 bg-sky-50",
         badgeClassName: "bg-sky-100 text-sky-800 hover:bg-sky-100",
@@ -117,7 +118,7 @@ export function LeadLifecycleExplainerDialog({
         title: "Open Marketplace",
         duration: formatHoursLabel(openHours, 72),
         access: "All qualifying practitioners",
-        purpose: "New client-submitted leads start here automatically so all qualifying practitioners can see them immediately.",
+        purpose: "Basic leads start here, and higher-tier leads reach this stage after their restricted access windows expire.",
         timerExample: `Expires in ${formatHoursLabel(openHours, 72)}`,
         accent: "border-emerald-200 bg-emerald-50",
         badgeClassName: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
@@ -127,10 +128,9 @@ export function LeadLifecycleExplainerDialog({
           "The lead remains active until the Open Marketplace timer ends",
         ],
         expiry: [
-          "Status changes to Expired if the lead is still unattended",
-          "The lead leaves practitioner visibility",
+          "After the first unattended Open Marketplace cycle, the lead restarts at its tiered starting stage",
+          "After the second unattended cycle, the lead moves to Pending Client Confirmation",
           "The full lifecycle history stays available to staff",
-          "Staff may manually reactivate the lead later",
         ],
       },
       {
@@ -174,11 +174,11 @@ export function LeadLifecycleExplainerDialog({
                 How the Acapolite Marketplace Works
               </div>
               <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-                New client-submitted leads now enter Open Marketplace automatically so they become visible to all qualifying practitioners immediately.
-                Business Exclusive and Professional Access remain available as optional admin re-entry stages for revived or manually repositioned leads.
+                New leads enter the lifecycle stage that matches their lead tier. Business leads start in Business Exclusive,
+                Professional leads start in Professional Access, and Basic leads start in Open Marketplace.
               </p>
               <p className="mt-3 text-sm leading-7 text-muted-foreground font-body">
-                Each stage still uses its own timer, and the lifecycle processor advances or expires unattended leads without staff intervention.
+                Each stage uses its own timer, and the lifecycle processor advances unattended leads through the marketplace flow without staff intervention.
               </p>
             </div>
 
