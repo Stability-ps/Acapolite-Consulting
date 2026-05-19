@@ -55,6 +55,18 @@ function getLeadResponseLimit(leadTier?: string | null) {
   return LEAD_RESPONSE_LIMITS[leadTier ?? "basic"] ?? 4;
 }
 
+function getRecommendedLeadTierRank(leadTier?: string | null) {
+  if (leadTier === "business") {
+    return 3;
+  }
+
+  if (leadTier === "professional") {
+    return 2;
+  }
+
+  return 1;
+}
+
 function getUpgradePrompt(requiredTier?: string | null) {
   if ((requiredTier ?? "basic") === "business") {
     return "Upgrade to Business to access this lead during the Business Exclusive stage.";
@@ -515,6 +527,20 @@ export default function PractitionerLeads() {
     return filteredRequests
       .filter((request) => !responseMap.has(request.id))
       .sort((left, right) => {
+        const leftTierRank = getRecommendedLeadTierRank(left.lead_tier);
+        const rightTierRank = getRecommendedLeadTierRank(right.lead_tier);
+
+        if (leftTierRank !== rightTierRank) {
+          return rightTierRank - leftTierRank;
+        }
+
+        const leftCreditCost = getDisplayedCreditCost(left);
+        const rightCreditCost = getDisplayedCreditCost(right);
+
+        if (leftCreditCost !== rightCreditCost) {
+          return rightCreditCost - leftCreditCost;
+        }
+
         const leftPriority = left.priority_level === "urgent" ? 4 : left.priority_level === "high" ? 3 : left.priority_level === "medium" ? 2 : 1;
         const rightPriority = right.priority_level === "urgent" ? 4 : right.priority_level === "high" ? 3 : right.priority_level === "medium" ? 2 : 1;
         if (leftPriority !== rightPriority) {
@@ -530,7 +556,7 @@ export default function PractitionerLeads() {
         return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
       })
       .slice(0, 4);
-  }, [documentMap, filteredRequests, responseMap]);
+  }, [accessRequestMap, documentMap, filteredRequests, responseMap]);
 
   const topRecommendedLead = recommendedLeads[0] ?? null;
   const topRecommendedResponse = topRecommendedLead ? responseMap.get(topRecommendedLead.id) ?? null : null;
