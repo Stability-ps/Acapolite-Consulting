@@ -118,14 +118,6 @@ function formatLeadType(leadTier?: string | null) {
   return "Starter Lead";
 }
 
-function normalizeLeadTier(leadTier?: string | null) {
-  if (leadTier === "business" || leadTier === "professional") {
-    return leadTier;
-  }
-
-  return "basic";
-}
-
 function getNameInitials(name: string) {
   const words = name
     .trim()
@@ -444,23 +436,13 @@ export default function PractitionerLeads() {
   const hasActiveSubscription = Boolean(activeSubscription);
 
   const visibleRequests = useMemo(() => {
-    return (requests ?? []).filter((request) => {
-      const accessRequest = accessRequestMap.get(request.id);
-      const accessApproved = Boolean(responseMap.get(request.id) || accessRequest?.status === "approved");
-
-      return accessApproved || canPlanAccessLifecycleStage(practitionerLeadTier, request.lifecycle_stage);
-    });
-  }, [accessRequestMap, practitionerLeadTier, requests, responseMap]);
+    return requests ?? [];
+  }, [requests]);
 
   const filteredRequests = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
-    const servicesOffered = new Set(practitionerProfile?.services_offered ?? []);
 
     return visibleRequests
-      .filter((request) => {
-        const matchesService = servicesOffered.size === 0 || resolveServiceList(request).some((service) => servicesOffered.has(service));
-        return matchesService;
-      })
       .filter((request) => {
         if (filters.status !== "all" && request.status !== filters.status) return false;
         if (filters.risk !== "all" && request.risk_indicator !== filters.risk) return false;
@@ -494,8 +476,6 @@ export default function PractitionerLeads() {
   }, [
     documentMap,
     filters,
-    practitionerLeadTier,
-    practitionerProfile?.services_offered,
     responseMap,
     searchQuery,
     visibleRequests,
@@ -578,11 +558,10 @@ export default function PractitionerLeads() {
   const selectedLifecycleRequiredTier = selectedRequest
     ? getLifecycleStageRequiredTier(selectedRequest.lifecycle_stage)
     : "basic";
-  const selectedLeadTier = normalizeLeadTier(selectedRequest?.lead_tier ?? null);
   const selectedPackageLocked = Boolean(
     selectedRequest
     && !hasApprovedAccess
-    && getTierRank(practitionerLeadTier) < getTierRank(selectedLeadTier),
+    && getTierRank(practitionerLeadTier) < getTierRank(selectedLifecycleRequiredTier),
   );
   const selectedLifecycleLocked = Boolean(
     selectedRequest
@@ -596,15 +575,13 @@ export default function PractitionerLeads() {
     && (selectedPackageLocked || selectedLifecycleLocked),
   );
   const selectedUpgradePrompt = selectedPackageLocked
-    ? getUpgradePrompt(selectedLeadTier)
+    ? getUpgradePrompt(selectedLifecycleRequiredTier)
     : selectedLifecycleLocked
-      ? selectedLeadTier === "professional"
-        ? "This Professional Lead is temporarily in Business Exclusive stage. It will unlock when Professional Access begins."
-        : "This Starter Lead is temporarily in an early access stage. It will unlock when Open Marketplace begins."
+      ? "This lead is visible for planning, but your plan can only unlock it when the lifecycle reaches an eligible stage."
       : null;
-  const selectedUpgradeTarget = selectedLeadTier === "business"
+  const selectedUpgradeTarget = selectedLifecycleRequiredTier === "business"
     ? "Business"
-    : selectedLeadTier === "professional"
+    : selectedLifecycleRequiredTier === "professional"
       ? "Professional"
       : null;
 
@@ -1099,11 +1076,10 @@ export default function PractitionerLeads() {
               const accessRequest = accessRequestMap.get(request.id);
               const accessApproved = Boolean(ownResponse || accessRequest?.status === "approved");
               const leadTier = request.lead_tier ?? "basic";
-              const normalizedLeadTier = normalizeLeadTier(leadTier);
               const leadTypeLabel = formatLeadType(leadTier);
               const requiredTier = getLifecycleStageRequiredTier(request.lifecycle_stage);
               const packageLocked = !accessApproved
-                && getTierRank(practitionerLeadTier) < getTierRank(normalizedLeadTier);
+                && getTierRank(practitionerLeadTier) < getTierRank(requiredTier);
               const lifecycleLocked = !accessApproved
                 && !packageLocked
                 && !canPlanAccessLifecycleStage(practitionerLeadTier, request.lifecycle_stage);
@@ -1123,15 +1099,15 @@ export default function PractitionerLeads() {
               const lifecycleLockedLabel = requiredTier === "business"
                 ? "Business Early Access"
                 : "Professional Access Active";
-              const lifecycleLockedSubtitle = normalizedLeadTier === "professional"
-                ? "Business members have early access first. This Professional Lead opens to you at Professional Access."
-                : "This Starter Lead is temporarily in an early access stage. It will unlock when Open Marketplace begins.";
+              const lifecycleLockedSubtitle = requiredTier === "business"
+                ? "Upgrade to Business to access this lead now, or wait for the next lifecycle stage."
+                : "Upgrade to Professional to access this lead now, or wait for Open Marketplace.";
               const actionLabel = ownResponse
                 ? "View Your Response"
                 : accessApproved
                   ? "Open Unlocked Lead"
                   : packageLocked
-                    ? normalizedLeadTier === "business"
+                    ? requiredTier === "business"
                       ? "Upgrade to Business"
                       : "Upgrade to Professional"
                   : lifecycleLocked
@@ -1144,9 +1120,9 @@ export default function PractitionerLeads() {
                 : accessApproved
                   ? "Full lead details are already available"
                   : packageLocked
-                    ? normalizedLeadTier === "business"
-                      ? "Business plan required for this lead."
-                      : "Professional plan required for this lead."
+                    ? requiredTier === "business"
+                      ? "Business plan required during this stage."
+                      : "Professional plan required during this stage."
                   : lifecycleLocked
                     ? lifecycleLockedSubtitle
                     : responseLimitReached
@@ -1637,7 +1613,7 @@ export default function PractitionerLeads() {
                   </Button>
                 ) : selectedLifecycleLocked ? (
                   <Button type="button" className="rounded-xl" disabled>
-                    {selectedLeadTier === "professional" ? "Available at Professional Access" : "Available at Open Marketplace"}
+                    {selectedLifecycleRequiredTier === "business" ? "Available to Business Plan" : "Available at Next Stage"}
                   </Button>
                 ) : (
                   <Button
