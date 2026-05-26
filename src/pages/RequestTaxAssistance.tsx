@@ -462,18 +462,52 @@ export default function RequestTaxAssistance() {
 
   const isSubmitting = submittingMode !== null;
 
-  const goOutsideWizard = () => {
-    const state = location.state as { fromPortal?: boolean; fromPath?: string } | null;
-    if (state?.fromPortal && user) {
-      if (window.history.length > 1) {
-        navigate(-1);
-        return;
-      }
-      navigate(state.fromPath || dashboardPath, { replace: true });
-      return;
+  const portalNavigationState = location.state as {
+    fromPortal?: boolean;
+    fromPath?: string;
+  } | null;
+
+  const leaveWizardForPortal = () => {
+    navigate(portalNavigationState?.fromPath || dashboardPath, { replace: true });
+  };
+
+  const renderBackControl = (homeLabel = "Back to home") => {
+    if (portalNavigationState?.fromPortal && user) {
+      return (
+        <Button
+          type="button"
+          variant="ghost"
+          className="rounded-full px-0 text-slate-600"
+          onClick={leaveWizardForPortal}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+      );
     }
 
-    navigate("/", { replace: true });
+    if (user) {
+      return (
+        <Button
+          type="button"
+          variant="ghost"
+          className="rounded-full px-0 text-slate-600"
+          onClick={() => navigate(dashboardPath, { replace: true })}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+      );
+    }
+
+    return (
+      <Button type="button" variant="ghost" className="rounded-full px-0 text-slate-600" asChild>
+        <Link to="/" replace onClick={clearWizardDraft}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          {homeLabel}
+        </Link>
+      </Button>
+    );
   };
 
   const goToStep = (step: WizardStep) => {
@@ -772,10 +806,19 @@ export default function RequestTaxAssistance() {
     return (
       <div className="min-h-screen bg-[#FAFAF6] px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl">
-          <Button variant="ghost" className="mb-6 rounded-full px-0 text-slate-600" onClick={goOutsideWizard}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            {user ? "Back to dashboard" : "Back to home"}
-          </Button>
+          {user ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="mb-6 rounded-full px-0 text-slate-600"
+              onClick={() => navigate(dashboardPath, { replace: true })}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to dashboard
+            </Button>
+          ) : (
+            <div className="mb-6">{renderBackControl("Back to home")}</div>
+          )}
 
           <div className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-8 shadow-sm sm:p-10">
             <AcapoliteLogo className="h-12" />
@@ -838,10 +881,7 @@ export default function RequestTaxAssistance() {
     <div className="min-h-screen bg-[#FAFAF6] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <Button variant="ghost" className="rounded-full px-0 text-slate-600" onClick={goOutsideWizard}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            {user ? "Back" : "Back to home"}
-          </Button>
+          {renderBackControl()}
           <AcapoliteLogo className="h-11" />
         </div>
 
