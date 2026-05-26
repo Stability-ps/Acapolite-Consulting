@@ -1361,6 +1361,12 @@ export type Database = {
           email: string;
           phone: string;
           province: string | null;
+          city: string | null;
+          contact_preference: string | null;
+          marketing_consent: boolean;
+          submitted_with_account: boolean;
+          client_profile_id: string | null;
+          intake_payload: Json;
           client_type: Database["public"]["Enums"]["service_request_client_type"];
           identity_document_type: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number: string | null;
@@ -1417,6 +1423,12 @@ export type Database = {
           email: string;
           phone: string;
           province?: string | null;
+          city?: string | null;
+          contact_preference?: string | null;
+          marketing_consent?: boolean;
+          submitted_with_account?: boolean;
+          client_profile_id?: string | null;
+          intake_payload?: Json;
           client_type: Database["public"]["Enums"]["service_request_client_type"];
           identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
@@ -1473,6 +1485,12 @@ export type Database = {
           email?: string;
           phone?: string;
           province?: string | null;
+          city?: string | null;
+          contact_preference?: string | null;
+          marketing_consent?: boolean;
+          submitted_with_account?: boolean;
+          client_profile_id?: string | null;
+          intake_payload?: Json;
           client_type?: Database["public"]["Enums"]["service_request_client_type"];
           identity_document_type?: Database["public"]["Enums"]["service_request_identity_document_type"] | null;
           id_number?: string | null;
@@ -1998,9 +2016,19 @@ export type Database = {
         | "open_marketplace"
         | "pending_client_confirmation"
         | "expired";
-      service_request_client_type: "individual" | "company";
+      service_request_client_type:
+        | "individual"
+        | "company"
+        | "trust"
+        | "npo_organisation";
       service_request_identity_document_type: "id_number" | "passport_number";
-      service_request_category: "individual_tax" | "business_tax" | "accounting" | "business_support";
+      service_request_category:
+        | "individual_tax"
+        | "business_tax"
+        | "accounting"
+        | "business_support"
+        | "trust_services"
+        | "npo_organisation_services";
       service_request_service_needed:
         | "tax_return"
         | "sars_debt_assistance"
@@ -2018,12 +2046,14 @@ export type Database = {
         | "individual_late_return_submissions"
         | "individual_tax_number_registration"
         | "individual_tax_status_corrections"
+        | "individual_tax_compliance_status_assistance"
         | "business_company_income_tax"
         | "business_vat_registration"
         | "business_vat_returns"
         | "business_paye_registration"
         | "business_paye_compliance"
         | "business_sars_debt_arrangements"
+        | "business_tax_compliance_support"
         | "business_tax_clearance_certificates"
         | "business_sars_audits_support"
         | "accounting_bookkeeping"
@@ -2031,12 +2061,28 @@ export type Database = {
         | "accounting_management_accounts"
         | "accounting_payroll_services"
         | "accounting_monthly_accounting_services"
+        | "accounting_cash_flow_management"
+        | "accounting_budget_planning"
         | "accounting_annual_financial_reporting"
         | "support_company_registration"
         | "support_business_compliance"
+        | "support_annual_returns_filing"
         | "support_cipc_services"
         | "support_business_advisory"
-        | "support_financial_compliance";
+        | "support_financial_compliance"
+        | "trust_tax_returns"
+        | "trust_compliance"
+        | "trust_sars_assistance"
+        | "trust_tax_clearance"
+        | "trust_financial_statements"
+        | "trust_advisory_support"
+        | "npo_registration_assistance"
+        | "npo_tax_exemption_assistance"
+        | "npo_annual_compliance_filing"
+        | "npo_payroll_accounting"
+        | "npo_sars_compliance"
+        | "npo_financial_reporting"
+        | "npo_governance_advisory";
       service_request_priority: "low" | "medium" | "high" | "urgent";
       service_request_risk_indicator: "low" | "medium" | "high";
       lead_access_tier: "basic" | "professional" | "business";
@@ -2177,9 +2223,21 @@ export const Constants = {
         "pending_client_confirmation",
         "expired",
       ],
-      service_request_client_type: ["individual", "company"],
+      service_request_client_type: [
+        "individual",
+        "company",
+        "trust",
+        "npo_organisation",
+      ],
       service_request_identity_document_type: ["id_number", "passport_number"],
-      service_request_category: ["individual_tax", "business_tax", "accounting", "business_support"],
+      service_request_category: [
+        "individual_tax",
+        "business_tax",
+        "accounting",
+        "business_support",
+        "trust_services",
+        "npo_organisation_services",
+      ],
       service_request_service_needed: [
         "tax_return",
         "sars_debt_assistance",
@@ -2197,12 +2255,14 @@ export const Constants = {
         "individual_late_return_submissions",
         "individual_tax_number_registration",
         "individual_tax_status_corrections",
+        "individual_tax_compliance_status_assistance",
         "business_company_income_tax",
         "business_vat_registration",
         "business_vat_returns",
         "business_paye_registration",
         "business_paye_compliance",
         "business_sars_debt_arrangements",
+        "business_tax_compliance_support",
         "business_tax_clearance_certificates",
         "business_sars_audits_support",
         "accounting_bookkeeping",
@@ -2210,12 +2270,28 @@ export const Constants = {
         "accounting_management_accounts",
         "accounting_payroll_services",
         "accounting_monthly_accounting_services",
+        "accounting_cash_flow_management",
+        "accounting_budget_planning",
         "accounting_annual_financial_reporting",
         "support_company_registration",
         "support_business_compliance",
+        "support_annual_returns_filing",
         "support_cipc_services",
         "support_business_advisory",
         "support_financial_compliance",
+        "trust_tax_returns",
+        "trust_compliance",
+        "trust_sars_assistance",
+        "trust_tax_clearance",
+        "trust_financial_statements",
+        "trust_advisory_support",
+        "npo_registration_assistance",
+        "npo_tax_exemption_assistance",
+        "npo_annual_compliance_filing",
+        "npo_payroll_accounting",
+        "npo_sars_compliance",
+        "npo_financial_reporting",
+        "npo_governance_advisory",
       ],
       service_request_priority: ["low", "medium", "high", "urgent"],
       service_request_risk_indicator: ["low", "medium", "high"],

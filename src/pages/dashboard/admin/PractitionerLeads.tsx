@@ -23,6 +23,9 @@ import {
   serviceCategoryOptions,
   serviceNeededOptions,
 } from "@/lib/serviceRequests";
+import { ServiceRequestIntakeDetails } from "@/components/dashboard/ServiceRequestIntakeDetails";
+import { getClientIdentityFieldLabel } from "@/lib/clientRisk";
+import { getIntakeContactPreference, getIntakeSupportingNotes } from "@/lib/serviceRequestIntake";
 import { calculateServiceRequestCreditCost } from "@/lib/practitionerCredits";
 import { sendLeadUnlockedNotification } from "@/lib/leadUnlockNotifications";
 import {
@@ -985,6 +988,8 @@ export default function PractitionerLeads() {
                   <SelectItem value="all">All</SelectItem>
                   <SelectItem value="individual">Individual</SelectItem>
                   <SelectItem value="company">Company</SelectItem>
+                  <SelectItem value="trust">Trust</SelectItem>
+                  <SelectItem value="npo_organisation">NPO / Organisation</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1337,9 +1342,19 @@ export default function PractitionerLeads() {
                       <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Phone Number</p>
                       <p className="mt-1 text-sm text-foreground font-body">{selectedRequest.phone || "Not provided"}</p>
                     </div>
-                    <div className="sm:col-span-2">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">City</p>
+                      <p className="mt-1 text-sm text-foreground font-body">{selectedRequest.city || "Not provided"}</p>
+                    </div>
+                    <div>
                       <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Province</p>
                       <p className="mt-1 text-sm text-foreground font-body">{selectedRequest.province || "Not provided"}</p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-body">Contact Preference</p>
+                      <p className="mt-1 text-sm text-foreground font-body">
+                        {selectedRequest.contact_preference || getIntakeContactPreference(selectedRequest.intake_payload) || "Not provided"}
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -1465,7 +1480,7 @@ export default function PractitionerLeads() {
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Supporting Notes</p>
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">
                   {hasApprovedAccess
-                    ? "No additional supporting notes were submitted with this request."
+                    ? getIntakeSupportingNotes(selectedRequest.intake_payload) || "No additional supporting notes were submitted with this request."
                     : selectedLeadLocked
                       ? selectedUpgradePrompt
                       : "Unlock this lead to review the complete request profile."}
@@ -1473,12 +1488,18 @@ export default function PractitionerLeads() {
               </div>
             </div>
 
+            {hasApprovedAccess ? (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <ServiceRequestIntakeDetails intakePayload={selectedRequest.intake_payload} />
+              </div>
+            ) : null}
+
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-2xl border border-border bg-card p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
                   {selectedRequest.client_type === "individual"
                     ? formatServiceRequestLabel(selectedRequest.identity_document_type || "id_number")
-                    : "Company Registration Number"}
+                    : getClientIdentityFieldLabel(selectedRequest.client_type)}
                 </p>
                 <p className="mt-3 text-sm text-foreground font-body">
                   {hasApprovedAccess

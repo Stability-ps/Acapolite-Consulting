@@ -1,10 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, Upload, X } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+﻿import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  ChevronDown,
+  FileText,
+  HeartHandshake,
+  Loader2,
+  Lock,
+  Send,
+  Shield,
+  Star,
+  User,
+  Users,
+} from "lucide-react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
+import { SummaryCard } from "@/components/request-wizard/SummaryCard";
+import { RequestWizardProgress } from "@/components/request-wizard/RequestWizardProgress";
+import { TrustSidebar } from "@/components/request-wizard/TrustSidebar";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -12,638 +35,799 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
-import { supabase } from "@/integrations/supabase/client";
-import type { Enums } from "@/integrations/supabase/types";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import type { Enums, TablesInsert } from "@/integrations/supabase/types";
+import { getAppBaseUrl } from "@/lib/siteUrl";
 import {
-  formatServiceRequestLabel,
-  getServicesForCategory,
-  serviceCategoryOptions,
-  serviceNeededOptions,
-  serviceRequestPriorityOptions,
-  uploadServiceRequestFile,
-} from "@/lib/serviceRequests";
+  buildIntakePayload,
+  buildRegisterQueryFromContact,
+  buildRequestDescription,
+  CONTACT_PREFERENCE_OPTIONS,
+  DETAIL_QUESTIONS_BY_ENTITY,
+  ENTITY_OPTIONS,
+  getCategoryForService,
+  getDetailSummaryRows,
+  getEntityLabel,
+  getGroupedSelectedServices,
+  clearWizardDraft,
+  getInitialWizardDraft,
+  getPrimaryCategoryForSelection,
+  getPrimaryServiceForSelection,
+  getStepFromSearchParam,
+  loadWizardDraft,
+  REQUEST_WIZARD_QUERY_KEY,
+  saveWizardStep,
+  SERVICE_CATEGORIES_BY_ENTITY,
+  SOUTH_AFRICAN_PROVINCES,
+  TAX_YEAR_OPTIONS,
+  type WizardContactData,
+  type WizardDraft,
+  type WizardEntityType,
+  type WizardService,
+  type WizardStep,
+} from "@/lib/requestWizard";
+import { formatServiceRequestLabel } from "@/lib/serviceRequests";
 
-type ClientType = Enums<"service_request_client_type">;
-type IdentityDocumentType = Enums<"service_request_identity_document_type">;
+type ServiceRequestInsert = TablesInsert<"service_requests">;
+type SubmissionMode = "guest" | "account";
+type SubmissionResult = {
+  requestId: string;
+  mode: SubmissionMode;
+  linkedToAccount: boolean;
+  requiresLogin: boolean;
+  emailSent: boolean;
+};
 
-const provinces = [
-  "Gauteng",
-  "Western Cape",
-  "KwaZulu-Natal",
-  "Eastern Cape",
-  "Free State",
-  "Limpopo",
-  "Mpumalanga",
-  "North West",
-  "Northern Cape",
-];
+type ErrorMap = Record<string, string>;
+
+const contactProvinceOptions = SOUTH_AFRICAN_PROVINCES.filter(
+  (province) => province !== "Any / Nationwide",
+);
+
+const entityIcons: Record<WizardEntityType, typeof User> = {
+  individual: User,
+  company: Building2,
+  trust: Users,
+  npo_organisation: HeartHandshake,
+};
+
+const categoryIcons = {
+  individual_tax: FileText,
+  business_tax: Briefcase,
+  accounting: BarChart3,
+  business_support: Building2,
+  trust_services: Users,
+  npo_organisation_services: HeartHandshake,
+} as const;
+
+function normalizePhoneNumber(value: string) {
+  return value.replace(/\D/g, "").slice(0, 12);
+}
+
+function getInlineFieldError(errors: ErrorMap, key: string) {
+  return errors[key] ? "border-red-300 focus-visible:ring-red-300" : "";
+}
+
+function getValidationErrorsForWho(draft: WizardDraft): ErrorMap {
+  const nextErrors: ErrorMap = {};
+
+  if (!draft.who.entityType) {
+    nextErrors.entityType = "Select who this request is for.";
+  }
+  if (!draft.who.province) {
+    nextErrors.province = "Select a province or nationwide option.";
+  }
+  if (!draft.who.city.trim()) {
+    nextErrors.city = "Enter your city or town.";
+  }
+
+  return nextErrors;
+}
+
+function getValidationErrorsForWhat(draft: WizardDraft): ErrorMap {
+  if (draft.what.selectedServices.length > 0) {
+    return {};
+  }
+
+  return {
+    selectedServices: "Select at least one service so we can match your request.",
+  };
+}
+
+function getValidationErrorsForDetails(draft: WizardDraft): ErrorMap {
+  const nextErrors: ErrorMap = {};
+  if (!draft.who.entityType) {
+    return { entityType: "Complete Step 1 first." };
+  }
+
+  for (const question of DETAIL_QUESTIONS_BY_ENTITY[draft.who.entityType]) {
+    if (question.type === "radio") {
+      if (!draft.details.answers[question.key]) {
+        nextErrors[question.key] = "Choose one option.";
+      }
+      continue;
+    }
+
+    if (question.type === "year-range") {
+      const fromYear = draft.details.answers[question.fromKey];
+      const toYear = draft.details.answers[question.toKey];
+
+      if (!fromYear) {
+        nextErrors[question.fromKey] = "Select a starting tax year.";
+      }
+      if (!toYear) {
+        nextErrors[question.toKey] = "Select an ending tax year.";
+      }
+      if (fromYear && toYear && Number(fromYear) > Number(toYear)) {
+        nextErrors[question.toKey] = "The ending tax year must be the same or later.";
+      }
+    }
+  }
+
+  if (draft.details.additionalNotes.length > 500) {
+    nextErrors.additionalNotes = "Keep additional notes within 500 characters.";
+  }
+
+  return nextErrors;
+}
+
+function getValidationErrorsForContact(draft: WizardDraft): ErrorMap {
+  const nextErrors: ErrorMap = {};
+  const email = draft.contact.email.trim();
+  const phoneDigits = normalizePhoneNumber(draft.contact.phoneNumber);
+
+  if (!draft.contact.fullName.trim()) {
+    nextErrors.fullName = "Enter your full name.";
+  }
+  if (!email) {
+    nextErrors.email = "Enter your email address.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    nextErrors.email = "Enter a valid email address.";
+  }
+  if (!phoneDigits) {
+    nextErrors.phoneNumber = "Enter your phone number.";
+  } else if (phoneDigits.length < 9) {
+    nextErrors.phoneNumber = "Enter a valid South African phone number.";
+  }
+  if (!draft.contact.province) {
+    nextErrors.contactProvince = "Select your province.";
+  }
+  if (!draft.contact.city.trim()) {
+    nextErrors.contactCity = "Enter your city or town.";
+  }
+  if (!draft.contact.contactPreference) {
+    nextErrors.contactPreference = "Select how professionals should reach you.";
+  }
+
+  return nextErrors;
+}
+
+function getPriorityLevel(draft: WizardDraft): Enums<"service_request_priority"> {
+  const reason = (draft.details.answers.mainReason ?? "").toLowerCase();
+  const yearsNeeded = draft.details.answers.yearsNeeded ?? "";
+  const services = new Set(draft.what.selectedServices);
+
+  if (
+    services.has("business_sars_audits_support") ||
+    services.has("individual_objections_and_disputes") ||
+    reason.includes("audit") ||
+    reason.includes("investigation")
+  ) {
+    return "urgent";
+  }
+
+  if (
+    services.has("individual_sars_debt_assistance") ||
+    services.has("business_sars_debt_arrangements") ||
+    reason.includes("debt") ||
+    yearsNeeded === "More than 7 years"
+  ) {
+    return "high";
+  }
+
+  if (draft.what.selectedServices.length >= 3) {
+    return "high";
+  }
+
+  return "medium";
+}
+
+function getRequestSignals(draft: WizardDraft) {
+  const reason = (draft.details.answers.mainReason ?? "").toLowerCase();
+  const services = new Set(draft.what.selectedServices);
+  const categories = new Set(draft.what.selectedServices.map(getCategoryForService));
+
+  const hasDebtFlag =
+    services.has("individual_sars_debt_assistance") ||
+    services.has("business_sars_debt_arrangements") ||
+    services.has("trust_sars_assistance") ||
+    reason.includes("debt");
+  const missingReturnsFlag =
+    services.has("individual_late_return_submissions") ||
+    reason.includes("late") ||
+    reason.includes("outstanding") ||
+    reason.includes("tax returns");
+  const hasSarsAudit =
+    services.has("business_sars_audits_support") ||
+    reason.includes("audit") ||
+    reason.includes("investigation");
+  const hasAdr =
+    services.has("individual_objections_and_disputes") ||
+    reason.includes("objection") ||
+    reason.includes("dispute");
+  const hasVatInvestigation =
+    services.has("business_vat_registration") ||
+    services.has("business_vat_returns") ||
+    reason.includes("vat");
+  const hasPayrollDispute =
+    services.has("business_paye_registration") ||
+    services.has("business_paye_compliance") ||
+    services.has("accounting_payroll_services") ||
+    reason.includes("paye") ||
+    reason.includes("payroll");
+  const hasMultipleTaxTypes = categories.size > 1 || draft.what.selectedServices.length >= 3;
+  const hasLegalComplexity = hasAdr || hasSarsAudit || reason.includes("notice");
+
+  let riskIndicator: Enums<"service_request_risk_indicator"> = "low";
+  if (hasDebtFlag || hasMultipleTaxTypes || missingReturnsFlag) {
+    riskIndicator = "medium";
+  }
+  if (hasSarsAudit || hasLegalComplexity) {
+    riskIndicator = "high";
+  }
+
+  return {
+    hasDebtFlag,
+    missingReturnsFlag,
+    missingDocumentsFlag: false,
+    hasSarsAudit,
+    hasAdr,
+    hasVatInvestigation,
+    hasPayrollDispute,
+    hasMultipleTaxTypes,
+    hasLegalComplexity,
+    returnsFiled: !missingReturnsFlag,
+    riskIndicator,
+  };
+}
+
+async function sendRequestEmails(
+  requestId: string,
+  request: ServiceRequestInsert,
+  selectedServiceLabels: string,
+  priorityLevel: Enums<"service_request_priority">,
+) {
+  const province = request.province ?? "South Africa";
+  const serviceType = selectedServiceLabels || "Tax assistance";
+
+  await Promise.allSettled([
+    supabase.functions.invoke("send-portal-email", {
+      body: {
+        type: "service_request_received",
+        requestId,
+        clientName: request.full_name,
+        clientEmail: request.email,
+        clientPhone: request.phone,
+        serviceType,
+        province,
+      },
+    }),
+    supabase.functions.invoke("send-portal-email", {
+      body: {
+        type: "service_request_received_admin",
+        requestId,
+        clientName: request.full_name,
+        clientEmail: request.email,
+        serviceType,
+        province,
+        status: "Open",
+        priority: formatServiceRequestLabel(priorityLevel),
+        submittedAt: new Date().toLocaleDateString("en-ZA", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        summary: request.description,
+      },
+    }),
+    supabase.functions.invoke("send-portal-email", {
+      body: {
+        type: "service_request_received_practitioner",
+        requestId,
+        clientName: request.full_name,
+        clientEmail: request.email,
+        serviceType,
+        province,
+        status: "Open",
+        priority: formatServiceRequestLabel(priorityLevel),
+        submittedAt: new Date().toLocaleDateString("en-ZA", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        summary: request.description,
+      },
+    }),
+  ]);
+}
 
 export default function RequestTaxAssistance() {
   const { user, profile, dashboardPath } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [submitting, setSubmitting] = useState(false);
-  const [completedRequestId, setCompletedRequestId] = useState<string | null>(
-    null,
-  );
-  const [completedRequestDetails, setCompletedRequestDetails] = useState<{
-    fullName: string;
-    email: string;
-    phone: string;
-    province: string;
-    idNumber: string;
-  } | null>(null);
-  const [files, setFiles] = useState<File[]>([]);
-  const [form, setForm] = useState({
-    full_name: "",
-    email: "",
-    phone: "",
-    province: "",
-    client_type: "individual" as ClientType,
-    identity_document_type: "id_number" as IdentityDocumentType,
-    id_number: "",
-    company_name: "",
-    company_registration_number: "",
-    service_categories: [
-      "individual_tax",
-    ] as Enums<"service_request_category">[],
-    service_needed_list: [
-      "individual_personal_income_tax_returns",
-    ] as Enums<"service_request_service_needed">[],
-    priority_level: "medium" as Enums<"service_request_priority">,
-    description: "",
-    sars_debt_amount: "",
-    returns_filed: true,
-  });
-  const portalFallbackPath = "/dashboard/client";
-  const resolvedAccountFullName =
-    profile?.full_name ||
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
-    "";
-  const isAuthenticated = Boolean(user?.email);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [draft, setDraft] = useState<WizardDraft>(() => loadWizardDraft());
+  const [errors, setErrors] = useState<ErrorMap>({});
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+  const [showAllServices, setShowAllServices] = useState<Record<string, boolean>>({});
+  const [submittingMode, setSubmittingMode] = useState<SubmissionMode | null>(null);
+  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
 
-  const resetFormToAccount = () => {
-    setForm({
-      full_name: resolvedAccountFullName,
-      email: user?.email || "",
-      phone: profile?.phone || "",
-      province: "",
-      client_type: "individual",
-      identity_document_type: "id_number",
-      id_number: "",
-      company_name: "",
-      company_registration_number: "",
-      service_categories: ["individual_tax"],
-      service_needed_list: ["individual_personal_income_tax_returns"],
-      priority_level: "medium",
-      description: "",
-      sars_debt_amount: "",
-      returns_filed: true,
-    });
-  };
+  const currentStep = getStepFromSearchParam(searchParams.get(REQUEST_WIZARD_QUERY_KEY));
+  const entityType = draft.who.entityType;
+  const categories = entityType ? SERVICE_CATEGORIES_BY_ENTITY[entityType] : [];
+  const groupedSelectedServices = entityType
+    ? getGroupedSelectedServices(entityType, draft.what.selectedServices)
+    : [];
+  const detailRows = entityType ? getDetailSummaryRows(entityType, draft.details) : [];
+  const registerQuery = useMemo(
+    () => buildRegisterQueryFromContact(draft.contact),
+    [draft.contact],
+  );
 
   useEffect(() => {
-    if (!user) return;
+    saveWizardStep("who", draft.who);
+  }, [draft.who]);
 
-    setForm((current) => ({
+  useEffect(() => {
+    saveWizardStep("what", draft.what);
+  }, [draft.what]);
+
+  useEffect(() => {
+    saveWizardStep("details", draft.details);
+  }, [draft.details]);
+
+  useEffect(() => {
+    saveWizardStep("contact", draft.contact);
+  }, [draft.contact]);
+
+  useEffect(() => {
+    const fullName =
+      profile?.full_name ||
+      user?.user_metadata?.full_name ||
+      user?.user_metadata?.name ||
+      "";
+    const phone = normalizePhoneNumber(profile?.phone ?? "");
+
+    setDraft((current) => ({
       ...current,
-      full_name: current.full_name || resolvedAccountFullName,
-      email: user.email || current.email,
-      phone: current.phone || profile?.phone || "",
+      contact: {
+        ...current.contact,
+        fullName: current.contact.fullName || fullName,
+        email: current.contact.email || user?.email || "",
+        phoneNumber: current.contact.phoneNumber || phone,
+      },
     }));
-  }, [profile?.phone, resolvedAccountFullName, user]);
+  }, [profile?.full_name, profile?.phone, user?.email, user?.user_metadata]);
 
   useEffect(() => {
-    if (!completedRequestId || isAuthenticated || !completedRequestDetails) {
+    setDraft((current) => {
+      const nextProvince =
+        current.contact.province ||
+        (contactProvinceOptions.includes(current.who.province as (typeof contactProvinceOptions)[number])
+          ? current.who.province
+          : "");
+      const nextCity = current.contact.city || current.who.city;
+
+      if (
+        nextProvince === current.contact.province &&
+        nextCity === current.contact.city
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        contact: {
+          ...current.contact,
+          province: nextProvince,
+          city: nextCity,
+        },
+      };
+    });
+  }, [draft.who.city, draft.who.province]);
+
+  useEffect(() => {
+    if (categories.length === 0) {
+      setExpandedCategories([]);
       return;
     }
 
-    const params = new URLSearchParams({
-      full_name: completedRequestDetails.fullName,
-      email: completedRequestDetails.email,
-      phone: completedRequestDetails.phone,
-      province: completedRequestDetails.province,
-      id_number: completedRequestDetails.idNumber,
-      source: "service-request",
+    setExpandedCategories((current) => {
+      const validCurrent = current.filter((key) =>
+        categories.some((category) => category.key === key),
+      );
+      if (validCurrent.length > 0) {
+        return validCurrent;
+      }
+      return [categories[0].key];
     });
-    const timer = window.setTimeout(() => {
-      navigate(`/register?${params.toString()}`, { replace: true });
-    }, 3500);
+  }, [categories]);
 
-    return () => window.clearTimeout(timer);
-  }, [completedRequestDetails, completedRequestId, isAuthenticated, navigate]);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [currentStep]);
 
-  const primaryService = form.service_needed_list[0];
-  const selectedService = useMemo(
-    () =>
-      serviceNeededOptions.find((option) => option.value === primaryService),
-    [primaryService],
-  );
+  const isSubmitting = submittingMode !== null;
 
-  const availableServices = useMemo(() => {
-    const categories = form.service_categories.length
-      ? form.service_categories
-      : serviceCategoryOptions.map((option) => option.value);
-    const services = Array.from(
-      new Set(
-        categories.flatMap((category) => getServicesForCategory(category)),
-      ),
-    );
-    const labelMap = new Map(
-      serviceNeededOptions.map((option) => [option.value, option.label]),
-    );
-    return services.map((service) => ({
-      value: service,
-      label: labelMap.get(service) || formatServiceRequestLabel(service),
+  const goOutsideWizard = () => {
+    const state = location.state as { fromPortal?: boolean; fromPath?: string } | null;
+    if (state?.fromPortal && user) {
+      if (window.history.length > 1) {
+        navigate(-1);
+        return;
+      }
+      navigate(state.fromPath || dashboardPath, { replace: true });
+      return;
+    }
+
+    navigate("/", { replace: true });
+  };
+
+  const goToStep = (step: WizardStep) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set(REQUEST_WIZARD_QUERY_KEY, String(step));
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const updateWho = (patch: Partial<WizardDraft["who"]>) => {
+    setDraft((current) => ({ ...current, who: { ...current.who, ...patch } }));
+  };
+
+  const updateContact = (patch: Partial<WizardContactData>) => {
+    setDraft((current) => ({
+      ...current,
+      contact: { ...current.contact, ...patch },
     }));
-  }, [form.service_categories]);
+  };
 
-  const categoryLabelMap = useMemo(
-    () =>
-      new Map(
-        serviceCategoryOptions.map((option) => [option.value, option.label]),
-      ),
-    [],
-  );
-
-  const serviceLabelMap = useMemo(
-    () =>
-      new Map(
-        serviceNeededOptions.map((option) => [option.value, option.label]),
-      ),
-    [],
-  );
-
-  const resolveServiceLabels = (
-    services: Enums<"service_request_service_needed">[],
-  ) =>
-    services.map(
-      (service) =>
-        serviceLabelMap.get(service) || formatServiceRequestLabel(service),
-    );
-
-  const resolveCategoryLabels = (
-    categories: Enums<"service_request_category">[],
-  ) =>
-    categories.map(
-      (category) =>
-        categoryLabelMap.get(category) || formatServiceRequestLabel(category),
-    );
-
-  const toggleServiceCategory = (
-    category: Enums<"service_request_category">,
-  ) => {
-    setForm((current) => {
-      const alreadySelected = current.service_categories.includes(category);
-      if (alreadySelected && current.service_categories.length === 1) {
-        return current;
-      }
-
-      const nextCategories = alreadySelected
-        ? current.service_categories.filter((item) => item !== category)
-        : [...current.service_categories, category];
-
-      const nextServicesAllowed = Array.from(
-        new Set(nextCategories.flatMap((item) => getServicesForCategory(item))),
-      );
-
-      let nextServices = current.service_needed_list.filter((service) =>
-        nextServicesAllowed.includes(service),
-      );
-      if (!nextServices.length && nextServicesAllowed.length) {
-        nextServices = [nextServicesAllowed[0]];
-      }
-
+  const toggleService = (service: WizardService) => {
+    setDraft((current) => {
+      const isSelected = current.what.selectedServices.includes(service);
       return {
         ...current,
-        service_categories: nextCategories,
-        service_needed_list: nextServices,
+        what: {
+          selectedServices: isSelected
+            ? current.what.selectedServices.filter((item) => item !== service)
+            : [...current.what.selectedServices, service],
+        },
       };
     });
   };
 
-  const toggleServiceNeeded = (
-    service: Enums<"service_request_service_needed">,
-  ) => {
-    setForm((current) => {
-      const alreadySelected = current.service_needed_list.includes(service);
-      if (alreadySelected && current.service_needed_list.length === 1) {
-        return current;
-      }
+  const validateCurrentStep = (step: WizardStep) => {
+    let nextErrors: ErrorMap = {};
+    if (step === 1) nextErrors = getValidationErrorsForWho(draft);
+    if (step === 2) nextErrors = getValidationErrorsForWhat(draft);
+    if (step === 3) nextErrors = getValidationErrorsForDetails(draft);
+    if (step === 4) nextErrors = getValidationErrorsForContact(draft);
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
 
-      if (!alreadySelected && current.service_needed_list.length >= 5) {
-        toast.error("You can select up to 5 services per request.");
-        return current;
-      }
+  const continueToNextStep = () => {
+    if (!validateCurrentStep(currentStep)) {
+      return;
+    }
 
-      const nextServices = alreadySelected
-        ? current.service_needed_list.filter((item) => item !== service)
-        : [...current.service_needed_list, service];
+    if (currentStep === 4) {
+      goToStep(5);
+      return;
+    }
 
+    goToStep((currentStep + 1) as WizardStep);
+  };
+
+  const buildIdentityFields = (
+    entityType: WizardEntityType,
+    contactName: string,
+  ): Pick<
+    ServiceRequestInsert,
+    "identity_document_type" | "id_number" | "company_name" | "company_registration_number"
+  > => {
+    if (entityType === "individual") {
       return {
-        ...current,
-        service_needed_list: nextServices,
+        identity_document_type: null,
+        id_number: null,
+        company_name: null,
+        company_registration_number: null,
       };
-    });
-  };
-
-  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextFiles = Array.from(event.target.files ?? []);
-
-    if (!nextFiles.length) {
-      return;
     }
 
-    setFiles((current) => {
-      const existingKeys = new Set(
-        current.map((file) => `${file.name}-${file.size}-${file.lastModified}`),
-      );
-      const dedupedIncoming = nextFiles.filter(
-        (file) =>
-          !existingKeys.has(`${file.name}-${file.size}-${file.lastModified}`),
-      );
-      return [...current, ...dedupedIncoming];
-    });
+    const organisationName = contactName.trim() || null;
 
-    event.target.value = "";
+    return {
+      identity_document_type: null,
+      id_number: null,
+      company_name: organisationName,
+      company_registration_number: null,
+    };
   };
 
-  const removeSelectedFile = (fileToRemove: File) => {
-    setFiles((current) =>
-      current.filter(
-        (file) =>
-          `${file.name}-${file.size}-${file.lastModified}` !==
-          `${fileToRemove.name}-${fileToRemove.size}-${fileToRemove.lastModified}`,
-      ),
+  const createLeadRequestPayload = (linkedProfileId: string | null, mode: SubmissionMode) => {
+    const resolvedEntityType = draft.who.entityType as WizardEntityType;
+    const priorityLevel = getPriorityLevel(draft);
+    const signals = getRequestSignals(draft);
+    const selectedCategoryKeys = Array.from(
+      new Set(draft.what.selectedServices.map(getCategoryForService)),
     );
+    const identityFields = buildIdentityFields(
+      resolvedEntityType,
+      draft.contact.fullName,
+    );
+    const requestPayload: ServiceRequestInsert = {
+      full_name: draft.contact.fullName.trim(),
+      email: draft.contact.email.trim().toLowerCase(),
+      phone: `${draft.contact.phoneCountryCode} ${normalizePhoneNumber(draft.contact.phoneNumber)}`.trim(),
+      province: draft.contact.province.trim(),
+      city: draft.contact.city.trim(),
+      contact_preference: draft.contact.contactPreference,
+      marketing_consent: draft.contact.marketingConsent,
+      submitted_with_account: mode === "account",
+      client_profile_id: linkedProfileId,
+      client_type: resolvedEntityType,
+      ...identityFields,
+      service_category: getPrimaryCategoryForSelection(resolvedEntityType, draft.what.selectedServices),
+      service_categories: selectedCategoryKeys,
+      service_needed: getPrimaryServiceForSelection(draft.what.selectedServices),
+      service_needed_list: draft.what.selectedServices,
+      priority_level: priorityLevel,
+      description: buildRequestDescription(draft),
+      sars_debt_amount: 0,
+      returns_filed: signals.returnsFiled,
+      has_debt_flag: signals.hasDebtFlag,
+      missing_returns_flag: signals.missingReturnsFlag,
+      missing_documents_flag: signals.missingDocumentsFlag,
+      has_sars_audit: signals.hasSarsAudit,
+      has_adr: signals.hasAdr,
+      has_vat_investigation: signals.hasVatInvestigation,
+      has_payroll_dispute: signals.hasPayrollDispute,
+      has_multiple_tax_types: signals.hasMultipleTaxTypes,
+      has_legal_complexity: signals.hasLegalComplexity,
+      risk_indicator: signals.riskIndicator,
+      intake_payload: buildIntakePayload(draft),
+    };
+
+    return { priorityLevel, requestPayload };
   };
 
-  const clearSelectedFiles = () => {
-    setFiles([]);
+  const ensureAccountForSubmission = async () => {
+    if (user?.id) {
+      return {
+        linkedProfileId: user.id,
+        requiresLogin: false,
+        emailSent: false,
+      };
+    }
+
+    const email = draft.contact.email.trim().toLowerCase();
+    const temporaryPassword = `${crypto.randomUUID()}Aa1!`;
+    const fullName = draft.contact.fullName.trim();
+
+    const signUpResult = await supabase.auth.signUp({
+      email,
+      password: temporaryPassword,
+      options: {
+        data: {
+          full_name: fullName,
+          role: "client",
+          account_type: "client",
+          phone: `${draft.contact.phoneCountryCode} ${normalizePhoneNumber(draft.contact.phoneNumber)}`.trim(),
+          province: draft.contact.province.trim(),
+          city: draft.contact.city.trim(),
+          client_type: draft.who.entityType,
+        },
+        emailRedirectTo: `${getAppBaseUrl()}/login`,
+      },
+    });
+
+    if (signUpResult.error) {
+      throw new Error(signUpResult.error.message);
+    }
+
+    let emailSent = false;
+    if (!signUpResult.data.session) {
+      const resetResult = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${getAppBaseUrl()}/reset-password`,
+      });
+      if (resetResult.error) {
+        console.error("Reset password email error:", resetResult.error);
+      } else {
+        emailSent = true;
+      }
+    }
+
+    return {
+      linkedProfileId:
+        signUpResult.data.user?.id ?? signUpResult.data.session?.user?.id ?? null,
+      requiresLogin: !signUpResult.data.session,
+      emailSent,
+    };
   };
 
-  const goBackInsidePortal = () => {
-    const state = location.state as {
-      fromPortal?: boolean;
-      fromPath?: string;
-    } | null;
-    const fallbackPath = state?.fromPath || dashboardPath || portalFallbackPath;
+  const handleSubmit = async (mode: SubmissionMode) => {
+    const reviewStepValid = [1, 2, 3, 4].every((step) =>
+      Object.keys(
+        step === 1
+          ? getValidationErrorsForWho(draft)
+          : step === 2
+            ? getValidationErrorsForWhat(draft)
+            : step === 3
+              ? getValidationErrorsForDetails(draft)
+              : getValidationErrorsForContact(draft),
+      ).length === 0,
+    );
 
-    if (!isAuthenticated) {
-      navigate("/", { replace: true });
+    if (!reviewStepValid || !draft.who.entityType) {
+      toast.error("Complete all required steps before submitting your request.");
       return;
     }
 
-    if (state?.fromPortal && window.history.length > 1) {
-      navigate(-1);
-      return;
-    }
-
-    navigate(fallbackPath, { replace: true });
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-
-    const requestEmail = (user?.email || form.email).trim().toLowerCase();
-    const requestPhone = form.phone.trim();
-    const requestName = form.full_name.trim();
-
-    if (
-      !requestName ||
-      !requestEmail ||
-      !requestPhone ||
-      !form.province.trim() ||
-      form.service_categories.length === 0 ||
-      form.service_needed_list.length === 0 ||
-      !form.priority_level
-    ) {
-      toast.error("Please complete all required fields.");
-      return;
-    }
-
-    if (form.client_type === "individual" && !form.id_number.trim()) {
-      toast.error(
-        `Please enter the ${form.identity_document_type === "passport_number" ? "passport number" : "ID number"} for the individual request.`,
-      );
-      return;
-    }
-
-    if (
-      form.client_type === "individual" &&
-      form.identity_document_type === "id_number" &&
-      form.id_number.trim().length !== 13
-    ) {
-      toast.error("ID number must be exactly 13 digits.");
-      return;
-    }
-
-    if (form.client_type === "company" && !form.company_name.trim()) {
-      toast.error("Please enter the company name.");
-      return;
-    }
-
-    if (form.client_type === "company" && !form.company_registration_number.trim()) {
-      toast.error("Please enter the company registration number.");
-      return;
-    }
-
-    setSubmitting(true);
-
+    setSubmittingMode(mode);
     try {
-      const debtAmount =
-        form.sars_debt_amount.trim() === "" ? 0 : Number(form.sars_debt_amount);
+      const accountResult =
+        mode === "account"
+          ? await ensureAccountForSubmission()
+          : { linkedProfileId: null, requiresLogin: false, emailSent: false };
 
-      if (Number.isNaN(debtAmount) || debtAmount < 0) {
-        throw new Error("Please enter a valid SARS debt amount.");
-      }
+      let { priorityLevel, requestPayload } = createLeadRequestPayload(
+        accountResult.linkedProfileId,
+        mode,
+      );
 
-      const primaryCategory = form.service_categories[0];
-      const primaryService = form.service_needed_list[0];
-      const { data: serviceRequest, error: requestError } = await supabase
+      let insertResult = await supabase
         .from("service_requests")
-        .insert({
-          full_name: requestName,
-          email: requestEmail,
-          phone: requestPhone,
-          province: form.province.trim(),
-          client_type: form.client_type,
-          identity_document_type:
-            form.client_type === "individual"
-              ? form.identity_document_type
-              : null,
-          id_number:
-            form.client_type === "individual" ? form.id_number.trim() : null,
-          company_name:
-            form.client_type === "company" ? form.company_name.trim() : null,
-          company_registration_number:
-            form.client_type === "company"
-              ? form.company_registration_number.trim()
-              : null,
-          service_category: primaryCategory,
-          service_categories: form.service_categories,
-          service_needed: primaryService,
-          service_needed_list: form.service_needed_list,
-          priority_level: form.priority_level,
-          description: form.description.trim() || "",
-          sars_debt_amount: debtAmount,
-          returns_filed: form.returns_filed,
-        })
-        .select("id, created_at, status, priority_level, description")
+        .insert(requestPayload)
+        .select("id")
         .single();
 
-      if (requestError || !serviceRequest) {
-        throw new Error(
-          requestError?.message || "Unable to save your request.",
-        );
+      if (insertResult.error && requestPayload.client_profile_id) {
+        requestPayload = { ...requestPayload, client_profile_id: null };
+        insertResult = await supabase
+          .from("service_requests")
+          .insert(requestPayload)
+          .select("id")
+          .single();
       }
 
-      if (files.length > 0) {
-        const uploadResults = await Promise.allSettled(
-          files.map(async (file) => {
-            const filePath = await uploadServiceRequestFile(
-              file,
-              serviceRequest.id,
-            );
-
-            const { error } = await supabase
-              .from("service_request_documents")
-              .insert({
-                service_request_id: serviceRequest.id,
-                title: file.name,
-                file_name: file.name,
-                file_path: filePath,
-                file_size: file.size,
-                mime_type: file.type,
-              });
-
-            if (error) {
-              throw new Error(error.message);
-            }
-          }),
-        );
-
-        const failedUploads = uploadResults.filter(
-          (result) => result.status === "rejected",
-        );
-
-        if (failedUploads.length > 0) {
-          const firstReason = failedUploads[0];
-          const details =
-            firstReason?.status === "rejected" &&
-            firstReason.reason instanceof Error
-              ? firstReason.reason.message
-              : "One or more document uploads failed.";
-
-          toast.error(
-            `Your request was submitted, but one or more documents could not be uploaded. ${details}`,
-          );
-        } else {
-          toast.success("Your service request was submitted successfully.");
-        }
-      } else {
-        toast.success("Your service request was submitted successfully.");
+      if (insertResult.error || !insertResult.data) {
+        throw new Error(insertResult.error?.message || "Unable to submit your request.");
       }
 
-      const selectedServiceLabels = resolveServiceLabels(
-        form.service_needed_list,
-      ).join(", ");
-      const emailPayload = {
-        type: "service_request_received" as const,
-        requestId: serviceRequest.id,
-        clientName: requestName,
-        clientEmail: requestEmail,
-        clientPhone: requestPhone,
-        serviceType:
-          selectedServiceLabels || selectedService?.label || "Tax assistance",
-        province: form.province.trim(),
-      };
-
-      const { error: emailError } = await supabase.functions.invoke(
-        "send-portal-email",
-        {
-          body: emailPayload,
-        },
+      const selectedServiceLabels = groupedSelectedServices
+        .flatMap((group) => group.selectedServices.map((service) => service.label))
+        .join(", ");
+      await sendRequestEmails(
+        insertResult.data.id,
+        requestPayload,
+        selectedServiceLabels,
+        priorityLevel,
       );
 
-      if (emailError) {
-        console.error("Service request email error:", emailError);
-      }
-
-      const staffPayload = {
-        requestId: serviceRequest.id,
-        clientName: requestName,
-        clientEmail: requestEmail,
-        serviceType:
-          selectedServiceLabels || selectedService?.label || "Tax assistance",
-        province: form.province.trim(),
-        status: "Open",
-        priority: formatServiceRequestLabel(serviceRequest.priority_level),
-        submittedAt: new Date(serviceRequest.created_at).toLocaleDateString(
-          "en-ZA",
-          {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          },
-        ),
-      };
-
-      const [{ error: adminError }, { error: practitionerError }] =
-        await Promise.all([
-          supabase.functions.invoke("send-portal-email", {
-            body: {
-              type: "service_request_received_admin" as const,
-              ...staffPayload,
-            },
-          }),
-          supabase.functions.invoke("send-portal-email", {
-            body: {
-              type: "service_request_received_practitioner" as const,
-              ...staffPayload,
-            },
-          }),
-        ]);
-
-      if (adminError) {
-        console.error("Admin service request email error:", adminError);
-      }
-
-      if (practitionerError) {
-        console.error(
-          "Practitioner service request email error:",
-          practitionerError,
-        );
-      }
-
-      setCompletedRequestId(serviceRequest.id);
-      setCompletedRequestDetails({
-        fullName: requestName,
-        email: requestEmail,
-        phone: requestPhone,
-        province: form.province.trim(),
-        idNumber:
-          form.client_type === "individual" ? form.id_number.trim() : "",
+      clearWizardDraft();
+      setDraft(getInitialWizardDraft());
+      setSubmissionResult({
+        requestId: insertResult.data.id,
+        mode,
+        linkedToAccount: Boolean(accountResult.linkedProfileId),
+        requiresLogin: accountResult.requiresLogin,
+        emailSent: accountResult.emailSent,
       });
-      setFiles([]);
+      toast.success("Your request has been submitted successfully.");
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to submit your request.";
-      toast.error(message);
+      toast.error(
+        error instanceof Error ? error.message : "Unable to submit your request.",
+      );
     } finally {
-      setSubmitting(false);
+      setSubmittingMode(null);
     }
   };
 
-  if (completedRequestId) {
-    const registerParams = completedRequestDetails
-      ? new URLSearchParams({
-          full_name: completedRequestDetails.fullName,
-          email: completedRequestDetails.email,
-          phone: completedRequestDetails.phone,
-          province: completedRequestDetails.province,
-          id_number: completedRequestDetails.idNumber,
-          source: "service-request",
-        })
-      : null;
-    return (
-      <div className="min-h-screen bg-surface-gradient px-4 py-16">
-        <div className="mx-auto w-full max-w-3xl">
-          <button
-            type="button"
-            onClick={goBackInsidePortal}
-            className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground font-body"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {isAuthenticated ? "Back to portal" : "Back to home"}
-          </button>
+  const renderError = (key: string) =>
+    errors[key] ? <p className="mt-2 text-sm text-red-600">{errors[key]}</p> : null;
 
-          <div className="rounded-[32px] border border-border bg-card p-8 shadow-elevated sm:p-10">
-            <AcapoliteLogo className="mb-8 h-14" />
-            <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-              <CheckCircle2 className="h-8 w-8" />
+  const renderRadioGroup = (key: string, label: string, options: string[]) => (
+    <div key={key} className="rounded-[1.5rem] border border-[#E7E7E7] bg-white p-5 shadow-sm">
+      <Label className="text-base font-semibold text-[#102B46]">{label}</Label>
+      <RadioGroup
+        value={draft.details.answers[key] || ""}
+        onValueChange={(value) => {
+          setDraft((current) => ({
+            ...current,
+            details: {
+              ...current.details,
+              answers: { ...current.details.answers, [key]: value },
+            },
+          }));
+        }}
+        className="mt-4 space-y-3"
+      >
+        {options.map((option) => (
+          <label
+            key={option}
+            className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition hover:border-[#C49A22]"
+          >
+            <RadioGroupItem value={option} className="mt-1 border-[#C49A22] text-[#C49A22]" />
+            <span className="text-sm text-slate-700">{option}</span>
+          </label>
+        ))}
+      </RadioGroup>
+      {renderError(key)}
+    </div>
+  );
+
+  if (submissionResult) {
+    return (
+      <div className="min-h-screen bg-[#FAFAF6] px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl">
+          <Button variant="ghost" className="mb-6 rounded-full px-0 text-slate-600" onClick={goOutsideWizard}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            {user ? "Back to dashboard" : "Back to home"}
+          </Button>
+
+          <div className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-8 shadow-sm sm:p-10">
+            <AcapoliteLogo className="h-12" />
+            <div className="mt-8 flex h-20 w-20 items-center justify-center rounded-full bg-[#FFF6DB] text-[#C49A22]">
+              <CheckCircle2 className="h-10 w-10" />
             </div>
-            <h1 className="mt-6 font-display text-3xl text-foreground">
-              Request Submitted
+            <h1 className="mt-6 text-3xl font-black tracking-[-0.03em] text-[#102B46]">
+              Request Submitted Successfully
             </h1>
-            <p className="mt-3 max-w-2xl text-sm text-muted-foreground font-body">
-              {isAuthenticated
-                ? "Your tax assistance request is now in the Acapolite pipeline. The team can review your request, documents, and risk profile from the staff dashboard."
-                : "Thank you for your request. To track your case, upload documents, and communicate securely, please create your account."}
+            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
+              Your request has been submitted and will be reviewed by qualified professionals. You will be contacted shortly.
             </p>
 
-            <div className="mt-8 rounded-2xl border border-border bg-accent/20 p-5">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
-                Reference
-              </p>
-              <p className="font-mono text-sm text-foreground">
-                {completedRequestId}
-              </p>
+            <div className="mt-8 rounded-[1.75rem] border border-[#E7E7E7] bg-[#F8F9F7] p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Reference</p>
+              <p className="mt-2 font-mono text-sm text-slate-700">{submissionResult.requestId}</p>
             </div>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              {isAuthenticated ? (
-                <Button
-                  type="button"
-                  className="rounded-xl"
-                  onClick={goBackInsidePortal}
-                >
-                  Return to Portal
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  className="rounded-xl"
-                  onClick={() => {
-                    if (registerParams) {
-                      navigate(`/register?${registerParams.toString()}`, {
-                        replace: true,
-                      });
-                    } else {
-                      navigate("/register", { replace: true });
-                    }
-                  }}
-                >
-                  Create Account
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-xl"
-                onClick={() => {
-                  setCompletedRequestId(null);
-                  setCompletedRequestDetails(null);
-                  if (isAuthenticated) {
-                    resetFormToAccount();
-                  } else {
-                    setForm((current) => ({
-                      ...current,
-                      full_name: "",
-                      email: "",
-                      phone: "",
-                      province: "",
-                      description: "",
-                      sars_debt_amount: "",
-                      returns_filed: true,
-                    }));
-                  }
-                }}
-              >
-                Submit Another Request
-              </Button>
-            </div>
+            {submissionResult.mode === "guest" ? (
+              <div className="mt-8 rounded-[2rem] border border-[#E7E7E7] bg-[#FFFDF7] p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1C8] text-[#C49A22]">
+                    <Star className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-xl font-bold text-[#102B46]">Create a free account to track your request</h2>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Create your account to track progress, upload documents and message professionals securely.
+                    </p>
+                    <Button asChild className="mt-5 rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]">
+                      <Link to={`/register?${registerQuery}`}>Create Free Account</Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-8 rounded-[2rem] border border-[#E8D9B0] bg-[#FFF8E4] p-6 text-[#1A4731]">
+                <p className="text-lg font-bold">Your free account is ready.</p>
+                <p className="mt-2 text-sm leading-6">
+                  {submissionResult.emailSent
+                    ? "We sent a secure email so you can set your password and access your request."
+                    : "Use your account to track your request, upload documents and message professionals."}
+                </p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <Button asChild className="rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]">
+                    <Link to={submissionResult.requiresLogin ? "/login" : dashboardPath}>
+                      {submissionResult.requiresLogin ? "Go to Login" : "Go to Dashboard"}
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -651,551 +835,531 @@ export default function RequestTaxAssistance() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-gradient px-4 py-12 sm:py-16">
-      <div className="mx-auto w-full max-w-4xl">
-        <button
-          type="button"
-          onClick={goBackInsidePortal}
-          className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground font-body"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to portal
-        </button>
+    <div className="min-h-screen bg-[#FAFAF6] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <Button variant="ghost" className="rounded-full px-0 text-slate-600" onClick={goOutsideWizard}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            {user ? "Back" : "Back to home"}
+          </Button>
+          <AcapoliteLogo className="h-11" />
+        </div>
 
-        <div className="rounded-[32px] border border-border bg-card p-6 shadow-elevated sm:p-10">
-          <AcapoliteLogo className="mb-8 h-14" />
-          <div className="max-w-3xl">
-            <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-border bg-accent/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Client Service Form
-            </p>
-            <h1 className="font-display text-3xl text-foreground sm:text-4xl">
-              Request Tax Assistance
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground font-body sm:text-base">
-              Tell Acapolite what you need help with, attach any supporting
-              documents, and submit the request. If you do not yet have an
-              account, you will be guided to create one after submission.
-            </p>
-          </div>
+        <div className="mt-8">
+          <RequestWizardProgress currentStep={currentStep} />
+        </div>
 
-          <form className="mt-10 space-y-8" onSubmit={handleSubmit}>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                  Full Name
-                </label>
-                <Input
-                  value={form.full_name}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      full_name: event.target.value,
-                    }))
-                  }
-                  placeholder="Full name"
-                  className="rounded-xl"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                  Email Address
-                </label>
-                <Input
-                  type="email"
-                  value={form.email}
-                  readOnly={isAuthenticated}
-                  placeholder={
-                    isAuthenticated
-                      ? "Linked to your portal account"
-                      : "you@example.com"
-                  }
-                  className="rounded-xl"
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                  required={!isAuthenticated}
-                />
-                {isAuthenticated ? (
-                  <p className="mt-2 text-xs text-muted-foreground font-body">
-                    This request will be submitted using your logged-in portal
-                    email.
-                  </p>
-                ) : null}
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                  Phone Number
-                </label>
-                <Input
-                  value={form.phone}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      phone: event.target.value,
-                    }))
-                  }
-                  placeholder="+27 ..."
-                  className="rounded-xl"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                  Province
-                </label>
-                <Select
-                  value={form.province}
-                  onValueChange={(value) =>
-                    setForm((current) => ({ ...current, province: value }))
-                  }
-                >
-                  <SelectTrigger className="w-full rounded-xl">
-                    <SelectValue placeholder="Select province" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {provinces.map((province) => (
-                      <SelectItem key={province} value={province}>
-                        {province}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                  Individual or Company
-                </label>
-                <Select
-                  value={form.client_type}
-                  onValueChange={(value) =>
-                    setForm((current) => ({
-                      ...current,
-                      client_type: value as ClientType,
-                      identity_document_type:
-                        value === "individual"
-                          ? current.identity_document_type
-                          : "id_number",
-                      id_number:
-                        value === "individual" ? current.id_number : "",
-                      company_name:
-                        value === "company" ? current.company_name : "",
-                      company_registration_number:
-                        value === "company"
-                          ? current.company_registration_number
-                          : "",
-                    }))
-                  }
-                >
-                  <SelectTrigger className="w-full rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="individual">Individual</SelectItem>
-                    <SelectItem value="company">Company</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <div className="space-y-6">
+            {currentStep === 1 ? (
+              <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 1</p>
+                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">Who is this request for?</h1>
+                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                  This helps us match you with the right type of professional.
+                </p>
 
-              {form.client_type === "individual" ? (
-                <>
+                <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                  {ENTITY_OPTIONS.map((option) => {
+                    const Icon = entityIcons[option.value];
+                    const isActive = draft.who.entityType === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => updateWho({ entityType: option.value })}
+                        className={`rounded-[1.75rem] border p-5 text-left transition ${
+                          isActive
+                            ? "border-[#C49A22] bg-[#FFF8E4] shadow-sm"
+                            : "border-slate-200 bg-white hover:border-[#C49A22]/50"
+                        }`}
+                      >
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1C8] text-[#C49A22]">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <p className="mt-4 text-lg font-bold text-[#102B46]">{option.label}</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{option.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                {renderError("entityType")}
+
+                <div className="mt-8 grid gap-5 md:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                      Identity Document Type
-                    </label>
-                    <Select
-                      value={form.identity_document_type}
-                      onValueChange={(value) =>
-                        setForm((current) => ({
-                          ...current,
-                          identity_document_type: value as IdentityDocumentType,
-                          id_number: "",
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="w-full rounded-xl">
-                        <SelectValue />
+                    <Label className="text-sm font-semibold text-[#102B46]">Your location</Label>
+                    <Select value={draft.who.province} onValueChange={(value) => updateWho({ province: value })}>
+                      <SelectTrigger className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "province")}`}>
+                        <SelectValue placeholder="Select your province or city" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="id_number">ID Number</SelectItem>
-                        <SelectItem value="passport_number">
-                          Passport Number
-                        </SelectItem>
+                        {SOUTH_AFRICAN_PROVINCES.map((province) => (
+                          <SelectItem key={province} value={province}>
+                            {province}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                    {renderError("province")}
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                      {form.identity_document_type === "passport_number"
-                        ? "Passport Number"
-                        : "ID Number"}
-                    </label>
+                    <Label className="text-sm font-semibold text-[#102B46]">City / Town</Label>
                     <Input
-                      value={form.id_number}
-                      onChange={(event) => {
-                        const nextValue =
-                          form.identity_document_type === "id_number"
-                            ? event.target.value.replace(/\D/g, "").slice(0, 13)
-                            : event.target.value.toUpperCase();
-
-                        setForm((current) => ({
-                          ...current,
-                          id_number: nextValue,
-                        }));
-                      }}
-                      placeholder={
-                        form.identity_document_type === "passport_number"
-                          ? "Passport number"
-                          : "13-digit South African ID number"
-                      }
-                      className="rounded-xl"
-                      inputMode={
-                        form.identity_document_type === "id_number"
-                          ? "numeric"
-                          : "text"
-                      }
-                      maxLength={
-                        form.identity_document_type === "id_number" ? 13 : 20
-                      }
-                      required
+                      value={draft.who.city}
+                      onChange={(event) => updateWho({ city: event.target.value })}
+                      placeholder="Pretoria"
+                      className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "city")}`}
                     />
-                    <p className="mt-2 text-xs text-muted-foreground font-body">
-                      {form.identity_document_type === "id_number"
-                        ? "Enter your 13-digit South African ID number."
-                        : "Enter the passport number exactly as it appears on the document."}
-                    </p>
+                    {renderError("city")}
                   </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                      Company Name
-                    </label>
-                    <Input
-                      value={form.company_name}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          company_name: event.target.value,
-                        }))
-                      }
-                      placeholder="Registered company name"
-                      className="rounded-xl"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                      Company Registration Number
-                    </label>
-                    <Input
-                      value={form.company_registration_number}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          company_registration_number: event.target.value,
-                        }))
-                      }
-                      placeholder="Company Registration Number"
-                      className="rounded-xl"
-                      required
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                  Service Category
-                </label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between rounded-xl border border-input/90 bg-white/92 px-3.5 py-2.5 text-left text-sm shadow-[0_6px_24px_-22px_rgba(15,23,42,0.28)] transition-all hover:border-primary/30"
-                    >
-                      <span
-                        className={
-                          form.service_categories.length
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                        }
-                      >
-                        {form.service_categories.length
-                          ? resolveCategoryLabels(form.service_categories).join(
-                              ", ",
-                            )
-                          : "Select one or more categories"}
-                      </span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="start"
-                    className="w-[--radix-popover-trigger-width] p-3"
-                  >
-                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                      {serviceCategoryOptions.map((option) => (
-                        <label
-                          key={option.value}
-                          className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/60"
-                        >
-                          <Checkbox
-                            checked={form.service_categories.includes(
-                              option.value,
-                            )}
-                            onCheckedChange={() =>
-                              toggleServiceCategory(option.value)
-                            }
-                          />
-                          <span className="text-sm text-foreground font-body">
-                            {option.label}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <p className="mt-2 text-xs text-muted-foreground font-body">
-                  Select all categories that apply.
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                  Service Needed
-                </label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between rounded-xl border border-input/90 bg-white/92 px-3.5 py-2.5 text-left text-sm shadow-[0_6px_24px_-22px_rgba(15,23,42,0.28)] transition-all hover:border-primary/30"
-                    >
-                      <span
-                        className={
-                          form.service_needed_list.length
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                        }
-                      >
-                        {form.service_needed_list.length
-                          ? resolveServiceLabels(form.service_needed_list).join(
-                              ", ",
-                            )
-                          : "Select one or more services"}
-                      </span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="start"
-                    className="w-[--radix-popover-trigger-width] p-3"
-                  >
-                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                      {availableServices.map((option) => (
-                        <label
-                          key={option.value}
-                          className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/60"
-                        >
-                          <Checkbox
-                            checked={form.service_needed_list.includes(
-                              option.value,
-                            )}
-                            onCheckedChange={() =>
-                              toggleServiceNeeded(option.value)
-                            }
-                          />
-                          <span className="text-sm text-foreground font-body">
-                            {option.label}
-                          </span>
-                        </label>
-                      ))}
-                      {!availableServices.length ? (
-                        <p className="text-xs text-muted-foreground font-body">
-                          Select a service category to see available services.
-                        </p>
-                      ) : null}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <p className="mt-2 text-xs text-muted-foreground font-body">
-                  Choose every service you need help with.
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                  Priority Level
-                </label>
-                <Select
-                  value={form.priority_level}
-                  onValueChange={(value) =>
-                    setForm((current) => ({
-                      ...current,
-                      priority_level:
-                        value as Enums<"service_request_priority">,
-                    }))
-                  }
-                >
-                  <SelectTrigger className="w-full rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {serviceRequestPriorityOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                Description of the Issue (Optional)
-              </label>
-              <Textarea
-                value={form.description}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    description: event.target.value,
-                  }))
-                }
-                placeholder={`Describe your ${selectedService?.label || "service"} request, SARS issue, deadlines, or supporting context.`}
-                className="min-h-[140px] rounded-xl"
-              />
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-foreground font-body">
-                  SARS Debt Amount (Optional)
-                </label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.sars_debt_amount}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      sars_debt_amount: event.target.value,
-                    }))
-                  }
-                  placeholder="0.00"
-                  className="rounded-xl"
-                />
-              </div>
-              <div className="rounded-2xl border border-border bg-accent/20 p-4">
-                <label className="flex items-start gap-3">
-                  <Checkbox
-                    checked={form.returns_filed}
-                    onCheckedChange={(checked) =>
-                      setForm((current) => ({
-                        ...current,
-                        returns_filed: checked === true,
-                      }))
-                    }
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="block text-sm font-semibold text-foreground font-body">
-                      Returns Filed?
-                    </span>
-                    <span className="block text-xs text-muted-foreground font-body mt-1">
-                      Leave unchecked if returns are still outstanding.
-                    </span>
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-dashed border-border bg-accent/20 p-5">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-full bg-primary/10 p-2 text-primary">
-                  <Upload className="h-4 w-4" />
                 </div>
-                <div className="w-full">
-                  <p className="text-sm font-semibold text-foreground font-body">
-                    Upload Supporting Documents (Optional)
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground font-body">
-                    Attach any SARS letters, statements, IDs, or supporting
-                    files that help explain the request. You can add multiple
-                    files before submitting.
-                  </p>
-                  <input
-                    type="file"
-                    multiple
-                    className="mt-4 block w-full rounded-xl border border-input/90 bg-white/92 px-3.5 py-2.5 text-sm text-foreground shadow-[0_6px_24px_-22px_rgba(15,23,42,0.28)] ring-offset-background transition-all duration-200 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:opacity-90 focus-visible:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2"
-                    onChange={handleFileSelection}
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
-                  />
-                  {files.length > 0 ? (
-                    <div className="mt-4 space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground font-body">
-                          {files.length} file{files.length === 1 ? "" : "s"}{" "}
-                          selected
-                        </p>
+
+                <Button onClick={continueToNextStep} className="mt-8 h-12 w-full rounded-2xl bg-[#C49A22] text-base font-semibold text-white hover:bg-[#b48a1c] sm:w-auto sm:px-8">
+                  Continue Request
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+
+                <p className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+                  <Lock className="h-4 w-4 text-[#1A4731]" />
+                  Your information is secure and will only be shared with verified professionals.
+                </p>
+              </section>
+            ) : null}
+
+            {currentStep === 2 ? (
+              <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 2</p>
+                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">What do you need help with?</h1>
+                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                  Select all that apply so we can match you with the right professionals.
+                </p>
+
+                <div className="mt-8 space-y-4">
+                  {categories.map((category) => {
+                    const Icon = categoryIcons[category.key as keyof typeof categoryIcons] ?? FileText;
+                    const isExpanded = expandedCategories.includes(category.key);
+                    const showAll = Boolean(showAllServices[category.key]);
+                    const visibleServices = showAll ? category.services : category.services.slice(0, 5);
+
+                    return (
+                      <div key={category.key} className="overflow-hidden rounded-[1.75rem] border border-[#E7E7E7] bg-[#FBFBF8]">
                         <button
                           type="button"
-                          onClick={clearSelectedFiles}
-                          className="text-xs font-semibold text-primary hover:underline"
+                          onClick={() =>
+                            setExpandedCategories((current) =>
+                              current.includes(category.key)
+                                ? current.filter((item) => item !== category.key)
+                                : [...current, category.key],
+                            )
+                          }
+                          className="flex w-full items-center justify-between gap-4 px-5 py-5 text-left"
                         >
-                          Clear all
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#C49A22] shadow-sm">
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="text-lg font-bold text-[#102B46]">{category.title}</p>
+                              <p className="mt-1 text-sm leading-6 text-slate-600">{category.description}</p>
+                            </div>
+                          </div>
+                          <ChevronDown className={`h-5 w-5 shrink-0 text-slate-500 transition ${isExpanded ? "rotate-180" : ""}`} />
                         </button>
+
+                        {isExpanded ? (
+                          <div className="border-t border-[#E7E7E7] bg-white px-5 py-5">
+                            <div className="space-y-3">
+                              {visibleServices.map((service) => {
+                                const isChecked = draft.what.selectedServices.includes(service.value);
+                                return (
+                                  <label
+                                    key={service.value}
+                                    className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition hover:border-[#C49A22]"
+                                  >
+                                    <Checkbox
+                                      checked={isChecked}
+                                      onCheckedChange={() => toggleService(service.value)}
+                                      className="mt-1 border-[#C49A22] data-[state=checked]:border-[#C49A22] data-[state=checked]:bg-[#C49A22]"
+                                    />
+                                    <span className="text-sm leading-6 text-slate-700">{service.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+
+                            {category.services.length > 5 ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowAllServices((current) => ({
+                                    ...current,
+                                    [category.key]: !current[category.key],
+                                  }))
+                                }
+                                className="mt-4 text-sm font-semibold text-[#1A4731]"
+                              >
+                                {showAll ? "Show less" : "Show more"}
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {files.map((file) => (
-                          <span
-                            key={`${file.name}-${file.size}-${file.lastModified}`}
-                            className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-medium text-foreground shadow-sm"
-                          >
-                            <span className="max-w-[220px] truncate">
-                              {file.name}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeSelectedFile(file)}
-                              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                              aria-label={`Remove ${file.name}`}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </span>
-                        ))}
+                    );
+                  })}
+                </div>
+                {renderError("selectedServices")}
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Button type="button" variant="outline" className="h-12 rounded-2xl border-[#D7D7D7] px-7" onClick={() => goToStep(1)}>
+                    Back
+                  </Button>
+                  <Button type="button" className="h-12 rounded-2xl bg-[#C49A22] px-7 text-white hover:bg-[#b48a1c]" onClick={continueToNextStep}>
+                    Continue
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </section>
+            ) : null}
+
+            {currentStep === 3 && entityType ? (
+              <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 3</p>
+                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">Tell us more about your request</h1>
+                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                  This helps us match you with the right professionals who can assist you.
+                </p>
+
+                <div className="mt-6 rounded-[1.75rem] border border-[#E8D9B0] bg-[#FFF8E4] p-5 text-[#1A4731]">
+                  <p className="text-sm font-semibold">
+                    You selected: <span className="text-[#C49A22]">{getEntityLabel(entityType)}</span>
+                  </p>
+                  <p className="mt-1 text-sm">Let&apos;s gather a few more details about your request.</p>
+                </div>
+
+                <div className="mt-8 space-y-5">
+                  {DETAIL_QUESTIONS_BY_ENTITY[entityType].map((question) => {
+                    if (question.type === "radio") {
+                      return renderRadioGroup(question.key, question.label, question.options);
+                    }
+
+                    if (question.type === "year-range") {
+                      return (
+                        <div key={question.key} className="rounded-[1.5rem] border border-[#E7E7E7] bg-white p-5 shadow-sm">
+                          <Label className="text-base font-semibold text-[#102B46]">{question.label}</Label>
+                          {question.helperText ? <p className="mt-2 text-sm text-slate-500">{question.helperText}</p> : null}
+                          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                            <div>
+                              <Label className="text-sm text-slate-600">From tax year</Label>
+                              <Select
+                                value={draft.details.answers[question.fromKey] || ""}
+                                onValueChange={(value) =>
+                                  setDraft((current) => ({
+                                    ...current,
+                                    details: {
+                                      ...current.details,
+                                      answers: { ...current.details.answers, [question.fromKey]: value },
+                                    },
+                                  }))
+                                }
+                              >
+                                <SelectTrigger className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, question.fromKey)}`}>
+                                  <SelectValue placeholder="Select year" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TAX_YEAR_OPTIONS.map((year) => (
+                                    <SelectItem key={year} value={year}>{year}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {renderError(question.fromKey)}
+                            </div>
+                            <div>
+                              <Label className="text-sm text-slate-600">To tax year</Label>
+                              <Select
+                                value={draft.details.answers[question.toKey] || ""}
+                                onValueChange={(value) =>
+                                  setDraft((current) => ({
+                                    ...current,
+                                    details: {
+                                      ...current.details,
+                                      answers: { ...current.details.answers, [question.toKey]: value },
+                                    },
+                                  }))
+                                }
+                              >
+                                <SelectTrigger className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, question.toKey)}`}>
+                                  <SelectValue placeholder="Select year" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TAX_YEAR_OPTIONS.map((year) => (
+                                    <SelectItem key={year} value={year}>{year}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {renderError(question.toKey)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={question.key} className="rounded-[1.5rem] border border-[#E7E7E7] bg-white p-5 shadow-sm">
+                        <Label className="text-base font-semibold text-[#102B46]">{question.label}</Label>
+                        <Textarea
+                          value={draft.details.additionalNotes}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              details: {
+                                ...current.details,
+                                additionalNotes: event.target.value.slice(0, question.maxLength),
+                              },
+                            }))
+                          }
+                          placeholder="Add any context that will help the right professional respond quickly."
+                          className={`mt-4 min-h-[160px] rounded-[1.5rem] ${getInlineFieldError(errors, "additionalNotes")}`}
+                        />
+                        <div className="mt-2 flex items-center justify-between text-sm text-slate-500">
+                          {renderError("additionalNotes") || <span>Optional</span>}
+                          <span>{draft.details.additionalNotes.length}/{question.maxLength}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Button type="button" variant="outline" className="h-12 rounded-2xl border-[#D7D7D7] px-7" onClick={() => goToStep(2)}>
+                    Back
+                  </Button>
+                  <Button type="button" className="h-12 rounded-2xl bg-[#C49A22] px-7 text-white hover:bg-[#b48a1c]" onClick={continueToNextStep}>
+                    Continue
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </section>
+            ) : null}
+
+            {currentStep === 4 ? (
+              <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 4</p>
+                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">Your contact information</h1>
+                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                  Please provide your details so we can connect you with the right professionals.
+                </p>
+
+                <div className="mt-6 flex items-center gap-3 rounded-[1.75rem] border border-[#DCE8E1] bg-[#F6FBF8] p-4 text-sm text-[#1A4731]">
+                  <Shield className="h-5 w-5 text-[#1A4731]" />
+                  Your information is secure — we only share your details with relevant, verified professionals.
+                </div>
+
+                <div className="mt-8 space-y-8">
+                  <div>
+                    <h2 className="text-xl font-bold text-[#102B46]">Your details</h2>
+                    <div className="mt-4 grid gap-5 md:grid-cols-2">
+                      <div>
+                        <Label className="text-sm font-semibold text-[#102B46]">Full name *</Label>
+                        <Input value={draft.contact.fullName} onChange={(event) => updateContact({ fullName: event.target.value })} className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "fullName")}`} />
+                        {renderError("fullName")}
+                      </div>
+                      <div>
+                        <Label className="text-sm font-semibold text-[#102B46]">Email address *</Label>
+                        <Input type="email" value={draft.contact.email} onChange={(event) => updateContact({ email: event.target.value })} className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "email")}`} />
+                        {renderError("email")}
                       </div>
                     </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
+                    <div className="mt-5 grid gap-5 md:grid-cols-[150px_minmax(0,1fr)]">
+                      <div>
+                        <Label className="text-sm font-semibold text-[#102B46]">Code</Label>
+                        <Select value={draft.contact.phoneCountryCode} onValueChange={(value) => updateContact({ phoneCountryCode: value })}>
+                          <SelectTrigger className="mt-2 h-12 rounded-2xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="+27">+27 South Africa</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-semibold text-[#102B46]">Phone number *</Label>
+                        <Input value={draft.contact.phoneNumber} onChange={(event) => updateContact({ phoneNumber: normalizePhoneNumber(event.target.value) })} placeholder="82 123 4567" className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "phoneNumber")}`} />
+                        {renderError("phoneNumber")}
+                        <p className="mt-2 text-sm text-slate-500">We&apos;ll use this to contact you about your request.</p>
+                      </div>
+                    </div>
+                  </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-xl"
-                onClick={goBackInsidePortal}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="rounded-xl"
-                disabled={submitting}
-              >
-                {submitting ? "Submitting..." : "Submit Tax Assistance Request"}
-              </Button>
-            </div>
-          </form>
+                  <div>
+                    <h2 className="text-xl font-bold text-[#102B46]">Where are you based?</h2>
+                    <div className="mt-4 grid gap-5 md:grid-cols-2">
+                      <div>
+                        <Label className="text-sm font-semibold text-[#102B46]">Province *</Label>
+                        <Select value={draft.contact.province} onValueChange={(value) => updateContact({ province: value })}>
+                          <SelectTrigger className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "contactProvince")}`}>
+                            <SelectValue placeholder="Select province" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {contactProvinceOptions.map((province) => (
+                              <SelectItem key={province} value={province}>{province}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {renderError("contactProvince")}
+                      </div>
+                      <div>
+                        <Label className="text-sm font-semibold text-[#102B46]">City / Town *</Label>
+                        <Input value={draft.contact.city} onChange={(event) => updateContact({ city: event.target.value })} className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "contactCity")}`} placeholder="Pretoria" />
+                        {renderError("contactCity")}
+                      </div>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-500">This helps us match you with professionals in your area.</p>
+                  </div>
+
+                  <div>
+                    <h2 className="text-xl font-bold text-[#102B46]">Best way to reach you</h2>
+                    <p className="mt-1 text-sm text-slate-500">How would you prefer professionals to contact you?</p>
+                    <RadioGroup value={draft.contact.contactPreference} onValueChange={(value) => updateContact({ contactPreference: value as WizardContactData["contactPreference"] })} className="mt-4 grid gap-3 md:grid-cols-2">
+                      {CONTACT_PREFERENCE_OPTIONS.map((option) => (
+                        <label key={`contact-preference-${option}`} className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition hover:border-[#C49A22]">
+                          <RadioGroupItem value={option} className="mt-1 border-[#C49A22] text-[#C49A22]" />
+                          <span className="text-sm text-slate-700">{option}</span>
+                        </label>
+                      ))}
+                    </RadioGroup>
+                    {renderError("contactPreference")}
+                  </div>
+
+                  <label className="flex items-start gap-3 rounded-2xl border border-[#E7E7E7] bg-[#FBFBF8] p-4">
+                    <Checkbox checked={draft.contact.marketingConsent} onCheckedChange={(checked) => updateContact({ marketingConsent: Boolean(checked) })} className="mt-1 border-[#C49A22] data-[state=checked]:border-[#C49A22] data-[state=checked]:bg-[#C49A22]" />
+                    <span className="text-sm leading-6 text-slate-700">It&apos;s okay to send me useful tips, updates and offers from Acapolite. You can opt out at any time.</span>
+                  </label>
+                </div>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Button type="button" variant="outline" className="h-12 rounded-2xl border-[#D7D7D7] px-7" onClick={() => goToStep(3)}>
+                    Back
+                  </Button>
+                  <Button type="button" className="h-12 rounded-2xl bg-[#C49A22] px-7 text-white hover:bg-[#b48a1c]" onClick={continueToNextStep}>
+                    Continue
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </section>
+            ) : null}
+
+            {currentStep === 5 ? (
+              <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 5</p>
+                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">Review your request</h1>
+                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                  Please review your details below before submitting your request.
+                </p>
+
+                <div className="mt-8 grid gap-5 xl:grid-cols-2">
+                  <SummaryCard title="Who is this for?" onEdit={() => goToStep(1)}>
+                    <p className="font-semibold text-[#102B46]">{entityType ? getEntityLabel(entityType) : "Not selected"}</p>
+                    <p className="mt-2 text-slate-600">{[draft.who.city, draft.who.province].filter(Boolean).join(", ") || "Location not provided"}</p>
+                  </SummaryCard>
+
+                  <SummaryCard title="Services you need help with" onEdit={() => goToStep(2)}>
+                    {groupedSelectedServices.length > 0 ? (
+                      <div className="space-y-3">
+                        {groupedSelectedServices.map((group) => (
+                          <div key={group.key}>
+                            <p className="font-semibold text-[#102B46]">{group.title}</p>
+                            <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-600">
+                              {group.selectedServices.map((service) => (
+                                <li key={service.value}>{service.label}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-slate-600">No services selected.</p>
+                    )}
+                  </SummaryCard>
+
+                  <SummaryCard title="Request details" onEdit={() => goToStep(3)}>
+                    {detailRows.length > 0 ? (
+                      <div className="space-y-3">
+                        {detailRows.map((row) => (
+                          <div key={row.label} className="rounded-2xl bg-[#F8F9F7] px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{row.label}</p>
+                            <p className="mt-1 text-sm text-slate-700">{row.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-slate-600">No details provided.</p>
+                    )}
+                  </SummaryCard>
+
+                  <SummaryCard title="Your contact information" onEdit={() => goToStep(4)}>
+                    <div className="space-y-2 text-slate-700">
+                      <p><span className="font-semibold text-[#102B46]">Name:</span> {draft.contact.fullName}</p>
+                      <p><span className="font-semibold text-[#102B46]">Email:</span> {draft.contact.email}</p>
+                      <p><span className="font-semibold text-[#102B46]">Phone:</span> {draft.contact.phoneCountryCode} {draft.contact.phoneNumber}</p>
+                      <p><span className="font-semibold text-[#102B46]">Location:</span> {[draft.contact.city, draft.contact.province].filter(Boolean).join(", ")}</p>
+                      <p><span className="font-semibold text-[#102B46]">Contact preference:</span> {draft.contact.contactPreference || "Not selected"}</p>
+                    </div>
+                  </SummaryCard>
+                </div>
+
+                <div className="mt-8 rounded-[1.75rem] border border-[#E7E7E7] bg-[#F8F9F7] p-5">
+                  <h2 className="text-xl font-bold text-[#102B46]">You&apos;re almost done!</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    You can submit your request now as a guest or create a free account to track progress, upload documents and message professionals.
+                  </p>
+                </div>
+
+                <div className="mt-8 grid gap-5 xl:grid-cols-2">
+                  <div className="rounded-[2rem] border-2 border-[#C49A22] bg-[#FFFDF6] p-6 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1C8] text-[#C49A22]">
+                        <Star className="h-5 w-5" />
+                      </div>
+                      <span className="rounded-full bg-[#C49A22] px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-white">Recommended</span>
+                    </div>
+                    <h3 className="mt-5 text-2xl font-bold text-[#102B46]">Submit &amp; Create a Free Account</h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">Track your request, upload documents and message professionals.</p>
+                    <Button className="mt-6 h-12 w-full rounded-2xl bg-[#C49A22] text-white hover:bg-[#b48a1c]" onClick={() => handleSubmit("account")} disabled={isSubmitting}>
+                      {submittingMode === "account" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Submit &amp; Create Account
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="rounded-[2rem] border border-[#E7E7E7] bg-white p-6 shadow-sm">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F3F4F6] text-slate-600">
+                      <Send className="h-5 w-5" />
+                    </div>
+                    <h3 className="mt-5 text-2xl font-bold text-[#102B46]">Submit Without an Account</h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">We&apos;ll send professionals your details. Limited tracking features may apply.</p>
+                    <Button variant="outline" className="mt-6 h-12 w-full rounded-2xl border-[#D7D7D7]" onClick={() => handleSubmit("guest")} disabled={isSubmitting}>
+                      {submittingMode === "guest" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Submit Without Account
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <p className="mt-5 flex items-center gap-2 text-sm text-slate-500">
+                  <Lock className="h-4 w-4 text-[#1A4731]" />
+                  Your information is secure and will only be shared with verified professionals.
+                </p>
+
+                <div className="mt-8 flex">
+                  <Button type="button" variant="outline" className="h-12 rounded-2xl border-[#D7D7D7] px-7" onClick={() => goToStep(4)} disabled={isSubmitting}>
+                    Back
+                  </Button>
+                </div>
+              </section>
+            ) : null}
+          </div>
+
+          {currentStep >= 2 && currentStep <= 4 ? <TrustSidebar /> : null}
         </div>
       </div>
     </div>

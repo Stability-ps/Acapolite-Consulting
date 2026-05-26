@@ -15,8 +15,34 @@ function pluralize(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+export const CLIENT_TYPE_OPTIONS = [
+  { value: "individual", label: "Individual" },
+  { value: "company", label: "Company / Business" },
+  { value: "trust", label: "Trust" },
+  { value: "npo_organisation", label: "NPO / Organisation" },
+] as const;
+
+export type ClientTypeValue = (typeof CLIENT_TYPE_OPTIONS)[number]["value"];
+
+export function isOrganisationClientType(clientType?: string | null) {
+  return (
+    clientType === "company" ||
+    clientType === "trust" ||
+    clientType === "npo_organisation"
+  );
+}
+
 export function getClientTypeLabel(clientType?: string | null) {
-  return clientType === "company" ? "Company" : "Individual";
+  switch (clientType) {
+    case "company":
+      return "Company / Business";
+    case "trust":
+      return "Trust";
+    case "npo_organisation":
+      return "NPO / Organisation";
+    default:
+      return "Individual";
+  }
 }
 
 export function getClientIdentityLabel(client: ClientRiskSource) {
@@ -24,11 +50,27 @@ export function getClientIdentityLabel(client: ClientRiskSource) {
     return client.company_registration_number || "Not provided";
   }
 
+  if (client.client_type === "trust" || client.client_type === "npo_organisation") {
+    return client.company_registration_number || "Not provided";
+  }
+
   return client.id_number || "Not provided";
 }
 
 export function getClientIdentityFieldLabel(clientType?: string | null) {
-  return clientType === "company" ? "Company Registration Number" : "ID Number";
+  if (clientType === "company") {
+    return "Company Registration Number";
+  }
+
+  if (clientType === "trust") {
+    return "Trust Reference Number";
+  }
+
+  if (clientType === "npo_organisation") {
+    return "Organisation Reference Number";
+  }
+
+  return "ID Number";
 }
 
 export function getClientWarningSummary(client: ClientRiskSource, counts: ClientRiskCounts = {}) {

@@ -37,7 +37,7 @@ export function CTA() {
 
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button asChild size="lg" className="rounded-xl bg-gold px-8 py-6 text-base font-semibold text-gold-foreground shadow-elevated hover:bg-[#A88633]">
-              <Link to="/request-tax-assistance">Request Tax Assistance</Link>
+              <Link to="/request-tax-assistance?step=1">Request Tax Assistance</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="rounded-xl border-primary/30 bg-white/90 px-8 py-6 text-base font-semibold text-foreground hover:bg-white">
               <Link to="/register">

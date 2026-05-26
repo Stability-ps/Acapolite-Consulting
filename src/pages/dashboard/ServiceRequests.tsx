@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ServiceRequestIntakeDetails } from "@/components/dashboard/ServiceRequestIntakeDetails";
+import { getClientTypeLabel } from "@/lib/clientRisk";
 import { serviceCategoryOptions, serviceNeededOptions, formatServiceRequestLabel, getServiceRequestRiskClass, getServiceRequestStatusClass } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, getResponseStatusClass } from "@/lib/practitionerMarketplace";
 import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
@@ -652,7 +654,13 @@ export default function ClientServiceRequests() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Client Type</p>
-                  <p className="mt-1">{formatServiceRequestLabel(selectedRequest.client_type)}</p>
+                  <p className="mt-1">{getClientTypeLabel(selectedRequest.client_type)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Location</p>
+                  <p className="mt-1">
+                    {[selectedRequest.city, selectedRequest.province].filter(Boolean).join(", ") || "Not provided"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Contact Email</p>
@@ -738,6 +746,10 @@ export default function ClientServiceRequests() {
             <div className="rounded-2xl border border-border bg-card p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Request Summary</p>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground font-body">{selectedRequest.description}</p>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <ServiceRequestIntakeDetails intakePayload={selectedRequest.intake_payload} />
             </div>
 
             <div className="rounded-2xl border border-border bg-accent/20 p-4">

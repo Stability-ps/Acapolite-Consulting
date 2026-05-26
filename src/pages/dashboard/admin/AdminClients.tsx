@@ -13,7 +13,15 @@ import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog"
 import { DeletePlatformUserDialog } from "@/components/dashboard/DeletePlatformUserDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
-import { getClientIdentityFieldLabel, getClientIdentityLabel, getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
+import {
+  CLIENT_TYPE_OPTIONS,
+  getClientIdentityFieldLabel,
+  getClientIdentityLabel,
+  getClientTypeLabel,
+  getClientWarningSummary,
+  isOrganisationClientType,
+  type ClientTypeValue,
+} from "@/lib/clientRisk";
 
 const provinces = [
   "Gauteng",
@@ -79,7 +87,7 @@ type NewClientFormState = {
   password: string;
   fullName: string;
   phone: string;
-  clientType: "individual" | "company";
+  clientType: ClientTypeValue;
   companyName: string;
   companyRegistrationNumber: string;
   firstName: string;
@@ -466,7 +474,9 @@ export default function AdminClients() {
       password: "",
       fullName: client.profiles?.full_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || client.company_name || "",
       phone: client.profiles?.phone || "",
-      clientType: client.client_type === "company" ? "company" : "individual",
+      clientType: CLIENT_TYPE_OPTIONS.some((option) => option.value === client.client_type)
+        ? (client.client_type as ClientTypeValue)
+        : "individual",
       companyName: client.company_name || "",
       companyRegistrationNumber: client.company_registration_number || "",
       firstName: client.first_name || "",
@@ -604,10 +614,14 @@ export default function AdminClients() {
     const clientPayload = {
       profile_id: profile.id,
       client_type: formState.clientType,
-      company_registration_number: formState.clientType === "company" ? formState.companyRegistrationNumber.trim() || null : null,
+      company_registration_number: isOrganisationClientType(formState.clientType)
+        ? formState.companyRegistrationNumber.trim() || null
+        : null,
       first_name: firstName || null,
       last_name: lastName || null,
-      company_name: formState.clientType === "company" ? formState.companyName.trim() || null : null,
+      company_name: isOrganisationClientType(formState.clientType)
+        ? formState.companyName.trim() || null
+        : null,
       tax_number: formState.taxNumber.trim() || null,
       sars_reference_number: formState.sarsReferenceNumber.trim() || null,
       id_number: formState.clientType === "individual" ? formState.idNumber.trim() || null : null,
@@ -697,10 +711,14 @@ export default function AdminClients() {
       .from("clients")
       .update({
         client_type: formState.clientType,
-        company_registration_number: formState.clientType === "company" ? formState.companyRegistrationNumber.trim() || null : null,
+        company_registration_number: isOrganisationClientType(formState.clientType)
+          ? formState.companyRegistrationNumber.trim() || null
+          : null,
         first_name: firstName || null,
         last_name: lastName || null,
-        company_name: formState.clientType === "company" ? formState.companyName.trim() || null : null,
+        company_name: isOrganisationClientType(formState.clientType)
+          ? formState.companyName.trim() || null
+          : null,
         tax_number: formState.taxNumber.trim() || null,
         sars_reference_number: formState.sarsReferenceNumber.trim() || null,
         id_number: formState.clientType === "individual" ? formState.idNumber.trim() || null : null,
@@ -1001,8 +1019,9 @@ export default function AdminClients() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="individual">Individual</SelectItem>
-                  <SelectItem value="company">Company</SelectItem>
+                  {CLIENT_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1023,15 +1042,23 @@ export default function AdminClients() {
               <Input value={formState.lastName} onChange={(event) => updateForm("lastName", event.target.value)} placeholder="Last name" className="rounded-xl" />
             </div>
 
-            {formState.clientType === "company" ? (
+            {isOrganisationClientType(formState.clientType) ? (
               <>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Name</label>
-                  <Input value={formState.companyName} onChange={(event) => updateForm("companyName", event.target.value)} placeholder="Company name" className="rounded-xl" />
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+                    {formState.clientType === "trust"
+                      ? "Trust Name"
+                      : formState.clientType === "npo_organisation"
+                        ? "Organisation Name"
+                        : "Company Name"}
+                  </label>
+                  <Input value={formState.companyName} onChange={(event) => updateForm("companyName", event.target.value)} placeholder="Registered name" className="rounded-xl" />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Registration Number</label>
-                  <Input value={formState.companyRegistrationNumber} onChange={(event) => updateForm("companyRegistrationNumber", event.target.value)} placeholder="Registration number" className="rounded-xl" />
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+                    {getClientIdentityFieldLabel(formState.clientType)}
+                  </label>
+                  <Input value={formState.companyRegistrationNumber} onChange={(event) => updateForm("companyRegistrationNumber", event.target.value)} placeholder="Reference or registration number" className="rounded-xl" />
                 </div>
               </>
             ) : (
@@ -1508,8 +1535,9 @@ export default function AdminClients() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="individual">Individual</SelectItem>
-                    <SelectItem value="company">Company</SelectItem>
+                    {CLIENT_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1523,15 +1551,23 @@ export default function AdminClients() {
                 <Input value={formState.lastName} onChange={(event) => updateForm("lastName", event.target.value)} placeholder="Last name" className="rounded-xl" />
               </div>
 
-              {formState.clientType === "company" ? (
+              {isOrganisationClientType(formState.clientType) ? (
                 <>
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Name</label>
-                    <Input value={formState.companyName} onChange={(event) => updateForm("companyName", event.target.value)} placeholder="Company name" className="rounded-xl" />
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+                      {formState.clientType === "trust"
+                        ? "Trust Name"
+                        : formState.clientType === "npo_organisation"
+                          ? "Organisation Name"
+                          : "Company Name"}
+                    </label>
+                    <Input value={formState.companyName} onChange={(event) => updateForm("companyName", event.target.value)} placeholder="Registered name" className="rounded-xl" />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">Company Registration Number</label>
-                    <Input value={formState.companyRegistrationNumber} onChange={(event) => updateForm("companyRegistrationNumber", event.target.value)} placeholder="Registration number" className="rounded-xl" />
+                    <label className="mb-2 block text-sm font-semibold text-foreground font-body">
+                      {getClientIdentityFieldLabel(formState.clientType)}
+                    </label>
+                    <Input value={formState.companyRegistrationNumber} onChange={(event) => updateForm("companyRegistrationNumber", event.target.value)} placeholder="Reference or registration number" className="rounded-xl" />
                   </div>
                 </>
               ) : (

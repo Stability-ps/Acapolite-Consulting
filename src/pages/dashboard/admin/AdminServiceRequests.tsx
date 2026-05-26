@@ -49,6 +49,9 @@ import { Textarea } from "@/components/ui/textarea";
 import type { Tables, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router-dom";
+import { ServiceRequestIntakeDetails } from "@/components/dashboard/ServiceRequestIntakeDetails";
+import { getClientIdentityFieldLabel } from "@/lib/clientRisk";
+import { getIntakeContactPreference } from "@/lib/serviceRequestIntake";
 import PractitionerLeads from "./PractitionerLeads";
 import {
   formatServiceRequestLabel,
@@ -2170,6 +2173,8 @@ export default function AdminServiceRequests() {
               <SelectItem value="all">All client types</SelectItem>
               <SelectItem value="individual">Individual</SelectItem>
               <SelectItem value="company">Company</SelectItem>
+              <SelectItem value="trust">Trust</SelectItem>
+              <SelectItem value="npo_organisation">NPO / Organisation</SelectItem>
             </SelectContent>
           </Select>
 
@@ -2481,10 +2486,19 @@ export default function AdminServiceRequests() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-border p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Location</p>
+                <p className="font-body text-foreground">
+                  {[selectedRequest.city, selectedRequest.province].filter(Boolean).join(", ") || "Not provided"}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground font-body">
+                  Contact preference: {selectedRequest.contact_preference || getIntakeContactPreference(selectedRequest.intake_payload) || "Not provided"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">
                   {selectedRequest.client_type === "individual"
                     ? formatServiceRequestLabel(selectedRequest.identity_document_type || "id_number")
-                    : "Company Registration Number"}
+                    : getClientIdentityFieldLabel(selectedRequest.client_type)}
                 </p>
                 <p className="font-body text-foreground">
                   {selectedRequest.client_type === "individual"
@@ -2508,6 +2522,10 @@ export default function AdminServiceRequests() {
               <div className="rounded-2xl border border-border p-4">
                 <p className="whitespace-pre-wrap font-body text-foreground">{selectedRequest.description || "No description was provided with this request."}</p>
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-border p-4">
+              <ServiceRequestIntakeDetails intakePayload={selectedRequest.intake_payload} />
             </div>
 
             <div className="rounded-2xl border border-border p-4">

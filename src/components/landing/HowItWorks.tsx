@@ -1,11 +1,25 @@
 import { motion } from "framer-motion";
-import { UserPlus, ClipboardList, Upload, Handshake } from "lucide-react";
+import { ClipboardList, MessagesSquare, SearchCheck } from "lucide-react";
 
 const steps = [
-  { title: "Create Account", desc: "Create your secure client profile in minutes.", icon: UserPlus },
-  { title: "Submit Request", desc: "Tell us what you need help with.", icon: ClipboardList },
-  { title: "Upload Documents", desc: "Safely upload your supporting documents.", icon: Upload },
-  { title: "Get Assistance", desc: "Connect with qualified professionals and get the help you need.", icon: Handshake },
+  {
+    title: "Submit Your Request",
+    description:
+      "Tell us what you need help with in a few guided steps.",
+    icon: ClipboardList,
+  },
+  {
+    title: "We Match Your Request",
+    description:
+      "Qualified practitioners review your request based on the services you need.",
+    icon: SearchCheck,
+  },
+  {
+    title: "Connect With Professionals",
+    description:
+      "Receive support, upload documents and move your request forward securely.",
+    icon: MessagesSquare,
+  },
 ];
 
 export function HowItWorks() {
@@ -21,34 +35,32 @@ export function HowItWorks() {
           <span className="mb-2 block text-sm font-semibold uppercase tracking-[0.32em] text-[#B8962E] font-body">
             HOW ACAPOLITE WORKS
           </span>
-          <h2 className="font-display text-3xl font-bold text-[#022D73] md:text-5xl">
-            Simple Steps to Get the Help You Need
+          <h2 className="font-display text-3xl font-bold text-[#102B46] md:text-5xl">
+            Simple Steps to Get the Right Support
           </h2>
         </motion.div>
 
-        <div className="relative">
-          <div className="absolute inset-x-0 top-1/2 hidden md:block">
-            <div className="mx-auto h-px w-full max-w-[calc(100%-4rem)] border-t border-dashed border-[#E7E7E7]" />
-          </div>
-
-          <div className="grid gap-8 md:grid-cols-4">
-            {steps.map((step, index) => (
-              <motion.div
-                key={step.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.12 }}
-                className="relative z-10 flex flex-col items-center gap-5 rounded-[2rem] border border-[#E7E7E7] bg-white p-8 text-center shadow-sm"
-              >
-                <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#E7E7E7] bg-[#FBF0C1] text-[#B8962E]">
-                  <step.icon className="h-6 w-6" />
-                </div>
-                <h3 className="text-xl font-semibold text-[#022D73]">{step.title}</h3>
-                <p className="text-sm leading-relaxed text-[#6E7480]">{step.desc}</p>
-              </motion.div>
-            ))}
-          </div>
+        <div className="grid gap-8 md:grid-cols-3">
+          {steps.map((step, index) => (
+            <motion.div
+              key={step.title}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1 }}
+              className="rounded-[2rem] border border-[#E7E7E7] bg-white p-8 text-center shadow-sm"
+            >
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#E7E7E7] bg-[#FBF0C1] text-[#B8962E]">
+                <step.icon className="h-6 w-6" />
+              </div>
+              <h3 className="mt-5 text-xl font-semibold text-[#102B46]">
+                {step.title}
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-[#5F6C7B]">
+                {step.description}
+              </p>
+            </motion.div>
+          ))}
         </div>
       </div>
     </section>

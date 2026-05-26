@@ -72,7 +72,7 @@ export function LandingHeader() {
                   ) : (
                     <>
                       <Button asChild className="w-full rounded-xl bg-white text-slate-950">
-                        <Link to="/request-tax-assistance" onClick={closeMenu}>Request Tax Assistance</Link>
+                        <Link to="/request-tax-assistance?step=1" onClick={closeMenu}>Request Tax Assistance</Link>
                       </Button>
                       <Button asChild variant="outline" className="w-full rounded-xl border-white/30 bg-white/90 !text-slate-950 hover:bg-white">
                         <Link to="/register" onClick={closeMenu}>Create Account (Client)</Link>
@@ -148,7 +148,7 @@ export function LandingHeader() {
 
           <div className="relative z-10 hidden items-center gap-3 xl:flex">
             <Button asChild className="rounded-full bg-[#B8962E] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#A88633]">
-              <Link to="/request-tax-assistance">Request Assistance</Link>
+              <Link to="/request-tax-assistance?step=1">Request Assistance</Link>
             </Button>
             <Button asChild className="rounded-full border border-[#B8962E] bg-white px-5 py-3 text-sm font-semibold text-[#022D73] transition hover:bg-[#F4F4F2]">
               <Link to="/register?role=consultant">Join as a Professional</Link>
