@@ -1,7 +1,6 @@
-import { motion } from "framer-motion";
 import { ChevronDown, Menu, UserCircle2 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,156 +11,169 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
+import { cn } from "@/lib/utils";
 
-const navItems: { label: string; href: string }[] = [
-  { label: "Practitioners", href: "/practitioners" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Services", href: "#services" },
-  { label: "Contact", href: "/contact-us" },
+const primaryNavItems = [
+  { label: "Home", href: "/", isHash: false },
+  { label: "Services", href: "#services", isHash: true },
+  { label: "How It Works", href: "#how-it-works", isHash: true },
+  { label: "Practitioners", href: "/practitioners", isHash: false },
+  { label: "Contact", href: "/contact-us", isHash: false },
+] as const;
+
+const resourceLinks = [
+  { label: "Help Center", href: "/help-center" },
+  { label: "FAQ", href: "/faq" },
+  { label: "How Acapolite Works", href: "/how-acapolite-works" },
+  { label: "Trust & Safety", href: "/trust-safety" },
 ];
+
+function NavLink({
+  href,
+  label,
+  isActive,
+  onClick,
+}: {
+  href: string;
+  label: string;
+  isActive?: boolean;
+  onClick?: () => void;
+}) {
+  const className = cn(
+    "relative px-3 py-2 text-sm font-medium text-[#1E2A3C] transition-colors hover:text-[#022D73]",
+    isActive && "text-[#022D73] after:absolute after:bottom-0 after:left-3 after:right-3 after:h-0.5 after:rounded-full after:bg-[#C49A22]",
+  );
+
+  if (href.startsWith("#")) {
+    return (
+      <a href={href} onClick={onClick} className={className}>
+        {label}
+      </a>
+    );
+  }
+
+  return (
+    <Link to={href} onClick={onClick} className={className}>
+      {label}
+    </Link>
+  );
+}
 
 export function LandingHeader() {
   const { user, dashboardPath } = useAuth();
+  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
+  const isHome = location.pathname === "/";
 
   return (
-    <motion.header
-      initial={{ opacity: 0, y: -24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
-      className="fixed inset-x-0 top-0 z-40"
-    >
-      <div className="container mx-auto px-6 pt-3 md:pt-4">
-        <div className="relative flex w-full flex-wrap items-center justify-between gap-3 rounded-[1.75rem] border border-[#E7E7E7] bg-white/95 px-4 py-3 shadow-sm backdrop-blur-xl md:flex-nowrap md:px-6 md:py-4">
-          <div className="flex items-center gap-3">
-            <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-11 gap-2 rounded-full border border-[#E7E7E7] bg-white px-4 text-[#022D73] shadow-sm hover:bg-[#F4F4F2] lg:hidden"
-                  aria-label="Open menu"
-                >
-                  <Menu className="h-5 w-5" />
-                  <span className="text-sm font-semibold tracking-wide">Menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-80 bg-slate-950 text-white">
-                <div className="flex items-center gap-3 pb-6">
-                  <AcapoliteLogo className="h-10" />
-                  <span className="text-sm font-semibold tracking-[0.2em] text-white/70">MENU</span>
-                </div>
-                <div className="space-y-2">
-                  {navItems.map((item) => (
-                    <a
-                      key={item.href}
-                      href={item.href}
-                      onClick={closeMenu}
-                      className="block rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10"
-                    >
-                      {item.label}
-                    </a>
-                  ))}
-                </div>
-                <div className="mt-6 grid gap-3">
-                  {user ? (
-                    <Button asChild className="w-full rounded-xl bg-white text-slate-950">
-                      <Link to={dashboardPath} onClick={closeMenu}>Dashboard</Link>
-                    </Button>
-                  ) : (
-                    <>
-                      <Button asChild className="w-full rounded-xl bg-white text-slate-950">
-                        <Link to="/request-tax-assistance?step=1" onClick={closeMenu}>Request Tax Assistance</Link>
-                      </Button>
-                      <Button asChild variant="outline" className="w-full rounded-xl border-white/30 bg-white/90 !text-slate-950 hover:bg-white">
-                        <Link to="/register" onClick={closeMenu}>Create Account (Client)</Link>
-                      </Button>
-                      <Button asChild variant="outline" className="w-full rounded-xl border-white/30 bg-white/90 !text-slate-950 hover:bg-white">
-                        <Link to="/register?role=consultant" onClick={closeMenu}>Join as Practitioner</Link>
-                      </Button>
-                      <Button asChild variant="ghost" className="w-full rounded-xl border border-white/15 text-white">
-                        <Link to="/login" onClick={closeMenu}>Log In</Link>
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </SheetContent>
-            </Sheet>
-
-            <a href="#top" className="flex min-w-0 items-center gap-3">
-              <AcapoliteLogo className="relative z-10 h-10 transition-transform duration-300 hover:scale-[1.02] md:h-12" />
-              <span className="hidden text-sm font-semibold uppercase tracking-[0.34em] text-[#022D73] xl:inline">
-                ACAPOLITE CONSULTING
-              </span>
-            </a>
-          </div>
-
-          {navItems.length ? (
-            <nav className="relative z-10 hidden flex-wrap items-center justify-center gap-1 lg:flex lg:px-2">
-              {navItems.map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className="rounded-full px-3 py-1.5 text-xs font-medium text-[#1E2A3C] transition-colors duration-200 hover:bg-[#F4F4F2] hover:text-[#022D73] lg:px-3 lg:py-2 xl:px-4 xl:text-sm"
-                >
-                  {item.label}
-                </a>
-              ))}
-            </nav>
-          ) : null}
-
-          <div className="relative z-10 flex items-center gap-2 xl:hidden">
-            {user ? (
-              <Button asChild size="sm" className="rounded-full bg-[#022D73] text-white hover:bg-[#05265c]">
-                <Link to={dashboardPath}>Dashboard</Link>
+    <header className="sticky top-0 z-50 border-b border-[#E7E7E7] bg-white">
+      <div className="container mx-auto flex items-center justify-between gap-4 px-4 py-3 md:px-6 md:py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+            <SheetTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 lg:hidden"
+                aria-label="Open menu"
+              >
+                <Menu className="h-5 w-5 text-[#022D73]" />
               </Button>
-            ) : (
-              <>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="ghost"
-                  className="rounded-full border border-[#D8E5EE] bg-white text-[#022D73] hover:bg-[#F4F4F2] hover:text-[#022D73]"
-                >
-                  <Link to="/login">Login</Link>
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" className="rounded-full bg-[#022D73] text-white hover:bg-[#05265c]">
-                      Join
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="min-w-[220px]">
-                    <DropdownMenuItem asChild>
-                      <Link to="/register">Create Account (Client)</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/register?role=consultant">Join as Practitioner</Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
-          </div>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-80">
+              <div className="flex items-center gap-3 pb-6">
+                <AcapoliteLogo className="h-10" />
+              </div>
+              <div className="space-y-1">
+                {primaryNavItems.map((item) => (
+                  <NavLink
+                    key={item.label}
+                    href={item.href}
+                    label={item.label}
+                    isActive={item.label === "Home" && isHome}
+                    onClick={closeMenu}
+                  />
+                ))}
+                {resourceLinks.map((item) => (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    onClick={closeMenu}
+                    className="block rounded-lg px-3 py-2 text-sm font-medium text-[#1E2A3C] hover:bg-[#F4F4F2]"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </SheetContent>
+          </Sheet>
 
-          <div className="relative z-10 hidden items-center gap-3 xl:flex">
-            <Button asChild className="rounded-full bg-[#B8962E] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#A88633]">
-              <Link to="/request-tax-assistance?step=1">Request Assistance</Link>
-            </Button>
-            <Button asChild className="rounded-full border border-[#B8962E] bg-white px-5 py-3 text-sm font-semibold text-[#022D73] transition hover:bg-[#F4F4F2]">
-              <Link to="/register?role=consultant">Join as a Professional</Link>
-            </Button>
-            <Button asChild variant="ghost" className="rounded-full border border-[#E7E7E7] bg-white p-3 text-[#022D73] transition hover:bg-[#F4F4F2]">
-              <Link to="/login">
-                <UserCircle2 className="h-5 w-5" />
-              </Link>
-            </Button>
-          </div>
+          <Link to="/" className="flex min-w-0 items-center gap-3">
+            <AcapoliteLogo className="h-10 w-auto md:h-11" />
+            <div className="hidden leading-none sm:block">
+              <p className="text-sm font-bold tracking-[0.12em] text-[#102B46]">ACAPOLITE</p>
+              <p className="mt-0.5 text-[10px] font-semibold tracking-[0.28em] text-[#C49A22]">CONSULTING</p>
+            </div>
+          </Link>
         </div>
 
+        <nav className="hidden items-center gap-1 lg:flex">
+          {primaryNavItems.map((item) => (
+            <NavLink
+              key={item.label}
+              href={item.href}
+              label={item.label}
+              isActive={item.label === "Home" && isHome}
+            />
+          ))}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-[#1E2A3C] transition-colors hover:text-[#022D73]">
+              Resources
+              <ChevronDown className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="min-w-[200px]">
+              {resourceLinks.map((item) => (
+                <DropdownMenuItem key={item.href} asChild>
+                  <Link to={item.href}>{item.label}</Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </nav>
+
+        <div className="flex items-center gap-2 md:gap-3">
+          {user ? (
+            <Button asChild size="sm" className="rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]">
+              <Link to={dashboardPath}>Dashboard</Link>
+            </Button>
+          ) : (
+            <>
+              <Button
+                asChild
+                size="sm"
+                className="hidden rounded-full bg-[#C49A22] px-4 text-white hover:bg-[#b48a1c] sm:inline-flex"
+              >
+                <Link to="/request-tax-assistance?step=1">Request Assistance</Link>
+              </Button>
+              <Button
+                asChild
+                size="sm"
+                variant="outline"
+                className="hidden rounded-full border-[#D7D7D7] bg-white px-4 text-[#102B46] hover:bg-[#F4F4F2] md:inline-flex"
+              >
+                <Link to="/register?role=consultant">Join as a Professional</Link>
+              </Button>
+              <Button asChild size="icon" variant="outline" className="rounded-full border-[#E7E7E7]">
+                <Link to="/login" aria-label="Account login">
+                  <UserCircle2 className="h-5 w-5 text-[#102B46]" />
+                </Link>
+              </Button>
+            </>
+          )}
+        </div>
       </div>
-    </motion.header>
+    </header>
   );
 }
