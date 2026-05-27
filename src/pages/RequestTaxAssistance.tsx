@@ -17,7 +17,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { SummaryCard } from "@/components/request-wizard/SummaryCard";
@@ -486,16 +486,25 @@ export default function RequestTaxAssistance() {
     navigate(portalNavigationState?.fromPath || dashboardPath, { replace: true });
   };
 
-  const goHome = () => {
+  const hardRedirect = (path: string) => {
     clearWizardDraft();
-    // Hard redirect to avoid any stale SPA route state.
-    window.location.replace("/");
+    window.location.replace(path);
+  };
+
+  const goHome = () => {
+    hardRedirect("/");
   };
 
   const goLogin = () => {
-    clearWizardDraft();
-    // Hard redirect to avoid any stale SPA route state.
-    window.location.replace("/login");
+    hardRedirect("/login");
+  };
+
+  const goRegister = () => {
+    hardRedirect(`/register?${registerQuery}`);
+  };
+
+  const goDashboard = () => {
+    hardRedirect(dashboardPath);
   };
 
   const renderBackControl = (homeLabel = "Back to home") => {
@@ -912,7 +921,7 @@ export default function RequestTaxAssistance() {
               type="button"
               variant="ghost"
               className="mb-6 rounded-full px-0 text-slate-600"
-              onClick={() => navigate(dashboardPath, { replace: true })}
+              onClick={goDashboard}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to dashboard
@@ -949,8 +958,12 @@ export default function RequestTaxAssistance() {
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                       Create your account to track progress, upload documents and message professionals securely.
                     </p>
-                    <Button asChild className="mt-5 rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]">
-                      <Link to={`/register?${registerQuery}`}>Create Free Account</Link>
+                    <Button
+                      type="button"
+                      className="mt-5 rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]"
+                      onClick={goRegister}
+                    >
+                      Create Free Account
                     </Button>
                   </div>
                 </div>
@@ -982,7 +995,7 @@ export default function RequestTaxAssistance() {
                     <Button
                       type="button"
                       className="rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]"
-                      onClick={() => navigate(dashboardPath, { replace: true })}
+                      onClick={goDashboard}
                     >
                       Go to Dashboard
                     </Button>
