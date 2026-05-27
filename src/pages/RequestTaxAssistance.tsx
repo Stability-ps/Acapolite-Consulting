@@ -5,6 +5,7 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  Check,
   CheckCircle2,
   ChevronDown,
   FileText,
@@ -760,14 +761,10 @@ export default function RequestTaxAssistance() {
         normalizedMessage.includes("already exists") ||
         normalizedMessage.includes("user exists")
       ) {
-        const resetResult = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${getAppBaseUrl()}/reset-password`,
-        });
-
         return {
           linkedProfileId: null,
           requiresLogin: true,
-          emailSent: !resetResult.error,
+          emailSent: false,
           existingAccount: true,
         };
       }
@@ -1040,13 +1037,19 @@ export default function RequestTaxAssistance() {
                         key={option.value}
                         type="button"
                         onClick={() => updateWho({ entityType: option.value })}
-                        className={`rounded-[1.75rem] border p-5 text-left transition ${
+                        className={`relative rounded-[1.75rem] border p-5 text-left transition ${
                           isActive
                             ? "border-[#C49A22] bg-[#FFF8E4] shadow-sm"
                             : "border-slate-200 bg-white hover:border-[#C49A22]/50"
                         }`}
                       >
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1C8] text-[#C49A22]">
+                        {isActive ? (
+                          <span className="absolute right-4 top-4 flex h-5 w-5 items-center justify-center rounded-full bg-[#C49A22] text-white">
+                            <Check className="h-3 w-3" strokeWidth={3} />
+                          </span>
+                        ) : null}
+
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#E7D6A6] bg-[#FFF1C8] text-[#C49A22]">
                           <Icon className="h-5 w-5" />
                         </div>
                         <p className="mt-4 text-base font-bold text-[#102B46] sm:text-lg">{option.label}</p>

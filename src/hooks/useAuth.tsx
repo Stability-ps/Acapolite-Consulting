@@ -136,6 +136,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const email = profile.email ?? user.email ?? "";
     const fullName = profile.full_name ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? "";
     const provider = user.app_metadata?.provider ?? "email";
+    const notificationMarker = `client-signup-emails:${profile.id}`;
+
+    if (provider === "email" || !user.email_confirmed_at) {
+      return;
+    }
+
+    if (typeof window !== "undefined" && window.sessionStorage.getItem(notificationMarker)) {
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(notificationMarker, "sent");
+    }
 
     void Promise.allSettled([
       supabase.functions.invoke("send-portal-email", {

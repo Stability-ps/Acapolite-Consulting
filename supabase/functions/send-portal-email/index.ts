@@ -289,6 +289,68 @@ function normalizeEmail(value?: string | null) {
   return trimString(value).toLowerCase();
 }
 
+function getNotificationKey(log: NotificationLogEntry) {
+  return typeof log.metadata?.notification_key === "string"
+    ? log.metadata.notification_key
+    : "";
+}
+
+function isUniqueViolation(error: unknown) {
+  return typeof error === "object"
+    && error !== null
+    && "code" in error
+    && error.code === "23505";
+}
+
+async function hasExistingNotificationLog(
+  adminClient: ReturnType<typeof createClient>,
+  log: NotificationLogEntry,
+) {
+  const notificationKey = getNotificationKey(log);
+
+  if (notificationKey) {
+    let query = adminClient
+      .from("email_notification_logs")
+      .select("id")
+      .eq("notification_type", log.notificationType)
+      .eq("recipient_email", log.recipientEmail)
+      .contains("metadata", { notification_key: notificationKey });
+
+    if (log.profileId) {
+      query = query.eq("profile_id", log.profileId);
+    }
+
+    const { data: existingLog } = await query.maybeSingle();
+    return Boolean(existingLog);
+  }
+
+  if (!log.profileId) {
+    return false;
+  }
+
+  const { data: existingLog } = await adminClient
+    .from("email_notification_logs")
+    .select("id")
+    .eq("notification_type", log.notificationType)
+    .eq("profile_id", log.profileId)
+    .maybeSingle();
+
+  return Boolean(existingLog);
+}
+
+async function insertNotificationLog(
+  adminClient: ReturnType<typeof createClient>,
+  log: NotificationLogEntry,
+) {
+  return await adminClient.from("email_notification_logs").insert({
+    notification_type: log.notificationType,
+    recipient_email: log.recipientEmail,
+    profile_id: log.profileId ?? null,
+    contact_email: log.contactEmail ?? null,
+    metadata: log.metadata ?? null,
+  });
+}
+
 async function isVerifiedPractitionerEmailRecipient(
   adminClient: ReturnType<typeof createClient>,
   practitionerProfileId?: string | null,
@@ -3339,26 +3401,25 @@ Deno.serve(async (request) => {
           accountsEmail: DEFAULT_ACCOUNTS_EMAIL,
         });
 
-        const notificationKey = typeof emailContent.log.metadata?.notification_key === "string"
-          ? emailContent.log.metadata.notification_key
-          : "";
-
-        if (emailContent.log.profileId && notificationKey) {
-          const { data: existingLog } = await adminClient
-            .from("email_notification_logs")
-            .select("id")
-            .eq("notification_type", emailContent.log.notificationType)
-            .eq("profile_id", emailContent.log.profileId)
-            .contains("metadata", { notification_key: notificationKey })
-            .maybeSingle();
-
-          if (existingLog) {
-            skipped += 1;
-            continue;
-          }
+        if (await hasExistingNotificationLog(adminClient, emailContent.log)) {
+          skipped += 1;
+          continue;
         }
 
         try {
+          if (emailContent.log.notificationType === "lead_confirmation_required") {
+            const { error: reserveError } = await insertNotificationLog(adminClient, emailContent.log);
+
+            if (reserveError) {
+              if (isUniqueViolation(reserveError)) {
+                skipped += 1;
+                continue;
+              }
+
+              throw reserveError;
+            }
+          }
+
           await sendMailtrapEmail({
             token: mailtrapApiToken,
             fromEmail,
@@ -3366,16 +3427,35 @@ Deno.serve(async (request) => {
             message: emailContent.mail,
           });
 
-          await adminClient.from("email_notification_logs").insert({
-            notification_type: emailContent.log.notificationType,
-            recipient_email: emailContent.log.recipientEmail,
-            profile_id: emailContent.log.profileId ?? null,
-            contact_email: emailContent.log.contactEmail ?? null,
-            metadata: emailContent.log.metadata ?? null,
-          });
+          if (emailContent.log.notificationType !== "lead_confirmation_required") {
+            const { error: insertError } = await insertNotificationLog(adminClient, emailContent.log);
+
+            if (insertError && !isUniqueViolation(insertError)) {
+              throw insertError;
+            }
+          }
 
           sent += 1;
         } catch (error) {
+          if (emailContent.log.notificationType === "lead_confirmation_required") {
+            const notificationKey = getNotificationKey(emailContent.log);
+            let deleteQuery = adminClient
+              .from("email_notification_logs")
+              .delete()
+              .eq("notification_type", emailContent.log.notificationType)
+              .eq("recipient_email", emailContent.log.recipientEmail);
+
+            if (emailContent.log.profileId) {
+              deleteQuery = deleteQuery.eq("profile_id", emailContent.log.profileId);
+            }
+
+            if (notificationKey) {
+              deleteQuery = deleteQuery.contains("metadata", { notification_key: notificationKey });
+            }
+
+            await deleteQuery;
+          }
+
           failed += 1;
           console.error("Practitioner lead email failed.", error);
         }
@@ -3424,49 +3504,59 @@ Deno.serve(async (request) => {
       }
     }
 
-    const notificationKey = typeof emailContent.log.metadata?.notification_key === "string"
-      ? emailContent.log.metadata.notification_key
-      : "";
+    if (await hasExistingNotificationLog(adminClient, emailContent.log)) {
+      return jsonResponse(request, { success: true, skipped: true }, 200);
+    }
 
-    if (emailContent.log.profileId && notificationKey) {
-      const { data: existingLog } = await adminClient
-        .from("email_notification_logs")
-        .select("id")
-        .eq("notification_type", emailContent.log.notificationType)
-        .eq("profile_id", emailContent.log.profileId)
-        .contains("metadata", { notification_key: notificationKey })
-        .maybeSingle();
+    if (emailContent.log.notificationType === "lead_confirmation_required") {
+      const { error: reserveError } = await insertNotificationLog(adminClient, emailContent.log);
 
-      if (existingLog) {
-        return jsonResponse(request, { success: true, skipped: true }, 200);
-      }
-    } else if (emailContent.log.profileId) {
-      const { data: existingLog } = await adminClient
-        .from("email_notification_logs")
-        .select("id")
-        .eq("notification_type", emailContent.log.notificationType)
-        .eq("profile_id", emailContent.log.profileId)
-        .maybeSingle();
+      if (reserveError) {
+        if (isUniqueViolation(reserveError)) {
+          return jsonResponse(request, { success: true, skipped: true }, 200);
+        }
 
-      if (existingLog) {
-        return jsonResponse(request, { success: true, skipped: true }, 200);
+        throw reserveError;
       }
     }
 
-    await sendMailtrapEmail({
-      token: mailtrapApiToken,
-      fromEmail,
-      fromName,
-      message: emailContent.mail,
-    });
+    try {
+      await sendMailtrapEmail({
+        token: mailtrapApiToken,
+        fromEmail,
+        fromName,
+        message: emailContent.mail,
+      });
 
-    await adminClient.from("email_notification_logs").insert({
-      notification_type: emailContent.log.notificationType,
-      recipient_email: emailContent.log.recipientEmail,
-      profile_id: emailContent.log.profileId ?? null,
-      contact_email: emailContent.log.contactEmail ?? null,
-      metadata: emailContent.log.metadata ?? null,
-    });
+      if (emailContent.log.notificationType !== "lead_confirmation_required") {
+        const { error: insertError } = await insertNotificationLog(adminClient, emailContent.log);
+
+        if (insertError && !isUniqueViolation(insertError)) {
+          throw insertError;
+        }
+      }
+    } catch (error) {
+      if (emailContent.log.notificationType === "lead_confirmation_required") {
+        const notificationKey = getNotificationKey(emailContent.log);
+        let deleteQuery = adminClient
+          .from("email_notification_logs")
+          .delete()
+          .eq("notification_type", emailContent.log.notificationType)
+          .eq("recipient_email", emailContent.log.recipientEmail);
+
+        if (emailContent.log.profileId) {
+          deleteQuery = deleteQuery.eq("profile_id", emailContent.log.profileId);
+        }
+
+        if (notificationKey) {
+          deleteQuery = deleteQuery.contains("metadata", { notification_key: notificationKey });
+        }
+
+        await deleteQuery;
+      }
+
+      throw error;
+    }
 
     if (emailContent.log.profileId && webPushVapidConfig) {
       const webPushContent = buildWebPushContent({ payload, portalUrl });
