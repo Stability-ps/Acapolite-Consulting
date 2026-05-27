@@ -486,6 +486,12 @@ export default function RequestTaxAssistance() {
     navigate(portalNavigationState?.fromPath || dashboardPath, { replace: true });
   };
 
+  const goHome = () => {
+    clearWizardDraft();
+    // Hard redirect to avoid any stale SPA route state.
+    window.location.replace("/");
+  };
+
   const renderBackControl = (homeLabel = "Back to home") => {
     if (portalNavigationState?.fromPortal && user) {
       return (
@@ -520,10 +526,7 @@ export default function RequestTaxAssistance() {
         type="button"
         variant="ghost"
         className="rounded-full px-0 text-slate-600"
-        onClick={() => {
-          clearWizardDraft();
-          navigate("/", { replace: true });
-        }}
+        onClick={goHome}
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
         {homeLabel}
