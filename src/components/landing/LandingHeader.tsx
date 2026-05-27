@@ -82,30 +82,62 @@ export function LandingHeader() {
                 <Menu className="h-5 w-5 text-[#022D73]" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-80">
-              <div className="flex items-center gap-3 pb-6">
+            <SheetContent side="left" className="w-80 px-0">
+              <div className="flex items-center gap-3 border-b border-[#E7E7E7] px-6 pb-5 pt-2">
                 <AcapoliteLogo className="h-10" />
               </div>
-              <div className="space-y-1">
-                {primaryNavItems.map((item) => (
-                  <NavLink
-                    key={item.label}
-                    href={item.href}
-                    label={item.label}
-                    isActive={item.label === "Home" && isHome}
-                    onClick={closeMenu}
-                  />
-                ))}
-                {resourceLinks.map((item) => (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    onClick={closeMenu}
-                    className="block rounded-lg px-3 py-2 text-sm font-medium text-[#1E2A3C] hover:bg-[#F4F4F2]"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
+              <div className="flex flex-col gap-6 px-4 py-6">
+                <div className="space-y-2">
+                  <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#C49A22]">
+                    Navigation
+                  </p>
+                  <div className="space-y-1">
+                    {primaryNavItems.map((item) => (
+                      <Link
+                        key={item.label}
+                        to={item.isHash ? `/${item.href}` : item.href}
+                        onClick={closeMenu}
+                        className={cn(
+                          "flex w-full items-center rounded-xl px-4 py-3 text-sm font-medium transition",
+                          item.label === "Home" && isHome
+                            ? "bg-[#FFF8E4] text-[#022D73]"
+                            : "text-[#1E2A3C] hover:bg-[#F4F4F2]",
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#C49A22]">
+                    Resources
+                  </p>
+                  <div className="space-y-1">
+                    {resourceLinks.map((item) => (
+                      <Link
+                        key={item.href}
+                        to={item.href}
+                        onClick={closeMenu}
+                        className="flex w-full items-center rounded-xl px-4 py-3 text-sm font-medium text-[#1E2A3C] transition hover:bg-[#F4F4F2]"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                {!user ? (
+                  <div className="space-y-3 border-t border-[#E7E7E7] pt-6">
+                    <Button asChild className="h-11 w-full rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]">
+                      <Link to="/request-tax-assistance?step=1" onClick={closeMenu}>Request Assistance</Link>
+                    </Button>
+                    <Button asChild variant="outline" className="h-11 w-full rounded-full border-[#D7D7D7] bg-white text-[#102B46] hover:bg-[#F4F4F2]">
+                      <Link to="/register?role=consultant" onClick={closeMenu}>Join as a Professional</Link>
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </SheetContent>
           </Sheet>
