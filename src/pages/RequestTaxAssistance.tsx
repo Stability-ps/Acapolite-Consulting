@@ -53,7 +53,6 @@ import {
   getGroupedSelectedServices,
   clearWizardDraft,
   getInitialWizardDraft,
-  getServiceCredits,
   getPrimaryCategoryForSelection,
   getPrimaryServiceForSelection,
   getStepFromSearchParam,
@@ -434,10 +433,8 @@ export default function RequestTaxAssistance() {
 
   useEffect(() => {
     setDraft((current) => {
-      const nextProvince =
-        current.contact.province ||
-        (current.who.province ? current.who.province : "");
-      const nextCity = current.contact.city || current.who.city;
+      const nextProvince = current.who.province;
+      const nextCity = current.who.city;
 
       if (
         nextProvince === current.contact.province &&
@@ -548,6 +545,22 @@ export default function RequestTaxAssistance() {
     setDraft((current) => ({
       ...current,
       contact: { ...current.contact, ...patch },
+    }));
+  };
+
+  const updateLocation = (patch: Pick<WizardContactData, "province" | "city">) => {
+    setDraft((current) => ({
+      ...current,
+      who: {
+        ...current.who,
+        province: patch.province,
+        city: patch.city,
+      },
+      contact: {
+        ...current.contact,
+        province: patch.province,
+        city: patch.city,
+      },
     }));
   };
 
@@ -1114,12 +1127,7 @@ export default function RequestTaxAssistance() {
                                         className="mt-1 border-[#C49A22] data-[state=checked]:border-[#C49A22] data-[state=checked]:bg-[#C49A22]"
                                       />
                                       <div className="flex-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <span className="text-sm leading-6 text-slate-700">{service.label}</span>
-                                          <span className="rounded-full bg-[#FFF6DB] px-2.5 py-1 text-xs font-semibold text-[#A27100]">
-                                            {service.credits} Credits
-                                          </span>
-                                        </div>
+                                        <span className="text-sm leading-6 text-slate-700">{service.label}</span>
                                       </div>
                                     </label>
                                     {service.isOther && isChecked ? (
@@ -1357,7 +1365,7 @@ export default function RequestTaxAssistance() {
                     <div className="mt-4 grid gap-5 md:grid-cols-2">
                       <div>
                         <Label className="text-sm font-semibold text-[#102B46]">Province *</Label>
-                        <Select value={draft.contact.province} onValueChange={(value) => updateContact({ province: value })}>
+                        <Select value={draft.contact.province} onValueChange={(value) => updateLocation({ province: value, city: draft.contact.city })}>
                           <SelectTrigger className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "contactProvince")}`}>
                             <SelectValue placeholder="Select province" />
                           </SelectTrigger>
@@ -1373,7 +1381,7 @@ export default function RequestTaxAssistance() {
                         <Label className="text-sm font-semibold text-[#102B46]">
                           City / Town {isNationwideSelection(draft.contact.province) ? "(optional)" : "*"}
                         </Label>
-                        <Input value={draft.contact.city} onChange={(event) => updateContact({ city: event.target.value })} className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "contactCity")}`} placeholder="Pretoria" />
+                        <Input value={draft.contact.city} onChange={(event) => updateLocation({ province: draft.contact.province, city: event.target.value })} className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "contactCity")}`} placeholder="Pretoria" />
                         {renderError("contactCity")}
                       </div>
                     </div>
