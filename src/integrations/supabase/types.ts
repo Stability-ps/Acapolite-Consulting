@@ -2047,6 +2047,11 @@ export type Database = {
         | "individual_tax_number_registration"
         | "individual_tax_status_corrections"
         | "individual_tax_compliance_status_assistance"
+        | "individual_voluntary_disclosure_programme"
+        | "individual_sars_verification_refund_assistance"
+        | "individual_tax_directives"
+        | "individual_estate_pension_tax_matters"
+        | "individual_other"
         | "business_company_income_tax"
         | "business_vat_registration"
         | "business_vat_returns"
@@ -2056,6 +2061,10 @@ export type Database = {
         | "business_tax_compliance_support"
         | "business_tax_clearance_certificates"
         | "business_sars_audits_support"
+        | "business_vat_paye_corrections"
+        | "business_tax_debt_compromise"
+        | "business_vat_objections_disputes"
+        | "business_tax_other"
         | "accounting_bookkeeping"
         | "accounting_financial_statements"
         | "accounting_management_accounts"
@@ -2064,25 +2073,38 @@ export type Database = {
         | "accounting_cash_flow_management"
         | "accounting_budget_planning"
         | "accounting_annual_financial_reporting"
+        | "accounting_independent_reviews"
+        | "accounting_other"
         | "support_company_registration"
         | "support_business_compliance"
         | "support_annual_returns_filing"
         | "support_cipc_services"
         | "support_business_advisory"
         | "support_financial_compliance"
+        | "support_beneficial_ownership_filings"
+        | "support_director_shareholder_changes"
+        | "support_bee_assistance"
+        | "business_support_other"
         | "trust_tax_returns"
         | "trust_compliance"
         | "trust_sars_assistance"
         | "trust_tax_clearance"
         | "trust_financial_statements"
         | "trust_advisory_support"
+        | "trust_representative_assistance"
+        | "trust_sars_disputes_objections"
+        | "trust_other"
         | "npo_registration_assistance"
         | "npo_tax_exemption_assistance"
         | "npo_annual_compliance_filing"
         | "npo_payroll_accounting"
         | "npo_sars_compliance"
         | "npo_financial_reporting"
-        | "npo_governance_advisory";
+        | "npo_governance_advisory"
+        | "npo_pbo_applications_assistance"
+        | "npo_donor_tax_section18a_assistance"
+        | "npo_audit_compliance_support"
+        | "npo_organisation_other";
       service_request_priority: "low" | "medium" | "high" | "urgent";
       service_request_risk_indicator: "low" | "medium" | "high";
       lead_access_tier: "basic" | "professional" | "business";
@@ -2256,6 +2278,11 @@ export const Constants = {
         "individual_tax_number_registration",
         "individual_tax_status_corrections",
         "individual_tax_compliance_status_assistance",
+        "individual_voluntary_disclosure_programme",
+        "individual_sars_verification_refund_assistance",
+        "individual_tax_directives",
+        "individual_estate_pension_tax_matters",
+        "individual_other",
         "business_company_income_tax",
         "business_vat_registration",
         "business_vat_returns",
@@ -2265,6 +2292,10 @@ export const Constants = {
         "business_tax_compliance_support",
         "business_tax_clearance_certificates",
         "business_sars_audits_support",
+        "business_vat_paye_corrections",
+        "business_tax_debt_compromise",
+        "business_vat_objections_disputes",
+        "business_tax_other",
         "accounting_bookkeeping",
         "accounting_financial_statements",
         "accounting_management_accounts",
@@ -2273,18 +2304,27 @@ export const Constants = {
         "accounting_cash_flow_management",
         "accounting_budget_planning",
         "accounting_annual_financial_reporting",
+        "accounting_independent_reviews",
+        "accounting_other",
         "support_company_registration",
         "support_business_compliance",
         "support_annual_returns_filing",
         "support_cipc_services",
         "support_business_advisory",
         "support_financial_compliance",
+        "support_beneficial_ownership_filings",
+        "support_director_shareholder_changes",
+        "support_bee_assistance",
+        "business_support_other",
         "trust_tax_returns",
         "trust_compliance",
         "trust_sars_assistance",
         "trust_tax_clearance",
         "trust_financial_statements",
         "trust_advisory_support",
+        "trust_representative_assistance",
+        "trust_sars_disputes_objections",
+        "trust_other",
         "npo_registration_assistance",
         "npo_tax_exemption_assistance",
         "npo_annual_compliance_filing",
@@ -2292,6 +2332,10 @@ export const Constants = {
         "npo_sars_compliance",
         "npo_financial_reporting",
         "npo_governance_advisory",
+        "npo_pbo_applications_assistance",
+        "npo_donor_tax_section18a_assistance",
+        "npo_audit_compliance_support",
+        "npo_organisation_other",
       ],
       service_request_priority: ["low", "medium", "high", "urgent"],
       service_request_risk_indicator: ["low", "medium", "high"],

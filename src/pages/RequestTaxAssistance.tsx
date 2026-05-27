@@ -53,10 +53,13 @@ import {
   getGroupedSelectedServices,
   clearWizardDraft,
   getInitialWizardDraft,
+  getServiceCredits,
   getPrimaryCategoryForSelection,
   getPrimaryServiceForSelection,
   getStepFromSearchParam,
+  isNationwideSelection,
   loadWizardDraft,
+  PHONE_COUNTRY_OPTIONS,
   REQUEST_WIZARD_QUERY_KEY,
   saveWizardStep,
   SERVICE_CATEGORIES_BY_ENTITY,
@@ -66,6 +69,7 @@ import {
   type WizardDraft,
   type WizardEntityType,
   type WizardService,
+  type WizardServiceCategory,
   type WizardStep,
 } from "@/lib/requestWizard";
 import { formatServiceRequestLabel } from "@/lib/serviceRequests";
@@ -78,13 +82,12 @@ type SubmissionResult = {
   linkedToAccount: boolean;
   requiresLogin: boolean;
   emailSent: boolean;
+  existingAccount?: boolean;
 };
 
 type ErrorMap = Record<string, string>;
 
-const contactProvinceOptions = SOUTH_AFRICAN_PROVINCES.filter(
-  (province) => province !== "Any / Nationwide",
-);
+const contactProvinceOptions = SOUTH_AFRICAN_PROVINCES;
 
 const entityIcons: Record<WizardEntityType, typeof User> = {
   individual: User,
@@ -112,6 +115,7 @@ function getInlineFieldError(errors: ErrorMap, key: string) {
 
 function getValidationErrorsForWho(draft: WizardDraft): ErrorMap {
   const nextErrors: ErrorMap = {};
+  const isNationwide = isNationwideSelection(draft.who.province);
 
   if (!draft.who.entityType) {
     nextErrors.entityType = "Select who this request is for.";
@@ -119,7 +123,7 @@ function getValidationErrorsForWho(draft: WizardDraft): ErrorMap {
   if (!draft.who.province) {
     nextErrors.province = "Select a province or nationwide option.";
   }
-  if (!draft.who.city.trim()) {
+  if (!isNationwide && !draft.who.city.trim()) {
     nextErrors.city = "Enter your city or town.";
   }
 
@@ -127,13 +131,23 @@ function getValidationErrorsForWho(draft: WizardDraft): ErrorMap {
 }
 
 function getValidationErrorsForWhat(draft: WizardDraft): ErrorMap {
-  if (draft.what.selectedServices.length > 0) {
-    return {};
+  const nextErrors: ErrorMap = {};
+
+  if (draft.what.selectedServices.length === 0) {
+    nextErrors.selectedServices = "Select at least one service so we can match your request.";
   }
 
-  return {
-    selectedServices: "Select at least one service so we can match your request.",
-  };
+  Object.entries(draft.what.otherDetails).forEach(([categoryKey, value]) => {
+    if (draft.what.selectedServices.some((service) => getCategoryForService(service) === categoryKey) && !value?.trim()) {
+      nextErrors[`otherDetails.${categoryKey}`] = "Please briefly describe the assistance you require.";
+    }
+  });
+
+  if (draft.what.selectedServices.length > 5) {
+    nextErrors.selectedServices = "You can select a maximum of 5 services per request.";
+  }
+
+  return nextErrors;
 }
 
 function getValidationErrorsForDetails(draft: WizardDraft): ErrorMap {
@@ -143,6 +157,10 @@ function getValidationErrorsForDetails(draft: WizardDraft): ErrorMap {
   }
 
   for (const question of DETAIL_QUESTIONS_BY_ENTITY[draft.who.entityType]) {
+    if (question.type === "year-range" && question.dependsOnKey && !draft.details.answers[question.dependsOnKey]) {
+      continue;
+    }
+
     if (question.type === "radio") {
       if (!draft.details.answers[question.key]) {
         nextErrors[question.key] = "Choose one option.";
@@ -177,6 +195,7 @@ function getValidationErrorsForContact(draft: WizardDraft): ErrorMap {
   const nextErrors: ErrorMap = {};
   const email = draft.contact.email.trim();
   const phoneDigits = normalizePhoneNumber(draft.contact.phoneNumber);
+  const isNationwide = isNationwideSelection(draft.contact.province);
 
   if (!draft.contact.fullName.trim()) {
     nextErrors.fullName = "Enter your full name.";
@@ -188,13 +207,13 @@ function getValidationErrorsForContact(draft: WizardDraft): ErrorMap {
   }
   if (!phoneDigits) {
     nextErrors.phoneNumber = "Enter your phone number.";
-  } else if (phoneDigits.length < 9) {
-    nextErrors.phoneNumber = "Enter a valid South African phone number.";
+  } else if (phoneDigits.length < 7) {
+    nextErrors.phoneNumber = "Enter a valid phone number.";
   }
   if (!draft.contact.province) {
     nextErrors.contactProvince = "Select your province.";
   }
-  if (!draft.contact.city.trim()) {
+  if (!isNationwide && !draft.contact.city.trim()) {
     nextErrors.contactCity = "Enter your city or town.";
   }
   if (!draft.contact.contactPreference) {
@@ -205,15 +224,14 @@ function getValidationErrorsForContact(draft: WizardDraft): ErrorMap {
 }
 
 function getPriorityLevel(draft: WizardDraft): Enums<"service_request_priority"> {
-  const reason = (draft.details.answers.mainReason ?? "").toLowerCase();
-  const yearsNeeded = draft.details.answers.yearsNeeded ?? "";
+  const urgency = draft.details.answers.urgency ?? "";
   const services = new Set(draft.what.selectedServices);
 
   if (
     services.has("business_sars_audits_support") ||
     services.has("individual_objections_and_disputes") ||
-    reason.includes("audit") ||
-    reason.includes("investigation")
+    services.has("trust_sars_disputes_objections") ||
+    urgency === "Urgent / Immediate"
   ) {
     return "urgent";
   }
@@ -221,8 +239,9 @@ function getPriorityLevel(draft: WizardDraft): Enums<"service_request_priority">
   if (
     services.has("individual_sars_debt_assistance") ||
     services.has("business_sars_debt_arrangements") ||
-    reason.includes("debt") ||
-    yearsNeeded === "More than 7 years"
+    services.has("business_tax_debt_compromise") ||
+    draft.details.answers.yearsNeeded === "More than 7 years" ||
+    urgency === "Within a few days"
   ) {
     return "high";
   }
@@ -235,40 +254,41 @@ function getPriorityLevel(draft: WizardDraft): Enums<"service_request_priority">
 }
 
 function getRequestSignals(draft: WizardDraft) {
-  const reason = (draft.details.answers.mainReason ?? "").toLowerCase();
   const services = new Set(draft.what.selectedServices);
   const categories = new Set(draft.what.selectedServices.map(getCategoryForService));
+  const urgency = draft.details.answers.urgency ?? "";
 
   const hasDebtFlag =
     services.has("individual_sars_debt_assistance") ||
     services.has("business_sars_debt_arrangements") ||
-    services.has("trust_sars_assistance") ||
-    reason.includes("debt");
+    services.has("business_tax_debt_compromise") ||
+    services.has("trust_sars_assistance");
   const missingReturnsFlag =
     services.has("individual_late_return_submissions") ||
-    reason.includes("late") ||
-    reason.includes("outstanding") ||
-    reason.includes("tax returns");
+    services.has("individual_personal_income_tax_returns") ||
+    services.has("business_company_income_tax");
   const hasSarsAudit =
-    services.has("business_sars_audits_support") ||
-    reason.includes("audit") ||
-    reason.includes("investigation");
+    services.has("business_sars_audits_support");
   const hasAdr =
     services.has("individual_objections_and_disputes") ||
-    reason.includes("objection") ||
-    reason.includes("dispute");
+    services.has("business_vat_objections_disputes") ||
+    services.has("trust_sars_disputes_objections");
   const hasVatInvestigation =
     services.has("business_vat_registration") ||
     services.has("business_vat_returns") ||
-    reason.includes("vat");
+    services.has("business_vat_paye_corrections") ||
+    services.has("business_vat_objections_disputes");
   const hasPayrollDispute =
     services.has("business_paye_registration") ||
     services.has("business_paye_compliance") ||
-    services.has("accounting_payroll_services") ||
-    reason.includes("paye") ||
-    reason.includes("payroll");
+    services.has("accounting_payroll_services");
   const hasMultipleTaxTypes = categories.size > 1 || draft.what.selectedServices.length >= 3;
-  const hasLegalComplexity = hasAdr || hasSarsAudit || reason.includes("notice");
+  const hasLegalComplexity =
+    hasAdr ||
+    hasSarsAudit ||
+    services.has("individual_tax_compliance_issues") ||
+    services.has("trust_representative_assistance") ||
+    urgency === "Urgent / Immediate";
 
   let riskIndicator: Enums<"service_request_risk_indicator"> = "low";
   if (hasDebtFlag || hasMultipleTaxTypes || missingReturnsFlag) {
@@ -416,9 +436,7 @@ export default function RequestTaxAssistance() {
     setDraft((current) => {
       const nextProvince =
         current.contact.province ||
-        (contactProvinceOptions.includes(current.who.province as (typeof contactProvinceOptions)[number])
-          ? current.who.province
-          : "");
+        (current.who.province ? current.who.province : "");
       const nextCity = current.contact.city || current.who.city;
 
       if (
@@ -501,11 +519,17 @@ export default function RequestTaxAssistance() {
     }
 
     return (
-      <Button type="button" variant="ghost" className="rounded-full px-0 text-slate-600" asChild>
-        <Link to="/" replace onClick={clearWizardDraft}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          {homeLabel}
-        </Link>
+      <Button
+        type="button"
+        variant="ghost"
+        className="rounded-full px-0 text-slate-600"
+        onClick={() => {
+          clearWizardDraft();
+          navigate("/", { replace: true });
+        }}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        {homeLabel}
       </Button>
     );
   };
@@ -530,15 +554,46 @@ export default function RequestTaxAssistance() {
   const toggleService = (service: WizardService) => {
     setDraft((current) => {
       const isSelected = current.what.selectedServices.includes(service);
+      if (!isSelected && current.what.selectedServices.length >= 5) {
+        toast.error("You can select up to 5 services per request.");
+        return current;
+      }
+
+      const nextSelectedServices = isSelected
+        ? current.what.selectedServices.filter((item) => item !== service)
+        : [...current.what.selectedServices, service];
+
+      const removedCategory = isSelected ? getCategoryForService(service) : null;
+      const stillHasOtherInCategory = removedCategory
+        ? nextSelectedServices.some((item) => getCategoryForService(item) === removedCategory && item.toLowerCase().endsWith("_other"))
+        : false;
+
+      const nextOtherDetails = { ...current.what.otherDetails };
+      if (removedCategory && !stillHasOtherInCategory) {
+        delete nextOtherDetails[removedCategory];
+      }
+
       return {
         ...current,
         what: {
-          selectedServices: isSelected
-            ? current.what.selectedServices.filter((item) => item !== service)
-            : [...current.what.selectedServices, service],
+          selectedServices: nextSelectedServices,
+          otherDetails: nextOtherDetails,
         },
       };
     });
+  };
+
+  const updateOtherDetails = (categoryKey: WizardServiceCategory, value: string) => {
+    setDraft((current) => ({
+      ...current,
+      what: {
+        ...current.what,
+        otherDetails: {
+          ...current.what.otherDetails,
+          [categoryKey]: value.slice(0, 500),
+        },
+      },
+    }));
   };
 
   const validateCurrentStep = (step: WizardStep) => {
@@ -606,7 +661,7 @@ export default function RequestTaxAssistance() {
       email: draft.contact.email.trim().toLowerCase(),
       phone: `${draft.contact.phoneCountryCode} ${normalizePhoneNumber(draft.contact.phoneNumber)}`.trim(),
       province: draft.contact.province.trim(),
-      city: draft.contact.city.trim(),
+      city: draft.contact.city.trim() || null,
       contact_preference: draft.contact.contactPreference,
       marketing_consent: draft.contact.marketingConsent,
       submitted_with_account: mode === "account",
@@ -668,6 +723,24 @@ export default function RequestTaxAssistance() {
     });
 
     if (signUpResult.error) {
+      const normalizedMessage = signUpResult.error.message.toLowerCase();
+      if (
+        normalizedMessage.includes("already registered") ||
+        normalizedMessage.includes("already exists") ||
+        normalizedMessage.includes("user exists")
+      ) {
+        const resetResult = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${getAppBaseUrl()}/reset-password`,
+        });
+
+        return {
+          linkedProfileId: null,
+          requiresLogin: true,
+          emailSent: !resetResult.error,
+          existingAccount: true,
+        };
+      }
+
       throw new Error(signUpResult.error.message);
     }
 
@@ -688,6 +761,7 @@ export default function RequestTaxAssistance() {
         signUpResult.data.user?.id ?? signUpResult.data.session?.user?.id ?? null,
       requiresLogin: !signUpResult.data.session,
       emailSent,
+      existingAccount: false,
     };
   };
 
@@ -714,7 +788,7 @@ export default function RequestTaxAssistance() {
       const accountResult =
         mode === "account"
           ? await ensureAccountForSubmission()
-          : { linkedProfileId: null, requiresLogin: false, emailSent: false };
+          : { linkedProfileId: null, requiresLogin: false, emailSent: false, existingAccount: false };
 
       let { priorityLevel, requestPayload } = createLeadRequestPayload(
         accountResult.linkedProfileId,
@@ -758,8 +832,13 @@ export default function RequestTaxAssistance() {
         linkedToAccount: Boolean(accountResult.linkedProfileId),
         requiresLogin: accountResult.requiresLogin,
         emailSent: accountResult.emailSent,
+        existingAccount: accountResult.existingAccount,
       });
-      toast.success("Your request has been submitted successfully.");
+      toast.success(
+        accountResult.existingAccount
+          ? "An account already exists with this email. Your request was still submitted successfully."
+          : "Your request has been submitted successfully.",
+      );
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Unable to submit your request.",
@@ -856,16 +935,22 @@ export default function RequestTaxAssistance() {
               </div>
             ) : (
               <div className="mt-8 rounded-[2rem] border border-[#E8D9B0] bg-[#FFF8E4] p-6 text-[#1A4731]">
-                <p className="text-lg font-bold">Your free account is ready.</p>
+                <p className="text-lg font-bold">
+                  {submissionResult.existingAccount
+                    ? "An account already exists with this email."
+                    : "Your free account is ready."}
+                </p>
                 <p className="mt-2 text-sm leading-6">
-                  {submissionResult.emailSent
-                    ? "We sent a secure email so you can set your password and access your request."
-                    : "Use your account to track your request, upload documents and message professionals."}
+                  {submissionResult.existingAccount
+                    ? "Your request has still been submitted successfully. Please log in to access your existing account and track this request."
+                    : submissionResult.emailSent
+                      ? "We sent a secure email so you can set your password and access your request."
+                      : "Use your account to track your request, upload documents and message professionals."}
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <Button asChild className="rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]">
-                    <Link to={submissionResult.requiresLogin ? "/login" : dashboardPath}>
-                      {submissionResult.requiresLogin ? "Go to Login" : "Go to Dashboard"}
+                    <Link to={submissionResult.requiresLogin || submissionResult.existingAccount ? "/login" : dashboardPath}>
+                      {submissionResult.requiresLogin || submissionResult.existingAccount ? "Go to Login" : "Go to Dashboard"}
                     </Link>
                   </Button>
                 </div>
@@ -892,10 +977,10 @@ export default function RequestTaxAssistance() {
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
           <div className="space-y-6">
             {currentStep === 1 ? (
-              <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
+              <section className="rounded-[2rem] border border-[#E7E7E7] bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 1</p>
-                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">Who is this request for?</h1>
-                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                <h1 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">Who is this request for?</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                   This helps us match you with the right type of professional.
                 </p>
 
@@ -917,7 +1002,7 @@ export default function RequestTaxAssistance() {
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1C8] text-[#C49A22]">
                           <Icon className="h-5 w-5" />
                         </div>
-                        <p className="mt-4 text-lg font-bold text-[#102B46]">{option.label}</p>
+                        <p className="mt-4 text-base font-bold text-[#102B46] sm:text-lg">{option.label}</p>
                         <p className="mt-2 text-sm leading-6 text-slate-600">{option.description}</p>
                       </button>
                     );
@@ -943,11 +1028,13 @@ export default function RequestTaxAssistance() {
                     {renderError("province")}
                   </div>
                   <div>
-                    <Label className="text-sm font-semibold text-[#102B46]">City / Town</Label>
+                    <Label className="text-sm font-semibold text-[#102B46]">
+                      City / Town {isNationwideSelection(draft.who.province) ? "(optional)" : ""}
+                    </Label>
                     <Input
                       value={draft.who.city}
                       onChange={(event) => updateWho({ city: event.target.value })}
-                      placeholder="Pretoria"
+                      placeholder={isNationwideSelection(draft.who.province) ? "Optional for nationwide requests" : "Pretoria"}
                       className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "city")}`}
                     />
                     {renderError("city")}
@@ -963,15 +1050,20 @@ export default function RequestTaxAssistance() {
                   <Lock className="h-4 w-4 text-[#1A4731]" />
                   Your information is secure and will only be shared with verified professionals.
                 </p>
+
+                <TrustSidebar className="mt-6 lg:hidden" />
               </section>
             ) : null}
 
             {currentStep === 2 ? (
-              <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
+              <section className="rounded-[2rem] border border-[#E7E7E7] bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 2</p>
-                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">What do you need help with?</h1>
-                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                <h1 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">What do you need help with?</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                   Select all that apply so we can match you with the right professionals.
+                </p>
+                <p className="mt-3 text-sm font-medium text-slate-500">
+                  Select up to 5 services. We only charge based on the highest-value service, with +1 credit when 3 or more services are selected.
                 </p>
 
                 <div className="mt-8 space-y-4">
@@ -1012,17 +1104,39 @@ export default function RequestTaxAssistance() {
                               {visibleServices.map((service) => {
                                 const isChecked = draft.what.selectedServices.includes(service.value);
                                 return (
-                                  <label
-                                    key={service.value}
-                                    className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition hover:border-[#C49A22]"
-                                  >
-                                    <Checkbox
-                                      checked={isChecked}
-                                      onCheckedChange={() => toggleService(service.value)}
-                                      className="mt-1 border-[#C49A22] data-[state=checked]:border-[#C49A22] data-[state=checked]:bg-[#C49A22]"
-                                    />
-                                    <span className="text-sm leading-6 text-slate-700">{service.label}</span>
-                                  </label>
+                                  <div key={service.value}>
+                                    <label
+                                      className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition hover:border-[#C49A22]"
+                                    >
+                                      <Checkbox
+                                        checked={isChecked}
+                                        onCheckedChange={() => toggleService(service.value)}
+                                        className="mt-1 border-[#C49A22] data-[state=checked]:border-[#C49A22] data-[state=checked]:bg-[#C49A22]"
+                                      />
+                                      <div className="flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="text-sm leading-6 text-slate-700">{service.label}</span>
+                                          <span className="rounded-full bg-[#FFF6DB] px-2.5 py-1 text-xs font-semibold text-[#A27100]">
+                                            {service.credits} Credits
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </label>
+                                    {service.isOther && isChecked ? (
+                                      <div className="mt-3 rounded-2xl border border-[#E8D9B0] bg-[#FFFDF6] p-4">
+                                        <Label className="text-sm font-semibold text-[#102B46]">
+                                          Describe your matter / problem
+                                        </Label>
+                                        <Textarea
+                                          value={draft.what.otherDetails[category.key] ?? ""}
+                                          onChange={(event) => updateOtherDetails(category.key, event.target.value)}
+                                          placeholder="Please briefly describe the assistance you require."
+                                          className={`mt-3 min-h-[120px] rounded-2xl ${getInlineFieldError(errors, `otherDetails.${category.key}`)}`}
+                                        />
+                                        {renderError(`otherDetails.${category.key}`)}
+                                      </div>
+                                    ) : null}
+                                  </div>
                                 );
                               })}
                             </div>
@@ -1062,10 +1176,10 @@ export default function RequestTaxAssistance() {
             ) : null}
 
             {currentStep === 3 && entityType ? (
-              <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
+              <section className="rounded-[2rem] border border-[#E7E7E7] bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 3</p>
-                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">Tell us more about your request</h1>
-                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                <h1 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">Tell us more about your request</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                   This helps us match you with the right professionals who can assist you.
                 </p>
 
@@ -1083,6 +1197,10 @@ export default function RequestTaxAssistance() {
                     }
 
                     if (question.type === "year-range") {
+                      if (question.dependsOnKey && !draft.details.answers[question.dependsOnKey]) {
+                        return null;
+                      }
+
                       return (
                         <div key={question.key} className="rounded-[1.5rem] border border-[#E7E7E7] bg-white p-5 shadow-sm">
                           <Label className="text-base font-semibold text-[#102B46]">{question.label}</Label>
@@ -1182,10 +1300,10 @@ export default function RequestTaxAssistance() {
             ) : null}
 
             {currentStep === 4 ? (
-              <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
+              <section className="rounded-[2rem] border border-[#E7E7E7] bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 4</p>
-                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">Your contact information</h1>
-                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                <h1 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">Your contact information</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                   Please provide your details so we can connect you with the right professionals.
                 </p>
 
@@ -1217,7 +1335,11 @@ export default function RequestTaxAssistance() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="+27">+27 South Africa</SelectItem>
+                            {PHONE_COUNTRY_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1248,7 +1370,9 @@ export default function RequestTaxAssistance() {
                         {renderError("contactProvince")}
                       </div>
                       <div>
-                        <Label className="text-sm font-semibold text-[#102B46]">City / Town *</Label>
+                        <Label className="text-sm font-semibold text-[#102B46]">
+                          City / Town {isNationwideSelection(draft.contact.province) ? "(optional)" : "*"}
+                        </Label>
                         <Input value={draft.contact.city} onChange={(event) => updateContact({ city: event.target.value })} className={`mt-2 h-12 rounded-2xl ${getInlineFieldError(errors, "contactCity")}`} placeholder="Pretoria" />
                         {renderError("contactCity")}
                       </div>
@@ -1310,7 +1434,13 @@ export default function RequestTaxAssistance() {
                             <p className="font-semibold text-[#102B46]">{group.title}</p>
                             <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-600">
                               {group.selectedServices.map((service) => (
-                                <li key={service.value}>{service.label}</li>
+                                <li key={service.value}>
+                                  {service.label}
+                                  {draft.what.otherDetails[group.key]
+                                    && service.value.toLowerCase().endsWith("_other")
+                                    ? ` — ${draft.what.otherDetails[group.key]}`
+                                    : ""}
+                                </li>
                               ))}
                             </ul>
                           </div>
@@ -1399,7 +1529,7 @@ export default function RequestTaxAssistance() {
             ) : null}
           </div>
 
-          {currentStep >= 2 && currentStep <= 4 ? <TrustSidebar /> : null}
+          {currentStep >= 1 && currentStep <= 4 ? <TrustSidebar className="hidden lg:block" /> : null}
         </div>
       </div>
     </div>

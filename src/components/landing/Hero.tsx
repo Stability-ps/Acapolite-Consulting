@@ -140,27 +140,28 @@ export function Hero() {
       <div className="container mx-auto px-4 py-10 md:px-6 md:py-14 lg:py-16">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-stretch lg:gap-6 xl:gap-8">
           {/* Photo — first on mobile, right column on desktop */}
-          <div className="order-1 flex min-h-[260px] flex-col sm:min-h-[320px] lg:order-3 lg:col-span-4 lg:col-start-9 lg:min-h-0">
+          <div className="order-3 flex min-h-[240px] flex-col sm:min-h-[300px] lg:order-3 lg:col-span-4 lg:col-start-9 lg:min-h-0">
             <div className="relative h-full min-h-[260px] overflow-hidden rounded-[1.75rem] border border-[#E7E7E7] bg-[#EAE9E4] shadow-[0_20px_50px_-24px_rgba(15,23,42,0.28)] sm:min-h-[320px] lg:min-h-full">
               <img
                 src="/oui.png"
                 alt="Professional tax consultant ready to assist"
                 className="absolute inset-0 h-full w-full object-cover object-[center_22%]"
               />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.02)_45%,rgba(15,23,42,0.1)_100%)]" />
             </div>
           </div>
 
           {/* Headline & trust */}
-          <div className="order-2 lg:order-1 lg:col-span-4 lg:self-center">
+          <div className="order-1 lg:order-1 lg:col-span-4 lg:self-center">
             <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#C49A22]">
               ACAPOLITE CONSULTING
             </p>
 
-            <h1 className="mt-4 text-4xl font-black leading-[1.08] tracking-[-0.03em] text-[#102B46] sm:text-[2.65rem] xl:text-[3rem]">
+            <h1 className="mt-4 text-[2.15rem] font-black leading-[1.08] tracking-[-0.03em] text-[#102B46] sm:text-[2.65rem] xl:text-[3rem]">
               Professional Tax, SARS &amp; Business Assistance Across South Africa
             </h1>
 
-            <p className="mt-5 text-base leading-7 text-[#5F6C7B]">
+            <p className="mt-4 text-[15px] leading-7 text-[#5F6C7B]">
               Access qualified tax practitioners and accounting professionals for SARS matters,
               tax returns, bookkeeping, company compliance and business support across South Africa.
             </p>
@@ -181,7 +182,7 @@ export function Hero() {
           </div>
 
           {/* Request form — matches photo height on desktop */}
-          <div className="order-3 flex h-full min-h-0 flex-col lg:order-2 lg:col-span-4 lg:col-start-5">
+          <div className="order-2 flex h-full min-h-0 flex-col lg:order-2 lg:col-span-4 lg:col-start-5">
             <div className="mx-auto flex h-full w-full max-w-md flex-col rounded-[1.75rem] border border-[#E7E7E7] bg-white p-6 shadow-[0_20px_50px_-24px_rgba(15,23,42,0.28)] sm:p-7 lg:mx-0 lg:max-w-none">
               <span className="inline-flex rounded-full bg-[#F1F1EF] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-[#6E7480]">
                 Step 1 of 5

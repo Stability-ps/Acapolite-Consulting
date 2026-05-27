@@ -13,6 +13,7 @@ export type ParsedIntakePayload = {
   };
   what?: {
     selectedServices?: Array<{ value: string; label: string; category?: string }>;
+    otherDetails?: Record<string, string>;
   };
   details?: {
     answers?: Record<string, string>;
@@ -48,7 +49,15 @@ export function getIntakeDetailRows(payload: Json | null | undefined) {
     additionalNotes: parsed.details.additionalNotes ?? "",
   };
 
-  return getDetailSummaryRows(entityType as WizardEntityType, details);
+  const rows = getDetailSummaryRows(entityType as WizardEntityType, details);
+  const otherDetails = Object.entries(parsed.what?.otherDetails ?? {})
+    .filter(([, value]) => value?.trim())
+    .map(([category, value]) => ({
+      label: `${category.replace(/_/g, " ")} other`,
+      value: value.trim(),
+    }));
+
+  return [...rows, ...otherDetails];
 }
 
 export function getIntakeSupportingNotes(payload: Json | null | undefined) {

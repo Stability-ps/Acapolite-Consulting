@@ -52,6 +52,7 @@ import { useSearchParams } from "react-router-dom";
 import { ServiceRequestIntakeDetails } from "@/components/dashboard/ServiceRequestIntakeDetails";
 import { getClientIdentityFieldLabel } from "@/lib/clientRisk";
 import { getIntakeContactPreference } from "@/lib/serviceRequestIntake";
+import { syncPendingClientConfirmationEmails } from "@/lib/pendingClientConfirmationNotifications";
 import PractitionerLeads from "./PractitionerLeads";
 import {
   formatServiceRequestLabel,
@@ -479,6 +480,14 @@ export default function AdminServiceRequests() {
   ].some((value) => value && value !== "all");
 
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
+
+  useEffect(() => {
+    if (!(requests ?? []).length) {
+      return;
+    }
+
+    void syncPendingClientConfirmationEmails(requests ?? []);
+  }, [requests]);
   const selectedDocuments = selectedRequest ? documentMap.get(selectedRequest.id) ?? [] : [];
   const selectedResponses = selectedRequest ? responsesByRequest.get(selectedRequest.id) ?? [] : [];
   const selectedAssignments = selectedRequest ? assignmentHistoryByRequest.get(selectedRequest.id) ?? [] : [];

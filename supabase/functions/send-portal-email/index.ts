@@ -181,6 +181,16 @@ type LeadUnlockedPayload = {
   serviceType?: string;
 };
 
+type LeadConfirmationRequiredPayload = {
+  type: "lead_confirmation_required";
+  requestId?: string;
+  clientProfileId?: string;
+  clientEmail?: string;
+  clientName?: string;
+  clientConfirmationDueAt?: string;
+  serviceType?: string;
+};
+
 type PortalEmailPayload =
   | ContactFormPayload
   | SignupNotificationPayload
@@ -197,7 +207,8 @@ type PortalEmailPayload =
   | ServiceRequestReceivedPayload
   | ServiceRequestReceivedAdminPayload
   | ServiceRequestReceivedPractitionerPayload
-  | LeadUnlockedPayload;
+  | LeadUnlockedPayload
+  | LeadConfirmationRequiredPayload;
 
 type MailtrapMessage = {
   toEmail: string;
@@ -418,6 +429,14 @@ function buildWebPushContent(params: {
         body: trimNotificationText("A practitioner has unlocked your request and is ready to assist you."),
         url: buildPortalLink(portalUrl, "/dashboard/client/messages"),
         tag: `lead-unlocked:${trimString(payload.requestId)}`,
+      } satisfies WebPushMessage;
+
+    case "lead_confirmation_required":
+      return {
+        title: "Please confirm your request",
+        body: trimNotificationText("Please confirm whether you still require assistance so we can keep your lead active."),
+        url: buildPortalLink(portalUrl, `/dashboard/client/requests?requestId=${trimString(payload.requestId) || ""}`),
+        tag: `lead-confirmation-required:${trimString(payload.requestId)}`,
       } satisfies WebPushMessage;
 
     default:
@@ -2847,6 +2866,145 @@ function buildEmailContent(params: {
       } satisfies MailtrapMessage,
       log: {
         notificationType: "lead_unlocked",
+        recipientEmail: clientEmail,
+        profileId: clientProfileId || undefined,
+        contactEmail: clientEmail,
+        metadata: {
+          request_id: requestId,
+          notification_key: notificationKey,
+        },
+      } satisfies NotificationLogEntry,
+    };
+  }
+
+  if (payload.type === "lead_confirmation_required") {
+    const requestId = trimString(payload.requestId);
+    const clientProfileId = trimString(payload.clientProfileId);
+    const clientEmail = normalizeEmail(payload.clientEmail);
+    const clientName = trimString(payload.clientName) || "Client";
+    const serviceType = trimString(payload.serviceType) || "tax assistance";
+    const confirmationDueAt = trimString(payload.clientConfirmationDueAt);
+    const portalLink = buildPortalLink(portalUrl, `/dashboard/client/requests?requestId=${requestId || ""}`);
+    const notificationKey = `lead_confirmation_required:${requestId || clientEmail}`;
+
+    if (!requestId || !clientEmail) {
+      throw new Error("Request ID and client email are required.");
+    }
+
+    const safeClientName = escapeHtml(clientName);
+    const safeServiceType = escapeHtml(serviceType);
+    const safeConfirmationDueAt = escapeHtml(confirmationDueAt || "the deadline shown in your portal");
+
+    return {
+      requiresAuth: true,
+      mail: {
+        toEmail: clientEmail,
+        subject: "Please confirm if you still need assistance",
+        text: [
+          `Dear ${clientName},`,
+          "",
+          "We still have your request open, but we need you to confirm whether you still need assistance.",
+          "",
+          `Request: ${serviceType}`,
+          confirmationDueAt ? `Please respond before: ${confirmationDueAt}` : null,
+          "",
+          "If you confirm, your request can return to the marketplace for professionals to assist you.",
+          "If you do not respond in time, the request may restart automatically according to the current lifecycle rules.",
+          "",
+          `Confirm your request here: ${portalLink}`,
+          "",
+          "The Acapolite Consulting Team",
+          `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
+        ].filter(Boolean).join("\n"),
+        html: `<!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8" />
+            </head>
+            <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:32px 16px">
+                    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+                      <tr>
+                        <td style="background:#1a3a5c;border-radius:10px 10px 0 0;padding:32px 36px">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td>
+                                <table cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="background:#c8a84b;border-radius:8px;width:40px;height:40px;text-align:center;vertical-align:middle;font-family:Georgia,serif;font-size:20px;color:#fff;font-weight:bold">A</td>
+                                    <td style="padding-left:12px">
+                                      <div style="font-size:15px;font-weight:bold;color:#fff">ACAPOLITE CONSULTING</div>
+                                      <div style="font-size:11px;color:rgba(255,255,255,0.55)">Client Confirmation Required</div>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                              <td align="right">
+                                <span style="background:#f59e0b;color:#fff;font-size:11px;font-weight:bold;padding:4px 12px;border-radius:20px">Action Required</span>
+                              </td>
+                            </tr>
+                          </table>
+                          <h1 style="color:#fff;font-size:22px;margin:24px 0 6px;font-family:Georgia,serif;font-weight:normal">Please confirm if you still need help</h1>
+                          <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Reference #${escapeHtml(requestId)}</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#fff;padding:32px 36px">
+                          <p style="font-size:15px;font-weight:bold;color:#1a3a5c;margin:0 0 12px">Dear ${safeClientName},</p>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 20px">
+                            We still have your request open, but we need you to confirm whether you still require assistance.
+                          </p>
+                          <table width="100%" cellpadding="0" cellspacing="0" style="background:#fdf8ef;border-left:4px solid #c8a84b;border-radius:0 8px 8px 0;margin-bottom:20px">
+                            <tr>
+                              <td style="padding:16px">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;width:140px;padding:4px 0">Request</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${safeServiceType}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Respond before</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${safeConfirmationDueAt}</td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 24px">
+                            If you confirm, your request can return to the marketplace so professionals can assist you.
+                            If you do not respond in time, the request may restart automatically according to the current lifecycle rules.
+                          </p>
+                          <table cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="background:#c8a84b;border-radius:6px">
+                                <a href="${portalLink}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:14px;font-weight:bold;text-decoration:none">Confirm Your Request</a>
+                              </td>
+                            </tr>
+                          </table>
+                          <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+                          <p style="font-size:13px;color:#555;margin:0">
+                            <strong style="color:#1a3a5c">The Acapolite Consulting Team</strong><br />
+                            ${supportEmail} | ${supportWhatsapp}
+                          </p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#f0f2f5;border-radius:0 0 10px 10px;padding:16px 36px;text-align:center">
+                          <p style="font-size:11px;color:#999;margin:0">Copyright 2026 Acapolite Consulting. Automated notification.</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>`,
+        category: "Client Confirmation Required",
+      } satisfies MailtrapMessage,
+      log: {
+        notificationType: "lead_confirmation_required",
         recipientEmail: clientEmail,
         profileId: clientProfileId || undefined,
         contactEmail: clientEmail,

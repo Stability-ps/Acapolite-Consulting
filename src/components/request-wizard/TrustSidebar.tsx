@@ -1,8 +1,13 @@
 import { Shield } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function TrustSidebar() {
+export function TrustSidebar({
+  className,
+}: {
+  className?: string;
+}) {
   return (
-    <aside className="hidden rounded-[2rem] border border-[#E8D9B0] bg-[#FFF8E4] p-6 lg:block">
+    <aside className={cn("rounded-[2rem] border border-[#E8D9B0] bg-[#FFF8E4] p-6", className)}>
       <div className="flex items-center gap-3 text-[#1A4731]">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#C49A22] shadow-sm">
           <Shield className="h-5 w-5" />

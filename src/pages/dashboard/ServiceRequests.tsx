@@ -19,6 +19,7 @@ import { getClientTypeLabel } from "@/lib/clientRisk";
 import { serviceCategoryOptions, serviceNeededOptions, formatServiceRequestLabel, getServiceRequestRiskClass, getServiceRequestStatusClass } from "@/lib/serviceRequests";
 import { formatAvailabilityLabel, getAvailabilityBadgeClass, getResponseStatusClass } from "@/lib/practitionerMarketplace";
 import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
+import { syncPendingClientConfirmationEmails } from "@/lib/pendingClientConfirmationNotifications";
 import { useNotificationSectionRead } from "@/hooks/useNotificationSectionRead";
 import { formatLifecycleStageLabel, getLifecycleCountdownLabel, getLifecycleStageBadgeClass } from "@/lib/serviceRequestLifecycle";
 
@@ -273,6 +274,14 @@ export default function ClientServiceRequests() {
     categories.map((category) => categoryLabelMap.get(category) || formatServiceRequestLabel(category)).join(", ");
 
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
+
+  useEffect(() => {
+    if (!(requests ?? []).length) {
+      return;
+    }
+
+    void syncPendingClientConfirmationEmails(requests ?? []);
+  }, [requests]);
 
   useEffect(() => {
     if (!requestIdFromQuery || !(requests ?? []).some((request) => request.id === requestIdFromQuery)) {
