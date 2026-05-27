@@ -1156,14 +1156,23 @@ export default function RequestTaxAssistance() {
                                 return (
                                   <div key={service.value}>
                                     <label
-                                      className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 px-4 py-3 transition hover:border-[#C49A22]"
+                                      className={`relative flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition ${
+                                        isChecked
+                                          ? "border-[#C49A22] bg-[#FFF8E4] shadow-sm"
+                                          : "border-slate-200 bg-white hover:border-[#C49A22]/60"
+                                      }`}
                                     >
+                                      {isChecked ? (
+                                        <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#C49A22] text-white">
+                                          <Check className="h-3 w-3" strokeWidth={3} />
+                                        </span>
+                                      ) : null}
                                       <Checkbox
                                         checked={isChecked}
                                         onCheckedChange={() => toggleService(service.value)}
-                                        className="mt-1 border-[#C49A22] data-[state=checked]:border-[#C49A22] data-[state=checked]:bg-[#C49A22]"
+                                        className="mt-1 shrink-0 border-[#C49A22] data-[state=checked]:border-[#C49A22] data-[state=checked]:bg-[#C49A22]"
                                       />
-                                      <div className="flex-1">
+                                      <div className="flex-1 pr-7">
                                         <span className="text-sm leading-6 text-slate-700">{service.label}</span>
                                       </div>
                                     </label>
