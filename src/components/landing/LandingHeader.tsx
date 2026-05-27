@@ -8,17 +8,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { cn } from "@/lib/utils";
 
 const primaryNavItems = [
-  { label: "Home", href: "/", isHash: false },
-  { label: "Services", href: "#services", isHash: true },
-  { label: "How It Works", href: "#how-it-works", isHash: true },
-  { label: "Practitioners", href: "/practitioners", isHash: false },
-  { label: "Contact", href: "/contact-us", isHash: false },
+  { label: "Home", href: "/" },
+  { label: "Services", href: "/#services" },
+  { label: "How It Works", href: "/#how-it-works" },
+  { label: "Practitioners", href: "/practitioners" },
+  { label: "Contact", href: "/contact-us" },
 ] as const;
 
 const resourceLinks = [
@@ -43,14 +43,6 @@ function NavLink({
     "relative px-3 py-2 text-sm font-medium text-[#1E2A3C] transition-colors hover:text-[#022D73]",
     isActive && "text-[#022D73] after:absolute after:bottom-0 after:left-3 after:right-3 after:h-0.5 after:rounded-full after:bg-[#C49A22]",
   );
-
-  if (href.startsWith("#")) {
-    return (
-      <a href={href} onClick={onClick} className={className}>
-        {label}
-      </a>
-    );
-  }
 
   return (
     <Link to={href} onClick={onClick} className={className}>
@@ -83,6 +75,7 @@ export function LandingHeader() {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-80 px-0">
+              <SheetTitle className="sr-only">Main navigation</SheetTitle>
               <div className="flex items-center gap-3 border-b border-[#E7E7E7] px-6 pb-5 pt-2">
                 <AcapoliteLogo className="h-10" />
               </div>
@@ -95,7 +88,7 @@ export function LandingHeader() {
                     {primaryNavItems.map((item) => (
                       <Link
                         key={item.label}
-                        to={item.isHash ? `/${item.href}` : item.href}
+                        to={item.href}
                         onClick={closeMenu}
                         className={cn(
                           "flex w-full items-center rounded-xl px-4 py-3 text-sm font-medium transition",

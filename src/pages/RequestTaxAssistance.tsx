@@ -1162,17 +1162,12 @@ export default function RequestTaxAssistance() {
                                           : "border-slate-200 bg-white hover:border-[#C49A22]/60"
                                       }`}
                                     >
-                                      {isChecked ? (
-                                        <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#C49A22] text-white">
-                                          <Check className="h-3 w-3" strokeWidth={3} />
-                                        </span>
-                                      ) : null}
                                       <Checkbox
                                         checked={isChecked}
                                         onCheckedChange={() => toggleService(service.value)}
                                         className="mt-1 shrink-0 border-[#C49A22] data-[state=checked]:border-[#C49A22] data-[state=checked]:bg-[#C49A22]"
                                       />
-                                      <div className="flex-1 pr-7">
+                                      <div className="flex-1">
                                         <span className="text-sm leading-6 text-slate-700">{service.label}</span>
                                       </div>
                                     </label>
