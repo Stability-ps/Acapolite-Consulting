@@ -140,7 +140,7 @@ export function Hero() {
       <div className="container mx-auto px-4 py-10 md:px-6 md:py-14 lg:py-16">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-stretch lg:gap-6 xl:gap-8">
           {/* Photo — first on mobile, right column on desktop */}
-          <div className="order-3 flex min-h-[240px] flex-col sm:min-h-[300px] lg:order-3 lg:col-span-4 lg:col-start-9 lg:min-h-0">
+          <div className="order-3 hidden min-h-[240px] flex-col sm:min-h-[300px] lg:order-3 lg:col-span-4 lg:col-start-9 lg:flex lg:min-h-0">
             <div className="relative h-full min-h-[260px] overflow-hidden rounded-[1.75rem] border border-[#E7E7E7] bg-[#EAE9E4] shadow-[0_20px_50px_-24px_rgba(15,23,42,0.28)] sm:min-h-[320px] lg:min-h-full">
               <img
                 src="/oui.png"
@@ -153,20 +153,42 @@ export function Hero() {
 
           {/* Headline & trust */}
           <div className="order-1 lg:order-1 lg:col-span-4 lg:self-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#C49A22]">
+            <div className="flex items-start gap-4 rounded-[1.5rem] border border-[#E7E7E7] bg-white p-4 shadow-[0_16px_40px_-26px_rgba(15,23,42,0.25)] lg:hidden">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#C49A22]">
+                  ACAPOLITE CONSULTING
+                </p>
+                <h1 className="mt-2 text-[1.5rem] font-black leading-[1.15] tracking-[-0.03em] text-[#102B46]">
+                  Professional Tax, SARS &amp; Business Assistance Across South Africa
+                </h1>
+                <p className="mt-2 text-[12px] leading-5 text-[#5F6C7B]">
+                  Access qualified tax practitioners and accounting professionals across South Africa.
+                </p>
+              </div>
+              <div className="relative h-36 w-28 shrink-0 overflow-hidden rounded-[1.25rem] border border-[#E7E7E7] bg-[#EAE9E4]">
+                <img
+                  src="/oui.png"
+                  alt="Professional tax consultant ready to assist"
+                  className="absolute inset-0 h-full w-full object-cover object-[center_20%]"
+                />
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(15,23,42,0.08)_100%)]" />
+              </div>
+            </div>
+
+            <p className="hidden text-xs font-semibold uppercase tracking-[0.32em] text-[#C49A22] lg:block">
               ACAPOLITE CONSULTING
             </p>
 
-            <h1 className="mt-4 text-[2.15rem] font-black leading-[1.08] tracking-[-0.03em] text-[#102B46] sm:text-[2.65rem] xl:text-[3rem]">
+            <h1 className="mt-4 hidden text-[2.15rem] font-black leading-[1.08] tracking-[-0.03em] text-[#102B46] sm:text-[2.65rem] lg:block xl:text-[3rem]">
               Professional Tax, SARS &amp; Business Assistance Across South Africa
             </h1>
 
-            <p className="mt-4 text-[15px] leading-7 text-[#5F6C7B]">
+            <p className="mt-4 hidden text-[15px] leading-7 text-[#5F6C7B] lg:block">
               Access qualified tax practitioners and accounting professionals for SARS matters,
               tax returns, bookkeeping, company compliance and business support across South Africa.
             </p>
 
-            <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-5">
+            <div className="mt-5 grid grid-cols-2 gap-x-3 gap-y-4 lg:mt-8 lg:gap-x-4 lg:gap-y-5">
               {trustItems.map((item) => (
                 <div key={item.title} className="flex items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D7D7D7] bg-white">
