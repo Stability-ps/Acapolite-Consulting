@@ -492,6 +492,12 @@ export default function RequestTaxAssistance() {
     window.location.replace("/");
   };
 
+  const goLogin = () => {
+    clearWizardDraft();
+    // Hard redirect to avoid any stale SPA route state.
+    window.location.replace("/login");
+  };
+
   const renderBackControl = (homeLabel = "Back to home") => {
     if (portalNavigationState?.fromPortal && user) {
       return (
@@ -964,11 +970,23 @@ export default function RequestTaxAssistance() {
                       : "Use your account to track your request, upload documents and message professionals."}
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
-                  <Button asChild className="rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]">
-                    <Link to={submissionResult.requiresLogin || submissionResult.existingAccount ? "/login" : dashboardPath}>
-                      {submissionResult.requiresLogin || submissionResult.existingAccount ? "Go to Login" : "Go to Dashboard"}
-                    </Link>
-                  </Button>
+                  {submissionResult.requiresLogin || submissionResult.existingAccount ? (
+                    <Button
+                      type="button"
+                      className="rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]"
+                      onClick={goLogin}
+                    >
+                      Go to Login
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      className="rounded-full bg-[#C49A22] text-white hover:bg-[#b48a1c]"
+                      onClick={() => navigate(dashboardPath, { replace: true })}
+                    >
+                      Go to Dashboard
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
