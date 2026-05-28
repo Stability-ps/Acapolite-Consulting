@@ -188,7 +188,7 @@ export function Hero() {
               tax returns, bookkeeping, company compliance and business support across South Africa.
             </p>
 
-            <div className="mt-5 grid grid-cols-2 gap-x-3 gap-y-4 lg:mt-8 lg:gap-x-4 lg:gap-y-5">
+            <div className="mt-5 hidden grid-cols-2 gap-x-3 gap-y-4 lg:mt-8 lg:grid lg:gap-x-4 lg:gap-y-5">
               {trustItems.map((item) => (
                 <div key={item.title} className="flex items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D7D7D7] bg-white">
@@ -286,6 +286,20 @@ export function Hero() {
                 Your information is secure and will only be shared with verified professionals.
               </p>
             </div>
+          </div>
+
+          <div className="order-3 grid grid-cols-2 gap-x-3 gap-y-4 lg:hidden">
+            {trustItems.map((item) => (
+              <div key={item.title} className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D7D7D7] bg-white">
+                  <item.icon className="h-4 w-4 text-[#6E7480]" strokeWidth={1.75} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold leading-tight text-[#102B46]">{item.title}</p>
+                  <p className="text-xs text-[#6E7480]">{item.subtitle}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
