@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { MapPin } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const serviceAreas = [
   {
@@ -42,51 +42,51 @@ const serviceAreas = [
 
 export function AreasWeServe() {
   return (
-    <section id="areas-we-serve" className="bg-background py-24 scroll-mt-32">
+    <section id="areas-we-serve" className="bg-[#E9ECEF] py-16 scroll-mt-32">
       <div className="container mx-auto px-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="mb-14 text-center"
+          className="mb-8 text-center"
         >
-          <span className="mb-2 block text-sm font-semibold uppercase tracking-widest text-primary font-body">Areas We Serve</span>
-          <h2 className="mb-4 font-display text-3xl font-bold text-foreground md:text-5xl">
-            Nationwide Tax, Payroll and Business Support
+          <h2 className="mb-2 font-display text-3xl font-bold text-[#20242A] md:text-5xl">
+            Areas We Serve
           </h2>
-          <p className="mx-auto max-w-3xl text-lg text-muted-foreground font-body">
+          <p className="mx-auto max-w-4xl text-sm text-[#5F6670] font-body md:text-base">
             Acapolite offers tax, payroll, and business support across South Africa including:
           </p>
         </motion.div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-x-10 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
           {serviceAreas.map((area, index) => (
-            <motion.div
+            <motion.ul
               key={area.province}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.04 }}
-              className="rounded-xl border border-border bg-card p-6 shadow-card"
+              className="space-y-0.5 text-left font-body text-sm leading-tight text-[#2F353D]"
             >
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent">
-                  <MapPin className="h-5 w-5 text-accent-foreground" />
-                </div>
-                <h3 className="font-display text-lg font-semibold text-card-foreground">{area.province}</h3>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {area.cities.map((city) => (
-                  <span
-                    key={city}
-                    className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground font-body"
+              <li>
+                <Link
+                  to={`/request-tax-assistance?step=1&province=${encodeURIComponent(area.province)}`}
+                  className="font-bold text-[#20242A] underline-offset-4 hover:text-primary hover:underline"
+                >
+                  {area.province}
+                </Link>
+              </li>
+              {area.cities.map((city) => (
+                <li key={city}>
+                  <Link
+                    to={`/request-tax-assistance?step=1&province=${encodeURIComponent(area.province)}&city=${encodeURIComponent(city)}`}
+                    className="text-[#2F353D] underline-offset-4 hover:text-primary hover:underline"
                   >
                     {city}
-                  </span>
-                ))}
-              </div>
-            </motion.div>
+                  </Link>
+                </li>
+              ))}
+            </motion.ul>
           ))}
         </div>
       </div>
