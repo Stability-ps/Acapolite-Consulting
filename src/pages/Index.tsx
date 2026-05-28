@@ -10,6 +10,7 @@ import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Services } from "@/components/landing/Services";
 import { VerifiedPractitioners } from "@/components/landing/VerifiedPractitioners";
 import { Testimonials } from "@/components/landing/Testimonials";
+import { AreasWeServe } from "@/components/landing/AreasWeServe";
 import { CTA } from "@/components/landing/CTA";
 import { Footer } from "@/components/landing/Footer";
 
@@ -41,6 +42,7 @@ const Index = () => {
       <Features />
       <VerifiedPractitioners />
       <Testimonials />
+      <AreasWeServe />
       <CTA />
       <Footer />
       <ScrollToTopButton />
