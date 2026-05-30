@@ -1547,18 +1547,18 @@ export default function AdminClientWorkspace() {
             <TabsContent value="overview" className="space-y-6">
               <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-                  <div className="mb-5 flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <User className="h-5 w-5 text-primary" />
-                      <div>
-                        <h2 className="font-display text-xl font-semibold text-foreground">{getClientName(clientDetails)}</h2>
-                        <p className="text-sm text-muted-foreground font-body">
+                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <User className="h-5 w-5 shrink-0 text-primary" />
+                      <div className="min-w-0">
+                        <h2 className="font-display text-xl font-semibold text-foreground break-words">{getClientName(clientDetails)}</h2>
+                        <p className="text-sm text-muted-foreground font-body break-words">
                           {clientDetails.client_code || "No client code"} • {clientDetails.profiles?.email || "No email"}
                         </p>
                       </div>
                     </div>
                     {canManageClients ? (
-                      <Button type="button" className="rounded-xl" onClick={() => setIsEditClientOpen(true)}>
+                      <Button type="button" className="w-full rounded-xl shrink-0 sm:w-auto" onClick={() => setIsEditClientOpen(true)}>
                         Edit Client Profile
                       </Button>
                     ) : null}

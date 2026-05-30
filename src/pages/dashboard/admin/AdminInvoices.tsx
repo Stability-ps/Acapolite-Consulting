@@ -1199,16 +1199,16 @@ export default function AdminInvoices() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4 mb-8">
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">All Invoices</h1>
           <p className="text-muted-foreground font-body text-sm">Review client billing, open invoice details, and update payment status.</p>
         </div>
-        <div className="flex items-center gap-3 text-sm font-body">
+        <div className="flex flex-col gap-3 text-sm font-body sm:flex-row sm:items-stretch">
           {canManageInvoices ? (
             <Button
               type="button"
-              className="rounded-xl"
+              className="w-full rounded-xl sm:w-auto"
               onClick={() => {
                 resetCreateForm();
                 setIsCreateOpen(true);
@@ -1217,13 +1217,15 @@ export default function AdminInvoices() {
               Create Invoice
             </Button>
           ) : null}
-          <div className="rounded-xl border border-border bg-card px-4 py-3">
-            <p className="text-muted-foreground">Unpaid</p>
-            <p className="font-display text-xl text-foreground">{unpaidCount}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card px-4 py-3">
-            <p className="text-muted-foreground">Overdue</p>
-            <p className="font-display text-xl text-foreground">{overdueCount}</p>
+          <div className="flex gap-3">
+            <div className="flex-1 rounded-xl border border-border bg-card px-4 py-3 sm:flex-none">
+              <p className="text-muted-foreground">Unpaid</p>
+              <p className="font-display text-xl text-foreground">{unpaidCount}</p>
+            </div>
+            <div className="flex-1 rounded-xl border border-border bg-card px-4 py-3 sm:flex-none">
+              <p className="text-muted-foreground">Overdue</p>
+              <p className="font-display text-xl text-foreground">{overdueCount}</p>
+            </div>
           </div>
         </div>
       </div>

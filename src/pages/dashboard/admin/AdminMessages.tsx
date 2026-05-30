@@ -668,8 +668,9 @@ export default function AdminMessages() {
                       onChange={(event) => setNewMessage(event.target.value)}
                       placeholder={canReplyMessages ? "Type a reply... Press Ctrl+Enter to send." : "View-only messaging access"}
                       autoResize
+                      rows={1}
                       maxAutoResizeHeight={320}
-                      className="min-h-[140px] flex-1 rounded-xl"
+                      className="!min-h-[40px] flex-1 rounded-xl"
                       onKeyDown={(event) => {
                         if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
                           event.preventDefault();

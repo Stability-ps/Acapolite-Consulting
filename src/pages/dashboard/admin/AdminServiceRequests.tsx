@@ -1454,7 +1454,7 @@ export default function AdminServiceRequests() {
   ] as const, [lifecycleSettings]);
 
   return (
-    <div className="space-y-8 bg-[#F5F7FB] px-1 pb-8">
+    <div className="space-y-8 bg-[#F5F7FB] sm:px-1 sm:pb-8">
       <div className="sticky top-0 z-20 -mx-1 border-b border-slate-200/80 bg-[#F5F7FB]/95 px-1 py-4 backdrop-blur">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
@@ -1629,18 +1629,18 @@ export default function AdminServiceRequests() {
                 key={request.id}
                 type="button"
                 onClick={() => openRequest(request)}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40"
+                className="flex w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-sm font-semibold text-white">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-sm font-semibold text-white">
                     {getInitials(request.full_name)}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-900">{request.full_name}</p>
                     <p className="text-xs text-slate-500">{formatServiceList(resolveServiceList(request))}</p>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 pl-[52px] text-left sm:pl-0 sm:text-right">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">Expiry countdown</p>
                   <p className="mt-1 text-sm font-medium text-rose-600">{getLifecycleCountdownLabel(request) || "Expires soon"}</p>
                 </div>
@@ -1657,15 +1657,15 @@ export default function AdminServiceRequests() {
         </div>
 
         <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] xl:col-span-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+          <div className="flex flex-col gap-4">
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold text-slate-900">Expired Leads</h2>
               <p className="mt-1 text-sm text-slate-500">Revive expired leads directly from the dashboard and restart their cycle at the selected stage.</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               {role === "admin" ? (
                 <Select value={selectedReviveStage} onValueChange={(value) => setSelectedReviveStage(value as Enums<"service_request_lifecycle_stage">)}>
-                  <SelectTrigger className="min-w-[220px] rounded-2xl border-slate-200 bg-white">
+                  <SelectTrigger className="w-full rounded-2xl border-slate-200 bg-white sm:w-auto sm:min-w-[220px]">
                     <SelectValue placeholder="Choose re-entry stage" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1675,7 +1675,7 @@ export default function AdminServiceRequests() {
                   </SelectContent>
                 </Select>
               ) : null}
-              <Button type="button" variant="outline" className="rounded-2xl border-slate-200" onClick={() => moveToWorkspaceTab("expired")}>
+              <Button type="button" variant="outline" className="w-full rounded-2xl border-slate-200 sm:w-auto" onClick={() => moveToWorkspaceTab("expired")}>
                 View all expired
               </Button>
             </div>
@@ -1686,14 +1686,14 @@ export default function AdminServiceRequests() {
                 key={request.id}
                 className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3"
               >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-col gap-3">
                   <button
                     type="button"
                     onClick={() => openRequest(request)}
                     className="min-w-0 text-left"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-100 text-sm font-semibold text-violet-700">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-sm font-semibold text-violet-700">
                         {getInitials(request.full_name)}
                       </div>
                       <div className="min-w-0">
@@ -1705,14 +1705,14 @@ export default function AdminServiceRequests() {
                       </div>
                     </div>
                   </button>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Button type="button" variant="outline" className="rounded-xl" onClick={() => openRequest(request)}>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                    <Button type="button" variant="outline" className="w-full rounded-xl sm:w-auto" onClick={() => openRequest(request)}>
                       Review lead
                     </Button>
                     {role === "admin" ? (
                       <Button
                         type="button"
-                        className="rounded-xl"
+                        className="w-full rounded-xl sm:w-auto"
                         onClick={() => void reviveLead(request.id)}
                         disabled={revivingLeadId === request.id}
                       >
