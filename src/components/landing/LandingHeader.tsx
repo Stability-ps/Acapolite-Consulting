@@ -56,7 +56,17 @@ export function LandingHeader() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
-  const isHome = location.pathname === "/";
+  const isNavItemActive = (href: string) => {
+    if (href === "/") {
+      return location.pathname === "/" && !location.hash;
+    }
+
+    if (href.startsWith("/#")) {
+      return location.pathname === "/" && location.hash === href.slice(1);
+    }
+
+    return location.pathname === href;
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#E7E7E7] bg-white">
@@ -92,7 +102,7 @@ export function LandingHeader() {
                         onClick={closeMenu}
                         className={cn(
                           "flex w-full items-center rounded-xl px-4 py-3 text-sm font-medium transition",
-                          item.label === "Home" && isHome
+                          isNavItemActive(item.href)
                             ? "bg-[#FFF8E4] text-[#022D73]"
                             : "text-[#1E2A3C] hover:bg-[#F4F4F2]",
                         )}
@@ -150,7 +160,7 @@ export function LandingHeader() {
               key={item.label}
               href={item.href}
               label={item.label}
-              isActive={item.label === "Home" && isHome}
+              isActive={isNavItemActive(item.href)}
             />
           ))}
           <DropdownMenu>
