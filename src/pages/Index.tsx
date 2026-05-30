@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
 import { Hero } from "@/components/landing/Hero";
+import { DatanamixPartner } from "@/components/landing/DatanamixPartner";
 import { StatsBar } from "@/components/landing/StatsBar";
 import { TaxSupportIntro } from "@/components/landing/TaxSupportIntro";
 import { Features } from "@/components/landing/Features";
@@ -35,6 +36,7 @@ const Index = () => {
     <div className="min-h-screen">
       <LandingHeader />
       <Hero />
+      <DatanamixPartner />
       <HowItWorks />
       <StatsBar />
       <TaxSupportIntro />

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Footer } from "@/components/landing/Footer";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
+import { DatanamixPartner } from "@/components/landing/DatanamixPartner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CREDIT_PACKAGES, SUBSCRIPTION_PLANS } from "@/hooks/usePaystack";
@@ -154,6 +155,8 @@ export default function Practitioners() {
             </div>
           </div>
         </section>
+
+        <DatanamixPartner />
 
         <section id="how-it-works" className="bg-background py-20 scroll-mt-32">
           <div className="container mx-auto px-6">
