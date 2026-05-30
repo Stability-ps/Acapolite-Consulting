@@ -156,8 +156,6 @@ export default function Practitioners() {
           </div>
         </section>
 
-        <DatanamixPartner />
-
         <section id="how-it-works" className="bg-background py-20 scroll-mt-32">
           <div className="container mx-auto px-6">
             <div className="mx-auto max-w-3xl text-center">
@@ -283,6 +281,8 @@ export default function Practitioners() {
             </div>
           </div>
         </section>
+
+        <DatanamixPartner />
 
         <section id="services" className="bg-muted/30 py-20 scroll-mt-32">
           <div className="container mx-auto px-6">

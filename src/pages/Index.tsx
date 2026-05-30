@@ -36,7 +36,6 @@ const Index = () => {
     <div className="min-h-screen">
       <LandingHeader />
       <Hero />
-      <DatanamixPartner />
       <HowItWorks />
       <StatsBar />
       <TaxSupportIntro />
@@ -45,6 +44,7 @@ const Index = () => {
       <VerifiedPractitioners />
       <Testimonials />
       <AreasWeServe />
+      <DatanamixPartner />
       <CTA />
       <Footer />
       <ScrollToTopButton />
