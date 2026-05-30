@@ -34,7 +34,7 @@ export function WebPushPrompt({ profileLink, buttonLabel = "Enable Notifications
           </p>
         </div>
 
-        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${
           isSubscribed ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-primary/20 bg-primary/10 text-primary"
         }`}>
           {isSubscribed ? <CheckCircle2 className="h-5 w-5" /> : <BellRing className="h-5 w-5" />}

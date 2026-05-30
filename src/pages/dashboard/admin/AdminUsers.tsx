@@ -1482,7 +1482,7 @@ export default function AdminUsers() {
 
   return (
     <div>
-      <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="mb-1 font-display text-2xl font-bold text-foreground">
             Staff Users
@@ -1494,32 +1494,31 @@ export default function AdminUsers() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            className="rounded-xl"
-            onClick={() => setIsCreateOpen(true)}
-          >
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Staff User
-          </Button>
-        </div>
+        <Button
+          type="button"
+          className="w-full rounded-xl shrink-0 sm:w-auto"
+          onClick={() => setIsCreateOpen(true)}
+        >
+          <UserPlus className="mr-2 h-4 w-4" />
+          Add Staff User
+        </Button>
       </div>
 
-      <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-[1.5fr_repeat(5,minmax(0,180px))]">
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
-            Practitioner Control
-          </p>
-          <h2 className="mt-3 font-display text-lg font-semibold text-foreground">
-            One view for verification, workload, and risk
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground font-body">
-            Quickly see which practitioners are verified, which ones still have
-            document issues, and who is ready to take on more work.
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+      <div className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-card">
+        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+          Practitioner Control
+        </p>
+        <h2 className="mt-2 font-display text-lg font-semibold text-foreground">
+          One view for verification, workload, and risk
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground font-body">
+          Quickly see which practitioners are verified, which ones still have
+          document issues, and who is ready to take on more work.
+        </p>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+        <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-card">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
             Admins
           </p>
@@ -1530,7 +1529,7 @@ export default function AdminUsers() {
             Full platform managers
           </p>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+        <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-card">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
             Practitioners
           </p>
@@ -1541,7 +1540,7 @@ export default function AdminUsers() {
             Marketplace practitioner accounts
           </p>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+        <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-card">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
             Verified
           </p>
@@ -1552,7 +1551,7 @@ export default function AdminUsers() {
             Practitioners ready for trust checks
           </p>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+        <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-card">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
             Needs Attention
           </p>
@@ -1563,7 +1562,7 @@ export default function AdminUsers() {
             Verification, profile, or document issues
           </p>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+        <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-card sm:col-span-2 md:col-span-1">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
             Ready For Work
           </p>
@@ -1738,7 +1737,7 @@ export default function AdminUsers() {
             return (
               <div
                 key={staffUser.id}
-                className={`rounded-2xl border bg-card p-5 shadow-card transition-all hover:shadow-elevated ${
+                className={`min-w-0 rounded-2xl border bg-card p-5 shadow-card transition-all hover:shadow-elevated ${
                   card.needsAttention
                     ? "border-amber-200"
                     : "border-border hover:border-primary/25"
@@ -2585,12 +2584,12 @@ export default function AdminUsers() {
               </div>
             ) : null}
 
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
               {selectedStaffUser.role === "consultant" ? (
                 <Button
                   type="button"
                   variant="outline"
-                  className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                  className="w-full rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 sm:w-auto sm:mr-auto"
                   onClick={() => setIsDeletePractitionerOpen(true)}
                   disabled={isSaving}
                 >
@@ -2601,7 +2600,7 @@ export default function AdminUsers() {
               <Button
                 type="button"
                 variant="outline"
-                className="rounded-xl"
+                className="w-full rounded-xl sm:w-auto"
                 onClick={() => setSelectedStaffId(null)}
                 disabled={isSaving}
               >
@@ -2609,7 +2608,7 @@ export default function AdminUsers() {
               </Button>
               <Button
                 type="button"
-                className="rounded-xl"
+                className="w-full rounded-xl sm:w-auto"
                 onClick={updateStaffUser}
                 disabled={isSaving}
               >
