@@ -180,12 +180,11 @@ export function Hero() {
             </p>
 
             <h1 className="mt-4 hidden text-[2.15rem] font-black leading-[1.08] tracking-[-0.03em] text-[#102B46] sm:text-[2.65rem] lg:block xl:text-[3rem]">
-              Professional Tax, SARS &amp; Business Assistance Across South Africa
+             Tax, Accounting, SARS &amp; Business Support Across South Africa
             </h1>
 
             <p className="mt-4 hidden text-[15px] leading-7 text-[#5F6C7B] lg:block">
-              Access qualified tax practitioners and accounting professionals for SARS matters,
-              tax returns, bookkeeping, company compliance and business support across South Africa.
+              Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa.
             </p>
 
             <div className="mt-5 hidden grid-cols-2 gap-x-3 gap-y-4 lg:mt-8 lg:grid lg:gap-x-4 lg:gap-y-5">
