@@ -159,10 +159,10 @@ export function Hero() {
                   ACAPOLITE CONSULTING
                 </p>
                 <h1 className="mt-2 text-[1.5rem] font-black leading-[1.15] tracking-[-0.03em] text-[#102B46]">
-                  Professional Tax, SARS &amp; Business Assistance Across South Africa
+                 Tax, Accounting, SARS &amp; Business Support Across South Africa
                 </h1>
                 <p className="mt-2 text-[12px] leading-5 text-[#5F6C7B]">
-                  Access qualified tax practitioners and accounting professionals across South Africa.
+                 Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa.
                 </p>
               </div>
               <div className="relative h-36 w-28 shrink-0 overflow-hidden rounded-[1.25rem] border border-[#E7E7E7] bg-[#EAE9E4]">
