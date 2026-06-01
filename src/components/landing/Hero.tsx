@@ -159,10 +159,10 @@ export function Hero() {
                   ACAPOLITE CONSULTING
                 </p>
                 <h1 className="mt-2 text-[1.5rem] font-black leading-[1.15] tracking-[-0.03em] text-[#102B46]">
-                 Tax, Accounting, SARS &amp; Business Support Across South Africa
+                  Tax, Accounting, SARS &amp; Business Support Across South Africa
                 </h1>
                 <p className="mt-2 text-[12px] leading-5 text-[#5F6C7B]">
-                 Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa.
+                  Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa.
                 </p>
               </div>
               <div className="relative h-36 w-28 shrink-0 overflow-hidden rounded-[1.25rem] border border-[#E7E7E7] bg-[#EAE9E4]">
@@ -180,7 +180,7 @@ export function Hero() {
             </p>
 
             <h1 className="mt-4 hidden text-[2.15rem] font-black leading-[1.08] tracking-[-0.03em] text-[#102B46] sm:text-[2.65rem] lg:block xl:text-[3rem]">
-             Tax, Accounting, SARS &amp; Business Support Across South Africa
+              Tax, Accounting, SARS &amp; Business Support Across South Africa
             </h1>
 
             <p className="mt-4 hidden text-[15px] leading-7 text-[#5F6C7B] lg:block">
