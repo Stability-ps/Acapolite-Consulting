@@ -153,7 +153,7 @@ export function Hero() {
 
           {/* Headline & trust */}
           <div className="order-1 lg:order-1 lg:col-span-4 lg:self-center">
-            <div className="flex items-start gap-4 rounded-[1.5rem] border border-[#E7E7E7] bg-white p-4 shadow-[0_16px_40px_-26px_rgba(15,23,42,0.25)] lg:hidden">
+            <div className="flex items-stretch gap-4 rounded-[1.5rem] border border-[#E7E7E7] bg-white p-4 shadow-[0_16px_40px_-26px_rgba(15,23,42,0.25)] lg:hidden">
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#C49A22]">
                   ACAPOLITE CONSULTING
@@ -165,11 +165,11 @@ export function Hero() {
                   Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa.
                 </p>
               </div>
-              <div className="relative h-36 w-28 shrink-0 overflow-hidden rounded-[1.25rem] border border-[#E7E7E7] bg-[#EAE9E4]">
+              <div className="relative w-28 shrink-0 self-stretch overflow-hidden rounded-[1.25rem] border border-[#E7E7E7] bg-[#EAE9E4]">
                 <img
                   src="/oui.png"
                   alt="Professional tax consultant ready to assist"
-                  className="absolute inset-0 h-full w-full object-cover object-[center_20%]"
+                  className="absolute inset-0 h-full w-full object-cover object-[center_top]"
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(15,23,42,0.08)_100%)]" />
               </div>
