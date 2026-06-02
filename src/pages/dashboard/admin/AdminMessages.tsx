@@ -551,7 +551,7 @@ export default function AdminMessages() {
         </div>
 
         <div className={isMobileConversationOpen
-          ? "fixed inset-0 z-50 flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] lg:relative lg:inset-auto lg:z-auto lg:h-auto lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:pt-0 lg:shadow-card"
+          ? "fixed inset-0 z-50 flex h-[87dvh] sm:h-[100dvh] min-h-0 flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] lg:relative lg:inset-auto lg:z-auto lg:h-auto lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:pt-0 lg:shadow-card"
           : "hidden min-h-0 lg:flex lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-card"}>
           {selectedConversationRecord ? (
             <>

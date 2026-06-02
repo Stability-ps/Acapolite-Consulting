@@ -1957,7 +1957,7 @@ export default function AdminServiceRequests() {
               <p className="mt-1 text-sm text-slate-500">Recent engagement and response performance across the marketplace.</p>
             </div>
           </div>
-          <div className="mt-5 space-y-3">
+          <div className="mt-5 max-h-[720px] space-y-3 overflow-y-auto pr-1">
             {practitionerActivityRows.length ? practitionerActivityRows.map((row) => (
               <div
                 key={row.id}

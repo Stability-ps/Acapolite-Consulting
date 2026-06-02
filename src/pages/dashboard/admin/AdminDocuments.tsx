@@ -995,19 +995,19 @@ export default function AdminDocuments() {
             Loading documents...
           </div>
         ) : filteredItems.length > 0 ? (
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3">
             {filteredItems.map((item) => (
               <div
                 key={item.id}
                 className="w-full text-left bg-card rounded-xl border border-border shadow-card p-5 hover:shadow-elevated hover:border-primary/30 transition-all"
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-display text-lg font-semibold text-foreground truncate">
+                    <div className="flex items-center gap-2">
+                      <p className="min-w-0 flex-1 truncate font-display text-lg font-semibold text-foreground">
                         {item.title}
                       </p>
-                      <Badge className={getStatusBadgeClass(item.status)}>
+                      <Badge className={`${getStatusBadgeClass(item.status)} shrink-0`}>
                         {formatStatusLabel(item.status)}
                       </Badge>
                     </div>
@@ -1015,9 +1015,9 @@ export default function AdminDocuments() {
                       {item.subtitle}
                     </p>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    <p>{item.clientName}</p>
-                    <p>{item.caseLabel}</p>
+                  <div className="min-w-0 text-sm text-muted-foreground sm:shrink-0 sm:text-right">
+                    <p className="truncate">{item.clientName}</p>
+                    <p className="truncate">{item.caseLabel}</p>
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap justify-end gap-2">

@@ -1472,7 +1472,7 @@ export default function AdminCases() {
               type="date"
               value={form.due_date}
               onChange={(event) => setForm((current) => ({ ...current, due_date: event.target.value }))}
-              className="rounded-xl"
+              className="w-full rounded-xl text-left [&::-webkit-date-and-time-value]:text-left [&::-webkit-datetime-edit]:text-left"
             />
           </div>
 
