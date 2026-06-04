@@ -1218,13 +1218,13 @@ export default function AdminInvoices() {
             </Button>
           ) : null}
           <div className="flex gap-3">
-            <div className="flex-1 rounded-xl border border-border bg-card px-4 py-3 sm:flex-none">
-              <p className="text-muted-foreground">Unpaid</p>
-              <p className="font-display text-xl text-foreground">{unpaidCount}</p>
+            <div className="flex h-11 flex-1 items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 sm:flex-none">
+              <p className="whitespace-nowrap text-muted-foreground">Unpaid</p>
+              <p className="font-display text-lg leading-none text-foreground">{unpaidCount}</p>
             </div>
-            <div className="flex-1 rounded-xl border border-border bg-card px-4 py-3 sm:flex-none">
-              <p className="text-muted-foreground">Overdue</p>
-              <p className="font-display text-xl text-foreground">{overdueCount}</p>
+            <div className="flex h-11 flex-1 items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 sm:flex-none">
+              <p className="whitespace-nowrap text-muted-foreground">Overdue</p>
+              <p className="font-display text-lg leading-none text-foreground">{overdueCount}</p>
             </div>
           </div>
         </div>

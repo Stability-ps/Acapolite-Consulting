@@ -198,7 +198,7 @@ export function AppSidebar() {
                           <div className="flex items-center justify-between gap-2 w-full">
                             <span>{item.title}</span>
                             {unreadCount > 0 ? (
-                              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[10px] font-semibold text-sidebar-primary-foreground shadow-sm">
+                              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[10px] font-semibold text-sidebar-primary-foreground shadow-sm">
                                 {unreadCount > 99 ? "99+" : unreadCount}
                               </span>
                             ) : null}
