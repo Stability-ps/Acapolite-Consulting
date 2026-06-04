@@ -149,7 +149,7 @@ export function LeadLifecycleExplainerDialog({
         ],
         expiry: [
           "If the client confirms they still need assistance, the lead returns to the marketplace with a reset timer",
-          "If the client declines, the lead expires and leaves the marketplace",
+          "If the client declines or does not respond before the deadline, the lead expires and leaves the marketplace",
         ],
       },
     ] as const;
@@ -284,8 +284,8 @@ export function LeadLifecycleExplainerDialog({
           </div>
           <p className="mt-3 text-sm leading-7 text-violet-900/80 font-body">
             Once a lead expires, it leaves practitioner visibility and stays archived until staff revive it.
-            The lifecycle configuration stores {formatHoursLabel(reminderHours, 6)} as the reminder window
-            before expiry and a threshold of {reactivationAlertThreshold} unsuccessful cycles for repeated reactivation review.
+            The lifecycle configuration sends a reminder within {formatHoursLabel(reminderHours, 6)} of expiry
+            and flags leads for staff review after {reactivationAlertThreshold} unsuccessful reactivation cycles.
           </p>
         </section>
       </div>
