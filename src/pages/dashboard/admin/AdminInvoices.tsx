@@ -1493,7 +1493,7 @@ export default function AdminInvoices() {
                         type="date"
                         value={invoiceDueDate}
                         onChange={(event) => setInvoiceDueDate(event.target.value)}
-                        className="h-11 w-full rounded-xl border-border/80 bg-card text-left shadow-sm [&::-webkit-date-and-time-value]:text-left [&::-webkit-datetime-edit]:text-left"
+                        className="h-11 w-full appearance-none rounded-xl border-border/80 bg-white text-left shadow-sm [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-date-and-time-value]:text-left [&::-webkit-datetime-edit]:text-left"
                       />
                     ) : (
                       <div className="rounded-xl border border-border/80 bg-card p-3 shadow-sm">
@@ -2119,7 +2119,7 @@ export default function AdminInvoices() {
                 type="date"
                 value={invoiceDueDate}
                 onChange={(event) => setInvoiceDueDate(event.target.value)}
-                className="w-full rounded-xl text-left [&::-webkit-date-and-time-value]:text-left [&::-webkit-datetime-edit]:text-left"
+                className="w-full appearance-none rounded-xl bg-white text-left [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-date-and-time-value]:text-left [&::-webkit-datetime-edit]:text-left"
               />
             </div>
           </div>
