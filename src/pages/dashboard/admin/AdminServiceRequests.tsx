@@ -747,6 +747,12 @@ export default function AdminServiceRequests() {
       return operationalRequests;
     }
 
+    if (lifecycleTab === "expired") {
+      return operationalRequests.filter((request) =>
+        request.lifecycle_stage === "expired" || request.status === "expired"
+      );
+    }
+
     if (lifecycleTab === "archived" || leadView === "archived") {
       return operationalRequests.filter((request) => request.is_archived);
     }

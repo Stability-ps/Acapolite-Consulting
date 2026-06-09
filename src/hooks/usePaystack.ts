@@ -49,6 +49,8 @@ declare global {
 }
 
 const DEFAULT_PAYSTACK_PUBLIC_KEY = "pk_live_22d1de7dc3c5f3f2247e243c1aa26c9ae5e08da3";
+const PAYSTACK_SCRIPT_SRC = "https://js.paystack.co/v1/inline.js";
+let paystackScriptPromise: Promise<void> | null = null;
 
 export const CREDIT_PACKAGES: CreditPackage[] = BILLING_CREDIT_PACKAGES;
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = BILLING_SUBSCRIPTION_PLANS;
@@ -68,9 +70,44 @@ function formatPaystackError(error: unknown) {
   return "Payment failed to initialize. Please try again.";
 }
 
-function ensurePaystack() {
+function loadPaystackScript() {
+  if (window.PaystackPop?.setup) {
+    return Promise.resolve();
+  }
+
+  if (paystackScriptPromise) {
+    return paystackScriptPromise;
+  }
+
+  paystackScriptPromise = new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${PAYSTACK_SCRIPT_SRC}"]`);
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Unable to load Paystack right now.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = PAYSTACK_SCRIPT_SRC;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Unable to load Paystack right now."));
+    document.body.appendChild(script);
+  }).finally(() => {
+    if (!window.PaystackPop?.setup) {
+      paystackScriptPromise = null;
+    }
+  });
+
+  return paystackScriptPromise;
+}
+
+async function ensurePaystack() {
+  await loadPaystackScript();
+
   if (!window.PaystackPop?.setup) {
-    throw new Error("Paystack is not available yet. Please refresh the page and try again.");
+    throw new Error("Paystack is not available yet. Please try again in a moment.");
   }
 }
 
@@ -128,7 +165,7 @@ export function usePaystack() {
     setLoading(true);
 
     try {
-      ensurePaystack();
+      await ensurePaystack();
       const { user } = await getAuthenticatedProfile();
 
       // Audit C2: purchase row creation has moved server-side. The browser
@@ -194,7 +231,7 @@ export function usePaystack() {
     setLoading(true);
 
     try {
-      ensurePaystack();
+      await ensurePaystack();
       const { user, profile } = await getAuthenticatedProfile();
 
       const handler = window.PaystackPop!.setup({
@@ -237,7 +274,7 @@ export function usePaystack() {
     setLoading(true);
 
     try {
-      ensurePaystack();
+      await ensurePaystack();
       const { user, profile } = await getAuthenticatedProfile();
 
       const { data: purchase, error: insertError } = await supabase
