@@ -2409,7 +2409,7 @@ export default function AdminClientWorkspace() {
                   type="date"
                   value={caseForm.due_date}
                   onChange={(event) => setCaseForm((current) => ({ ...current, due_date: event.target.value }))}
-                  className="w-full rounded-xl text-left [&::-webkit-date-and-time-value]:text-left [&::-webkit-datetime-edit]:text-left"
+                  className="w-full appearance-none rounded-xl bg-white text-left [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-date-and-time-value]:text-left [&::-webkit-datetime-edit]:text-left"
                 />
               </div>
               <div>

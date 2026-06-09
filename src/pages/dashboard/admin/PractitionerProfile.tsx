@@ -787,7 +787,7 @@ export default function PractitionerProfile() {
           </section>
 
           <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div>
                 <h2 className="font-display text-2xl text-foreground">
                   Client Feedback
@@ -797,9 +797,8 @@ export default function PractitionerProfile() {
                   and service quality.
                 </p>
               </div>
-              <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                {reviewSummary.count} review
-                {reviewSummary.count === 1 ? "" : "s"}
+              <Badge className="shrink-0 whitespace-nowrap rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                {reviewSummary.count} review{reviewSummary.count === 1 ? "" : "s"}
               </Badge>
             </div>
 
