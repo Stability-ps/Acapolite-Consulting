@@ -784,7 +784,7 @@ export default function PractitionerLeads() {
   };
 
   return (
-    <div className="space-y-8 bg-[#F5F7FB] pb-6">
+    <div className="space-y-8 pb-6">
       <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

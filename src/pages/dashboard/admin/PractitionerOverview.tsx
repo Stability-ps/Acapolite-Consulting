@@ -689,7 +689,7 @@ export default function PractitionerOverview() {
                 <h2 className="font-display text-2xl text-foreground">Profile Status</h2>
                 <p className="mt-2 text-sm text-muted-foreground font-body">Keep your marketplace setup healthy and current.</p>
               </div>
-              <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <Badge className="shrink-0 whitespace-nowrap rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                 {profileCompletion}% complete
               </Badge>
             </div>
@@ -712,7 +712,7 @@ export default function PractitionerOverview() {
                     {formatAvailabilityLabel(practitionerProfile?.availability_status)}
                   </p>
                 </div>
-                <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getAvailabilityBadgeClass(practitionerProfile?.availability_status)}`}>
+                <Badge className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getAvailabilityBadgeClass(practitionerProfile?.availability_status)}`}>
                   {practitionerProfile?.is_verified ? "Verified" : "Pending"}
                 </Badge>
               </div>

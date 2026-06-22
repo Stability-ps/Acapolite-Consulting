@@ -371,11 +371,11 @@ export default function Documents() {
 
       {isUploadModalOpen ? (
         <div
-          className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-sm flex items-center justify-center px-4"
+          className="fixed inset-0 z-50 backdrop-blur-sm flex items-center justify-center px-4"
           onClick={closeUploadModal}
         >
           <div
-            className="w-full max-w-xl rounded-[28px] bg-card border border-border shadow-elevated p-6 sm:p-7"
+            className="w-full max-w-xl shadow rounded-[28px] bg-card border border-border shadow-elevated p-6 sm:p-7"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 mb-6">

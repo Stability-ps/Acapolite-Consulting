@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Tables } from "@/integrations/supabase/types";
 
 export type AppNotification = Tables<"notifications">;
 export type NotificationSection = "general" | "messages" | "requests" | "cases" | "documents";
+
+const NOTIFICATIONS_PAGE_SIZE = 15;
 
 function appendQueryParam(path: string, key: string, value: string) {
   if (!value || path.includes(`${key}=`)) {
@@ -134,8 +136,39 @@ export function useNotifications() {
   const { user, role } = useAuth();
   const queryClient = useQueryClient();
 
-  const query = useQuery({
-    queryKey: ["notifications", user?.id],
+  const listQuery = useInfiniteQuery({
+    queryKey: ["notifications", user?.id, "list"],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      if (!user?.id) {
+        return [];
+      }
+
+      const from = (pageParam as number) * NOTIFICATIONS_PAGE_SIZE;
+      const to = from + NOTIFICATIONS_PAGE_SIZE - 1;
+
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("recipient_profile_id", user.id)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as AppNotification[];
+    },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < NOTIFICATIONS_PAGE_SIZE ? undefined : allPages.length,
+    enabled: !!user?.id,
+  });
+
+  // Unread notifications are fetched separately so badge/section counts stay
+  // accurate regardless of how many pages of the list have been loaded.
+  const unreadQuery = useQuery({
+    queryKey: ["notifications", user?.id, "unread"],
     queryFn: async () => {
       if (!user?.id) {
         return [];
@@ -145,8 +178,9 @@ export function useNotifications() {
         .from("notifications")
         .select("*")
         .eq("recipient_profile_id", user.id)
+        .eq("is_read", false)
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(200);
 
       if (error) {
         throw error;
@@ -178,9 +212,7 @@ export function useNotifications() {
     };
   }, [queryClient, user?.id]);
 
-  const notifications = useMemo(() => {
-    const items = query.data ?? [];
-
+  const transformNotifications = useCallback((items: AppNotification[]) => {
     if (role !== "consultant") {
       return items.map((notification) => ({
         ...notification,
@@ -191,23 +223,26 @@ export function useNotifications() {
     return items
       .filter((notification) => isVisibleToPractitioner(notification, user?.id))
       .map((notification) => sanitizePractitionerNotification(notification));
-  }, [query.data, role, user?.id]);
+  }, [role, user?.id]);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((notification) => !notification.is_read).length,
-    [notifications],
+  const notifications = useMemo(
+    () => transformNotifications(listQuery.data?.pages.flat() ?? []),
+    [listQuery.data, transformNotifications],
   );
 
-  const unreadBySection = useMemo(() => {
-    return notifications.reduce<Record<string, number>>((accumulator, notification) => {
-      if (notification.is_read) {
-        return accumulator;
-      }
+  const unreadNotifications = useMemo(
+    () => transformNotifications(unreadQuery.data ?? []),
+    [unreadQuery.data, transformNotifications],
+  );
 
+  const unreadCount = unreadNotifications.length;
+
+  const unreadBySection = useMemo(() => {
+    return unreadNotifications.reduce<Record<string, number>>((accumulator, notification) => {
       accumulator[notification.section] = (accumulator[notification.section] ?? 0) + 1;
       return accumulator;
     }, {});
-  }, [notifications]);
+  }, [unreadNotifications]);
 
   const markAsRead = useCallback(async (notificationIds: string[]) => {
     if (!user?.id || !notificationIds.length) {
@@ -233,8 +268,8 @@ export function useNotifications() {
       return;
     }
 
-    const unreadIds = notifications
-      .filter((notification) => notification.section === section && !notification.is_read)
+    const unreadIds = unreadNotifications
+      .filter((notification) => notification.section === section)
       .map((notification) => notification.id);
 
     if (!unreadIds.length) {
@@ -242,29 +277,34 @@ export function useNotifications() {
     }
 
     await markAsRead(unreadIds);
-  }, [markAsRead, notifications, user?.id]);
+  }, [markAsRead, unreadNotifications, user?.id]);
 
   const markAllAsRead = useCallback(async () => {
     if (!user?.id) {
       return;
     }
 
-    const unreadIds = notifications
-      .filter((notification) => !notification.is_read)
-      .map((notification) => notification.id);
+    const unreadIds = unreadNotifications.map((notification) => notification.id);
 
     if (!unreadIds.length) {
       return;
     }
 
     await markAsRead(unreadIds);
-  }, [markAsRead, notifications, user?.id]);
+  }, [markAsRead, unreadNotifications, user?.id]);
 
   return {
     notifications,
     unreadCount,
     unreadBySection,
-    isLoading: query.isLoading,
+    isLoading: listQuery.isLoading,
+    hasMore: listQuery.hasNextPage,
+    isLoadingMore: listQuery.isFetchingNextPage,
+    loadMore: () => {
+      if (listQuery.hasNextPage && !listQuery.isFetchingNextPage) {
+        void listQuery.fetchNextPage();
+      }
+    },
     markAsRead,
     markSectionAsRead,
     markAllAsRead,

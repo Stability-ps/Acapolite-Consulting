@@ -302,12 +302,12 @@ export function AdminCreditControls({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             <TrendingUp className="h-6 w-6 text-primary" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h3 className="font-display text-lg font-semibold text-foreground">Current Credits & Billing Snapshot</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               Live plan pricing, limits, and wallet balances for this practitioner.
@@ -318,7 +318,7 @@ export function AdminCreditControls({
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="rounded-xl border border-border bg-background/60 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Active Plan</p>
-            <p className="mt-2 font-display text-2xl text-foreground">
+            <p className="mt-2 break-words font-display text-2xl text-foreground">
               {activePractitionerPlan?.name ?? "No active subscription"}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -336,7 +336,7 @@ export function AdminCreditControls({
 
           <div className="rounded-xl border border-border bg-background/60 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Wallet Overview</p>
-            <p className="mt-2 font-display text-2xl text-foreground">{currentBalance} total credits</p>
+            <p className="mt-2 break-words font-display text-2xl text-foreground">{currentBalance} total credits</p>
             <div className="mt-4 space-y-1 text-sm text-muted-foreground">
               <p>Monthly credits remaining: {monthlyCreditsRemaining}</p>
               <p>Monthly credit expiry: {formatDate(monthlyExpiryDate)}</p>
@@ -346,22 +346,22 @@ export function AdminCreditControls({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-border bg-background/60 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Storage Used</p>
-            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageValue(creditAccount?.storage_used_bytes ?? 0)}</p>
+            <p className="mt-2 break-words font-display text-2xl text-foreground">{formatStorageValue(creditAccount?.storage_used_bytes ?? 0)}</p>
           </div>
           <div className="rounded-xl border border-border bg-background/60 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Effective Storage Limit</p>
-            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageLimitFromMb(currentStorageLimitMb)}</p>
+            <p className="mt-2 break-words font-display text-2xl text-foreground">{formatStorageLimitFromMb(currentStorageLimitMb)}</p>
           </div>
           <div className="rounded-xl border border-border bg-background/60 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Storage Add-ons</p>
-            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageLimitFromMb(storageAddonLimitMb)}</p>
+            <p className="mt-2 break-words font-display text-2xl text-foreground">{formatStorageLimitFromMb(storageAddonLimitMb)}</p>
           </div>
           <div className="rounded-xl border border-border bg-background/60 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Admin Override</p>
-            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageLimitFromMb(storageOverrideLimitMb)}</p>
+            <p className="mt-2 break-words font-display text-2xl text-foreground">{formatStorageLimitFromMb(storageOverrideLimitMb)}</p>
           </div>
         </div>
 
@@ -380,13 +380,13 @@ export function AdminCreditControls({
         ) : null}
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100">
               <Coins className="h-6 w-6 text-amber-600" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="font-display text-lg font-semibold text-foreground">Credit Management</h3>
               <p className="mt-1 text-sm text-muted-foreground">Current balance: {currentBalance} credits</p>
             </div>
@@ -522,12 +522,12 @@ export function AdminCreditControls({
         </Button>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-100">
             <HardDrive className="h-6 w-6 text-sky-700" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h3 className="font-display text-lg font-semibold text-foreground">Storage & Usage Overrides</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               Current storage: {formatStorageValue(creditAccount?.storage_used_bytes ?? 0)} / {formatStorageLimitFromMb(currentStorageLimitMb)}
@@ -562,7 +562,7 @@ export function AdminCreditControls({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-xl border border-border bg-background/60 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Current upload usage</p>
-            <p className="mt-2 font-display text-2xl text-foreground">{formatStorageValue(creditAccount?.storage_used_bytes ?? 0)}</p>
+            <p className="mt-2 break-words font-display text-2xl text-foreground">{formatStorageValue(creditAccount?.storage_used_bytes ?? 0)}</p>
           </div>
           <div className="rounded-xl border border-border bg-background/60 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Tracked clients</p>
@@ -596,12 +596,12 @@ export function AdminCreditControls({
         </Button>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-border bg-card p-6">
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-100">
             <Settings2 className="h-6 w-6 text-violet-700" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h3 className="font-display text-lg font-semibold text-foreground">Plan Limits</h3>
             <p className="mt-1 text-sm text-muted-foreground">Update global plan limits, credits, and storage allowances.</p>
           </div>

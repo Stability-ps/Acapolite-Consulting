@@ -64,7 +64,10 @@ export function InvoiceLineItemsEditor({
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border">
-        <div className="grid grid-cols-[minmax(0,1.9fr)_110px_140px_140px] gap-3 border-b border-border bg-accent/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {/* Column headers — desktop only; mobile uses inline labels per field */}
+        <div
+          className={`hidden gap-3 border-b border-border bg-accent/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground md:grid ${readOnly ? "md:grid-cols-[minmax(0,1.9fr)_110px_140px_140px]" : "md:grid-cols-[minmax(0,1.9fr)_110px_140px_140px_52px]"}`}
+        >
           <p>Service Item</p>
           <p>Quantity</p>
           <p>Price</p>
@@ -74,52 +77,95 @@ export function InvoiceLineItemsEditor({
           {items?.map((item, index) => (
             <div
               key={getStableKey(item, index)}
-              className={`grid gap-3 px-4 py-4 ${readOnly ? "grid-cols-[minmax(0,1.9fr)_110px_140px_140px]" : "grid-cols-[minmax(0,1.9fr)_110px_140px_140px_52px]"}`}
+              className={`grid grid-cols-1 gap-3 px-4 py-4 md:gap-3 ${
+                readOnly
+                  ? "md:grid-cols-[minmax(0,1.9fr)_110px_140px_140px]"
+                  : "md:grid-cols-[minmax(0,1.9fr)_110px_140px_140px_52px]"
+              }`}
             >
               {readOnly ? (
                 <>
                   <p className="text-sm text-foreground font-body">{item.service_item || "Service item"}</p>
-                  <p className="text-sm text-foreground font-body">{item.quantity || "1"}</p>
-                  <p className="text-sm text-foreground font-body">{formatCurrency(Number(item.unit_price || 0))}</p>
-                  <p className="text-sm font-semibold text-foreground font-body">{formatCurrency(calculateLineItemTotal(item))}</p>
+                  <p className="text-sm text-foreground font-body">
+                    <span className="mr-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground md:hidden">
+                      Qty
+                    </span>
+                    {item.quantity || "1"}
+                  </p>
+                  <p className="text-sm text-foreground font-body">
+                    <span className="mr-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground md:hidden">
+                      Price
+                    </span>
+                    {formatCurrency(Number(item.unit_price || 0))}
+                  </p>
+                  <p className="text-sm font-semibold text-foreground font-body">
+                    <span className="mr-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground md:hidden">
+                      Total
+                    </span>
+                    {formatCurrency(calculateLineItemTotal(item))}
+                  </p>
                 </>
               ) : (
                 <>
-                  <Input
-                    value={item.service_item}
-                    onChange={(event) => updateItem(index, "service_item", event.target.value)}
-                    placeholder="Example: Tax return filing"
-                    className="rounded-xl"
-                  />
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={item.quantity}
-                    onChange={(event) => updateItem(index, "quantity", event.target.value)}
-                    className="rounded-xl"
-                  />
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.unit_price}
-                    onChange={(event) => updateItem(index, "unit_price", event.target.value)}
-                    className="rounded-xl"
-                  />
-                  <div className="flex items-center rounded-xl border border-border bg-accent/10 px-3 text-sm font-semibold text-foreground">
-                    {formatCurrency(calculateLineItemTotal(item))}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground md:hidden">
+                      Service Item
+                    </label>
+                    <Input
+                      value={item.service_item}
+                      onChange={(event) => updateItem(index, "service_item", event.target.value)}
+                      placeholder="Example: Tax return filing"
+                      className="rounded-xl"
+                    />
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-xl"
-                    onClick={() => removeItem(index)}
-                    disabled={items.length === 1}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="grid grid-cols-2 gap-3 md:contents">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground md:hidden">
+                        Quantity
+                      </label>
+                      <Input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={item.quantity}
+                        onChange={(event) => updateItem(index, "quantity", event.target.value)}
+                        className="rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground md:hidden">
+                        Price
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.unit_price}
+                        onChange={(event) => updateItem(index, "unit_price", event.target.value)}
+                        className="rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground md:hidden">
+                      Total
+                    </label>
+                    <div className="flex h-10 items-center rounded-xl border border-border bg-accent/10 px-3 text-sm font-semibold text-foreground">
+                      {formatCurrency(calculateLineItemTotal(item))}
+                    </div>
+                  </div>
+                  <div className="flex justify-end md:block">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-10 rounded-xl px-3 text-destructive hover:text-destructive md:w-10 md:px-0"
+                      onClick={() => removeItem(index)}
+                      disabled={items.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="ml-2 md:hidden">Remove item</span>
+                    </Button>
+                  </div>
                 </>
               )}
             </div>

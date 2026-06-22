@@ -36,7 +36,7 @@ function formatSectionLabel(section: NotificationSection) {
 
 export default function Notifications() {
   const navigate = useNavigate();
-  const { notifications, unreadCount, isLoading, markAllAsRead, markAsRead } = useNotifications();
+  const { notifications, unreadCount, isLoading, markAllAsRead, markAsRead, hasMore, isLoadingMore, loadMore } = useNotifications();
   const [filter, setFilter] = useState<FilterValue>("all");
 
   const filteredNotifications = useMemo(() => {
@@ -131,6 +131,19 @@ export default function Notifications() {
               </div>
             </button>
           ))}
+
+          {hasMore ? (
+            <div className="flex justify-center pt-2">
+              <Button
+                type="button"
+                className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => loadMore()}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? "Loading..." : "Load more"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="rounded-2xl border border-border bg-card p-12 text-center">

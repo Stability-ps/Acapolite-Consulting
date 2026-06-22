@@ -144,47 +144,47 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-2xl">
+    <div className="mx-auto w-full max-w-5xl">
       <h1 className="font-display text-2xl font-bold text-foreground mb-1">Settings</h1>
       <p className="text-muted-foreground font-body text-sm mb-8">Manage your profile information</p>
 
-      <form onSubmit={handleSave} className="bg-card rounded-xl border border-border shadow-card p-6 space-y-5">
-        <div>
-          <Label className="font-body">Email</Label>
-          <Input value={user?.email || ""} disabled className="mt-1.5 bg-muted" />
-        </div>
-        <div>
-          <Label className="font-body">Full Name</Label>
-          <Input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} className="mt-1.5" />
-        </div>
-        <div>
-          <Label className="font-body">Phone Number</Label>
-          <Input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="mt-1.5" />
-        </div>
-        <div>
-          <Label className="font-body">Individual or Company</Label>
-          <Select
-            value={form.client_type}
-            onValueChange={(value) =>
-              setForm((current) => ({
-                ...current,
-                client_type: value,
-                id_number: value === "individual" ? current.id_number : "",
-                company_name: value === "company" ? current.company_name : "",
-                company_registration_number: value === "company" ? current.company_registration_number : "",
-              }))
-            }
-          >
-            <SelectTrigger className="mt-1.5">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="individual">Individual</SelectItem>
-              <SelectItem value="company">Company</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
+      <form onSubmit={handleSave} className="bg-card rounded-xl border border-border shadow-card p-6 sm:p-8">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label className="font-body">Email</Label>
+            <Input value={user?.email || ""} disabled className="mt-1.5 bg-muted" />
+          </div>
+          <div>
+            <Label className="font-body">Full Name</Label>
+            <Input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} className="mt-1.5" />
+          </div>
+          <div>
+            <Label className="font-body">Phone Number</Label>
+            <Input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="mt-1.5" />
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="font-body">Individual or Company</Label>
+            <Select
+              value={form.client_type}
+              onValueChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  client_type: value,
+                  id_number: value === "individual" ? current.id_number : "",
+                  company_name: value === "company" ? current.company_name : "",
+                  company_registration_number: value === "company" ? current.company_registration_number : "",
+                }))
+              }
+            >
+              <SelectTrigger className="mt-1.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="individual">Individual</SelectItem>
+                <SelectItem value="company">Company</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div>
             <Label className="font-body">First Name</Label>
             <Input value={form.first_name} onChange={(event) => setForm({ ...form, first_name: event.target.value })} className="mt-1.5" />
@@ -193,8 +193,6 @@ export default function SettingsPage() {
             <Label className="font-body">Last Name</Label>
             <Input value={form.last_name} onChange={(event) => setForm({ ...form, last_name: event.target.value })} className="mt-1.5" />
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
           <div>
             <Label className="font-body">
               {form.client_type === "company" ? "Company Name" : "ID Number"}
@@ -229,22 +227,20 @@ export default function SettingsPage() {
               <Input value={form.tax_number} onChange={(event) => setForm({ ...form, tax_number: event.target.value })} className="mt-1.5" />
             )}
           </div>
-        </div>
-        {form.client_type === "company" ? (
+          {form.client_type === "company" ? (
+            <div className="sm:col-span-2">
+              <Label className="font-body">Tax Number</Label>
+              <Input value={form.tax_number} onChange={(event) => setForm({ ...form, tax_number: event.target.value })} className="mt-1.5" />
+            </div>
+          ) : null}
           <div>
-            <Label className="font-body">Tax Number</Label>
-            <Input value={form.tax_number} onChange={(event) => setForm({ ...form, tax_number: event.target.value })} className="mt-1.5" />
+            <Label className="font-body">SARS Reference Number</Label>
+            <Input value={form.sars_reference_number} onChange={(event) => setForm({ ...form, sars_reference_number: event.target.value })} className="mt-1.5" />
           </div>
-        ) : null}
-        <div>
-          <Label className="font-body">SARS Reference Number</Label>
-          <Input value={form.sars_reference_number} onChange={(event) => setForm({ ...form, sars_reference_number: event.target.value })} className="mt-1.5" />
-        </div>
-        <div>
-          <Label className="font-body">VAT Number (Optional)</Label>
-          <Input value={form.vat_number} onChange={(event) => setForm({ ...form, vat_number: event.target.value })} className="mt-1.5" placeholder="VAT number" />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="font-body">VAT Number (Optional)</Label>
+            <Input value={form.vat_number} onChange={(event) => setForm({ ...form, vat_number: event.target.value })} className="mt-1.5" placeholder="VAT number" />
+          </div>
           <div>
             <Label className="font-body">City</Label>
             <Input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} className="mt-1.5" />
@@ -264,16 +260,14 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
           </div>
-        </div>
-        <div>
-          <Label className="font-body">Address Line 1</Label>
-          <Input value={form.address_line_1} onChange={(event) => setForm({ ...form, address_line_1: event.target.value })} className="mt-1.5" />
-        </div>
-        <div>
-          <Label className="font-body">Address Line 2</Label>
-          <Input value={form.address_line_2} onChange={(event) => setForm({ ...form, address_line_2: event.target.value })} className="mt-1.5" />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
+          <div className="sm:col-span-2">
+            <Label className="font-body">Address Line 1</Label>
+            <Input value={form.address_line_1} onChange={(event) => setForm({ ...form, address_line_1: event.target.value })} className="mt-1.5" />
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="font-body">Address Line 2</Label>
+            <Input value={form.address_line_2} onChange={(event) => setForm({ ...form, address_line_2: event.target.value })} className="mt-1.5" />
+          </div>
           <div>
             <Label className="font-body">Postal Code</Label>
             <Input value={form.postal_code} onChange={(event) => setForm({ ...form, postal_code: event.target.value })} className="mt-1.5" />
@@ -283,7 +277,7 @@ export default function SettingsPage() {
             <Input value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} className="mt-1.5" />
           </div>
         </div>
-        <Button type="submit" disabled={saving} className="rounded-xl">
+        <Button type="submit" disabled={saving} className="mt-7 w-full rounded-xl sm:w-auto">
           {saving ? "Saving..." : "Save Changes"}
         </Button>
       </form>

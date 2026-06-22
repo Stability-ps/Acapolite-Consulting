@@ -414,7 +414,7 @@ export default function PractitionerProfile() {
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div>
               <h2 className="font-display text-2xl text-foreground">
                 My Profile
@@ -425,7 +425,7 @@ export default function PractitionerProfile() {
               </p>
             </div>
             <Badge
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${getAvailabilityBadgeClass(practitionerProfile?.availability_status ?? form.availabilityStatus)}`}
+              className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold ${getAvailabilityBadgeClass(practitionerProfile?.availability_status ?? form.availabilityStatus)}`}
             >
               {practitionerProfile?.is_verified
                 ? "Verified Practitioner"
@@ -491,8 +491,8 @@ export default function PractitionerProfile() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/40 hover:bg-accent/30">
-                  <ImagePlus className="mr-2 h-4 w-4" />
+                <label className="inline-flex shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/40 hover:bg-accent/30">
+                  <ImagePlus className="mr-2 h-4 w-4 shrink-0" />
                   {uploadingLogo ? "Uploading..." : "Upload Logo"}
                   <input
                     type="file"
@@ -564,7 +564,7 @@ export default function PractitionerProfile() {
                   A quick health check for your practitioner setup.
                 </p>
               </div>
-              <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <Badge className="shrink-0 whitespace-nowrap rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                 {completion.percent}% complete
               </Badge>
             </div>
@@ -787,7 +787,7 @@ export default function PractitionerProfile() {
           </section>
 
           <section className="rounded-[28px] border border-border bg-card p-6 shadow-card">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div>
                 <h2 className="font-display text-2xl text-foreground">
                   Client Feedback
@@ -797,9 +797,8 @@ export default function PractitionerProfile() {
                   and service quality.
                 </p>
               </div>
-              <Badge className="rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                {reviewSummary.count} review
-                {reviewSummary.count === 1 ? "" : "s"}
+              <Badge className="shrink-0 whitespace-nowrap rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                {reviewSummary.count} review{reviewSummary.count === 1 ? "" : "s"}
               </Badge>
             </div>
 

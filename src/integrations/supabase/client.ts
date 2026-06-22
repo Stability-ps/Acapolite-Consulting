@@ -9,13 +9,13 @@ const SUPABASE_PUBLISHABLE_KEY =
 
 if (!SUPABASE_URL) {
   throw new Error(
-    "Missing VITE_SUPABASE_URL. Check .env.local and restart the Vite dev server.",
+    "Missing VITE_SUPABASE_URL. Check `local.env` or `.env.local`, then restart the Vite dev server.",
   );
 }
 
 if (!SUPABASE_PUBLISHABLE_KEY) {
   throw new Error(
-    "Missing VITE_SUPABASE_PUBLISHABLE_KEY or VITE_SUPABASE_ANON_KEY. Check .env.local and restart the Vite dev server.",
+    "Missing VITE_SUPABASE_PUBLISHABLE_KEY or VITE_SUPABASE_ANON_KEY. Check `local.env` or `.env.local`, then restart the Vite dev server.",
   );
 }
 

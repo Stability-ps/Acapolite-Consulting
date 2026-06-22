@@ -842,7 +842,7 @@ export default function AdminClients() {
 
   return (
     <div>
-      <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="mb-1 font-display text-2xl font-bold text-foreground">All Clients</h1>
           <p className="text-sm text-muted-foreground font-body">
@@ -854,9 +854,9 @@ export default function AdminClients() {
           </p>
         </div>
 
-        <div className="flex w-full max-w-2xl items-center justify-end gap-3">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center lg:w-auto lg:justify-end">
+          <div className="relative w-full sm:w-80 lg:w-[16rem]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4  -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
@@ -865,21 +865,21 @@ export default function AdminClients() {
             />
           </div>
           {canShowClientCreationControls ? (
-            <>
+            <div className="flex items-center gap-3">
               <Button
                 type="button"
                 variant="outline"
-                className="rounded-xl shrink-0"
+                className="rounded-xl flex-1 sm:flex-none"
                 onClick={assignMissingClientCodes}
                 disabled={isAssigningCodes}
               >
                 {isAssigningCodes ? "Assigning..." : "Auto Client Codes"}
               </Button>
-              <Button type="button" className="rounded-xl shrink-0" onClick={() => setIsCreateOpen(true)}>
+              <Button type="button" className="rounded-xl flex-1 sm:flex-none" onClick={() => setIsCreateOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add New Client
               </Button>
-            </>
+            </div>
           ) : null}
         </div>
       </div>
@@ -919,17 +919,17 @@ export default function AdminClients() {
       {isLoading || isLoadingAccessibleClientIds ? (
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : filteredClients.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
-          <table className="w-full">
+        <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-card">
+          <table className="w-full min-w-[820px]">
             <thead>
               <tr className="border-b border-border">
-                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Name</th>
-                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Email</th>
-                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Type</th>
-                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Tax Number</th>
-                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Client Code</th>
-                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Status</th>
-                <th className="p-4 text-left text-sm font-semibold text-foreground font-body">Joined</th>
+                <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Name</th>
+                <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Email</th>
+                <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Type</th>
+                <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Tax Number</th>
+                <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Client Code</th>
+                <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Status</th>
+                <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Joined</th>
               </tr>
             </thead>
             <tbody>
@@ -942,12 +942,12 @@ export default function AdminClients() {
                     className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-accent/30"
                     onClick={() => setSelectedClientId(client.id)}
                   >
-                    <td className="p-4 text-sm font-medium text-foreground font-body">{getClientName(client)}</td>
-                    <td className="p-4 text-sm text-muted-foreground font-body">{client.profiles?.email || "-"}</td>
-                    <td className="p-4 text-sm text-muted-foreground font-body">{getClientTypeLabel(client.client_type)}</td>
-                    <td className="p-4 text-sm text-muted-foreground font-body">{client.tax_number || "-"}</td>
-                    <td className="p-4 text-sm text-muted-foreground font-body">{client.client_code || "-"}</td>
-                    <td className="p-4 text-sm font-body">
+                    <td className="whitespace-nowrap p-4 text-sm font-medium text-foreground font-body">{getClientName(client)}</td>
+                    <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{client.profiles?.email || "-"}</td>
+                    <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{getClientTypeLabel(client.client_type)}</td>
+                    <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{client.tax_number || "-"}</td>
+                    <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{client.client_code || "-"}</td>
+                    <td className="whitespace-nowrap p-4 text-sm font-body">
                       {client.is_archived ? (
                         <span className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">
                           Archived
@@ -963,7 +963,7 @@ export default function AdminClients() {
                         </span>
                       )}
                     </td>
-                    <td className="p-4 text-sm text-muted-foreground font-body">{new Date(client.created_at).toLocaleDateString()}</td>
+                    <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{new Date(client.created_at).toLocaleDateString()}</td>
                   </tr>
                 );
               })}

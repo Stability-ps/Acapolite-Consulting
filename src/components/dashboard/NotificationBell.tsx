@@ -20,7 +20,7 @@ function formatNotificationTime(value: string) {
 
 export function NotificationBell() {
   const navigate = useNavigate();
-  const { notifications, unreadCount, markAllAsRead, markAsRead } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, markAsRead, hasMore, isLoadingMore, loadMore } = useNotifications();
 
   const openNotification = async (notificationId: string, link?: string | null) => {
     await markAsRead([notificationId]);
@@ -87,6 +87,20 @@ export function NotificationBell() {
               No notifications yet.
             </div>
           )}
+
+          {notifications.length && hasMore ? (
+            <Button
+              type="button"
+              className="mt-1 w-full rounded-xl bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+              onClick={(event) => {
+                event.preventDefault();
+                loadMore();
+              }}
+              disabled={isLoadingMore}
+            >
+              {isLoadingMore ? "Loading..." : "Load more"}
+            </Button>
+          ) : null}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

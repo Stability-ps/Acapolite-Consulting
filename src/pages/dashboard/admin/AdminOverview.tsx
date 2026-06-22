@@ -1093,7 +1093,7 @@ export default function AdminOverview() {
               </div>
               <Link
                 to="/dashboard/staff/clients"
-                className="text-sm font-semibold text-primary hover:underline"
+                className="inline-flex shrink-0 items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
               >
                 View all
               </Link>

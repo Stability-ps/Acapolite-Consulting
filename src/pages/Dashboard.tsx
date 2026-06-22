@@ -33,9 +33,9 @@ export default function Dashboard() {
           <header className="sticky top-0 z-20 border-b border-border/70 bg-white/78 px-4 py-3 backdrop-blur-xl sm:px-6">
             <div className="dashboard-page flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
-                <SidebarTrigger className="mt-1 mr-0 h-11 w-auto gap-2 rounded-full border border-primary/30 bg-primary px-4 text-primary-foreground shadow-[0_12px_26px_rgba(15,23,42,0.25)] hover:bg-primary/95">
+                <SidebarTrigger className="mt-1 mr-0 h-11 w-11 shrink-0 aspect-square gap-0 rounded-full border border-primary/30 bg-primary px-0 text-primary-foreground shadow-[0_12px_26px_rgba(15,23,42,0.25)] hover:bg-primary/95 sm:aspect-auto sm:w-auto sm:gap-2 sm:px-4">
                   <PanelLeft className="h-5 w-5" />
-                  <span className="text-sm font-semibold tracking-wide sm:hidden">Menu</span>
+                  <span className="hidden text-sm font-semibold tracking-wide sm:inline">Menu</span>
                 </SidebarTrigger>
                 <div>
                   <h2 className="font-display text-xl font-semibold text-foreground">{title}</h2>
@@ -53,7 +53,7 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 exit={{ opacity: 0, y: -8, filter: "blur(3px)" }}
                 transition={{ duration: 0.24, ease: "easeOut" }}
-                className="dashboard-page dashboard-surface min-h-full rounded-[1.75rem] border border-border/70 p-4 shadow-elevated sm:p-6 lg:p-7"
+                className="dashboard-page dashboard-surface min-h-full rounded-[1.75rem]   md:p-4  sm:p-6 lg:p-7"
               >
                 <Outlet />
               </motion.div>

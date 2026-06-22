@@ -153,23 +153,23 @@ export function Hero() {
 
           {/* Headline & trust */}
           <div className="order-1 lg:order-1 lg:col-span-4 lg:self-center">
-            <div className="flex items-start gap-4 rounded-[1.5rem] border border-[#E7E7E7] bg-white p-4 shadow-[0_16px_40px_-26px_rgba(15,23,42,0.25)] lg:hidden">
+            <div className="flex items-stretch gap-4 rounded-[1.5rem] border border-[#E7E7E7] bg-white p-4 shadow-[0_16px_40px_-26px_rgba(15,23,42,0.25)] lg:hidden">
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#C49A22]">
                   ACAPOLITE CONSULTING
                 </p>
                 <h1 className="mt-2 text-[1.5rem] font-black leading-[1.15] tracking-[-0.03em] text-[#102B46]">
-                  Professional Tax, SARS &amp; Business Assistance Across South Africa
+                  Tax, Accounting, SARS &amp; Business Support Across South Africa
                 </h1>
                 <p className="mt-2 text-[12px] leading-5 text-[#5F6C7B]">
-                  Access qualified tax practitioners and accounting professionals across South Africa.
+                  Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa.
                 </p>
               </div>
-              <div className="relative h-36 w-28 shrink-0 overflow-hidden rounded-[1.25rem] border border-[#E7E7E7] bg-[#EAE9E4]">
+              <div className="relative w-28 shrink-0 self-stretch overflow-hidden rounded-[1.25rem] border border-[#E7E7E7] bg-[#EAE9E4]">
                 <img
                   src="/oui.png"
                   alt="Professional tax consultant ready to assist"
-                  className="absolute inset-0 h-full w-full object-cover object-[center_20%]"
+                  className="absolute inset-0 h-full w-full object-cover object-[center_top]"
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(15,23,42,0.08)_100%)]" />
               </div>
@@ -180,12 +180,11 @@ export function Hero() {
             </p>
 
             <h1 className="mt-4 hidden text-[2.15rem] font-black leading-[1.08] tracking-[-0.03em] text-[#102B46] sm:text-[2.65rem] lg:block xl:text-[3rem]">
-              Professional Tax, SARS &amp; Business Assistance Across South Africa
+              Tax, Accounting, SARS &amp; Business Support Across South Africa
             </h1>
 
             <p className="mt-4 hidden text-[15px] leading-7 text-[#5F6C7B] lg:block">
-              Access qualified tax practitioners and accounting professionals for SARS matters,
-              tax returns, bookkeeping, company compliance and business support across South Africa.
+              Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa.
             </p>
 
             <div className="mt-5 hidden grid-cols-2 gap-x-3 gap-y-4 lg:mt-8 lg:grid lg:gap-x-4 lg:gap-y-5">

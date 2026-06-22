@@ -29,7 +29,7 @@ export function DashboardItemDialog({
             ) : null}
           </DialogHeader>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5 sm:px-7">
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 sm:px-7">
           {children}
         </div>
       </DialogContent>
