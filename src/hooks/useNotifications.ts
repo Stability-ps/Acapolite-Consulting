@@ -82,6 +82,33 @@ function isVisibleToPractitioner(notification: AppNotification, profileId?: stri
     return false;
   }
 
+  const isAdminOnlyReactivationReview =
+    notification.section === "requests"
+    && notification.entity_type === "service_request"
+    && (
+      notification.title === "Lead needs reactivation review"
+      || notification.body?.toLowerCase().includes("repeated reactivation threshold")
+      || notification.category === "lead_reactivation_review"
+    );
+
+  if (isAdminOnlyReactivationReview) {
+    return false;
+  }
+
+  const isPractitionerBlockedReactivationNotice =
+    notification.section === "requests"
+    && notification.entity_type === "service_request"
+    && (
+      notification.category === "lead_reactivated"
+      || notification.title === "Lead reactivated"
+      || notification.title === "Lead reactivated by client confirmation"
+      || notification.body?.toLowerCase().includes("reactivated and returned")
+    );
+
+  if (isPractitionerBlockedReactivationNotice) {
+    return false;
+  }
+
   if (notification.section !== "documents") {
     return true;
   }
