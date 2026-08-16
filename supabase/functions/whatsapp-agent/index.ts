@@ -25,10 +25,9 @@ async function hmacSha256Hex(secret: string, payload: string) {
 }
 
 async function verifyMetaSignature(req: Request, rawBody: string) {
-  const appSecret = requiredEnv("WHATSAPP_APP_SECRET");
   const provided = req.headers.get("x-hub-signature-256")?.trim();
   if (!provided?.startsWith("sha256=")) return false;
-  const expected = `sha256=${await hmacSha256Hex(appSecret, rawBody)}`;
+  const expected = `sha256=${await hmacSha256Hex(requiredEnv("WHATSAPP_APP_SECRET"), rawBody)}`;
   return timingSafeEqual(provided, expected);
 }
 
@@ -119,23 +118,8 @@ function wantsHuman(text: string) {
   return /\b(human|person|someone|admin|call me|phone me|speak to|talk to|real person)\b/i.test(text);
 }
 
-function normalizeForPrompt(value: string, max = 1200) {
+function normalizeForPrompt(value: string, max = 1500) {
   return value.replace(/\s+/g, " ").trim().slice(0, max);
-}
-
-function extractResponseText(response: Record<string, unknown>) {
-  const direct = typeof response?.output_text === "string" ? response.output_text.trim() : "";
-  if (direct) return direct;
-  const parts: string[] = [];
-  const output = Array.isArray(response?.output) ? response.output : [];
-  for (const rawItem of output as Array<Record<string, unknown>>) {
-    if (rawItem?.type !== "message") continue;
-    const content = Array.isArray(rawItem?.content) ? rawItem.content : [];
-    for (const rawContent of content as Array<Record<string, unknown>>) {
-      if (rawContent?.type === "output_text" && typeof rawContent?.text === "string") parts.push(rawContent.text);
-    }
-  }
-  return parts.join("\n").trim();
 }
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -148,9 +132,7 @@ function bytesToBase64(bytes: Uint8Array) {
 async function downloadMetaMedia(mediaId: string) {
   const token = requiredEnv("WHATSAPP_ACCESS_TOKEN");
   const graphVersion = requiredEnv("WHATSAPP_GRAPH_API_VERSION");
-  const meta = await fetch(`https://graph.facebook.com/${graphVersion}/${mediaId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const meta = await fetch(`https://graph.facebook.com/${graphVersion}/${mediaId}`, { headers: { Authorization: `Bearer ${token}` } });
   const metadata = await meta.json().catch(() => ({}));
   if (!meta.ok || !metadata?.url) throw new Error(`Meta media lookup failed (${meta.status})`);
   const fileSize = Number(metadata.file_size || 0);
@@ -160,6 +142,7 @@ async function downloadMetaMedia(mediaId: string) {
   if (!mediaResponse.ok) throw new Error(`Meta media download failed (${mediaResponse.status})`);
   const bytes = new Uint8Array(await mediaResponse.arrayBuffer());
   if (bytes.byteLength > MAX_MEDIA_BYTES) throw new Error("Attachment exceeds Acapolite test size limit");
+
   return {
     bytes,
     mimeType: String(metadata.mime_type || mediaResponse.headers.get("content-type") || "application/octet-stream"),
@@ -168,75 +151,203 @@ async function downloadMetaMedia(mediaId: string) {
   };
 }
 
+const serviceNeededValues = [
+  "tax_return", "sars_debt_assistance", "vat_registration", "company_tax", "paye_issues", "objection_dispute", "bookkeeping",
+  "individual_personal_income_tax_returns", "individual_sars_debt_assistance", "individual_tax_compliance_issues", "individual_objections_and_disputes",
+  "individual_late_return_submissions", "individual_tax_number_registration", "individual_sars_verification_refund_assistance",
+  "business_company_income_tax", "business_vat_registration", "business_vat_returns", "business_paye_registration", "business_paye_compliance",
+  "business_sars_debt_arrangements", "business_tax_debt_compromise", "business_vat_objections_disputes", "business_sars_audits_support",
+  "accounting_bookkeeping", "accounting_financial_statements", "accounting_management_accounts", "accounting_payroll_services", "accounting_monthly_accounting_services",
+  "support_company_registration", "support_business_compliance", "support_cipc_services", "support_annual_returns_filing", "support_beneficial_ownership_filings",
+  "trust_tax_returns", "trust_compliance", "trust_sars_assistance", "trust_sars_disputes_objections",
+  "npo_registration_assistance", "npo_tax_exemption_assistance", "npo_annual_compliance_filing", "npo_sars_compliance", "npo_financial_reporting", "other",
+] as const;
+
+type IntakePayload = Record<string, unknown>;
+type AIResult = {
+  reply: string;
+  extracted: {
+    full_name: string | null;
+    email: string | null;
+    client_type: "individual" | "company" | "trust" | "npo_organisation" | null;
+    company_name: string | null;
+    company_registration_number: string | null;
+    province: string | null;
+    city: string | null;
+    service_category: "individual_tax" | "business_tax" | "accounting" | "business_support" | "trust_services" | "npo_organisation_services" | null;
+    service_needed: string | null;
+    description: string | null;
+    sars_debt_amount: number | null;
+    returns_filed: boolean | null;
+    has_debt_flag: boolean | null;
+    has_sars_audit: boolean | null;
+    has_adr: boolean | null;
+    has_vat_investigation: boolean | null;
+    has_payroll_dispute: boolean | null;
+    has_multiple_tax_types: boolean | null;
+    has_legal_complexity: boolean | null;
+    priority_level: "low" | "medium" | "high" | "urgent" | null;
+    risk_indicator: "low" | "medium" | "high" | null;
+    contact_preference: string | null;
+    authorised_representative: boolean | null;
+    document_summary: string | null;
+  };
+};
+
+function mergeIntake(current: IntakePayload, extracted: AIResult["extracted"], waId: string, displayName: string | null) {
+  const next: IntakePayload = { ...current, phone: waId, source: "whatsapp" };
+  if (!next.whatsapp_display_name && displayName) next.whatsapp_display_name = displayName;
+  for (const [key, value] of Object.entries(extracted)) {
+    if (value !== null && value !== "") next[key] = value;
+  }
+  if (typeof next.description === "string") next.description = normalizeForPrompt(next.description, 5000);
+  return next;
+}
+
+function intakeMissingFields(intake: IntakePayload) {
+  const missing: string[] = [];
+  if (!intake.full_name) missing.push("full_name");
+  if (!intake.client_type) missing.push("client_type");
+  if (!intake.service_needed) missing.push("service_needed");
+  if (!intake.description) missing.push("description");
+  if (!intake.province) missing.push("province");
+  if (!intake.email) missing.push("email");
+  if (intake.client_type === "company" && !intake.company_name) missing.push("company_name");
+  if (intake.has_debt_flag === true && intake.sars_debt_amount === undefined) missing.push("sars_debt_amount");
+  if (intake.has_debt_flag === true && intake.returns_filed === undefined) missing.push("returns_filed");
+  return missing;
+}
+
+function extractStructuredOutput(response: Record<string, unknown>) {
+  const direct = typeof response?.output_text === "string" ? response.output_text.trim() : "";
+  if (direct) return JSON.parse(direct) as AIResult;
+  const output = Array.isArray(response?.output) ? response.output : [];
+  for (const rawItem of output as Array<Record<string, unknown>>) {
+    if (rawItem?.type !== "message") continue;
+    const content = Array.isArray(rawItem?.content) ? rawItem.content : [];
+    for (const rawContent of content as Array<Record<string, unknown>>) {
+      if (rawContent?.type === "output_text" && typeof rawContent?.text === "string") return JSON.parse(rawContent.text) as AIResult;
+    }
+  }
+  throw new Error("OpenAI returned no structured output");
+}
+
 async function callOpenAI(
   history: { direction: string; sender_type: string; content: string | null }[],
   latest: string,
+  currentIntake: IntakePayload,
+  missingBefore: string[],
   attachment?: { kind: "image" | "document"; bytes: Uint8Array; mimeType: string; filename?: string | null },
-) {
-  const apiKey = requiredEnv("OPENAI_API_KEY");
-  const model = requiredEnv("OPENAI_WHATSAPP_MODEL");
+): Promise<AIResult> {
   const recentHistory = history.filter((m) => m.content).slice(-12).map((m) => `${m.direction === "inbound" ? "Customer" : "Acapolite"}: ${normalizeForPrompt(m.content || "", 700)}`).join("\n");
 
   const instructions = [
     "You are chatting with a customer on WhatsApp on behalf of Acapolite in South Africa.",
     "Sound like a helpful real person from the Acapolite office, not a chatbot, call centre script or formal letter.",
-    "Understand why the customer needs tax, SARS, CIPC, VAT, bookkeeping, accounting or compliance help and move the conversation naturally toward Acapolite's existing service-request process.",
-    "Treat the recent conversation as authoritative context. Never restart intake just because the latest message is short.",
-    "If the customer says a brief acknowledgement or continuation such as hi, hello, yes, okay, ok, continue, let's continue, help me, sure or please after a document or issue has already been discussed, continue from the most recent relevant context and do not ask them to upload or repeat information already present in the conversation.",
-    "If a document was analysed in a recent Acapolite reply, rely on that prior analysis for follow-up conversation even when the attachment itself is not included again.",
-    "Write like a normal WhatsApp conversation. Prefer 1 to 3 short paragraphs separated by a blank line. Avoid one long block of text.",
-    "Keep each paragraph short, normally one or two sentences. Ask only one useful question at a time.",
-    "Do not use bullet lists, numbered lists or headings in ordinary chat unless the customer specifically asks for a checklist or list.",
-    "Avoid hyphens, en dashes and em dashes in normal conversational writing. Prefer commas, full stops or a new paragraph. Use a hyphen only when it is genuinely required inside a normal word or value.",
-    "Do not repeatedly say phrases such as continue on Acapolite, service request or verified practitioner. Mention the next step only when it is actually useful.",
-    "When an image or PDF is attached, explain what the document appears to be, identify clearly visible important dates or requested actions, and state uncertainty where relevant.",
-    "Do not pretend to be a tax practitioner and do not give definitive legal or tax conclusions.",
-    "Do not promise outcomes, refunds, SARS approvals, turnaround times or practitioner availability.",
-    "Never ask for passwords, OTPs, eFiling credentials, bank PINs or card details.",
-    "Never expose practitioner names, private client data, internal pricing rules, admin notes or platform secrets.",
-    "Never claim that you opened, submitted, assigned, escalated or created a service request unless the application has actually confirmed that action. In this version you cannot create service requests.",
-    "Do not offer a fixed quote unless Acapolite has actually calculated or supplied one.",
-    "Use natural South African English. Be warm, clear and concise without sounding overly formal.",
+    "Quietly extract every relevant fact the customer provides that maps to Acapolite's service request, even when they answer out of order or temporarily change topic.",
+    "Never discard already collected intake information and never ask the customer to repeat information already present in the current intake or recent conversation.",
+    "If the customer asks a side question, answer it first in a useful short way, then naturally ask one missing intake question if appropriate. Do not force the conversation back abruptly.",
+    "Ask only one intake question at a time and adapt to the natural conversation.",
+    "Do not ask for an ID number, passport number, bank PIN, card details, eFiling password, OTP or other authentication secret in WhatsApp.",
+    "Write like a normal WhatsApp conversation, use 1 to 3 short paragraphs separated by a blank line, each paragraph usually one sentence.",
+    "Avoid bullet lists, numbered lists, headings, em dashes and en dashes in ordinary conversation, prefer commas, full stops and new paragraphs.",
+    "Do not repeat long document checklists unless the customer asks for the list.",
+    "Do not send or promise a link until intake is ready for the final secure handoff. Never claim you created or submitted a service request unless the backend confirms it.",
+    "When an image or PDF is attached, explain what it appears to be and extract relevant facts for intake, including service type, dates, debt, audit or dispute indicators and a short document summary where visible.",
+    "The description field should be a concise consolidated summary of the client's overall problem using the current intake plus new information, not just the latest message.",
+    "Do not make definitive legal or tax conclusions and do not promise SARS outcomes, refunds or turnaround times.",
+    `When mapping service_needed, use one of these exact values when clearly applicable: ${serviceNeededValues.join(", ")}. Otherwise use other.`,
+    "The extracted object must contain only facts clearly stated or strongly supported by the conversation or attached document, use null for unknown values.",
   ].join(" ");
 
-  const contextText = recentHistory
-    ? `${recentHistory}\nCustomer: ${normalizeForPrompt(latest || "Please review the attached document.")}\nRespond as Acapolite:`
-    : `Customer: ${normalizeForPrompt(latest || "Please review the attached document.")}\nRespond as Acapolite:`;
+  const contextText = [
+    `CURRENT INTAKE: ${JSON.stringify(currentIntake)}`,
+    `FIELDS STILL MISSING BEFORE THIS MESSAGE: ${missingBefore.join(", ") || "none"}`,
+    recentHistory ? `RECENT CHAT:\n${recentHistory}` : "",
+    `LATEST CUSTOMER MESSAGE: ${normalizeForPrompt(latest || "Please review the attached document.")}`,
+  ].filter(Boolean).join("\n\n");
 
-  let input: unknown = contextText;
+  const content: Record<string, unknown>[] = [{ type: "input_text", text: contextText }];
   if (attachment) {
     const base64 = bytesToBase64(attachment.bytes);
-    const content: Record<string, unknown>[] = [{ type: "input_text", text: contextText }];
-    if (attachment.kind === "image") {
-      content.push({ type: "input_image", image_url: `data:${attachment.mimeType};base64,${base64}`, detail: "high" });
-    } else {
-      content.push({ type: "input_file", file_data: base64, filename: attachment.filename || "whatsapp-document.pdf" });
-    }
-    input = [{ role: "user", content }];
+    if (attachment.kind === "image") content.push({ type: "input_image", image_url: `data:${attachment.mimeType};base64,${base64}`, detail: "high" });
+    else content.push({ type: "input_file", file_data: base64, filename: attachment.filename || "whatsapp-document.pdf" });
   }
+
+  const nullableString = { anyOf: [{ type: "string" }, { type: "null" }] };
+  const nullableNumber = { anyOf: [{ type: "number" }, { type: "null" }] };
+  const nullableBoolean = { anyOf: [{ type: "boolean" }, { type: "null" }] };
+  const nullableEnum = (values: string[]) => ({ anyOf: [{ type: "string", enum: values }, { type: "null" }] });
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, instructions, input, store: false, text: { verbosity: "low" } }),
+    headers: { Authorization: `Bearer ${requiredEnv("OPENAI_API_KEY")}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: requiredEnv("OPENAI_WHATSAPP_MODEL"),
+      instructions,
+      input: [{ role: "user", content }],
+      store: false,
+      text: {
+        verbosity: "low",
+        format: {
+          type: "json_schema",
+          name: "acapolite_whatsapp_intake",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["reply", "extracted"],
+            properties: {
+              reply: { type: "string" },
+              extracted: {
+                type: "object",
+                additionalProperties: false,
+                required: ["full_name", "email", "client_type", "company_name", "company_registration_number", "province", "city", "service_category", "service_needed", "description", "sars_debt_amount", "returns_filed", "has_debt_flag", "has_sars_audit", "has_adr", "has_vat_investigation", "has_payroll_dispute", "has_multiple_tax_types", "has_legal_complexity", "priority_level", "risk_indicator", "contact_preference", "authorised_representative", "document_summary"],
+                properties: {
+                  full_name: nullableString,
+                  email: nullableString,
+                  client_type: nullableEnum(["individual", "company", "trust", "npo_organisation"]),
+                  company_name: nullableString,
+                  company_registration_number: nullableString,
+                  province: nullableString,
+                  city: nullableString,
+                  service_category: nullableEnum(["individual_tax", "business_tax", "accounting", "business_support", "trust_services", "npo_organisation_services"]),
+                  service_needed: nullableEnum([...serviceNeededValues]),
+                  description: nullableString,
+                  sars_debt_amount: nullableNumber,
+                  returns_filed: nullableBoolean,
+                  has_debt_flag: nullableBoolean,
+                  has_sars_audit: nullableBoolean,
+                  has_adr: nullableBoolean,
+                  has_vat_investigation: nullableBoolean,
+                  has_payroll_dispute: nullableBoolean,
+                  has_multiple_tax_types: nullableBoolean,
+                  has_legal_complexity: nullableBoolean,
+                  priority_level: nullableEnum(["low", "medium", "high", "urgent"]),
+                  risk_indicator: nullableEnum(["low", "medium", "high"]),
+                  contact_preference: nullableString,
+                  authorised_representative: nullableBoolean,
+                  document_summary: nullableString,
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
   });
+
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`OpenAI request failed (${response.status}): ${body.slice(0, 500)}`);
+    throw new Error(`OpenAI request failed (${response.status}): ${body.slice(0, 700)}`);
   }
-  const data = (await response.json()) as Record<string, unknown>;
-  const text = extractResponseText(data);
-  if (!text) throw new Error("OpenAI returned an empty response");
-  return text.slice(0, 1800);
+  return extractStructuredOutput((await response.json()) as Record<string, unknown>);
 }
 
 async function sendWhatsAppText(to: string, body: string) {
-  const token = requiredEnv("WHATSAPP_ACCESS_TOKEN");
-  const phoneNumberId = requiredEnv("WHATSAPP_PHONE_NUMBER_ID");
-  const graphVersion = requiredEnv("WHATSAPP_GRAPH_API_VERSION");
-  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`, {
+  const response = await fetch(`https://graph.facebook.com/${requiredEnv("WHATSAPP_GRAPH_API_VERSION")}/${requiredEnv("WHATSAPP_PHONE_NUMBER_ID")}/messages`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${requiredEnv("WHATSAPP_ACCESS_TOKEN")}`, "Content-Type": "application/json" },
     body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to, type: "text", text: { preview_url: false, body } }),
   });
   const data = await response.json().catch(() => ({}));
@@ -251,8 +362,7 @@ Deno.serve(async (req: Request) => {
       const mode = url.searchParams.get("hub.mode");
       const token = url.searchParams.get("hub.verify_token");
       const challenge = url.searchParams.get("hub.challenge");
-      const verifyToken = requiredEnv("WHATSAPP_VERIFY_TOKEN");
-      if (mode === "subscribe" && token && timingSafeEqual(token, verifyToken) && challenge) return new Response(challenge, { status: 200, headers: textHeaders });
+      if (mode === "subscribe" && token && timingSafeEqual(token, requiredEnv("WHATSAPP_VERIFY_TOKEN")) && challenge) return new Response(challenge, { status: 200, headers: textHeaders });
       return new Response("Forbidden", { status: 403, headers: textHeaders });
     }
     if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: textHeaders });
@@ -278,72 +388,67 @@ Deno.serve(async (req: Request) => {
       if (referral?.headline) conversationPatch.referral_headline = referral.headline;
       if (referral?.ctwa_clid) conversationPatch.referral_campaign_id = referral.ctwa_clid;
 
-      const { data: conversation, error: conversationError } = await supabase.from("whatsapp_conversations").upsert(conversationPatch, { onConflict: "wa_id" }).select("id, status, ai_enabled").single();
+      const { data: conversation, error: conversationError } = await supabase.from("whatsapp_conversations").upsert(conversationPatch, { onConflict: "wa_id" }).select("id, status, ai_enabled, intake_payload, intake_missing_fields, intake_ready").single();
       if (conversationError) throw conversationError;
 
       let attachment: { kind: "image" | "document"; bytes: Uint8Array; mimeType: string; filename?: string | null } | undefined;
       let mediaSizeBytes: number | null = null;
       let resolvedMime = event.mediaMimeType;
       let resolvedSha = event.mediaSha256;
+
       if ((event.kind === "image" || event.kind === "document") && event.mediaId) {
         const media = await downloadMetaMedia(event.mediaId);
         mediaSizeBytes = media.fileSize;
         resolvedMime = media.mimeType || resolvedMime;
         resolvedSha = media.sha256 || resolvedSha;
         if (event.kind === "document" && resolvedMime !== "application/pdf") {
-          const unsupportedText = "I can currently read images and PDF documents here. Please resend this document as a PDF, or continue with a service request on Acapolite.";
+          const text = "I can read images and PDF files here. Please resend this one as a PDF if you can.";
           await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: event.messageId, direction: "inbound", sender_type: "customer", message_type: event.kind, content: event.text || "[Document attached]", media_id: event.mediaId, media_mime_type: resolvedMime, media_filename: event.mediaFilename, media_sha256: resolvedSha, media_size_bytes: mediaSizeBytes });
-          await sendWhatsAppText(event.waId, unsupportedText);
+          await sendWhatsAppText(event.waId, text);
           continue;
         }
         attachment = { kind: event.kind, bytes: media.bytes, mimeType: resolvedMime || "application/octet-stream", filename: event.mediaFilename };
       }
 
-      const { error: inboundError } = await supabase.from("whatsapp_messages").insert({
-        conversation_id: conversation.id,
-        meta_message_id: event.messageId,
-        direction: "inbound",
-        sender_type: "customer",
-        message_type: event.kind,
-        content: event.text || (event.kind === "image" ? "[Image attached]" : event.kind === "document" ? "[Document attached]" : "[Unsupported WhatsApp message]"),
-        media_id: event.mediaId,
-        media_mime_type: resolvedMime,
-        media_filename: event.mediaFilename,
-        media_sha256: resolvedSha,
-        media_size_bytes: mediaSizeBytes,
-      });
+      const inboundContent = event.text || (event.kind === "image" ? "[Image attached]" : event.kind === "document" ? "[Document attached]" : "[Unsupported WhatsApp message]");
+      const { error: inboundError } = await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: event.messageId, direction: "inbound", sender_type: "customer", message_type: event.kind, content: inboundContent, media_id: event.mediaId, media_mime_type: resolvedMime, media_filename: event.mediaFilename, media_sha256: resolvedSha, media_size_bytes: mediaSizeBytes });
       if (inboundError) {
         if (inboundError.code === "23505") continue;
         throw inboundError;
       }
 
       if (event.kind === "unsupported") {
-        const unsupportedText = "I can currently assist with text, images and PDF documents on WhatsApp. Please send your question as text, an image, or a PDF.";
-        const metaMessageId = await sendWhatsAppText(event.waId, unsupportedText);
-        await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: metaMessageId, direction: "outbound", sender_type: "system", message_type: "text", content: unsupportedText, delivery_status: "submitted" });
+        const text = "Please send that as text, an image or a PDF and I’ll help you from there.";
+        const metaMessageId = await sendWhatsAppText(event.waId, text);
+        await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: metaMessageId, direction: "outbound", sender_type: "system", message_type: "text", content: text, delivery_status: "submitted" });
         continue;
       }
 
       if (wantsHuman(event.text)) {
-        const { error: handoffError } = await supabase.from("whatsapp_conversations").update({ status: "human_handoff", ai_enabled: false, human_handoff_requested_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
-        if (handoffError) throw handoffError;
-        const handoffText = "Certainly. I’ve paused the automated assistant and flagged this conversation for the Acapolite admin team.";
-        const metaMessageId = await sendWhatsAppText(event.waId, handoffText);
-        const { error: handoffMessageError } = await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: metaMessageId, direction: "outbound", sender_type: "system", message_type: "text", content: handoffText, delivery_status: "submitted" });
-        if (handoffMessageError) throw handoffMessageError;
+        await supabase.from("whatsapp_conversations").update({ status: "human_handoff", ai_enabled: false, human_handoff_requested_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+        const text = "Of course, I’ve paused the automated replies so the Acapolite admin team can take over this chat.";
+        const metaMessageId = await sendWhatsAppText(event.waId, text);
+        await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: metaMessageId, direction: "outbound", sender_type: "system", message_type: "text", content: text, delivery_status: "submitted" });
         continue;
       }
 
       if (!conversation.ai_enabled || conversation.status === "human_handoff") continue;
+
       const { data: history, error: historyError } = await supabase.from("whatsapp_messages").select("direction, sender_type, content").eq("conversation_id", conversation.id).neq("meta_message_id", event.messageId).order("created_at", { ascending: false }).limit(12);
       if (historyError) throw historyError;
 
-      const reply = await callOpenAI([...(history || [])].reverse(), event.text, attachment);
+      const currentIntake = (conversation.intake_payload || {}) as IntakePayload;
+      const missingBefore = Array.isArray(conversation.intake_missing_fields) ? conversation.intake_missing_fields : intakeMissingFields(currentIntake);
+      const ai = await callOpenAI([...(history || [])].reverse(), event.text, currentIntake, missingBefore, attachment);
+      const mergedIntake = mergeIntake(currentIntake, ai.extracted, event.waId, event.displayName);
+      const missingAfter = intakeMissingFields(mergedIntake);
+      const ready = missingAfter.length === 0;
+
+      await supabase.from("whatsapp_conversations").update({ intake_payload: mergedIntake, intake_missing_fields: missingAfter, intake_ready: ready, intake_updated_at: new Date().toISOString(), last_outbound_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+
+      const reply = ai.reply.trim().slice(0, 1200);
       const metaMessageId = await sendWhatsAppText(event.waId, reply);
-      const { error: outboundError } = await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: metaMessageId, direction: "outbound", sender_type: "ai", message_type: "text", content: reply, delivery_status: "submitted" });
-      if (outboundError) throw outboundError;
-      const { error: conversationUpdateError } = await supabase.from("whatsapp_conversations").update({ last_outbound_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
-      if (conversationUpdateError) throw conversationUpdateError;
+      await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: metaMessageId, direction: "outbound", sender_type: "ai", message_type: "text", content: reply, delivery_status: "submitted" });
     }
 
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: jsonHeaders });
