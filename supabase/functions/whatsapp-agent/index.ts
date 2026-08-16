@@ -135,8 +135,7 @@ async function downloadMetaMedia(mediaId: string) {
   const meta = await fetch(`https://graph.facebook.com/${graphVersion}/${mediaId}`, { headers: { Authorization: `Bearer ${token}` } });
   const metadata = await meta.json().catch(() => ({}));
   if (!meta.ok || !metadata?.url) throw new Error(`Meta media lookup failed (${meta.status})`);
-  const fileSize = Number(metadata.file_size || 0);
-  if (fileSize > MAX_MEDIA_BYTES) throw new Error("Attachment exceeds Acapolite test size limit");
+  if (Number(metadata.file_size || 0) > MAX_MEDIA_BYTES) throw new Error("Attachment exceeds Acapolite test size limit");
 
   const mediaResponse = await fetch(String(metadata.url), { headers: { Authorization: `Bearer ${token}` } });
   if (!mediaResponse.ok) throw new Error(`Meta media download failed (${mediaResponse.status})`);
@@ -197,9 +196,7 @@ type AIResult = {
 function mergeIntake(current: IntakePayload, extracted: AIResult["extracted"], waId: string, displayName: string | null) {
   const next: IntakePayload = { ...current, phone: waId, source: "whatsapp" };
   if (!next.whatsapp_display_name && displayName) next.whatsapp_display_name = displayName;
-  for (const [key, value] of Object.entries(extracted)) {
-    if (value !== null && value !== "") next[key] = value;
-  }
+  for (const [key, value] of Object.entries(extracted)) if (value !== null && value !== "") next[key] = value;
   if (typeof next.description === "string") next.description = normalizeForPrompt(next.description, 5000);
   return next;
 }
@@ -216,6 +213,65 @@ function intakeMissingFields(intake: IntakePayload) {
   if (intake.has_debt_flag === true && intake.sars_debt_amount === undefined) missing.push("sars_debt_amount");
   if (intake.has_debt_flag === true && intake.returns_filed === undefined) missing.push("returns_filed");
   return missing;
+}
+
+function nextMissingQuestion(missing: string[], intake: IntakePayload) {
+  const field = missing[0];
+  if (!field) return "Thanks, I have the main details I need for now.";
+  const questions: Record<string, string> = {
+    full_name: "What is the client’s full name?",
+    client_type: "Is this for an individual, company, trust or NPO?",
+    service_needed: "What would you like us to help with?",
+    description: "Can you briefly tell me what happened and what you need help with?",
+    province: "Which province is the client based in?",
+    email: "What email address can we use for the client?",
+    company_name: "What is the company name?",
+    sars_debt_amount: "Approximately how much does SARS say is owed?",
+    returns_filed: "Are the required tax returns up to date?",
+  };
+  const firstName = typeof intake.full_name === "string" ? intake.full_name.split(/\s+/)[0] : "the client";
+  return questions[field]?.replace("the client", firstName) || "What other important detail should we know?";
+}
+
+function hasUnconfirmedActionClaim(text: string) {
+  return /\b(i(?:'ll| will)|we(?:'ll| will)|i am going to|we are going to)\b[^.!?\n]{0,100}\b(open|create|submit|send|share|upload|assign|escalate|confirm)\b[^.!?\n]{0,100}\b(service request|request|link|documents?|practitioner|case)\b/i.test(text)
+    || /\bsecure upload link\b/i.test(text)
+    || /\bi(?:'ve| have) (opened|created|submitted|sent|assigned|escalated)\b/i.test(text);
+}
+
+function sanitizeWhatsAppReply(raw: string, missing: string[], intake: IntakePayload) {
+  let text = raw.trim();
+
+  if (!text || hasUnconfirmedActionClaim(text)) return nextMissingQuestion(missing, intake);
+
+  text = text
+    .replace(/[—–]/g, ",")
+    .replace(/^\s*[-•]\s+/gm, "")
+    .replace(/\bintake\b/gi, "details")
+    .replace(/\bservice request\b/gi, "request")
+    .replace(/\s+,/g, ",")
+    .replace(/,{2,}/g, ",")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const questionPositions = [...text.matchAll(/\?/g)].map((m) => m.index ?? -1).filter((i) => i >= 0);
+  if (questionPositions.length > 1) text = text.slice(0, questionPositions[0] + 1);
+
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).slice(0, 3);
+  text = paragraphs.join("\n\n");
+
+  if (text.length > 520) {
+    const shortened = text.slice(0, 520);
+    const lastStop = Math.max(shortened.lastIndexOf("."), shortened.lastIndexOf("?"));
+    text = (lastStop > 240 ? shortened.slice(0, lastStop + 1) : shortened).trim();
+  }
+
+  if (!text.includes("\n\n") && text.length > 220) {
+    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) || [text];
+    if (sentences.length >= 2) text = `${sentences[0]}\n\n${sentences.slice(1).join(" ")}`;
+  }
+
+  return text || nextMissingQuestion(missing, intake);
 }
 
 function extractStructuredOutput(response: Record<string, unknown>) {
@@ -243,25 +299,29 @@ async function callOpenAI(
 
   const instructions = [
     "You are chatting with a customer on WhatsApp on behalf of Acapolite in South Africa.",
-    "Sound like a helpful real person from the Acapolite office, not a chatbot, call centre script or formal letter.",
-    "Quietly extract every relevant fact the customer provides that maps to Acapolite's service request, even when they answer out of order or temporarily change topic.",
-    "Never discard already collected intake information and never ask the customer to repeat information already present in the current intake or recent conversation.",
-    "If the customer asks a side question, answer it first in a useful short way, then naturally ask one missing intake question if appropriate. Do not force the conversation back abruptly.",
-    "Ask only one intake question at a time and adapt to the natural conversation.",
-    "Do not ask for an ID number, passport number, bank PIN, card details, eFiling password, OTP or other authentication secret in WhatsApp.",
-    "Write like a normal WhatsApp conversation, use 1 to 3 short paragraphs separated by a blank line, each paragraph usually one sentence.",
-    "Avoid bullet lists, numbered lists, headings, em dashes and en dashes in ordinary conversation, prefer commas, full stops and new paragraphs.",
-    "Do not repeat long document checklists unless the customer asks for the list.",
-    "Do not send or promise a link until intake is ready for the final secure handoff. Never claim you created or submitted a service request unless the backend confirms it.",
-    "When an image or PDF is attached, explain what it appears to be and extract relevant facts for intake, including service type, dates, debt, audit or dispute indicators and a short document summary where visible.",
-    "The description field should be a concise consolidated summary of the client's overall problem using the current intake plus new information, not just the latest message.",
+    "Sound like a real helpful person from the Acapolite office, never like a chatbot, form, call centre script or formal letter.",
+    "Quietly extract every relevant fact that maps to Acapolite's service request, even when the client gives several facts at once, answers out of order or changes topic.",
+    "Never discard information already collected and never ask for information already present in the current details or recent conversation.",
+    "If the client asks a side question, answer it naturally first, then if appropriate ask one missing question without abruptly changing the subject.",
+    "Ask only one main question at a time.",
+    "Never say recorded, captured, added to the intake, added to the system or similar internal workflow language. Just continue naturally.",
+    "Never mention intake, database, field, workflow or backend to the customer.",
+    "Never claim or promise that you opened, created or submitted a request, sent or will send a link, received documents, assigned a practitioner, escalated a case or completed any external action. Those actions are not available yet.",
+    "Do not ask for ID numbers, passport numbers, bank PINs, card details, eFiling passwords, OTPs or authentication secrets in WhatsApp.",
+    "Write like normal WhatsApp. Usually 1 to 3 very short paragraphs, with a blank line between thoughts. Usually stay under 300 characters unless explaining a document or answering a question requires more.",
+    "Do not use em dashes or en dashes. Avoid hyphens as punctuation. Use commas, full stops or a new paragraph instead.",
+    "Do not use bullet lists, numbered lists or headings unless the customer specifically asks for a checklist.",
+    "Do not repeat document lists or previously explained facts unless the customer asks for them again.",
+    "Do not keep asking shall we continue, are you ready, or similar permission questions once the client has already asked Acapolite for help.",
+    "When an image or PDF is attached, explain what it appears to be and extract relevant facts, dates and requested actions. Keep the customer explanation concise.",
+    "The description field must be a concise consolidated summary of the client's overall issue using current details plus new information, not merely the last message.",
     "Do not make definitive legal or tax conclusions and do not promise SARS outcomes, refunds or turnaround times.",
     `When mapping service_needed, use one of these exact values when clearly applicable: ${serviceNeededValues.join(", ")}. Otherwise use other.`,
-    "The extracted object must contain only facts clearly stated or strongly supported by the conversation or attached document, use null for unknown values.",
+    "The extracted object must contain only facts clearly stated or strongly supported by the conversation or attached document. Use null for unknown values.",
   ].join(" ");
 
   const contextText = [
-    `CURRENT INTAKE: ${JSON.stringify(currentIntake)}`,
+    `CURRENT DETAILS: ${JSON.stringify(currentIntake)}`,
     `FIELDS STILL MISSING BEFORE THIS MESSAGE: ${missingBefore.join(", ") || "none"}`,
     recentHistory ? `RECENT CHAT:\n${recentHistory}` : "",
     `LATEST CUSTOMER MESSAGE: ${normalizeForPrompt(latest || "Please review the attached document.")}`,
@@ -426,7 +486,7 @@ Deno.serve(async (req: Request) => {
 
       if (wantsHuman(event.text)) {
         await supabase.from("whatsapp_conversations").update({ status: "human_handoff", ai_enabled: false, human_handoff_requested_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
-        const text = "Of course, I’ve paused the automated replies so the Acapolite admin team can take over this chat.";
+        const text = "Of course. I’ve paused the automated replies so the Acapolite admin team can take over this chat.";
         const metaMessageId = await sendWhatsAppText(event.waId, text);
         await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: metaMessageId, direction: "outbound", sender_type: "system", message_type: "text", content: text, delivery_status: "submitted" });
         continue;
@@ -446,7 +506,7 @@ Deno.serve(async (req: Request) => {
 
       await supabase.from("whatsapp_conversations").update({ intake_payload: mergedIntake, intake_missing_fields: missingAfter, intake_ready: ready, intake_updated_at: new Date().toISOString(), last_outbound_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
 
-      const reply = ai.reply.trim().slice(0, 1200);
+      const reply = sanitizeWhatsAppReply(ai.reply, missingAfter, mergedIntake);
       const metaMessageId = await sendWhatsAppText(event.waId, reply);
       await supabase.from("whatsapp_messages").insert({ conversation_id: conversation.id, meta_message_id: metaMessageId, direction: "outbound", sender_type: "ai", message_type: "text", content: reply, delivery_status: "submitted" });
     }
