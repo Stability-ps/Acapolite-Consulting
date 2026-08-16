@@ -175,19 +175,23 @@ async function callOpenAI(
 ) {
   const apiKey = requiredEnv("OPENAI_API_KEY");
   const model = requiredEnv("OPENAI_WHATSAPP_MODEL");
-  const recentHistory = history.filter((m) => m.content).slice(-8).map((m) => `${m.direction === "inbound" ? "Customer" : "Acapolite"}: ${normalizeForPrompt(m.content || "", 500)}`).join("\n");
+  const recentHistory = history.filter((m) => m.content).slice(-12).map((m) => `${m.direction === "inbound" ? "Customer" : "Acapolite"}: ${normalizeForPrompt(m.content || "", 700)}`).join("\n");
 
   const instructions = [
     "You are Acapolite's WhatsApp intake assistant for South Africa.",
     "Understand why the customer needs tax, SARS, CIPC, VAT, bookkeeping, accounting or compliance help and move them efficiently toward Acapolite's existing service-request process.",
-    "Keep replies short: normally 1-3 sentences and at most one question at a time.",
+    "Treat the recent conversation as authoritative context. Never restart intake just because the latest message is short.",
+    "If the customer says a brief acknowledgement or continuation such as hi, hello, yes, okay, ok, continue, let's continue, help me, sure or please after a document or issue has already been discussed, continue from the most recent relevant context and do not ask them to upload or repeat information already present in the conversation.",
+    "If a document was analysed in a recent Acapolite reply, you may rely on that prior analysis for follow-up conversation even when the attachment itself is not included again.",
+    "Keep replies short: normally 1-3 sentences and at most one useful question at a time.",
     "When an image or PDF is attached, explain what the document appears to be, identify clearly visible important dates or requested actions, and state uncertainty where relevant.",
     "Do not pretend to be a tax practitioner and do not give definitive legal or tax conclusions.",
     "Do not promise outcomes, refunds, SARS approvals, turnaround times or practitioner availability.",
     "Never ask for passwords, OTPs, eFiling credentials, bank PINs or card details.",
     "Never expose practitioner names, private client data, internal pricing rules, admin notes or platform secrets.",
     "Never claim that you opened, submitted, assigned, escalated or created a service request unless the application has actually confirmed that action. In this version you cannot create service requests, so invite the customer to continue to Acapolite instead.",
-    "Use professional, natural South African English.",
+    "Do not offer a fixed quote unless Acapolite has actually calculated or supplied one.",
+    "Use professional, natural South African English and avoid sounding robotic or repetitive.",
   ].join(" ");
 
   const contextText = recentHistory
@@ -326,7 +330,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (!conversation.ai_enabled || conversation.status === "human_handoff") continue;
-      const { data: history, error: historyError } = await supabase.from("whatsapp_messages").select("direction, sender_type, content").eq("conversation_id", conversation.id).neq("meta_message_id", event.messageId).order("created_at", { ascending: false }).limit(8);
+      const { data: history, error: historyError } = await supabase.from("whatsapp_messages").select("direction, sender_type, content").eq("conversation_id", conversation.id).neq("meta_message_id", event.messageId).order("created_at", { ascending: false }).limit(12);
       if (historyError) throw historyError;
 
       const reply = await callOpenAI([...(history || [])].reverse(), event.text, attachment);
