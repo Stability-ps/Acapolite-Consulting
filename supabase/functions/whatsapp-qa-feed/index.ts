@@ -194,7 +194,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: conversation, error: conversationError } = await sb
       .from("whatsapp_conversations")
-      .select("id,wa_id,status,ai_enabled,last_inbound_at,assigned_staff_id,assigned_staff_name")
+      .select("id,wa_id,status,inbox_status,ai_enabled,human_handoff_requested_at,last_inbound_at,assigned_staff_id,assigned_staff_name,first_staff_reply_at")
       .eq("id", conversationId)
       .maybeSingle();
     if (conversationError || !conversation) return json(req, { error: "Conversation not found" }, 404);
@@ -211,11 +211,57 @@ Deno.serve(async (req: Request) => {
         assigned_at: assignedAt,
         assigned_by: actor.id,
         status: "human_handoff",
+        inbox_status: "assigned",
         ai_enabled: false,
+        human_handoff_requested_at: conversation.human_handoff_requested_at || assignedAt,
         updated_at: assignedAt,
       }).eq("id", conversationId);
       if (error) return json(req, { error: "Unable to assign this chat" }, 500);
       await recordAction(sb, conversationId, actor, nextAction, { staff_id: assignee.id, staff_name: displayName(assignee) });
+      return json(req, { ok: true });
+    }
+
+    if (action === "mark_read") {
+      const readAt = new Date().toISOString();
+      const { error } = await sb.from("whatsapp_conversation_reads").upsert({
+        conversation_id: conversationId,
+        staff_id: actor.id,
+        last_read_at: readAt,
+      }, { onConflict: "conversation_id,staff_id" });
+      if (error) return json(req, { error: "Unable to mark this chat as read" }, 500);
+      await sb.from("whatsapp_alerts").update({ is_resolved: true, resolved_at: readAt, resolved_by: actor.id })
+        .eq("conversation_id", conversationId).eq("alert_type", "customer_reply").eq("is_resolved", false);
+      return json(req, { ok: true });
+    }
+
+    if (action === "resolve") {
+      const resolvedAt = new Date().toISOString();
+      const { error } = await sb.from("whatsapp_conversations").update({
+        inbox_status: "resolved",
+        resolved_at: resolvedAt,
+        resolved_by: actor.id,
+        ai_enabled: false,
+        updated_at: resolvedAt,
+      }).eq("id", conversationId);
+      if (error) return json(req, { error: "Unable to resolve this chat" }, 500);
+      await sb.from("whatsapp_alerts").update({ is_resolved: true, resolved_at: resolvedAt, resolved_by: actor.id })
+        .eq("conversation_id", conversationId).eq("is_resolved", false);
+      await recordAction(sb, conversationId, actor, "resolved");
+      return json(req, { ok: true });
+    }
+
+    if (action === "reopen") {
+      const changedAt = new Date().toISOString();
+      const { error } = await sb.from("whatsapp_conversations").update({
+        inbox_status: conversation.assigned_staff_id ? "assigned" : "unassigned",
+        status: "human_handoff",
+        ai_enabled: false,
+        resolved_at: null,
+        resolved_by: null,
+        updated_at: changedAt,
+      }).eq("id", conversationId);
+      if (error) return json(req, { error: "Unable to reopen this chat" }, 500);
+      await recordAction(sb, conversationId, actor, "reopened");
       return json(req, { ok: true });
     }
 
@@ -267,7 +313,9 @@ Deno.serve(async (req: Request) => {
       await sb.from("whatsapp_conversations").update({
         ...assignmentPatch,
         status: "human_handoff",
+        inbox_status: "waiting_client",
         ai_enabled: false,
+        first_staff_reply_at: conversation.first_staff_reply_at || sentAt,
         last_outbound_at: sentAt,
         last_staff_reply_at: sentAt,
         updated_at: sentAt,
@@ -280,6 +328,7 @@ Deno.serve(async (req: Request) => {
       const changedAt = new Date().toISOString();
       const { error } = await sb.from("whatsapp_conversations").update({
         status: "active",
+        inbox_status: "resolved",
         ai_enabled: true,
         assigned_staff_id: null,
         assigned_staff_name: null,
@@ -295,9 +344,30 @@ Deno.serve(async (req: Request) => {
     return json(req, { error: "Unsupported action" }, 400);
   }
 
-  const [{ data: conversations, error: conversationsError }, { data: messages, error: messagesError }, staff] = await Promise.all([
-    sb.from("whatsapp_conversations").select("id,wa_id,display_name,status,ai_enabled,human_handoff_requested_at,service_request_id,ai_summary,intake_payload,intake_missing_fields,intake_ready,submission_state,last_inbound_at,last_outbound_at,assigned_staff_id,assigned_staff_name,assigned_at,last_staff_reply_at,created_at,updated_at").order("updated_at", { ascending: false }).limit(100),
+  const overdueCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: overdueConversations } = await sb.from("whatsapp_conversations")
+    .select("id,display_name,wa_id")
+    .eq("status", "human_handoff")
+    .is("assigned_staff_id", null)
+    .neq("inbox_status", "resolved")
+    .lte("human_handoff_requested_at", overdueCutoff);
+  if (overdueConversations?.length) {
+    await sb.from("whatsapp_conversations").update({ inbox_status: "unassigned" })
+      .in("id", overdueConversations.map((conversation) => conversation.id)).eq("inbox_status", "new");
+    await Promise.all(overdueConversations.map((conversation) => sb.from("whatsapp_alerts").insert({
+        conversation_id: conversation.id,
+        alert_type: "unassigned_overdue",
+        severity: "warning",
+        title: "Unassigned WhatsApp chat is overdue",
+        body: `${conversation.display_name || conversation.wa_id} has waited more than 10 minutes.`,
+      })));
+  }
+
+  const [{ data: conversations, error: conversationsError }, { data: messages, error: messagesError }, { data: reads }, { data: alerts }, staff] = await Promise.all([
+    sb.from("whatsapp_conversations").select("id,wa_id,display_name,status,inbox_status,priority_level,ai_enabled,human_handoff_requested_at,service_request_id,ai_summary,intake_payload,intake_missing_fields,intake_ready,submission_state,last_inbound_at,last_outbound_at,assigned_staff_id,assigned_staff_name,assigned_at,last_staff_reply_at,first_staff_reply_at,resolved_at,resolved_by,created_at,updated_at").order("updated_at", { ascending: false }).limit(100),
     sb.from("whatsapp_messages").select("id,conversation_id,direction,sender_type,message_type,content,delivery_status,media_mime_type,media_filename,media_size_bytes,media_storage_path,staff_sender_id,staff_sender_name,created_at").order("created_at", { ascending: true }),
+    sb.from("whatsapp_conversation_reads").select("conversation_id,last_read_at").eq("staff_id", actor.id),
+    sb.from("whatsapp_alerts").select("id,conversation_id,alert_type,severity,title,body,assigned_staff_id,is_resolved,created_at").eq("is_resolved", false).order("created_at", { ascending: false }).limit(100),
     loadStaff(token, actor),
   ]);
   if (conversationsError || messagesError) return json(req, { error: "Unable to load WhatsApp data" }, 500);
@@ -311,6 +381,8 @@ Deno.serve(async (req: Request) => {
   return json(req, {
     conversations: conversations || [],
     messages: messagesWithAttachments,
+    reads: reads || [],
+    alerts: alerts || [],
     staff,
     current_staff: actor,
     attachment_url_ttl_seconds: SIGNED_URL_SECONDS,

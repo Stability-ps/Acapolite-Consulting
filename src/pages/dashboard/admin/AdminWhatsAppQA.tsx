@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowUpDown, Bot, CheckCircle2, Download, FileSpreadsheet, FileText, Headphones, ImageIcon, MessageCircle, Paperclip, RefreshCw, Search, Send, ShieldCheck, Trash2, UserRoundCheck, Users, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, BarChart3, Bell, Bot, CheckCircle2, Clock3, Download, FileSpreadsheet, FileText, Headphones, ImageIcon, MessageCircle, Paperclip, RefreshCw, Search, Send, ShieldCheck, Trash2, UserRoundCheck, Users, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,8 @@ type Conversation = {
   wa_id: string;
   display_name: string | null;
   status: string;
+  inbox_status: "new" | "unassigned" | "assigned" | "waiting_client" | "resolved";
+  priority_level: "normal" | "high" | "urgent";
   ai_enabled: boolean;
   human_handoff_requested_at: string | null;
   service_request_id: string | null;
@@ -31,6 +33,10 @@ type Conversation = {
   assigned_staff_name: string | null;
   assigned_at: string | null;
   last_staff_reply_at: string | null;
+  first_staff_reply_at: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  unread_count: number;
   created_at: string;
   updated_at: string;
 };
@@ -63,6 +69,18 @@ type FeedPayload = {
   evaluations: Evaluation[];
   staff: StaffProfile[];
   currentStaff: StaffProfile | null;
+  alerts: WhatsAppAlert[];
+};
+
+type WhatsAppAlert = {
+  id: string;
+  conversation_id: string;
+  alert_type: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  body: string | null;
+  assigned_staff_id: string | null;
+  created_at: string;
 };
 
 type RuleResult = {
@@ -235,37 +253,62 @@ export default function AdminWhatsAppQA() {
       if (!response.ok) throw new Error(`QA feed failed (${response.status})`);
       const payload = await response.json();
       const allMessages = (payload.messages || []) as Message[];
+      const readTimes = new Map<string, string>((payload.reads || []).map((read: { conversation_id: string; last_read_at: string }) => [read.conversation_id, read.last_read_at]));
       return {
-        evaluations: ((payload.conversations || []) as Conversation[]).map((conversation) =>
-          evaluateConversation(conversation, allMessages.filter((message) => message.conversation_id === conversation.id)),
-        ),
+        evaluations: ((payload.conversations || []) as Conversation[]).map((conversation) => {
+          const conversationMessages = allMessages.filter((message) => message.conversation_id === conversation.id);
+          const lastReadAt = readTimes.get(conversation.id);
+          const unreadCount = conversationMessages.filter((message) => message.direction === "inbound" && (!lastReadAt || new Date(message.created_at) > new Date(lastReadAt))).length;
+          const inboxStatus = conversation.inbox_status || (conversation.status === "human_handoff" ? conversation.assigned_staff_id ? "assigned" : "unassigned" : "resolved");
+          return evaluateConversation({
+            ...conversation,
+            inbox_status: inboxStatus,
+            priority_level: conversation.priority_level || "normal",
+            first_staff_reply_at: conversation.first_staff_reply_at || null,
+            resolved_at: conversation.resolved_at || null,
+            resolved_by: conversation.resolved_by || null,
+            unread_count: unreadCount,
+          }, conversationMessages);
+        }),
         staff: (payload.staff || []) as StaffProfile[],
         currentStaff: (payload.current_staff || null) as StaffProfile | null,
+        alerts: (payload.alerts || []) as WhatsAppAlert[],
       } satisfies FeedPayload;
     },
     enabled: !authLoading && Boolean(session?.access_token),
+    refetchInterval: 30_000,
   });
 
   const evaluations = useMemo(() => query.data?.evaluations || [], [query.data?.evaluations]);
   const staff = query.data?.staff || [];
+  const alerts = query.data?.alerts || [];
   const visibleEvaluations = useMemo(() => {
     const needle = normalize(conversationSearch);
     const filtered = evaluations.filter(({ conversation }) => {
       const matchesQueue = queueFilter === "all"
         || queueFilter === "human" && conversation.status === "human_handoff"
-        || queueFilter === "unassigned" && conversation.status === "human_handoff" && !conversation.assigned_staff_id
-        || queueFilter === "ai" && conversation.ai_enabled;
+        || queueFilter === "new" && conversation.inbox_status === "new"
+        || queueFilter === "unassigned" && conversation.inbox_status === "unassigned"
+        || queueFilter === "assigned" && conversation.inbox_status === "assigned"
+        || queueFilter === "waiting" && conversation.inbox_status === "waiting_client"
+        || queueFilter === "resolved" && conversation.inbox_status === "resolved"
+        || queueFilter === "mine" && conversation.assigned_staff_id === query.data?.currentStaff?.id
+        || queueFilter === "unread" && conversation.unread_count > 0;
       const intake = conversation.intake_payload || {};
       const haystack = normalize([conversation.display_name, conversation.wa_id, intake.full_name, intake.company_name, intake.email].filter(Boolean).join(" "));
       return matchesQueue && (!needle || haystack.includes(needle));
     });
     return [...filtered].sort((a, b) => {
+      if (conversationSort === "priority") {
+        const rank = { urgent: 3, high: 2, normal: 1 };
+        return rank[b.conversation.priority_level] - rank[a.conversation.priority_level] || b.conversation.unread_count - a.conversation.unread_count;
+      }
       if (conversationSort === "oldest") return new Date(a.conversation.updated_at).getTime() - new Date(b.conversation.updated_at).getTime();
       if (conversationSort === "name") return (a.conversation.display_name || a.conversation.wa_id).localeCompare(b.conversation.display_name || b.conversation.wa_id);
       if (conversationSort === "messages") return b.messages.length - a.messages.length;
       return new Date(b.conversation.updated_at).getTime() - new Date(a.conversation.updated_at).getTime();
     });
-  }, [conversationSearch, conversationSort, evaluations, queueFilter]);
+  }, [conversationSearch, conversationSort, evaluations, query.data?.currentStaff?.id, queueFilter]);
   const filteredLeadEvaluations = useMemo(() => {
     const needle = normalize(leadSearch);
     const filtered = evaluations.filter(({ conversation }) => {
@@ -286,10 +329,45 @@ export default function AdminWhatsAppQA() {
     failed: evaluations.filter((evaluation) => evaluation.status === "failed").length,
     average: evaluations.length ? Math.round(evaluations.reduce((sum, evaluation) => sum + evaluation.score, 0) / evaluations.length) : 0,
     human: evaluations.filter((evaluation) => evaluation.conversation.status === "human_handoff").length,
-    unassigned: evaluations.filter((evaluation) => evaluation.conversation.status === "human_handoff" && !evaluation.conversation.assigned_staff_id).length,
+    unassigned: evaluations.filter((evaluation) => evaluation.conversation.inbox_status === "unassigned").length,
+    unread: evaluations.reduce((sum, evaluation) => sum + evaluation.conversation.unread_count, 0),
+    resolved: evaluations.filter((evaluation) => evaluation.conversation.status === "human_handoff" && evaluation.conversation.inbox_status === "resolved").length,
   }), [evaluations]);
 
-  const runAction = async (action: "assign" | "reply" | "return_to_ai", values: Record<string, unknown> = {}) => {
+  const reports = useMemo(() => {
+    const handoffs = evaluations.filter(({ conversation }) => conversation.human_handoff_requested_at);
+    const responseMinutes = handoffs.flatMap(({ conversation }) => conversation.first_staff_reply_at && conversation.human_handoff_requested_at
+      ? [(new Date(conversation.first_staff_reply_at).getTime() - new Date(conversation.human_handoff_requested_at).getTime()) / 60000]
+      : []).filter((minutes) => minutes >= 0);
+    const serviceCounts = new Map<string, number>();
+    const staffStats = new Map<string, { replies: number; conversations: Set<string> }>();
+    evaluations.forEach(({ conversation, messages }) => {
+      const service = String(conversation.intake_payload?.service_needed || "Not classified").replace(/_/g, " ");
+      serviceCounts.set(service, (serviceCounts.get(service) || 0) + 1);
+      messages.filter((message) => message.sender_type === "staff").forEach((message) => {
+        const name = message.staff_sender_name || "Unknown staff";
+        const stat = staffStats.get(name) || { replies: 0, conversations: new Set<string>() };
+        stat.replies += 1;
+        stat.conversations.add(conversation.id);
+        staffStats.set(name, stat);
+      });
+    });
+    const byDay = new Map<string, number>();
+    handoffs.forEach(({ conversation }) => {
+      const day = new Date(conversation.human_handoff_requested_at!).toLocaleDateString("en-ZA", { month: "short", day: "numeric" });
+      byDay.set(day, (byDay.get(day) || 0) + 1);
+    });
+    return {
+      averageFirstResponse: responseMinutes.length ? Math.round(responseMinutes.reduce((sum, value) => sum + value, 0) / responseMinutes.length) : null,
+      converted: evaluations.filter(({ conversation }) => conversation.service_request_id).length,
+      conversionRate: evaluations.length ? Math.round(evaluations.filter(({ conversation }) => conversation.service_request_id).length / evaluations.length * 100) : 0,
+      services: [...serviceCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5),
+      byDay: [...byDay.entries()].slice(-7),
+      staff: [...staffStats.entries()].map(([name, stat]) => ({ name, replies: stat.replies, conversations: stat.conversations.size })).sort((a, b) => b.replies - a.replies),
+    };
+  }, [evaluations]);
+
+  const runAction = async (action: "assign" | "reply" | "return_to_ai" | "mark_read" | "resolve" | "reopen", values: Record<string, unknown> = {}) => {
     if (!session?.access_token || !selected) return;
     setActionPending(true);
     try {
@@ -301,7 +379,8 @@ export default function AdminWhatsAppQA() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `Action failed (${response.status})`);
       if (action === "reply") setReply("");
-      toast.success(action === "reply" ? "Reply sent on WhatsApp" : action === "assign" ? "Chat assigned" : "AI replies restored");
+      const message = action === "reply" ? "Reply sent on WhatsApp" : action === "assign" ? "Chat assigned" : action === "resolve" ? "Chat resolved" : action === "reopen" ? "Chat reopened" : action === "mark_read" ? "Chat marked as read" : "AI replies restored";
+      toast.success(message);
       await query.refetch();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to update this chat");
@@ -390,10 +469,13 @@ export default function AdminWhatsAppQA() {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
         <button type="button" className="text-left" onClick={() => setQueueFilter(queueFilter === "human" ? "all" : "human")}>
           <Card className={queueFilter === "human" ? "border-primary ring-1 ring-primary" : "transition-colors hover:border-primary/50"}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Human chats</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-primary"><Headphones className="h-6 w-6" />{totals.human}<span className="ml-auto text-xs font-normal text-muted-foreground">{totals.unassigned} unassigned</span></CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => setQueueFilter(queueFilter === "unread" ? "all" : "unread")}>
+          <Card className={queueFilter === "unread" ? "border-primary ring-1 ring-primary" : "transition-colors hover:border-primary/50"}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Unread messages</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold"><Bell className="h-6 w-6 text-amber-600" />{totals.unread}</CardContent></Card>
         </button>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Average score</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.average}%</CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Passed</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.passed}</CardContent></Card>
@@ -404,13 +486,44 @@ export default function AdminWhatsAppQA() {
         <Card className="border-destructive/40"><CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertTriangle className="h-5 w-5 shrink-0" /><span>Unable to load WhatsApp QA data. {query.error instanceof Error ? query.error.message : "Please try again."}</span></CardContent></Card>
       ) : null}
 
+      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.4fr]">
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="flex items-center justify-between gap-3 text-base"><span className="flex items-center gap-2"><Bell className="h-4 w-4" />Operational alerts</span><Badge variant={alerts.some((alert) => alert.severity === "critical") ? "destructive" : "secondary"}>{alerts.length} open</Badge></CardTitle></CardHeader>
+          <CardContent className="max-h-60 space-y-2 overflow-y-auto">
+            {alerts.length === 0 ? <p className="py-6 text-center text-xs text-muted-foreground">No open WhatsApp alerts.</p> : alerts.map((alert) => (
+              <button key={alert.id} type="button" onClick={() => { setSelectedId(alert.conversation_id); setQueueFilter("all"); }} className={`w-full rounded-lg border p-3 text-left ${alert.severity === "critical" ? "border-red-200 bg-red-50/60" : alert.severity === "warning" ? "border-amber-200 bg-amber-50/60" : "bg-muted/20"}`}>
+                <div className="flex items-start justify-between gap-2"><p className="text-sm font-medium">{alert.title}</p><span className="shrink-0 text-[10px] text-muted-foreground">{new Date(alert.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>
+                {alert.body ? <p className="mt-1 text-xs text-muted-foreground">{alert.body}</p> : null}
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><BarChart3 className="h-4 w-4" />Human chat reporting</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border p-3"><p className="text-[11px] text-muted-foreground">Avg first response</p><p className="mt-1 text-xl font-semibold">{reports.averageFirstResponse === null ? "—" : `${reports.averageFirstResponse} min`}</p></div>
+              <div className="rounded-lg border p-3"><p className="text-[11px] text-muted-foreground">Unassigned</p><p className="mt-1 text-xl font-semibold">{totals.unassigned}</p></div>
+              <div className="rounded-lg border p-3"><p className="text-[11px] text-muted-foreground">Resolved / open</p><p className="mt-1 text-xl font-semibold">{totals.resolved} / {Math.max(0, totals.human - totals.resolved)}</p></div>
+              <div className="rounded-lg border p-3"><p className="text-[11px] text-muted-foreground">Lead conversion</p><p className="mt-1 text-xl font-semibold">{reports.conversionRate}%</p><p className="text-[10px] text-muted-foreground">{reports.converted} requests</p></div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div><p className="mb-2 text-xs font-semibold">Handoffs by day</p>{reports.byDay.length ? reports.byDay.map(([day, count]) => <div key={day} className="flex justify-between border-b py-1.5 text-xs"><span>{day}</span><span className="font-medium">{count}</span></div>) : <p className="text-xs text-muted-foreground">No handoffs yet.</p>}</div>
+              <div><p className="mb-2 text-xs font-semibold">Common services</p>{reports.services.map(([service, count]) => <div key={service} className="flex justify-between gap-3 border-b py-1.5 text-xs"><span className="truncate capitalize">{service}</span><span className="font-medium">{count}</span></div>)}</div>
+              <div><p className="mb-2 text-xs font-semibold">Admin responses</p>{reports.staff.length ? reports.staff.map((stat) => <div key={stat.name} className="border-b py-1.5 text-xs"><div className="flex justify-between gap-3"><span className="truncate">{stat.name}</span><span className="font-medium">{stat.replies}</span></div><p className="text-[10px] text-muted-foreground">{stat.conversations} chats</p></div>) : <p className="text-xs text-muted-foreground">No staff replies yet.</p>}</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid gap-5 xl:grid-cols-[minmax(215px,0.56fr)_minmax(430px,1.22fr)_minmax(320px,0.9fr)]">
         <Card>
           <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
             <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Name or WhatsApp number" className="h-9 pl-8 text-xs" /></div>
             <div className="grid grid-cols-2 gap-2">
-              <Select value={queueFilter} onValueChange={setQueueFilter}><SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All chats</SelectItem><SelectItem value="human">Human chats</SelectItem><SelectItem value="unassigned">Unassigned</SelectItem><SelectItem value="ai">AI active</SelectItem></SelectContent></Select>
-              <Select value={conversationSort} onValueChange={setConversationSort}><SelectTrigger className="h-9 text-xs"><ArrowUpDown className="mr-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest</SelectItem><SelectItem value="name">Name</SelectItem><SelectItem value="messages">Most messages</SelectItem></SelectContent></Select>
+              <Select value={queueFilter} onValueChange={setQueueFilter}><SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All chats</SelectItem><SelectItem value="human">Human chats</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="unassigned">Unassigned</SelectItem><SelectItem value="assigned">Assigned</SelectItem><SelectItem value="waiting">Waiting for client</SelectItem><SelectItem value="resolved">Resolved</SelectItem><SelectItem value="unread">Unread</SelectItem><SelectItem value="mine">Assigned to me</SelectItem></SelectContent></Select>
+              <Select value={conversationSort} onValueChange={setConversationSort}><SelectTrigger className="h-9 text-xs"><ArrowUpDown className="mr-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">Urgent first</SelectItem><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest waiting</SelectItem><SelectItem value="name">Name</SelectItem><SelectItem value="messages">Most messages</SelectItem></SelectContent></Select>
             </div>
           </CardHeader>
           <CardContent className="max-h-[820px] space-y-1.5 overflow-y-auto px-3 pb-3">
@@ -423,9 +536,9 @@ export default function AdminWhatsAppQA() {
                   <p className="truncate text-sm font-medium">{evaluation.conversation.display_name || `+${evaluation.conversation.wa_id}`}</p>
                   <p className="truncate text-[11px] font-medium text-primary">+{evaluation.conversation.wa_id}</p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold">{evaluation.score}%</span>
+                <div className="flex shrink-0 items-center gap-1">{evaluation.conversation.unread_count > 0 ? <Badge className="h-5 min-w-5 justify-center rounded-full bg-primary px-1.5 text-[10px]">{evaluation.conversation.unread_count}</Badge> : null}<span className="text-sm font-semibold">{evaluation.score}%</span></div>
                 </div>
-                <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"><span>{evaluation.messages.length} messages · {new Date(evaluation.conversation.updated_at).toLocaleDateString()}</span>{evaluation.conversation.status === "human_handoff" ? <Badge className="h-5 bg-blue-100 px-1.5 text-[9px] text-blue-800 hover:bg-blue-100">Human</Badge> : null}</div>
+                <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"><span>{evaluation.messages.length} messages · {new Date(evaluation.conversation.updated_at).toLocaleDateString()}</span><div className="flex gap-1">{evaluation.conversation.priority_level !== "normal" ? <Badge variant="destructive" className="h-5 px-1.5 text-[9px]">{evaluation.conversation.priority_level}</Badge> : null}<Badge variant="outline" className="h-5 px-1.5 text-[9px] capitalize">{evaluation.conversation.inbox_status.replace(/_/g, " ")}</Badge></div></div>
               </button>
             ))}
           </CardContent>
@@ -518,6 +631,15 @@ export default function AdminWhatsAppQA() {
                   )}
                 </div>
 
+                <div className="flex flex-wrap gap-2">
+                  {selected.conversation.unread_count > 0 ? <Button size="sm" variant="outline" onClick={() => runAction("mark_read")} disabled={actionPending}><CheckCircle2 className="mr-2 h-4 w-4" />Mark read</Button> : null}
+                  {selected.conversation.inbox_status === "resolved" ? (
+                    <Button size="sm" variant="outline" onClick={() => runAction("reopen")} disabled={actionPending}><RefreshCw className="mr-2 h-4 w-4" />Reopen chat</Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => window.confirm("Mark this human chat as resolved? AI will remain silent.") && runAction("resolve")} disabled={actionPending || selected.conversation.ai_enabled}><CheckCircle2 className="mr-2 h-4 w-4" />Resolve</Button>
+                  )}
+                </div>
+
                 <div className={`rounded-lg border px-3 py-2 text-xs ${selected.conversation.ai_enabled ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
                   {selected.conversation.ai_enabled
                     ? "AI is active. Take over or assign the chat before replying."
@@ -557,6 +679,9 @@ export default function AdminWhatsAppQA() {
                   <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p><p className="rounded-xl border bg-muted/20 p-4 text-sm leading-relaxed">{selected.conversation.ai_summary || intakeValue(selected.conversation.intake_payload?.description)}</p></div>
                   <div>
                     <DetailRow label="Conversation status" value={selected.conversation.status.replace(/_/g, " ")} />
+                    <DetailRow label="Inbox status" value={selected.conversation.inbox_status.replace(/_/g, " ")} />
+                    <DetailRow label="Priority" value={selected.conversation.priority_level} />
+                    <DetailRow label="Unread for me" value={selected.conversation.unread_count} />
                     <DetailRow label="AI responding" value={selected.conversation.ai_enabled ? "Yes" : "No"} />
                     <DetailRow label="Submission state" value={selected.conversation.submission_state.replace(/_/g, " ")} />
                     <DetailRow label="Intake complete" value={selected.conversation.intake_ready ? "Yes" : "No"} />
@@ -565,6 +690,8 @@ export default function AdminWhatsAppQA() {
                     <DetailRow label="Assigned staff" value={selected.conversation.assigned_staff_name || "Unassigned"} />
                     <DetailRow label="Assigned at" value={selected.conversation.assigned_at ? new Date(selected.conversation.assigned_at).toLocaleString() : "—"} />
                     <DetailRow label="Last staff reply" value={selected.conversation.last_staff_reply_at ? new Date(selected.conversation.last_staff_reply_at).toLocaleString() : "—"} />
+                    <DetailRow label="First staff reply" value={selected.conversation.first_staff_reply_at ? new Date(selected.conversation.first_staff_reply_at).toLocaleString() : "—"} />
+                    <DetailRow label="Resolved" value={selected.conversation.resolved_at ? new Date(selected.conversation.resolved_at).toLocaleString() : "No"} />
                     <DetailRow label="Service request" value={selected.conversation.service_request_id || "Not created"} />
                     <DetailRow label="Started" value={new Date(selected.conversation.created_at).toLocaleString()} />
                     <DetailRow label="Last activity" value={new Date(selected.conversation.updated_at).toLocaleString()} />
