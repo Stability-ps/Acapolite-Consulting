@@ -150,6 +150,21 @@ function containsFalseActionClaim(text: string) {
     || /\b(has been|was)\s+(submitted|filed|lodged|sent|assigned|connected|escalated|forwarded)\b/i.test(text);
 }
 
+function isSimpleGreeting(text: string) {
+  return /^(hi|hello|hey|good\s+(morning|afternoon|evening)|howzit|sawubona|sanibonani|dumelang|molo|molweni)[!. ]*$/i.test(text.trim());
+}
+
+function asksAssistantIdentity(text: string) {
+  return /\b(what('| i)s your name|who are you|are you nomsa|you are nomsa|your name is nomsa|called nomsa)\b/i.test(text)
+    || /\bnever asked you\b.{0,30}\bnomsa\b/i.test(text);
+}
+
+function unsafeLocalizedRewrite(source: string, output: string) {
+  const changedQuestionToStatement = source.includes("?") && !output.includes("?");
+  const inventedIdentity = /\b(my (full )?name is|i am|i'm)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b/.test(output);
+  return changedQuestionToStatement || inventedIdentity || containsFalseActionClaim(output);
+}
+
 function repeatedQuestion(answer: string, question: string) {
   const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   const a = normalize(answer);
@@ -369,7 +384,8 @@ async function localize(message: string, latest: string, history: any[]) {
   const data = await response.json();
   let output = typeof data?.output_text === "string" ? data.output_text : "";
   if (!output) for (const item of data?.output || []) for (const part of item?.content || []) if (part?.type === "output_text") output = part.text;
-  return cleanReply(output || message);
+  const localized = cleanReply(output || message);
+  return unsafeLocalizedRewrite(message, localized) ? cleanReply(message) : localized;
 }
 
 async function askAI(history: any[], latest: string, current: Intake, state: string, attachment?: { kind: "image" | "document"; bytes: Uint8Array; mime: string; filename?: string | null }) {
@@ -532,6 +548,16 @@ Deno.serve(async (req: Request) => {
           continue;
         }
         if (!conversation.ai_enabled || conversation.status === "human_handoff") continue;
+
+        if (event.kind === "text" && isSimpleGreeting(event.text)) {
+          await storeOutbound(sb, conversation.id, event.waId, "Hi! How can Acapolite help you today?");
+          continue;
+        }
+
+        if (event.kind === "text" && asksAssistantIdentity(event.text)) {
+          await storeOutbound(sb, conversation.id, event.waId, "You’re right, that name was incorrect. I’m Acapolite’s AI-assisted WhatsApp assistant, not Nomsa. Sorry about that. How can we help you today?", "system");
+          continue;
+        }
 
         if (event.kind === "text" && requestsHumanHandoff(event.text)) {
           await sb.from("whatsapp_conversations").update({ status: "human_handoff", ai_enabled: false, human_handoff_requested_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
