@@ -1,6 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { canUseTaxCoach } from "../_shared/taxCoachAccess.ts";
 import { TAX_COACH_INSTRUCTIONS } from "../_shared/taxCoachPrompt.ts";
+import {
+  buildTaxCoachAttachmentInput,
+  validateTaxCoachAttachments,
+  type TaxCoachAttachment,
+} from "../_shared/taxCoachAttachments.ts";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -71,6 +76,12 @@ Deno.serve(async (request) => {
     if (!validMessages(payload?.messages)) {
       return json(request, { error: "Provide between 1 and 20 valid chat messages." }, 400);
     }
+    if (!validateTaxCoachAttachments(payload?.attachments)) {
+      return json(request, { error: "Attach up to 3 valid PDF, PNG, JPEG or WebP files within the size limits." }, 400);
+    }
+
+    const attachments = (payload.attachments ?? []) as TaxCoachAttachment[];
+    const lastMessageIndex = payload.messages.length - 1;
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -82,9 +93,14 @@ Deno.serve(async (request) => {
         model: Deno.env.get("OPENAI_TAX_COACH_MODEL") || Deno.env.get("OPENAI_WHATSAPP_MODEL") || "gpt-4.1-mini",
         store: false,
         instructions: TAX_COACH_INSTRUCTIONS,
-        input: payload.messages.map((message: ChatMessage) => ({
+        input: payload.messages.map((message: ChatMessage, index: number) => ({
           role: message.role,
-          content: [{ type: message.role === "assistant" ? "output_text" : "input_text", text: message.content }],
+          content: message.role === "assistant"
+            ? [{ type: "output_text", text: message.content }]
+            : [
+                { type: "input_text", text: message.content },
+                ...(index === lastMessageIndex ? buildTaxCoachAttachmentInput(attachments) : []),
+              ],
         })),
         text: { verbosity: "medium" },
       }),
