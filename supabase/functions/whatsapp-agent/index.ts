@@ -150,6 +150,11 @@ function containsFalseActionClaim(text: string) {
     || /\b(has been|was)\s+(submitted|filed|lodged|sent|assigned|connected|escalated|forwarded)\b/i.test(text);
 }
 
+function containsDuplicateSubmissionOffer(text: string) {
+  return /\b(?:submit|create|open|send)\b.{0,45}\b(?:case|request|matter)\b/i.test(text)
+    || /\b(?:case|request|matter)\b.{0,45}\b(?:submit|create|open|send)\b/i.test(text);
+}
+
 function containsInventedPersonalIdentity(text: string) {
   return /\bmy (full )?name is\b/i.test(text)
     || /\b(?:i am|i'm)\s+[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(text);
@@ -613,11 +618,13 @@ Deno.serve(async (req: Request) => {
 
         if (conversation.service_request_id) {
           const p = requestPayload(next);
-          await sb.from("service_requests").update({ ...p, updated_at: new Date().toISOString() }).eq("id", conversation.service_request_id);
+          const { error: requestUpdateError } = await sb.from("service_requests").update({ ...p, updated_at: new Date().toISOString() }).eq("id", conversation.service_request_id);
+          if (requestUpdateError) throw requestUpdateError;
           if (storagePath) await linkDocuments(sb, conversation.id, conversation.service_request_id);
           let answer = cleanReply(ai.reply);
           if (containsInventedPersonalIdentity(answer)) answer = "I’m Acapolite’s AI-assisted WhatsApp assistant. A practitioner will decide the correct next step after reviewing the matter.";
           if (containsFalseActionClaim(answer)) answer = "A practitioner will decide the correct next step after reviewing the matter.";
+          if (containsDuplicateSubmissionOffer(answer)) answer = "Your Acapolite request already exists and now includes this information. A practitioner still needs to review the matter and advise the correct next step. Nothing has been submitted to SARS.";
           if (answer && looksLikeQuestion(event.text)) await storeOutbound(sb, conversation.id, event.waId, answer);
           else await storeOutbound(sb, conversation.id, event.waId, await localize("Thanks. The new information is now part of your Acapolite request.", event.text, history));
           continue;
