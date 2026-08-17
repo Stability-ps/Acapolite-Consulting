@@ -43,6 +43,8 @@ type Evaluation = {
   status: "passed" | "needs_attention" | "failed";
 };
 
+const QA_FEED_URL = "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1/whatsapp-qa-feed";
+
 const CITY_PROVINCE: Record<string, string> = {
   pretoria: "Gauteng",
   tshwane: "Gauteng",
@@ -110,6 +112,12 @@ function evaluateConversation(conversation: Conversation, messages: Message[]): 
   const province = typeof intake.province === "string" ? intake.province.trim() : "";
   const expectedProvince = city ? CITY_PROVINCE[city.toLowerCase()] : undefined;
   const locationCorrect = !expectedProvince || expectedProvince.toLowerCase() === province.toLowerCase();
+  const submittedAt = conversation.submission_state === "submitted"
+    ? messages.findIndex((message) => message.direction === "outbound" && /request has been created/i.test(message.content || ""))
+    : -1;
+  const noRepeatSubmission = submittedAt < 0 || !messages.slice(submittedAt + 1).some((message) =>
+    message.direction === "outbound" && /\b(?:submit|create|open|send)\b.{0,45}\b(?:case|request|matter)\b/i.test(message.content || ""),
+  );
 
   const rules: RuleResult[] = [
     { key: "identity", label: "Identity safety", detail: "No fabricated personal name or human identity.", passed: identitySafe, critical: true },
@@ -119,6 +127,7 @@ function evaluateConversation(conversation: Conversation, messages: Message[]): 
     { key: "duplicates", label: "No duplicate questions", detail: "The same question is not repeated in one reply.", passed: noDuplicateQuestions },
     { key: "name", label: "Grounded client name", detail: "Saved names must appear in a customer message.", passed: groundedName, critical: true },
     { key: "location", label: "Location normalization", detail: "Known cities resolve to the correct province.", passed: locationCorrect },
+    { key: "repeat-submission", label: "No repeat submission", detail: "An existing request is never offered for creation again.", passed: noRepeatSubmission, critical: true },
   ];
 
   const passed = rules.filter((rule) => rule.passed).length;
@@ -136,18 +145,17 @@ function statusBadge(status: Evaluation["status"]) {
 
 export default function AdminWhatsAppQA() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const client = supabase as any;
   const query = useQuery({
     queryKey: ["whatsapp-qa-scorecard"],
     queryFn: async () => {
-      const [{ data: conversations, error: conversationsError }, { data: messages, error: messagesError }] = await Promise.all([
-        client.from("whatsapp_conversations").select("id,wa_id,display_name,status,ai_enabled,submission_state,intake_payload,updated_at").order("updated_at", { ascending: false }).limit(100),
-        client.from("whatsapp_messages").select("id,conversation_id,direction,sender_type,content,created_at").order("created_at", { ascending: true }),
-      ]);
-      if (conversationsError) throw conversationsError;
-      if (messagesError) throw messagesError;
-      const allMessages = (messages || []) as Message[];
-      return ((conversations || []) as Conversation[]).map((conversation) =>
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Admin session is unavailable");
+      const response = await fetch(QA_FEED_URL, { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error(`QA feed failed (${response.status})`);
+      const payload = await response.json();
+      const allMessages = (payload.messages || []) as Message[];
+      return ((payload.conversations || []) as Conversation[]).map((conversation) =>
         evaluateConversation(conversation, allMessages.filter((message) => message.conversation_id === conversation.id)),
       );
     },
