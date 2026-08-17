@@ -2,7 +2,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
 interface RequireStaffPermissionProps {
-  permission: "can_view_overview" | "can_view_clients" | "can_view_client_workspace" | "can_view_cases" | "can_view_documents" | "can_view_invoices" | "can_view_messages";
+  permission: "can_view_overview" | "can_view_clients" | "can_view_client_workspace" | "can_view_cases" | "can_view_documents" | "can_view_invoices" | "can_view_messages" | "can_use_tax_coach_ai";
 }
 
 export function RequireStaffPermission({ permission }: RequireStaffPermissionProps) {
