@@ -662,7 +662,11 @@ Deno.serve(async (req: Request) => {
         if (containsInventedPersonalIdentity(answer)) answer = "I’m Acapolite’s AI-assisted WhatsApp assistant. How can we help with your tax matter?";
         if (containsFalseActionClaim(answer)) answer = "A practitioner should review the matter before any formal step is taken.";
         const safeQuestion = repeatedQuestion(answer, question) ? "" : question;
-        if (answer && looksLikeQuestion(event.text)) {
+        // An image or PDF can contain the customer's actual question even when
+        // WhatsApp supplies no caption. In that case the vision result lives in
+        // ai.reply, so keep the useful response instead of sending only the next
+        // intake question.
+        if (answer && (looksLikeQuestion(event.text) || Boolean(attachment))) {
           const combined = cleanReply(`${answer}\n\n${safeQuestion}`);
           await storeOutbound(sb, conversation.id, event.waId, combined || safeQuestion || answer);
         } else {
