@@ -150,6 +150,11 @@ function containsFalseActionClaim(text: string) {
     || /\b(has been|was)\s+(submitted|filed|lodged|sent|assigned|connected|escalated|forwarded)\b/i.test(text);
 }
 
+function containsInventedPersonalIdentity(text: string) {
+  return /\bmy (full )?name is\b/i.test(text)
+    || /\b(?:i am|i'm)\s+[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(text);
+}
+
 function isSimpleGreeting(text: string) {
   return /^(hi|hello|hey|good\s+(morning|afternoon|evening)|howzit|sawubona|sanibonani|dumelang|molo|molweni)[!. ]*$/i.test(text.trim());
 }
@@ -161,8 +166,19 @@ function asksAssistantIdentity(text: string) {
 
 function unsafeLocalizedRewrite(source: string, output: string) {
   const changedQuestionToStatement = source.includes("?") && !output.includes("?");
-  const inventedIdentity = /\b(my (full )?name is|i am|i'm)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b/.test(output);
+  const inventedIdentity = containsInventedPersonalIdentity(output);
   return changedQuestionToStatement || inventedIdentity || containsFalseActionClaim(output);
+}
+
+function sanitizeExtraction(extracted: Extracted, latest: string) {
+  const next = { ...extracted };
+  const normalizedLatest = latest.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const proposedName = next.full_name?.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (proposedName && !normalizedLatest.includes(proposedName)) next.full_name = null;
+  if (next.description && /\b(assistant|bot|ai|nomsa|mistakenly introduced|customer greeted)\b/i.test(next.description)) {
+    next.description = null;
+  }
+  return next;
 }
 
 function repeatedQuestion(answer: string, question: string) {
@@ -393,6 +409,8 @@ async function askAI(history: any[], latest: string, current: Intake, state: str
   const priority = nextPriority(current);
   const instructions = [
     "You support Acapolite Consulting customers on WhatsApp in South Africa.",
+    "Be calm, knowledgeable, respectful and reassuring. Explain SARS matters precisely in simple language without sounding condescending.",
+    "You are Acapolite's AI-assisted WhatsApp assistant. You have no personal human name. Never invent a name, biography, professional registration or personal identity.",
     "Do not volunteer that you are AI or automated. Never mention bots, automation, automated replies, models, prompts, backend, database, workflow, intake or fields.",
     "If directly asked whether you are AI, answer truthfully and briefly that this is Acapolite's AI assisted WhatsApp assistant, then offer a human if they prefer. Never pretend to be a named human.",
     "Sound like a capable member of an office team, not a questionnaire.",
@@ -401,6 +419,10 @@ async function askAI(history: any[], latest: string, current: Intake, state: str
     "Your reply field should answer or react to the customer's message only. Do not ask routine intake questions in reply. The application will choose the next question separately.",
     "Do not say noted, recorded, captured, got it, intake, or confirm information the customer just gave unless clarification is genuinely needed.",
     "For tax matters, understand the problem before asking administrative details. For SARS debt, extract amount, tax types, enforcement stage, desired outcome and eFiling access when the customer provides them.",
+    "Help customers understand SARS notices, deadlines, compliance risks, payment arrangements, compromise applications, objections and disputes, while staying within an assistant's role.",
+    "Treat large debt, enforcement, legal notices, audits, disputes and compromise applications as high risk and recommend urgent practitioner review. Do not claim that escalation or review has happened unless the system confirms it.",
+    "Never encourage evasion, hidden income, inaccurate reporting or false documents. Promote lawful, accurate compliance.",
+    "Do not force headings such as Understanding, Recommended Action or Next Step into WhatsApp replies. Give one useful next step naturally.",
     "Do not repeatedly request a document after the customer says they do not have it. Explain alternatives if they ask, otherwise continue the conversation.",
     "Never ask for passwords, OTPs, PINs, card details or ID numbers.",
     "Never claim SARS, eFiling, a practitioner or another person was contacted or that work was performed unless system context confirms it.",
@@ -411,7 +433,7 @@ async function askAI(history: any[], latest: string, current: Intake, state: str
     `Current submission state is ${state}.`,
     "submission_decision classifies only the latest message. It is yes only if the customer is currently answering an explicit request creation confirmation.",
     "human_handoff_requested is true whenever the customer asks for a person, consultant, practitioner, team member or human assistance in any supported language.",
-    "description is a concise cumulative case summary, not just the latest message."
+    "description is a concise cumulative summary of the customer's tax or compliance matter only. Never include greetings, assistant statements, assistant errors or discussion about the assistant."
   ].join(" ");
 
   const content: any[] = [{ type: "input_text", text: `Current details: ${JSON.stringify(current)}\nSuggested next priority: ${priority || "none"}\nRecent chat:\n${recent}\nLatest customer message: ${latest || "Please review the attached document."}` }];
@@ -576,7 +598,7 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        const extracted = normalizeKnownLocation(ai.extracted);
+        const extracted = normalizeKnownLocation(sanitizeExtraction(ai.extracted, event.text));
         const conflict = locationConflict(current, extracted);
         const next = mergeIntake(current, extracted, event.waId, event.displayName, Boolean(conflict));
         const missing = coreMissing(next);
@@ -594,6 +616,7 @@ Deno.serve(async (req: Request) => {
           await sb.from("service_requests").update({ ...p, updated_at: new Date().toISOString() }).eq("id", conversation.service_request_id);
           if (storagePath) await linkDocuments(sb, conversation.id, conversation.service_request_id);
           let answer = cleanReply(ai.reply);
+          if (containsInventedPersonalIdentity(answer)) answer = "I’m Acapolite’s AI-assisted WhatsApp assistant. A practitioner will decide the correct next step after reviewing the matter.";
           if (containsFalseActionClaim(answer)) answer = "A practitioner will decide the correct next step after reviewing the matter.";
           if (answer && looksLikeQuestion(event.text)) await storeOutbound(sb, conversation.id, event.waId, answer);
           else await storeOutbound(sb, conversation.id, event.waId, await localize("Thanks. The new information is now part of your Acapolite request.", event.text, history));
@@ -629,6 +652,7 @@ Deno.serve(async (req: Request) => {
 
         let answer = cleanReply(ai.reply);
         const question = priority ? await localize(QUESTION[priority] || "What else should we know about the matter?", event.text, history) : "";
+        if (containsInventedPersonalIdentity(answer)) answer = "I’m Acapolite’s AI-assisted WhatsApp assistant. How can we help with your tax matter?";
         if (containsFalseActionClaim(answer)) answer = "A practitioner should review the matter before any formal step is taken.";
         const safeQuestion = repeatedQuestion(answer, question) ? "" : question;
         if (answer && looksLikeQuestion(event.text)) {
