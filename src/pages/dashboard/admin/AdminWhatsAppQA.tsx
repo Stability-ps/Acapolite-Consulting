@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Bot, CheckCircle2, Download, FileText, ImageIcon, MessageCircle, Paperclip, RefreshCw, Send, ShieldCheck, UserRoundCheck, XCircle } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, Download, FileSpreadsheet, FileText, ImageIcon, MessageCircle, Paperclip, RefreshCw, Send, ShieldCheck, Trash2, UserRoundCheck, Users, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -202,6 +203,11 @@ function fileSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function csvCell(value: unknown) {
+  const text = value === null || value === undefined ? "" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
 function replyWindowOpen(lastInboundAt: string | null) {
   if (!lastInboundAt) return false;
   const elapsed = Date.now() - new Date(lastInboundAt).getTime();
@@ -212,6 +218,7 @@ export default function AdminWhatsAppQA() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [actionPending, setActionPending] = useState(false);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const { session, loading: authLoading } = useAuth();
   const query = useQuery({
     queryKey: ["whatsapp-qa-scorecard", session?.user.id],
@@ -259,6 +266,73 @@ export default function AdminWhatsAppQA() {
       await query.refetch();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to update this chat");
+    } finally {
+      setActionPending(false);
+    }
+  };
+
+  const exportLeadData = () => {
+    const rows = evaluations.filter((evaluation) => selectedLeadIds.size === 0 || selectedLeadIds.has(evaluation.conversation.id));
+    if (!rows.length) return toast.error("There is no client data to export");
+    const headers = ["WhatsApp name", "Full name", "Phone", "Email", "Client type", "Company", "City", "Province", "Service", "Tax types", "SARS debt", "Enforcement stage", "Urgency", "eFiling access", "Desired outcome", "Conversation status", "Submission state", "Assigned staff", "Service request ID", "Summary", "Started", "Last activity"];
+    const data = rows.map(({ conversation }) => {
+      const intake = conversation.intake_payload || {};
+      return [
+        conversation.display_name,
+        intake.full_name,
+        `+${conversation.wa_id}`,
+        intake.email,
+        intake.client_type,
+        intake.company_name,
+        intake.city,
+        intake.province,
+        intake.service_needed,
+        intake.tax_types,
+        intake.sars_debt_amount,
+        intake.enforcement_stage,
+        intake.urgency,
+        intake.efiling_access,
+        intake.desired_outcome,
+        conversation.status,
+        conversation.submission_state,
+        conversation.assigned_staff_name,
+        conversation.service_request_id,
+        conversation.ai_summary || intake.description,
+        conversation.created_at,
+        conversation.updated_at,
+      ];
+    });
+    const csv = `\uFEFF${[headers, ...data].map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `acapolite-whatsapp-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${rows.length} client record${rows.length === 1 ? "" : "s"} exported for Excel`);
+  };
+
+  const deleteSelectedLeads = async () => {
+    if (!session?.access_token || selectedLeadIds.size === 0) return;
+    const count = selectedLeadIds.size;
+    const confirmed = window.confirm(`Permanently delete ${count} selected WhatsApp client record${count === 1 ? "" : "s"}, including chat messages and stored attachments? Linked service requests will be preserved.`);
+    if (!confirmed) return;
+    setActionPending(true);
+    try {
+      const response = await fetch(QA_FEED_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_conversations", conversation_ids: [...selectedLeadIds] }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Deletion failed (${response.status})`);
+      setSelectedLeadIds(new Set());
+      setSelectedId(null);
+      toast.success(`${payload.deleted || count} client record${(payload.deleted || count) === 1 ? "" : "s"} deleted`);
+      if (payload.attachment_cleanup_warning) toast.warning(payload.attachment_cleanup_warning);
+      await query.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to delete the selected records");
     } finally {
       setActionPending(false);
     }
@@ -445,22 +519,70 @@ export default function AdminWhatsAppQA() {
                     <DetailRow label="Last activity" value={new Date(selected.conversation.updated_at).toLocaleString()} />
                   </div>
                 </TabsContent>
-                <TabsContent value="client" className="mt-0">
-                  <DetailRow label="Full name" value={intakeValue(selected.conversation.intake_payload?.full_name)} />
-                  <DetailRow label="WhatsApp name" value={selected.conversation.display_name || "—"} />
-                  <DetailRow label="Phone" value={`+${selected.conversation.wa_id}`} />
-                  <DetailRow label="Email" value={intakeValue(selected.conversation.intake_payload?.email)} />
-                  <DetailRow label="Client type" value={intakeValue(selected.conversation.intake_payload?.client_type)} />
-                  <DetailRow label="Company" value={intakeValue(selected.conversation.intake_payload?.company_name)} />
-                  <DetailRow label="City" value={intakeValue(selected.conversation.intake_payload?.city)} />
-                  <DetailRow label="Province" value={intakeValue(selected.conversation.intake_payload?.province)} />
-                  <DetailRow label="Service" value={intakeValue(selected.conversation.intake_payload?.service_needed)} />
-                  <DetailRow label="Tax types" value={intakeValue(selected.conversation.intake_payload?.tax_types)} />
-                  <DetailRow label="SARS debt" value={selected.conversation.intake_payload?.sars_debt_amount ? `R${intakeValue(selected.conversation.intake_payload.sars_debt_amount)}` : "—"} />
-                  <DetailRow label="Enforcement stage" value={intakeValue(selected.conversation.intake_payload?.enforcement_stage)} />
-                  <DetailRow label="Urgency" value={intakeValue(selected.conversation.intake_payload?.urgency)} />
-                  <DetailRow label="eFiling access" value={intakeValue(selected.conversation.intake_payload?.efiling_access)} />
-                  <DetailRow label="Desired outcome" value={intakeValue(selected.conversation.intake_payload?.desired_outcome)} />
+                <TabsContent value="client" className="mt-0 space-y-6">
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Selected client</p>
+                    <DetailRow label="Full name" value={intakeValue(selected.conversation.intake_payload?.full_name)} />
+                    <DetailRow label="WhatsApp name" value={selected.conversation.display_name || "—"} />
+                    <DetailRow label="Phone" value={`+${selected.conversation.wa_id}`} />
+                    <DetailRow label="Email" value={intakeValue(selected.conversation.intake_payload?.email)} />
+                    <DetailRow label="Client type" value={intakeValue(selected.conversation.intake_payload?.client_type)} />
+                    <DetailRow label="Company" value={intakeValue(selected.conversation.intake_payload?.company_name)} />
+                    <DetailRow label="City" value={intakeValue(selected.conversation.intake_payload?.city)} />
+                    <DetailRow label="Province" value={intakeValue(selected.conversation.intake_payload?.province)} />
+                    <DetailRow label="Service" value={intakeValue(selected.conversation.intake_payload?.service_needed)} />
+                    <DetailRow label="Tax types" value={intakeValue(selected.conversation.intake_payload?.tax_types)} />
+                    <DetailRow label="SARS debt" value={selected.conversation.intake_payload?.sars_debt_amount ? `R${intakeValue(selected.conversation.intake_payload.sars_debt_amount)}` : "—"} />
+                    <DetailRow label="Enforcement stage" value={intakeValue(selected.conversation.intake_payload?.enforcement_stage)} />
+                    <DetailRow label="Urgency" value={intakeValue(selected.conversation.intake_payload?.urgency)} />
+                    <DetailRow label="eFiling access" value={intakeValue(selected.conversation.intake_payload?.efiling_access)} />
+                    <DetailRow label="Desired outcome" value={intakeValue(selected.conversation.intake_payload?.desired_outcome)} />
+                  </div>
+
+                  <div className="space-y-3 border-t pt-5">
+                    <div className="flex items-center gap-2"><Users className="h-4 w-4" /><p className="text-sm font-semibold">Lead data</p></div>
+                    <p className="text-xs text-muted-foreground">Select clients to export for Excel or permanently remove their WhatsApp records.</p>
+                    <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3">
+                      <Checkbox
+                        checked={evaluations.length > 0 && selectedLeadIds.size === evaluations.length}
+                        onCheckedChange={(checked) => setSelectedLeadIds(checked ? new Set(evaluations.map((evaluation) => evaluation.conversation.id)) : new Set())}
+                        aria-label="Select all clients"
+                      />
+                      <span className="text-sm">Select all clients</span>
+                      <span className="ml-auto text-xs text-muted-foreground">{selectedLeadIds.size} selected</span>
+                    </div>
+                    <div className="max-h-64 space-y-2 overflow-y-auto">
+                      {evaluations.map((evaluation) => {
+                        const conversation = evaluation.conversation;
+                        return (
+                          <div key={conversation.id} className={`flex items-center gap-3 rounded-lg border p-3 ${selectedLeadIds.has(conversation.id) ? "border-primary bg-primary/5" : ""}`}>
+                            <Checkbox
+                              checked={selectedLeadIds.has(conversation.id)}
+                              onCheckedChange={(checked) => setSelectedLeadIds((current) => {
+                                const next = new Set(current);
+                                if (checked) next.add(conversation.id); else next.delete(conversation.id);
+                                return next;
+                              })}
+                              aria-label={`Select ${conversation.display_name || conversation.wa_id}`}
+                            />
+                            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedId(conversation.id)}>
+                              <p className="truncate text-sm font-medium">{conversation.display_name || intakeValue(conversation.intake_payload?.full_name)}</p>
+                              <p className="truncate text-xs text-muted-foreground">+{conversation.wa_id} · {conversation.status.replace(/_/g, " ")}</p>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Button variant="outline" onClick={exportLeadData} disabled={!evaluations.length}>
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />{selectedLeadIds.size ? "Export selected" : "Export all"}
+                      </Button>
+                      <Button variant="destructive" onClick={deleteSelectedLeads} disabled={selectedLeadIds.size === 0 || actionPending}>
+                        <Trash2 className="mr-2 h-4 w-4" />Delete selected
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Exports use an Excel-compatible CSV file. Deleting removes the WhatsApp chat and private attachments, while any linked service request remains preserved.</p>
+                  </div>
                 </TabsContent>
                 <TabsContent value="analysis" className="mt-0 space-y-3">
                   <div className="mb-5 flex items-center justify-between rounded-xl bg-muted/60 p-4"><div><p className="font-medium">Quality score</p><p className="text-xs text-muted-foreground">{selected.passed} of {selected.rules.length} checks passed</p></div><span className="text-3xl font-semibold">{selected.score}%</span></div>
