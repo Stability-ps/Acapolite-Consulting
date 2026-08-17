@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Bot, CheckCircle2, Download, FileSpreadsheet, FileText, ImageIcon, MessageCircle, Paperclip, RefreshCw, Send, ShieldCheck, Trash2, UserRoundCheck, Users, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, Bot, CheckCircle2, Download, FileSpreadsheet, FileText, Headphones, ImageIcon, MessageCircle, Paperclip, RefreshCw, Search, Send, ShieldCheck, Trash2, UserRoundCheck, Users, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -219,6 +220,11 @@ export default function AdminWhatsAppQA() {
   const [reply, setReply] = useState("");
   const [actionPending, setActionPending] = useState(false);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [queueFilter, setQueueFilter] = useState("all");
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [conversationSort, setConversationSort] = useState("newest");
+  const [leadSearch, setLeadSearch] = useState("");
+  const [leadSort, setLeadSort] = useState("newest");
   const { session, loading: authLoading } = useAuth();
   const query = useQuery({
     queryKey: ["whatsapp-qa-scorecard", session?.user.id],
@@ -242,12 +248,45 @@ export default function AdminWhatsAppQA() {
 
   const evaluations = useMemo(() => query.data?.evaluations || [], [query.data?.evaluations]);
   const staff = query.data?.staff || [];
-  const selected = evaluations.find((evaluation) => evaluation.conversation.id === selectedId) || evaluations[0] || null;
+  const visibleEvaluations = useMemo(() => {
+    const needle = normalize(conversationSearch);
+    const filtered = evaluations.filter(({ conversation }) => {
+      const matchesQueue = queueFilter === "all"
+        || queueFilter === "human" && conversation.status === "human_handoff"
+        || queueFilter === "unassigned" && conversation.status === "human_handoff" && !conversation.assigned_staff_id
+        || queueFilter === "ai" && conversation.ai_enabled;
+      const intake = conversation.intake_payload || {};
+      const haystack = normalize([conversation.display_name, conversation.wa_id, intake.full_name, intake.company_name, intake.email].filter(Boolean).join(" "));
+      return matchesQueue && (!needle || haystack.includes(needle));
+    });
+    return [...filtered].sort((a, b) => {
+      if (conversationSort === "oldest") return new Date(a.conversation.updated_at).getTime() - new Date(b.conversation.updated_at).getTime();
+      if (conversationSort === "name") return (a.conversation.display_name || a.conversation.wa_id).localeCompare(b.conversation.display_name || b.conversation.wa_id);
+      if (conversationSort === "messages") return b.messages.length - a.messages.length;
+      return new Date(b.conversation.updated_at).getTime() - new Date(a.conversation.updated_at).getTime();
+    });
+  }, [conversationSearch, conversationSort, evaluations, queueFilter]);
+  const filteredLeadEvaluations = useMemo(() => {
+    const needle = normalize(leadSearch);
+    const filtered = evaluations.filter(({ conversation }) => {
+      const intake = conversation.intake_payload || {};
+      return !needle || normalize([conversation.display_name, conversation.wa_id, intake.full_name, intake.company_name, intake.email, intake.city, intake.service_needed].filter(Boolean).join(" ")).includes(needle);
+    });
+    return [...filtered].sort((a, b) => {
+      if (leadSort === "oldest") return new Date(a.conversation.updated_at).getTime() - new Date(b.conversation.updated_at).getTime();
+      if (leadSort === "name") return (a.conversation.display_name || a.conversation.wa_id).localeCompare(b.conversation.display_name || b.conversation.wa_id);
+      if (leadSort === "debt") return Number(b.conversation.intake_payload?.sars_debt_amount || 0) - Number(a.conversation.intake_payload?.sars_debt_amount || 0);
+      return new Date(b.conversation.updated_at).getTime() - new Date(a.conversation.updated_at).getTime();
+    });
+  }, [evaluations, leadSearch, leadSort]);
+  const selected = evaluations.find((evaluation) => evaluation.conversation.id === selectedId) || visibleEvaluations[0] || null;
   const totals = useMemo(() => ({
     conversations: evaluations.length,
     passed: evaluations.filter((evaluation) => evaluation.status === "passed").length,
     failed: evaluations.filter((evaluation) => evaluation.status === "failed").length,
     average: evaluations.length ? Math.round(evaluations.reduce((sum, evaluation) => sum + evaluation.score, 0) / evaluations.length) : 0,
+    human: evaluations.filter((evaluation) => evaluation.conversation.status === "human_handoff").length,
+    unassigned: evaluations.filter((evaluation) => evaluation.conversation.status === "human_handoff" && !evaluation.conversation.assigned_staff_id).length,
   }), [evaluations]);
 
   const runAction = async (action: "assign" | "reply" | "return_to_ai", values: Record<string, unknown> = {}) => {
@@ -272,7 +311,7 @@ export default function AdminWhatsAppQA() {
   };
 
   const exportLeadData = () => {
-    const rows = evaluations.filter((evaluation) => selectedLeadIds.size === 0 || selectedLeadIds.has(evaluation.conversation.id));
+    const rows = filteredLeadEvaluations.filter((evaluation) => selectedLeadIds.size === 0 || selectedLeadIds.has(evaluation.conversation.id));
     if (!rows.length) return toast.error("There is no client data to export");
     const headers = ["WhatsApp name", "Full name", "Phone", "Email", "Client type", "Company", "City", "Province", "Service", "Tax types", "SARS debt", "Enforcement stage", "Urgency", "eFiling access", "Desired outcome", "Conversation status", "Submission state", "Assigned staff", "Service request ID", "Summary", "Started", "Last activity"];
     const data = rows.map(({ conversation }) => {
@@ -351,8 +390,11 @@ export default function AdminWhatsAppQA() {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
+        <button type="button" className="text-left" onClick={() => setQueueFilter(queueFilter === "human" ? "all" : "human")}>
+          <Card className={queueFilter === "human" ? "border-primary ring-1 ring-primary" : "transition-colors hover:border-primary/50"}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Human chats</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-primary"><Headphones className="h-6 w-6" />{totals.human}<span className="ml-auto text-xs font-normal text-muted-foreground">{totals.unassigned} unassigned</span></CardContent></Card>
+        </button>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Average score</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.average}%</CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Passed</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.passed}</CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Critical failures</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-destructive"><XCircle className="h-6 w-6" />{totals.failed}</CardContent></Card>
@@ -362,19 +404,28 @@ export default function AdminWhatsAppQA() {
         <Card className="border-destructive/40"><CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertTriangle className="h-5 w-5 shrink-0" /><span>Unable to load WhatsApp QA data. {query.error instanceof Error ? query.error.message : "Please try again."}</span></CardContent></Card>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(250px,0.72fr)_minmax(390px,1.15fr)_minmax(320px,0.85fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(215px,0.56fr)_minmax(430px,1.22fr)_minmax(320px,0.9fr)]">
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5" />Conversation results</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
+          <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
+            <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Name or WhatsApp number" className="h-9 pl-8 text-xs" /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={queueFilter} onValueChange={setQueueFilter}><SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All chats</SelectItem><SelectItem value="human">Human chats</SelectItem><SelectItem value="unassigned">Unassigned</SelectItem><SelectItem value="ai">AI active</SelectItem></SelectContent></Select>
+              <Select value={conversationSort} onValueChange={setConversationSort}><SelectTrigger className="h-9 text-xs"><ArrowUpDown className="mr-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest</SelectItem><SelectItem value="name">Name</SelectItem><SelectItem value="messages">Most messages</SelectItem></SelectContent></Select>
+            </div>
+          </CardHeader>
+          <CardContent className="max-h-[820px] space-y-1.5 overflow-y-auto px-3 pb-3">
             {authLoading || query.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Evaluating conversations…</p> : null}
-            {!authLoading && !query.isLoading && evaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No WhatsApp conversations found.</p> : null}
-            {evaluations.map((evaluation) => (
-              <button key={evaluation.conversation.id} type="button" onClick={() => setSelectedId(evaluation.conversation.id)} className={`flex w-full items-center justify-between gap-4 rounded-xl border p-4 text-left transition-colors ${selected?.conversation.id === evaluation.conversation.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}>
+            {!authLoading && !query.isLoading && visibleEvaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No matching WhatsApp conversations.</p> : null}
+            {visibleEvaluations.map((evaluation) => (
+              <button key={evaluation.conversation.id} type="button" onClick={() => setSelectedId(evaluation.conversation.id)} className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${selected?.conversation.id === evaluation.conversation.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}>
+                <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{evaluation.conversation.display_name || evaluation.conversation.wa_id}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{evaluation.messages.length} messages · {new Date(evaluation.conversation.updated_at).toLocaleString()}</p>
+                  <p className="truncate text-sm font-medium">{evaluation.conversation.display_name || `+${evaluation.conversation.wa_id}`}</p>
+                  <p className="truncate text-[11px] font-medium text-primary">+{evaluation.conversation.wa_id}</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">{statusBadge(evaluation.status)}<span className="w-12 text-right text-lg font-semibold">{evaluation.score}%</span></div>
+                <span className="shrink-0 text-sm font-semibold">{evaluation.score}%</span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"><span>{evaluation.messages.length} messages · {new Date(evaluation.conversation.updated_at).toLocaleDateString()}</span>{evaluation.conversation.status === "human_handoff" ? <Badge className="h-5 bg-blue-100 px-1.5 text-[9px] text-blue-800 hover:bg-blue-100">Human</Badge> : null}</div>
               </button>
             ))}
           </CardContent>
@@ -542,17 +593,21 @@ export default function AdminWhatsAppQA() {
                   <div className="space-y-3 border-t pt-5">
                     <div className="flex items-center gap-2"><Users className="h-4 w-4" /><p className="text-sm font-semibold">Lead data</p></div>
                     <p className="text-xs text-muted-foreground">Select clients to export for Excel or permanently remove their WhatsApp records.</p>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
+                      <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={leadSearch} onChange={(event) => setLeadSearch(event.target.value)} placeholder="Search client data" className="h-9 pl-8 text-xs" /></div>
+                      <Select value={leadSort} onValueChange={setLeadSort}><SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest</SelectItem><SelectItem value="name">Name</SelectItem><SelectItem value="debt">Highest debt</SelectItem></SelectContent></Select>
+                    </div>
                     <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3">
                       <Checkbox
-                        checked={evaluations.length > 0 && selectedLeadIds.size === evaluations.length}
-                        onCheckedChange={(checked) => setSelectedLeadIds(checked ? new Set(evaluations.map((evaluation) => evaluation.conversation.id)) : new Set())}
+                        checked={filteredLeadEvaluations.length > 0 && filteredLeadEvaluations.every((evaluation) => selectedLeadIds.has(evaluation.conversation.id))}
+                        onCheckedChange={(checked) => setSelectedLeadIds(checked ? new Set(filteredLeadEvaluations.map((evaluation) => evaluation.conversation.id)) : new Set())}
                         aria-label="Select all clients"
                       />
                       <span className="text-sm">Select all clients</span>
                       <span className="ml-auto text-xs text-muted-foreground">{selectedLeadIds.size} selected</span>
                     </div>
                     <div className="max-h-64 space-y-2 overflow-y-auto">
-                      {evaluations.map((evaluation) => {
+                      {filteredLeadEvaluations.map((evaluation) => {
                         const conversation = evaluation.conversation;
                         return (
                           <div key={conversation.id} className={`flex items-center gap-3 rounded-lg border p-3 ${selectedLeadIds.has(conversation.id) ? "border-primary bg-primary/5" : ""}`}>
@@ -574,8 +629,8 @@ export default function AdminWhatsAppQA() {
                       })}
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <Button variant="outline" onClick={exportLeadData} disabled={!evaluations.length}>
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />{selectedLeadIds.size ? "Export selected" : "Export all"}
+                      <Button variant="outline" onClick={exportLeadData} disabled={!filteredLeadEvaluations.length}>
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />{selectedLeadIds.size ? "Export selected" : leadSearch ? "Export filtered" : "Export all"}
                       </Button>
                       <Button variant="destructive" onClick={deleteSelectedLeads} disabled={selectedLeadIds.size === 0 || actionPending}>
                         <Trash2 className="mr-2 h-4 w-4" />Delete selected

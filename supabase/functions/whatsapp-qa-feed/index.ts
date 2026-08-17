@@ -227,27 +227,36 @@ Deno.serve(async (req: Request) => {
         return json(req, { error: "The 24-hour WhatsApp reply window has closed. Use an approved template before sending another free-form message." }, 409);
       }
 
-      let metaMessageId: string | null = null;
-      try {
-        metaMessageId = await sendWhatsAppText(conversation.wa_id, message);
-      } catch (error) {
-        return json(req, { error: error instanceof Error ? error.message : "WhatsApp delivery failed" }, 502);
-      }
-
       const sentAt = new Date().toISOString();
       const staffName = displayName(actor);
-      const { error: messageError } = await sb.from("whatsapp_messages").insert({
+      const { data: pendingMessage, error: pendingMessageError } = await sb.from("whatsapp_messages").insert({
         conversation_id: conversationId,
-        meta_message_id: metaMessageId,
         direction: "outbound",
         sender_type: "staff",
         message_type: "text",
         content: message,
-        delivery_status: "submitted",
+        delivery_status: "sending",
         staff_sender_id: actor.id,
         staff_sender_name: staffName,
-      });
-      if (messageError) return json(req, { error: "Reply was delivered but could not be added to the transcript" }, 500);
+      }).select("id").single();
+      if (pendingMessageError || !pendingMessage) {
+        console.error("Unable to create pending WhatsApp transcript row", pendingMessageError);
+        return json(req, { error: "The reply was not sent because the transcript could not be created" }, 500);
+      }
+
+      let metaMessageId: string | null = null;
+      try {
+        metaMessageId = await sendWhatsAppText(conversation.wa_id, message);
+      } catch (error) {
+        await sb.from("whatsapp_messages").update({ delivery_status: "failed" }).eq("id", pendingMessage.id);
+        return json(req, { error: error instanceof Error ? error.message : "WhatsApp delivery failed" }, 502);
+      }
+
+      const { error: messageError } = await sb.from("whatsapp_messages").update({
+        meta_message_id: metaMessageId,
+        delivery_status: "submitted",
+      }).eq("id", pendingMessage.id);
+      if (messageError) console.error("WhatsApp reply delivered; transcript status update failed", messageError);
 
       const assignmentPatch = conversation.assigned_staff_id ? {} : {
         assigned_staff_id: actor.id,
