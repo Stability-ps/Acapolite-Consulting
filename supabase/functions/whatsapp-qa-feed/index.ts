@@ -379,6 +379,7 @@ Deno.serve(async (req: Request) => {
   }));
 
   return json(req, {
+    features: { inbox_v2: true },
     conversations: conversations || [],
     messages: messagesWithAttachments,
     reads: reads || [],

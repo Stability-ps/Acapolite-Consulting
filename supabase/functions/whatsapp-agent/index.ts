@@ -5,6 +5,8 @@ const TEXT_HEADERS = { "Content-Type": "text/plain" };
 const MEDIA_BUCKET = "service-request-attachments";
 const MAX_MEDIA_BYTES = 12 * 1024 * 1024;
 const encoder = new TextEncoder();
+const DEFAULT_ADMIN_ID = Deno.env.get("DEFAULT_WHATSAPP_ADMIN_ID")?.trim() || "5b8c712b-aa4c-47de-8551-0a8e85492165";
+const DEFAULT_ADMIN_NAME = Deno.env.get("DEFAULT_WHATSAPP_ADMIN_NAME")?.trim() || "Super Admin";
 
 type Intake = Record<string, unknown>;
 type Incoming = {
@@ -57,6 +59,20 @@ const env = (name: string) => {
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 };
+
+function adminHandoffPatch(timestamp: string) {
+  return {
+    status: "human_handoff",
+    inbox_status: "assigned",
+    ai_enabled: false,
+    human_handoff_requested_at: timestamp,
+    assigned_staff_id: DEFAULT_ADMIN_ID,
+    assigned_staff_name: DEFAULT_ADMIN_NAME,
+    assigned_at: timestamp,
+    assigned_by: DEFAULT_ADMIN_ID,
+    updated_at: timestamp,
+  };
+}
 
 function timingSafeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
@@ -587,7 +603,8 @@ Deno.serve(async (req: Request) => {
         }
 
         if (event.kind === "text" && requestsHumanHandoff(event.text)) {
-          await sb.from("whatsapp_conversations").update({ status: "human_handoff", ai_enabled: false, human_handoff_requested_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+          const handoffAt = new Date().toISOString();
+          await sb.from("whatsapp_conversations").update(adminHandoffPatch(handoffAt)).eq("id", conversation.id);
           await storeOutbound(sb, conversation.id, event.waId, "Of course. I’ll hand this chat over to the Acapolite team so someone can assist you.", "system");
           continue;
         }
@@ -598,7 +615,8 @@ Deno.serve(async (req: Request) => {
         const ai = await askAI(history, event.text, current, conversation.submission_state || "collecting", attachment);
 
         if (ai.human_handoff_requested) {
-          await sb.from("whatsapp_conversations").update({ status: "human_handoff", ai_enabled: false, human_handoff_requested_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+          const handoffAt = new Date().toISOString();
+          await sb.from("whatsapp_conversations").update(adminHandoffPatch(handoffAt)).eq("id", conversation.id);
           await storeOutbound(sb, conversation.id, event.waId, await localize("Of course. I’ll hand this chat over to the Acapolite team so someone can assist you.", event.text, history), "system");
           continue;
         }

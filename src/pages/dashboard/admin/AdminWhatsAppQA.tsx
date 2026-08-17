@@ -70,6 +70,7 @@ type FeedPayload = {
   staff: StaffProfile[];
   currentStaff: StaffProfile | null;
   alerts: WhatsAppAlert[];
+  inboxReady: boolean;
 };
 
 type WhatsAppAlert = {
@@ -273,6 +274,7 @@ export default function AdminWhatsAppQA() {
         staff: (payload.staff || []) as StaffProfile[],
         currentStaff: (payload.current_staff || null) as StaffProfile | null,
         alerts: (payload.alerts || []) as WhatsAppAlert[],
+        inboxReady: payload.features?.inbox_v2 === true,
       } satisfies FeedPayload;
     },
     enabled: !authLoading && Boolean(session?.access_token),
@@ -369,6 +371,10 @@ export default function AdminWhatsAppQA() {
 
   const runAction = async (action: "assign" | "reply" | "return_to_ai" | "mark_read" | "resolve" | "reopen", values: Record<string, unknown> = {}) => {
     if (!session?.access_token || !selected) return;
+    if (["mark_read", "resolve", "reopen"].includes(action) && !query.data?.inboxReady) {
+      toast.error("This inbox action will be available after the WhatsApp backend upgrade");
+      return;
+    }
     setActionPending(true);
     try {
       const response = await fetch(QA_FEED_URL, {
@@ -632,13 +638,19 @@ export default function AdminWhatsAppQA() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {selected.conversation.unread_count > 0 ? <Button size="sm" variant="outline" onClick={() => runAction("mark_read")} disabled={actionPending}><CheckCircle2 className="mr-2 h-4 w-4" />Mark read</Button> : null}
+                  {selected.conversation.unread_count > 0 ? <Button size="sm" variant="outline" onClick={() => runAction("mark_read")} disabled={actionPending || !query.data?.inboxReady} title={query.data?.inboxReady ? undefined : "Requires the WhatsApp backend upgrade"}><CheckCircle2 className="mr-2 h-4 w-4" />Mark read</Button> : null}
                   {selected.conversation.inbox_status === "resolved" ? (
-                    <Button size="sm" variant="outline" onClick={() => runAction("reopen")} disabled={actionPending}><RefreshCw className="mr-2 h-4 w-4" />Reopen chat</Button>
+                    <Button size="sm" variant="outline" onClick={() => runAction("reopen")} disabled={actionPending || !query.data?.inboxReady}><RefreshCw className="mr-2 h-4 w-4" />Reopen chat</Button>
                   ) : (
-                    <Button size="sm" variant="outline" onClick={() => window.confirm("Mark this human chat as resolved? AI will remain silent.") && runAction("resolve")} disabled={actionPending || selected.conversation.ai_enabled}><CheckCircle2 className="mr-2 h-4 w-4" />Resolve</Button>
+                    <Button size="sm" variant="outline" onClick={() => window.confirm("Mark this human chat as resolved? AI will remain silent.") && runAction("resolve")} disabled={actionPending || selected.conversation.ai_enabled || !query.data?.inboxReady}><CheckCircle2 className="mr-2 h-4 w-4" />Resolve</Button>
                   )}
                 </div>
+
+                {!query.data?.inboxReady ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Inbox read and resolution controls are waiting for the WhatsApp backend upgrade.
+                  </div>
+                ) : null}
 
                 <div className={`rounded-lg border px-3 py-2 text-xs ${selected.conversation.ai_enabled ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
                   {selected.conversation.ai_enabled

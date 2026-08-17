@@ -180,6 +180,15 @@ set inbox_status = case
     )),
     intake_payload = conversation.intake_payload;
 
+update public.whatsapp_conversations
+set assigned_staff_id = '5b8c712b-aa4c-47de-8551-0a8e85492165'::uuid,
+    assigned_staff_name = 'Super Admin',
+    assigned_at = coalesce(assigned_at, human_handoff_requested_at, now()),
+    assigned_by = '5b8c712b-aa4c-47de-8551-0a8e85492165'::uuid,
+    inbox_status = case when inbox_status = 'resolved' then 'resolved' else 'assigned' end
+where status = 'human_handoff'
+  and assigned_staff_id is null;
+
 insert into public.whatsapp_alerts (conversation_id, alert_type, severity, title, body, assigned_staff_id)
 select conversation.id, 'human_handoff', 'warning', 'New human handoff',
   coalesce(conversation.display_name, conversation.wa_id) || ' is waiting for human assistance.',
