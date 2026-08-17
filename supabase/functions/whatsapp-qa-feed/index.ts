@@ -142,6 +142,53 @@ Deno.serve(async (req: Request) => {
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action || "");
+
+    if (action === "delete_conversations") {
+      const conversationIds = Array.from(new Set(
+        (Array.isArray(body?.conversation_ids) ? body.conversation_ids : [])
+          .map((value: unknown) => String(value || ""))
+          .filter(Boolean),
+      )).slice(0, 50);
+      if (!conversationIds.length) return json(req, { error: "Select at least one client record" }, 400);
+
+      const [{ data: conversations, error: conversationsError }, { data: messages, error: messagesError }] = await Promise.all([
+        sb.from("whatsapp_conversations").select("id,service_request_id").in("id", conversationIds),
+        sb.from("whatsapp_messages").select("id,conversation_id,media_storage_path").in("conversation_id", conversationIds),
+      ]);
+      if (conversationsError || messagesError || !conversations?.length) return json(req, { error: "Unable to load the selected client records" }, 500);
+
+      const auditRows = conversations.map((conversation) => {
+        const related = (messages || []).filter((message) => message.conversation_id === conversation.id);
+        return {
+          conversation_id: conversation.id,
+          actor_id: actor.id,
+          actor_name: displayName(actor),
+          preserved_service_request_id: conversation.service_request_id,
+          message_count: related.length,
+          attachment_count: related.filter((message) => message.media_storage_path).length,
+        };
+      });
+      const { data: createdAudits, error: auditError } = await sb.from("whatsapp_deletion_audit").insert(auditRows).select("id");
+      if (auditError) return json(req, { error: "Unable to create the deletion audit" }, 500);
+
+      const existingIds = conversations.map((conversation) => conversation.id);
+      const { error: deleteError } = await sb.from("whatsapp_conversations").delete().in("id", existingIds);
+      if (deleteError) {
+        const auditIds = (createdAudits || []).map((row) => row.id);
+        if (auditIds.length) await sb.from("whatsapp_deletion_audit").delete().in("id", auditIds);
+        return json(req, { error: "Unable to delete the selected client records" }, 500);
+      }
+
+      const storagePaths = (messages || []).map((message) => message.media_storage_path).filter((path): path is string => Boolean(path));
+      const storageResult = storagePaths.length ? await sb.storage.from(MEDIA_BUCKET).remove(storagePaths) : { error: null };
+      return json(req, {
+        ok: true,
+        deleted: existingIds.length,
+        preserved_service_requests: conversations.filter((conversation) => conversation.service_request_id).length,
+        attachment_cleanup_warning: storageResult.error ? "Some private attachment files could not be removed automatically." : null,
+      });
+    }
+
     const conversationId = String(body?.conversation_id || "");
     if (!conversationId) return json(req, { error: "Conversation is required" }, 400);
 
