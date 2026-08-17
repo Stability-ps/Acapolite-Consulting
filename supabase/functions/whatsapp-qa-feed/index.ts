@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const [{ data: conversations, error: conversationsError }, { data: messages, error: messagesError }] = await Promise.all([
-    sb.from("whatsapp_conversations").select("id,wa_id,display_name,status,ai_enabled,submission_state,intake_payload,updated_at").order("updated_at", { ascending: false }).limit(100),
+    sb.from("whatsapp_conversations").select("id,wa_id,display_name,status,ai_enabled,human_handoff_requested_at,service_request_id,ai_summary,intake_payload,intake_missing_fields,intake_ready,submission_state,created_at,updated_at").order("updated_at", { ascending: false }).limit(100),
     sb.from("whatsapp_messages").select("id,conversation_id,direction,sender_type,content,created_at").order("created_at", { ascending: true }),
   ]);
   if (conversationsError || messagesError) return json(req, { error: "Unable to load QA data" }, 500);
