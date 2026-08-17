@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, MessageCircle, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -145,11 +145,11 @@ function statusBadge(status: Evaluation["status"]) {
 
 export default function AdminWhatsAppQA() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { session, loading: authLoading } = useAuth();
   const query = useQuery({
-    queryKey: ["whatsapp-qa-scorecard"],
+    queryKey: ["whatsapp-qa-scorecard", session?.user.id],
     queryFn: async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      const token = session?.access_token;
       if (!token) throw new Error("Admin session is unavailable");
       const response = await fetch(QA_FEED_URL, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) throw new Error(`QA feed failed (${response.status})`);
@@ -159,6 +159,7 @@ export default function AdminWhatsAppQA() {
         evaluateConversation(conversation, allMessages.filter((message) => message.conversation_id === conversation.id)),
       );
     },
+    enabled: !authLoading && Boolean(session?.access_token),
   });
 
   const evaluations = query.data || [];
@@ -191,15 +192,15 @@ export default function AdminWhatsAppQA() {
       </div>
 
       {query.error ? (
-        <Card className="border-destructive/40"><CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertTriangle className="h-5 w-5 shrink-0" />Unable to load WhatsApp QA data. Confirm the signed-in staff account has access to the WhatsApp tables.</CardContent></Card>
+        <Card className="border-destructive/40"><CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertTriangle className="h-5 w-5 shrink-0" /><span>Unable to load WhatsApp QA data. {query.error instanceof Error ? query.error.message : "Please try again."}</span></CardContent></Card>
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5" />Conversation results</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {query.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Evaluating conversations…</p> : null}
-            {!query.isLoading && evaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No WhatsApp conversations found.</p> : null}
+            {authLoading || query.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Evaluating conversations…</p> : null}
+            {!authLoading && !query.isLoading && evaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No WhatsApp conversations found.</p> : null}
             {evaluations.map((evaluation) => (
               <button key={evaluation.conversation.id} type="button" onClick={() => setSelectedId(evaluation.conversation.id)} className={`flex w-full items-center justify-between gap-4 rounded-xl border p-4 text-left transition-colors ${selected?.conversation.id === evaluation.conversation.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}>
                 <div className="min-w-0">
