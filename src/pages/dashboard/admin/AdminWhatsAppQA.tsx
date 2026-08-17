@@ -195,7 +195,7 @@ export default function AdminWhatsAppQA() {
         <Card className="border-destructive/40"><CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertTriangle className="h-5 w-5 shrink-0" /><span>Unable to load WhatsApp QA data. {query.error instanceof Error ? query.error.message : "Please try again."}</span></CardContent></Card>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(250px,0.72fr)_minmax(390px,1.15fr)_minmax(320px,0.85fr)]">
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5" />Conversation results</CardTitle></CardHeader>
           <CardContent className="space-y-2">
@@ -210,6 +210,49 @@ export default function AdminWhatsAppQA() {
                 <div className="flex shrink-0 items-center gap-3">{statusBadge(evaluation.status)}<span className="w-12 text-right text-lg font-semibold">{evaluation.score}%</span></div>
               </button>
             ))}
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0">
+          <CardHeader className="border-b">
+            <CardTitle className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2"><MessageCircle className="h-5 w-5" />Conversation</span>
+              {selected ? statusBadge(selected.status) : null}
+            </CardTitle>
+            {selected ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span>{selected.conversation.display_name || selected.conversation.wa_id}</span>
+                <span>{selected.messages.length} messages</span>
+                <span>{new Date(selected.conversation.updated_at).toLocaleString()}</span>
+              </div>
+            ) : null}
+          </CardHeader>
+          <CardContent className="p-0">
+            {!selected ? (
+              <p className="px-6 py-12 text-center text-sm text-muted-foreground">Select a conversation to read its transcript.</p>
+            ) : selected.messages.length === 0 ? (
+              <p className="px-6 py-12 text-center text-sm text-muted-foreground">No messages were recorded for this conversation.</p>
+            ) : (
+              <div className="max-h-[720px] space-y-4 overflow-y-auto bg-muted/20 p-4 md:p-5">
+                {selected.messages.map((message) => {
+                  const customer = message.direction === "inbound";
+                  const sender = customer ? "Customer" : message.sender_type === "system" ? "Acapolite system" : "Acapolite assistant";
+                  return (
+                    <div key={message.id} className={`flex ${customer ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[88%] ${customer ? "text-right" : "text-left"}`}>
+                        <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground" style={{ justifyContent: customer ? "flex-end" : "flex-start" }}>
+                          <span className="font-medium">{sender}</span>
+                          <span>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        </div>
+                        <div className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-sm leading-relaxed shadow-sm ${customer ? "rounded-br-md bg-emerald-700 text-white" : "rounded-bl-md border bg-background text-foreground"}`}>
+                          {message.content || "[No text content]"}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
