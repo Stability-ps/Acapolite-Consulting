@@ -3,6 +3,7 @@ import { Bot, Loader2, Send, Sparkles, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { TaxCoachMarkdown } from "@/components/dashboard/TaxCoachMarkdown";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -68,8 +69,8 @@ export default function TaxCoachAIStaff() {
           ) : messages.map((message, index) => (
             <div key={`${message.role}-${index}`} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               {message.role === "assistant" ? <Bot className="mt-2 h-5 w-5 shrink-0 text-primary" /> : null}
-              <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 font-body ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
-                {message.content}
+              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 font-body ${message.role === "user" ? "whitespace-pre-wrap bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
+                {message.role === "assistant" ? <TaxCoachMarkdown content={message.content} /> : message.content}
               </div>
               {message.role === "user" ? <UserRound className="mt-2 h-5 w-5 shrink-0 text-primary" /> : null}
             </div>
