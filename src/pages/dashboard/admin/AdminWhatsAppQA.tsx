@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Conversation = {
   id: string;
@@ -12,8 +13,14 @@ type Conversation = {
   display_name: string | null;
   status: string;
   ai_enabled: boolean;
+  human_handoff_requested_at: string | null;
+  service_request_id: string | null;
+  ai_summary: string | null;
   submission_state: string;
   intake_payload: Record<string, unknown> | null;
+  intake_missing_fields: string[];
+  intake_ready: boolean;
+  created_at: string;
   updated_at: string;
 };
 
@@ -143,6 +150,16 @@ function statusBadge(status: Evaluation["status"]) {
   return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Needs attention</Badge>;
 }
 
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return <div className="flex items-start justify-between gap-4 border-b py-3 last:border-0"><span className="text-xs text-muted-foreground">{label}</span><span className="max-w-[65%] break-words text-right text-sm font-medium">{value || "—"}</span></div>;
+}
+
+function intakeValue(value: unknown) {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return value.toLocaleString("en-ZA");
+  return typeof value === "string" && value.trim() ? value : "—";
+}
+
 export default function AdminWhatsAppQA() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { session, loading: authLoading } = useAuth();
@@ -256,23 +273,66 @@ export default function AdminWhatsAppQA() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" />Evaluation detail</CardTitle></CardHeader>
-          <CardContent>
-            {!selected ? <p className="py-8 text-center text-sm text-muted-foreground">Select a conversation to inspect its checks.</p> : (
-              <div className="space-y-3">
-                <div className="mb-5 flex items-center justify-between rounded-xl bg-muted/60 p-4"><div><p className="font-medium">{selected.conversation.display_name || selected.conversation.wa_id}</p><p className="text-xs text-muted-foreground">{selected.passed} of {selected.rules.length} checks passed</p></div><span className="text-3xl font-semibold">{selected.score}%</span></div>
-                {selected.rules.map((rule) => (
-                  <div key={rule.key} className={`rounded-xl border p-4 ${rule.passed ? "border-emerald-200 bg-emerald-50/50" : "border-red-200 bg-red-50/60"}`}>
-                    <div className="flex items-start gap-3">
-                      {rule.passed ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />}
-                      <div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{rule.label}</p>{rule.critical ? <Badge variant="outline" className="text-[10px]">Critical</Badge> : null}</div><p className="mt-1 text-xs text-muted-foreground">{rule.detail}</p></div>
-                    </div>
+        <Card className="min-w-0">
+          {!selected ? (
+            <CardContent><p className="py-8 text-center text-sm text-muted-foreground">Select a conversation to inspect its details.</p></CardContent>
+          ) : (
+            <Tabs defaultValue="overview">
+              <CardHeader className="border-b pb-0">
+                <CardTitle className="flex items-center gap-2 pb-4"><ShieldCheck className="h-5 w-5" />Review</CardTitle>
+                <TabsList className="grid h-auto w-full grid-cols-3 rounded-b-none bg-transparent p-0">
+                  <TabsTrigger value="overview" className="rounded-b-none border-b-2 border-transparent px-2 py-3 data-[state=active]:border-primary data-[state=active]:shadow-none">Overview</TabsTrigger>
+                  <TabsTrigger value="client" className="rounded-b-none border-b-2 border-transparent px-2 py-3 data-[state=active]:border-primary data-[state=active]:shadow-none">Client data</TabsTrigger>
+                  <TabsTrigger value="analysis" className="rounded-b-none border-b-2 border-transparent px-2 py-3 data-[state=active]:border-primary data-[state=active]:shadow-none">Analysis</TabsTrigger>
+                </TabsList>
+              </CardHeader>
+              <CardContent className="max-h-[720px] overflow-y-auto pt-5">
+                <TabsContent value="overview" className="mt-0 space-y-5">
+                  <div className="flex items-center justify-between rounded-xl bg-muted/60 p-4"><div><p className="font-medium">{selected.conversation.display_name || selected.conversation.wa_id}</p><p className="text-xs text-muted-foreground">{selected.messages.length} messages</p></div>{statusBadge(selected.status)}</div>
+                  <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p><p className="rounded-xl border bg-muted/20 p-4 text-sm leading-relaxed">{selected.conversation.ai_summary || intakeValue(selected.conversation.intake_payload?.description)}</p></div>
+                  <div>
+                    <DetailRow label="Conversation status" value={selected.conversation.status.replace(/_/g, " ")} />
+                    <DetailRow label="AI responding" value={selected.conversation.ai_enabled ? "Yes" : "No"} />
+                    <DetailRow label="Submission state" value={selected.conversation.submission_state.replace(/_/g, " ")} />
+                    <DetailRow label="Intake complete" value={selected.conversation.intake_ready ? "Yes" : "No"} />
+                    <DetailRow label="Missing fields" value={selected.conversation.intake_missing_fields?.length ? selected.conversation.intake_missing_fields.join(", ") : "None"} />
+                    <DetailRow label="Human handoff" value={selected.conversation.human_handoff_requested_at ? new Date(selected.conversation.human_handoff_requested_at).toLocaleString() : "Not requested"} />
+                    <DetailRow label="Service request" value={selected.conversation.service_request_id || "Not created"} />
+                    <DetailRow label="Started" value={new Date(selected.conversation.created_at).toLocaleString()} />
+                    <DetailRow label="Last activity" value={new Date(selected.conversation.updated_at).toLocaleString()} />
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
+                </TabsContent>
+                <TabsContent value="client" className="mt-0">
+                  <DetailRow label="Full name" value={intakeValue(selected.conversation.intake_payload?.full_name)} />
+                  <DetailRow label="WhatsApp name" value={selected.conversation.display_name || "—"} />
+                  <DetailRow label="Phone" value={`+${selected.conversation.wa_id}`} />
+                  <DetailRow label="Email" value={intakeValue(selected.conversation.intake_payload?.email)} />
+                  <DetailRow label="Client type" value={intakeValue(selected.conversation.intake_payload?.client_type)} />
+                  <DetailRow label="Company" value={intakeValue(selected.conversation.intake_payload?.company_name)} />
+                  <DetailRow label="City" value={intakeValue(selected.conversation.intake_payload?.city)} />
+                  <DetailRow label="Province" value={intakeValue(selected.conversation.intake_payload?.province)} />
+                  <DetailRow label="Service" value={intakeValue(selected.conversation.intake_payload?.service_needed)} />
+                  <DetailRow label="Tax types" value={intakeValue(selected.conversation.intake_payload?.tax_types)} />
+                  <DetailRow label="SARS debt" value={selected.conversation.intake_payload?.sars_debt_amount ? `R${intakeValue(selected.conversation.intake_payload.sars_debt_amount)}` : "—"} />
+                  <DetailRow label="Enforcement stage" value={intakeValue(selected.conversation.intake_payload?.enforcement_stage)} />
+                  <DetailRow label="Urgency" value={intakeValue(selected.conversation.intake_payload?.urgency)} />
+                  <DetailRow label="eFiling access" value={intakeValue(selected.conversation.intake_payload?.efiling_access)} />
+                  <DetailRow label="Desired outcome" value={intakeValue(selected.conversation.intake_payload?.desired_outcome)} />
+                </TabsContent>
+                <TabsContent value="analysis" className="mt-0 space-y-3">
+                  <div className="mb-5 flex items-center justify-between rounded-xl bg-muted/60 p-4"><div><p className="font-medium">Quality score</p><p className="text-xs text-muted-foreground">{selected.passed} of {selected.rules.length} checks passed</p></div><span className="text-3xl font-semibold">{selected.score}%</span></div>
+                  {selected.rules.map((rule) => (
+                    <div key={rule.key} className={`rounded-xl border p-4 ${rule.passed ? "border-emerald-200 bg-emerald-50/50" : "border-red-200 bg-red-50/60"}`}>
+                      <div className="flex items-start gap-3">
+                        {rule.passed ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />}
+                        <div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{rule.label}</p>{rule.critical ? <Badge variant="outline" className="text-[10px]">Critical</Badge> : null}</div><p className="mt-1 text-xs text-muted-foreground">{rule.detail}</p></div>
+                      </div>
+                    </div>
+                  ))}
+                </TabsContent>
+              </CardContent>
+            </Tabs>
+          )}
         </Card>
       </div>
     </div>
