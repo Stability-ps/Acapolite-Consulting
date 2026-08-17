@@ -47,7 +47,7 @@ export default function TaxCoachAIStaff() {
             <p className="text-sm uppercase tracking-[0.2em] text-primary/70 font-body">
               {isAdmin ? "Admin Tools" : "Practitioner Tools"}
             </p>
-            <h1 className="mt-2 font-display text-3xl text-foreground">ChatGPT Tax Coach AI</h1>
+            <h1 className="mt-2 font-display text-3xl text-foreground">Tax Coach AI</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground font-body">
               Get help interpreting SARS correspondence, drafting client responses, researching tax questions, and planning case next steps.
             </p>

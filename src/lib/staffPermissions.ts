@@ -65,7 +65,7 @@ export const consultantPermissionFields: Array<{
   {
     key: "can_use_tax_coach_ai",
     label: "Tax Coach AI",
-    description: "Allow this practitioner to see and use the ChatGPT Tax Coach.",
+    description: "Allow this practitioner to see and use Tax Coach AI.",
   },
   {
     key: "assigned_clients_only",
