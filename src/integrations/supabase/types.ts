@@ -64,6 +64,7 @@ export type Database = {
           can_manage_invoices: boolean;
           can_view_messages: boolean;
           can_reply_messages: boolean;
+          can_use_tax_coach_ai: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -82,6 +83,7 @@ export type Database = {
           can_manage_invoices?: boolean;
           can_view_messages?: boolean;
           can_reply_messages?: boolean;
+          can_use_tax_coach_ai?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -100,6 +102,7 @@ export type Database = {
           can_manage_invoices?: boolean;
           can_view_messages?: boolean;
           can_reply_messages?: boolean;
+          can_use_tax_coach_ai?: boolean;
           created_at?: string;
           updated_at?: string;
         };

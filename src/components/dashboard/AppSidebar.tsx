@@ -58,7 +58,7 @@ const adminItems = [
   { title: "Invoices", url: "/dashboard/staff/invoices", icon: Receipt, permission: "can_view_invoices" as StaffPermissionKey },
   { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare, permission: "can_view_messages" as StaffPermissionKey },
   { title: "External Tool", url: "/dashboard/staff/external-tools", icon: ExternalLink, permission: "can_view_overview" as StaffPermissionKey },
-  { title: "Tax Coach AI", url: "/dashboard/staff/tax-coach-ai", icon: Sparkles, permission: "can_view_overview" as StaffPermissionKey },
+  { title: "Tax Coach AI", url: "/dashboard/staff/tax-coach-ai", icon: Sparkles, permission: "can_use_tax_coach_ai" as StaffPermissionKey },
   { title: "WhatsApp QA", url: "/dashboard/staff/whatsapp-qa", icon: ShieldCheck, permission: "can_view_overview" as StaffPermissionKey },
   { title: "System Activity Log", url: "/dashboard/staff/activity-log", icon: ClipboardList, permission: "can_view_overview" as StaffPermissionKey },
 ];
@@ -77,6 +77,7 @@ const consultantItems = [
   { title: "Invoices", url: "/dashboard/staff/invoices", icon: Receipt, permission: "can_view_invoices" as StaffPermissionKey },
   { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare, permission: "can_view_messages" as StaffPermissionKey },
   { title: "External Tool", url: "/dashboard/staff/external-tools", icon: ExternalLink, permission: "can_view_overview" as StaffPermissionKey },
+  { title: "Tax Coach AI", url: "/dashboard/staff/tax-coach-ai", icon: Sparkles, permission: "can_use_tax_coach_ai" as StaffPermissionKey },
 ];
 
 export function AppSidebar() {

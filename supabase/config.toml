@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.whatsapp-qa-feed]
 verify_jwt = false
+
+[functions.tax-coach-ai]
+verify_jwt = false

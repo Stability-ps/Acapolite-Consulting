@@ -15,6 +15,7 @@ type StaffPermissions = {
   can_manage_invoices: boolean;
   can_view_messages: boolean;
   can_reply_messages: boolean;
+  can_use_tax_coach_ai: boolean;
 };
 
 type CreateStaffUserPayload = {
@@ -40,6 +41,7 @@ const fullStaffPermissions: StaffPermissions = {
   can_manage_invoices: true,
   can_view_messages: true,
   can_reply_messages: true,
+  can_use_tax_coach_ai: true,
 };
 
 const defaultConsultantPermissions: StaffPermissions = {
@@ -56,6 +58,7 @@ const defaultConsultantPermissions: StaffPermissions = {
   can_manage_invoices: false,
   can_view_messages: true,
   can_reply_messages: true,
+  can_use_tax_coach_ai: false,
 };
 
 function sanitizePermissions(role: StaffRole, permissions?: Partial<StaffPermissions>) {

@@ -18,6 +18,7 @@ export type StaffPermissionValues = Pick<
   | "can_manage_invoices"
   | "can_view_messages"
   | "can_reply_messages"
+  | "can_use_tax_coach_ai"
 >;
 
 export type StaffPermissionKey = Exclude<keyof StaffPermissionValues, "assigned_clients_only">;
@@ -36,6 +37,7 @@ export const fullStaffPermissions: StaffPermissionValues = {
   can_manage_invoices: true,
   can_view_messages: true,
   can_reply_messages: true,
+  can_use_tax_coach_ai: true,
 };
 
 export const defaultConsultantPermissions: StaffPermissionValues = {
@@ -52,6 +54,7 @@ export const defaultConsultantPermissions: StaffPermissionValues = {
   can_manage_invoices: false,
   can_view_messages: true,
   can_reply_messages: true,
+  can_use_tax_coach_ai: false,
 };
 
 export const consultantPermissionFields: Array<{
@@ -59,6 +62,11 @@ export const consultantPermissionFields: Array<{
   label: string;
   description: string;
 }> = [
+  {
+    key: "can_use_tax_coach_ai",
+    label: "Tax Coach AI",
+    description: "Allow this practitioner to see and use the ChatGPT Tax Coach.",
+  },
   {
     key: "assigned_clients_only",
     label: "Assigned Clients Only",
@@ -200,6 +208,17 @@ export function hasStaffPermission(
   return Boolean(resolveStaffPermissions(role, permissions)?.[permission]);
 }
 
+export function buildStaffPermissionsUpsert(
+  profileId: string,
+  role: "admin" | "consultant",
+  permissions: StaffPermissionValues,
+) {
+  return {
+    profile_id: profileId,
+    ...(role === "admin" ? fullStaffPermissions : sanitizeStaffPermissions(permissions)),
+  };
+}
+
 export function getFirstStaffRoute(permissions: StaffPermissionValues | null | undefined) {
   const resolved = resolveStaffPermissions("consultant", permissions);
 
@@ -211,5 +230,6 @@ export function getFirstStaffRoute(permissions: StaffPermissionValues | null | u
   if (resolved.can_view_documents) return "/dashboard/staff/documents";
   if (resolved.can_view_invoices) return "/dashboard/staff/invoices";
   if (resolved.can_view_messages) return "/dashboard/staff/messages";
+  if (resolved.can_use_tax_coach_ai) return "/dashboard/staff/tax-coach-ai";
   return "/dashboard";
 }

@@ -128,9 +128,12 @@ function AppRoutes() {
                 element={<RequireRole allowedRoles={["admin", "consultant"]} />}
               >
                 <Route
-                  element={
-                    <RequireStaffPermission permission="can_view_overview" />
-                  }
+                  element={<RequireStaffPermission permission="can_use_tax_coach_ai" />}
+                >
+                  <Route path="staff/tax-coach-ai" element={<TaxCoachAIStaff />} />
+                </Route>
+                <Route
+                  element={<RequireStaffPermission permission="can_view_overview" />}
                 >
                   <Route path="staff" element={<StaffOverviewRouter />} />
                   <Route
@@ -216,10 +219,6 @@ function AppRoutes() {
                   <Route
                     path="staff/activity-log"
                     element={<AdminActivityLog />}
-                  />
-                  <Route
-                    path="staff/tax-coach-ai"
-                    element={<TaxCoachAIStaff />}
                   />
                   <Route
                     path="staff/external-tools"

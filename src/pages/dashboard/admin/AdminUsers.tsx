@@ -50,6 +50,7 @@ import {
 } from "@/lib/practitionerMarketplace";
 import {
   consultantPermissionFields,
+  buildStaffPermissionsUpsert,
   defaultConsultantPermissions,
   fullStaffPermissions,
   getFirstStaffRoute,
@@ -1227,17 +1228,9 @@ export default function AdminUsers() {
       }
     }
 
-    const permissionsToSave =
-      editForm.role === "admin"
-        ? fullStaffPermissions
-        : sanitizeStaffPermissions(editPermissions);
-
     const { error: permissionError } = await supabase
       .from("staff_permissions")
-      .upsert({
-        profile_id: selectedStaffUser.id,
-        ...permissionsToSave,
-      });
+      .upsert(buildStaffPermissionsUpsert(selectedStaffUser.id, editForm.role, editPermissions));
 
     if (permissionError) {
       toast.error(permissionError.message);
