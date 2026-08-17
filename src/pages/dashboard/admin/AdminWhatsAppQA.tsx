@@ -101,7 +101,7 @@ type Evaluation = {
   status: "passed" | "needs_attention" | "failed";
 };
 
-const QA_FEED_URL = "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1/whatsapp-qa-feed";
+const QA_FEED_URL = "/api/whatsapp-qa-feed";
 
 const CITY_PROVINCE: Record<string, string> = {
   pretoria: "Gauteng",
