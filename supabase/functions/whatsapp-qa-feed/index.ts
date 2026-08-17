@@ -8,7 +8,10 @@ const SIGNED_URL_SECONDS = 300;
 const MAX_REPLY_LENGTH = 1000;
 const ALLOWED_ORIGINS = new Set([
   "https://acapolite-consulting.vercel.app",
+  "https://acapoliteconsulting.co.za",
+  "https://www.acapoliteconsulting.co.za",
   "http://localhost:5173",
+  "http://127.0.0.1:8080",
 ]);
 const ACAPOLITE_PREVIEW_ORIGIN = /^https:\/\/acapolite-consulting-[a-z0-9-]+-acapolite\.vercel\.app$/;
 
