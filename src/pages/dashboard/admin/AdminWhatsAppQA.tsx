@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, MessageCircle, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, Download, FileText, ImageIcon, MessageCircle, Paperclip, RefreshCw, Send, ShieldCheck, UserRoundCheck, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 
 type Conversation = {
   id: string;
@@ -20,6 +23,12 @@ type Conversation = {
   intake_payload: Record<string, unknown> | null;
   intake_missing_fields: string[];
   intake_ready: boolean;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+  assigned_staff_id: string | null;
+  assigned_staff_name: string | null;
+  assigned_at: string | null;
+  last_staff_reply_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -29,8 +38,29 @@ type Message = {
   conversation_id: string;
   direction: "inbound" | "outbound";
   sender_type: string;
+  message_type: string;
   content: string | null;
+  delivery_status: string | null;
+  media_mime_type: string | null;
+  media_filename: string | null;
+  media_size_bytes: number | null;
+  attachment_url: string | null;
+  staff_sender_id: string | null;
+  staff_sender_name: string | null;
   created_at: string;
+};
+
+type StaffProfile = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string;
+};
+
+type FeedPayload = {
+  evaluations: Evaluation[];
+  staff: StaffProfile[];
+  currentStaff: StaffProfile | null;
 };
 
 type RuleResult = {
@@ -108,9 +138,11 @@ function evaluateConversation(conversation: Conversation, messages: Message[]): 
   const handoffRequests = messages.filter((message) => message.direction === "inbound" && requestsHuman(message.content || ""));
   const handoffPassed = handoffRequests.every((request) => {
     const requestIndex = messages.findIndex((message) => message.id === request.id);
-    const laterOutbound = messages.slice(requestIndex + 1).filter((message) => message.direction === "outbound");
-    if (laterOutbound.length !== 1) return false;
-    return /hand this chat over|acapolite team|someone can assist/i.test(laterOutbound[0].content || "");
+    const laterAutomated = messages.slice(requestIndex + 1).filter((message) =>
+      message.direction === "outbound" && message.sender_type !== "staff",
+    );
+    if (laterAutomated.length !== 1) return false;
+    return /hand this chat over|acapolite team|someone can assist/i.test(laterAutomated[0].content || "");
   }) && (handoffRequests.length === 0 || conversation.status === "human_handoff" && conversation.ai_enabled === false);
 
   const fullName = typeof intake.full_name === "string" ? normalize(intake.full_name) : "";
@@ -160,8 +192,26 @@ function intakeValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value : "—";
 }
 
+function staffLabel(staff: StaffProfile) {
+  return staff.full_name?.trim() || staff.email?.trim() || "Acapolite staff";
+}
+
+function fileSize(bytes: number | null) {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function replyWindowOpen(lastInboundAt: string | null) {
+  if (!lastInboundAt) return false;
+  const elapsed = Date.now() - new Date(lastInboundAt).getTime();
+  return Number.isFinite(elapsed) && elapsed >= 0 && elapsed < 24 * 60 * 60 * 1000;
+}
+
 export default function AdminWhatsAppQA() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
+  const [actionPending, setActionPending] = useState(false);
   const { session, loading: authLoading } = useAuth();
   const query = useQuery({
     queryKey: ["whatsapp-qa-scorecard", session?.user.id],
@@ -172,14 +222,19 @@ export default function AdminWhatsAppQA() {
       if (!response.ok) throw new Error(`QA feed failed (${response.status})`);
       const payload = await response.json();
       const allMessages = (payload.messages || []) as Message[];
-      return ((payload.conversations || []) as Conversation[]).map((conversation) =>
-        evaluateConversation(conversation, allMessages.filter((message) => message.conversation_id === conversation.id)),
-      );
+      return {
+        evaluations: ((payload.conversations || []) as Conversation[]).map((conversation) =>
+          evaluateConversation(conversation, allMessages.filter((message) => message.conversation_id === conversation.id)),
+        ),
+        staff: (payload.staff || []) as StaffProfile[],
+        currentStaff: (payload.current_staff || null) as StaffProfile | null,
+      } satisfies FeedPayload;
     },
     enabled: !authLoading && Boolean(session?.access_token),
   });
 
-  const evaluations = query.data || [];
+  const evaluations = useMemo(() => query.data?.evaluations || [], [query.data?.evaluations]);
+  const staff = query.data?.staff || [];
   const selected = evaluations.find((evaluation) => evaluation.conversation.id === selectedId) || evaluations[0] || null;
   const totals = useMemo(() => ({
     conversations: evaluations.length,
@@ -187,6 +242,27 @@ export default function AdminWhatsAppQA() {
     failed: evaluations.filter((evaluation) => evaluation.status === "failed").length,
     average: evaluations.length ? Math.round(evaluations.reduce((sum, evaluation) => sum + evaluation.score, 0) / evaluations.length) : 0,
   }), [evaluations]);
+
+  const runAction = async (action: "assign" | "reply" | "return_to_ai", values: Record<string, unknown> = {}) => {
+    if (!session?.access_token || !selected) return;
+    setActionPending(true);
+    try {
+      const response = await fetch(QA_FEED_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action, conversation_id: selected.conversation.id, ...values }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Action failed (${response.status})`);
+      if (action === "reply") setReply("");
+      toast.success(action === "reply" ? "Reply sent on WhatsApp" : action === "assign" ? "Chat assigned" : "AI replies restored");
+      await query.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to update this chat");
+    } finally {
+      setActionPending(false);
+    }
+  };
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -253,7 +329,13 @@ export default function AdminWhatsAppQA() {
               <div className="max-h-[720px] space-y-4 overflow-y-auto bg-muted/20 p-4 md:p-5">
                 {selected.messages.map((message) => {
                   const customer = message.direction === "inbound";
-                  const sender = customer ? "Customer" : message.sender_type === "system" ? "Acapolite system" : "Acapolite assistant";
+                  const sender = customer
+                    ? "Customer"
+                    : message.sender_type === "staff"
+                      ? message.staff_sender_name || "Acapolite staff"
+                      : message.sender_type === "system"
+                        ? "Acapolite system"
+                        : "Acapolite assistant";
                   return (
                     <div key={message.id} className={`flex ${customer ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[88%] ${customer ? "text-right" : "text-left"}`}>
@@ -261,8 +343,24 @@ export default function AdminWhatsAppQA() {
                           <span className="font-medium">{sender}</span>
                           <span>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                         </div>
-                        <div className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-sm leading-relaxed shadow-sm ${customer ? "rounded-br-md bg-emerald-700 text-white" : "rounded-bl-md border bg-background text-foreground"}`}>
-                          {message.content || "[No text content]"}
+                        <div className={`space-y-3 whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-sm leading-relaxed shadow-sm ${customer ? "rounded-br-md bg-emerald-700 text-white" : "rounded-bl-md border bg-background text-foreground"}`}>
+                          {message.attachment_url ? (
+                            <div className="overflow-hidden rounded-xl border border-white/20 bg-background/95 text-foreground">
+                              {message.media_mime_type?.startsWith("image/") ? (
+                                <a href={message.attachment_url} target="_blank" rel="noreferrer" className="block">
+                                  <img src={message.attachment_url} alt={message.media_filename || "WhatsApp attachment"} className="max-h-72 w-full object-contain" />
+                                </a>
+                              ) : (
+                                <div className="flex items-center gap-3 p-4"><FileText className="h-8 w-8 text-primary" /><div className="min-w-0"><p className="truncate font-medium">{message.media_filename || "Attached document"}</p><p className="text-xs text-muted-foreground">{message.media_mime_type || "Document"} {fileSize(message.media_size_bytes)}</p></div></div>
+                              )}
+                              <a href={message.attachment_url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 border-t px-3 py-2 text-xs font-medium text-primary hover:bg-muted/50">
+                                {message.media_mime_type?.startsWith("image/") ? <ImageIcon className="h-4 w-4" /> : <Download className="h-4 w-4" />} Open attachment
+                              </a>
+                            </div>
+                          ) : message.message_type === "image" || message.message_type === "document" ? (
+                            <div className="flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs"><Paperclip className="h-4 w-4" />Attachment link expired. Refresh the conversation.</div>
+                          ) : null}
+                          {message.content && !/^\[(?:Image|Document) attached\]$/i.test(message.content) ? <div>{message.content}</div> : null}
                         </div>
                       </div>
                     </div>
@@ -270,6 +368,48 @@ export default function AdminWhatsAppQA() {
                 })}
               </div>
             )}
+            {selected ? (
+              <div className="space-y-3 border-t bg-background p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Select
+                    value={selected.conversation.assigned_staff_id || "unassigned"}
+                    onValueChange={(staffId) => staffId !== "unassigned" && runAction("assign", { staff_id: staffId })}
+                    disabled={actionPending}
+                  >
+                    <SelectTrigger className="flex-1"><SelectValue placeholder="Assign to staff" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned" disabled>Assign to staff</SelectItem>
+                      {staff.map((person) => <SelectItem key={person.id} value={person.id}>{staffLabel(person)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {selected.conversation.ai_enabled ? (
+                    <Button variant="outline" onClick={() => query.data?.currentStaff && runAction("assign", { staff_id: query.data.currentStaff.id })} disabled={actionPending || !query.data?.currentStaff}>
+                      <UserRoundCheck className="mr-2 h-4 w-4" />Take over
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={() => window.confirm("Return this chat to AI? Staff replies will stop controlling the conversation.") && runAction("return_to_ai")} disabled={actionPending}>
+                      <Bot className="mr-2 h-4 w-4" />Return to AI
+                    </Button>
+                  )}
+                </div>
+
+                <div className={`rounded-lg border px-3 py-2 text-xs ${selected.conversation.ai_enabled ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
+                  {selected.conversation.ai_enabled
+                    ? "AI is active. Take over or assign the chat before replying."
+                    : `Human control is active${selected.conversation.assigned_staff_name ? `, assigned to ${selected.conversation.assigned_staff_name}` : ""}. AI replies are locked.`}
+                </div>
+
+                <Textarea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a WhatsApp reply…" maxLength={1000} rows={3} disabled={selected.conversation.ai_enabled || actionPending} />
+                <div className="flex items-center justify-between gap-3">
+                  <p className={`text-xs ${replyWindowOpen(selected.conversation.last_inbound_at) ? "text-muted-foreground" : "text-destructive"}`}>
+                    {replyWindowOpen(selected.conversation.last_inbound_at) ? `${reply.length}/1000 · WhatsApp reply window open` : "24-hour reply window closed"}
+                  </p>
+                  <Button onClick={() => runAction("reply", { message: reply })} disabled={selected.conversation.ai_enabled || actionPending || !reply.trim() || !replyWindowOpen(selected.conversation.last_inbound_at)}>
+                    <Send className="mr-2 h-4 w-4" />Send reply
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -297,6 +437,9 @@ export default function AdminWhatsAppQA() {
                     <DetailRow label="Intake complete" value={selected.conversation.intake_ready ? "Yes" : "No"} />
                     <DetailRow label="Missing fields" value={selected.conversation.intake_missing_fields?.length ? selected.conversation.intake_missing_fields.join(", ") : "None"} />
                     <DetailRow label="Human handoff" value={selected.conversation.human_handoff_requested_at ? new Date(selected.conversation.human_handoff_requested_at).toLocaleString() : "Not requested"} />
+                    <DetailRow label="Assigned staff" value={selected.conversation.assigned_staff_name || "Unassigned"} />
+                    <DetailRow label="Assigned at" value={selected.conversation.assigned_at ? new Date(selected.conversation.assigned_at).toLocaleString() : "—"} />
+                    <DetailRow label="Last staff reply" value={selected.conversation.last_staff_reply_at ? new Date(selected.conversation.last_staff_reply_at).toLocaleString() : "—"} />
                     <DetailRow label="Service request" value={selected.conversation.service_request_id || "Not created"} />
                     <DetailRow label="Started" value={new Date(selected.conversation.created_at).toLocaleString()} />
                     <DetailRow label="Last activity" value={new Date(selected.conversation.updated_at).toLocaleString()} />
