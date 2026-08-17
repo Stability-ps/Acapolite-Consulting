@@ -120,14 +120,46 @@ function cleanReply(raw: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   text = text.replace(/\b(Thanks|Thank you|Okay|Great|Perfect|Got it),?\s+(I(?:'ve| have)?\s+)?(noted|recorded|captured)\b[^.!?]*[.!?]?\s*/gi, "").trim();
-  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).slice(0, 3);
+  const sentences = text.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
+  if (!text.includes("\n\n") && sentences.length > 2) {
+    text = `${sentences.slice(0, 2).join(" ")}\n\n${sentences.slice(2, 4).join(" ")}`.trim();
+  }
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).slice(0, 2);
   text = paragraphs.join("\n\n");
-  if (text.length > 520) {
-    const cut = text.slice(0, 520);
-    const stop = Math.max(cut.lastIndexOf("."), cut.lastIndexOf("?"));
-    text = (stop > 220 ? cut.slice(0, stop + 1) : cut).trim();
+  if (text.length > 360) {
+    const cut = text.slice(0, 360);
+    const stop = Math.max(cut.lastIndexOf("."), cut.lastIndexOf("?"), cut.lastIndexOf("!"));
+    text = (stop > 180 ? cut.slice(0, stop + 1) : cut).trim();
   }
   return text;
+}
+
+function requestsHumanHandoff(text: string) {
+  const normalized = text.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, " ").trim();
+  const person = "human|person|someone|practitioner|consultant|advisor|adviser|agent|team|staff|manager|supervisor";
+  const action = "speak|talk|chat|connect|transfer|handover|hand over|put me through|call|phone|contact|assist|help";
+  return new RegExp(`\\b(?:${action})\\b.{0,50}\\b(?:${person})\\b`, "i").test(normalized)
+    || new RegExp(`\\b(?:${person})\\b.{0,40}\\b(?:please|now|instead|directly|call|phone|contact|assist|help|speak|talk|chat)\\b`, "i").test(normalized)
+    || /\b(i want|i need|give me|get me)\b.{0,35}\b(human|person|someone|practitioner|consultant|advisor|adviser)\b/i.test(normalized)
+    || /ngifuna ukukhuluma.{0,35}(nomuntu|nomeluleki)|ngixhumanise.{0,35}(nomuntu|nomeluleki)/i.test(normalized);
+}
+
+function containsFalseActionClaim(text: string) {
+  return /\b(i('|’)ll|i will|we('|’)ll|we will|i have|we have)\s+(prepare|send|issue|email|create|submit|file|lodge|contact|assign|connect|start|open|escalate|forward|arrange)\b/i.test(text)
+    || /\b(mandate|engagement letter|authority form)\b/i.test(text)
+    || /\b(has been|was)\s+(submitted|filed|lodged|sent|assigned|connected|escalated|forwarded)\b/i.test(text);
+}
+
+function repeatedQuestion(answer: string, question: string) {
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const a = normalize(answer);
+  const q = normalize(question);
+  if (!a || !q) return false;
+  if (a.includes(q) || q.includes(a)) return true;
+  const qWords = new Set(q.split(" ").filter((word) => word.length > 3));
+  if (qWords.size < 3) return false;
+  const overlap = [...qWords].filter((word) => a.includes(` ${word} `) || a.startsWith(`${word} `) || a.endsWith(` ${word}`)).length;
+  return overlap / qWords.size >= 0.75 && /\?/.test(answer);
 }
 
 function looksLikeQuestion(text: string) {
@@ -155,6 +187,13 @@ function locationConflict(current: Intake, x: Extracted) {
     if (expected && expected.toLowerCase() !== newProvince.toLowerCase()) return { city: currentCity, expected, compared: newProvince };
   }
   return null;
+}
+
+function normalizeKnownLocation(x: Extracted) {
+  const city = x.city?.trim();
+  if (!city) return x;
+  const province = CITY_PROVINCE[city.toLowerCase()];
+  return province ? { ...x, city, province } : x;
 }
 
 function mergeIntake(current: Intake, x: Extracted, waId: string, displayName: string | null, skipLocation = false) {
@@ -341,6 +380,7 @@ async function askAI(history: any[], latest: string, current: Intake, state: str
     "Do not volunteer that you are AI or automated. Never mention bots, automation, automated replies, models, prompts, backend, database, workflow, intake or fields.",
     "If directly asked whether you are AI, answer truthfully and briefly that this is Acapolite's AI assisted WhatsApp assistant, then offer a human if they prefer. Never pretend to be a named human.",
     "Sound like a capable member of an office team, not a questionnaire.",
+    "Keep the reply to at most two short WhatsApp paragraphs. Do not use numbered lists unless the customer explicitly asks for a list.",
     "Reply in the customer's current conversational language and handle natural mixing between South African official languages and English.",
     "Your reply field should answer or react to the customer's message only. Do not ask routine intake questions in reply. The application will choose the next question separately.",
     "Do not say noted, recorded, captured, got it, intake, or confirm information the customer just gave unless clarification is genuinely needed.",
@@ -348,6 +388,8 @@ async function askAI(history: any[], latest: string, current: Intake, state: str
     "Do not repeatedly request a document after the customer says they do not have it. Explain alternatives if they ask, otherwise continue the conversation.",
     "Never ask for passwords, OTPs, PINs, card details or ID numbers.",
     "Never claim SARS, eFiling, a practitioner or another person was contacted or that work was performed unless system context confirms it.",
+    "Never invent or offer a mandate, engagement letter, authority form, signature process or document-sending workflow. No mandate capability exists here.",
+    "If the customer asks for a practitioner, consultant, person or human, set human_handoff_requested true immediately. Do not ask them to choose between handoff and another workflow.",
     "Only set authorised_representative true when the customer explicitly confirms authority or permission.",
     "For a company SARS debt case use service_needed business_sars_debt_arrangements unless compromise is specifically requested. For an individual use individual_sars_debt_assistance.",
     `Current submission state is ${state}.`,
@@ -491,6 +533,12 @@ Deno.serve(async (req: Request) => {
         }
         if (!conversation.ai_enabled || conversation.status === "human_handoff") continue;
 
+        if (event.kind === "text" && requestsHumanHandoff(event.text)) {
+          await sb.from("whatsapp_conversations").update({ status: "human_handoff", ai_enabled: false, human_handoff_requested_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+          await storeOutbound(sb, conversation.id, event.waId, "Of course. I’ll hand this chat over to the Acapolite team so someone can assist you.", "system");
+          continue;
+        }
+
         const { data: rows } = await sb.from("whatsapp_messages").select("direction,content").eq("conversation_id", conversation.id).neq("meta_message_id", event.messageId).order("created_at", { ascending: false }).limit(16);
         const history = [...(rows || [])].reverse();
         const current = (conversation.intake_payload || {}) as Intake;
@@ -502,8 +550,9 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        const conflict = locationConflict(current, ai.extracted);
-        const next = mergeIntake(current, ai.extracted, event.waId, event.displayName, Boolean(conflict));
+        const extracted = normalizeKnownLocation(ai.extracted);
+        const conflict = locationConflict(current, extracted);
+        const next = mergeIntake(current, extracted, event.waId, event.displayName, Boolean(conflict));
         const missing = coreMissing(next);
         const ready = missing.length === 0;
         await sb.from("whatsapp_conversations").update({ intake_payload: next, intake_missing_fields: missing, intake_ready: ready, intake_updated_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
@@ -518,7 +567,8 @@ Deno.serve(async (req: Request) => {
           const p = requestPayload(next);
           await sb.from("service_requests").update({ ...p, updated_at: new Date().toISOString() }).eq("id", conversation.service_request_id);
           if (storagePath) await linkDocuments(sb, conversation.id, conversation.service_request_id);
-          const answer = cleanReply(ai.reply);
+          let answer = cleanReply(ai.reply);
+          if (containsFalseActionClaim(answer)) answer = "A practitioner will decide the correct next step after reviewing the matter.";
           if (answer && looksLikeQuestion(event.text)) await storeOutbound(sb, conversation.id, event.waId, answer);
           else await storeOutbound(sb, conversation.id, event.waId, await localize("Thanks. The new information is now part of your Acapolite request.", event.text, history));
           continue;
@@ -551,13 +601,15 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        const answer = cleanReply(ai.reply);
+        let answer = cleanReply(ai.reply);
         const question = priority ? await localize(QUESTION[priority] || "What else should we know about the matter?", event.text, history) : "";
+        if (containsFalseActionClaim(answer)) answer = "A practitioner should review the matter before any formal step is taken.";
+        const safeQuestion = repeatedQuestion(answer, question) ? "" : question;
         if (answer && looksLikeQuestion(event.text)) {
-          const combined = cleanReply(`${answer}\n\n${question}`);
-          await storeOutbound(sb, conversation.id, event.waId, combined || question);
+          const combined = cleanReply(`${answer}\n\n${safeQuestion}`);
+          await storeOutbound(sb, conversation.id, event.waId, combined || safeQuestion || answer);
         } else {
-          await storeOutbound(sb, conversation.id, event.waId, question || answer || await localize("How can we help with this matter?", event.text, history));
+          await storeOutbound(sb, conversation.id, event.waId, safeQuestion || answer || await localize("How can we help with this matter?", event.text, history));
         }
       } catch (messageError) {
         console.error("message processing error", messageError instanceof Error ? messageError.message : messageError);
