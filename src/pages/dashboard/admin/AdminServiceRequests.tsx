@@ -13,6 +13,7 @@ import {
   FileText,
   Image,
   Megaphone,
+  MessageCircle,
   RotateCcw,
   RefreshCcw,
   Save,
@@ -70,6 +71,14 @@ import {
   getLifecycleCountdownLabel,
   getLifecycleStageBadgeClass,
 } from "@/lib/serviceRequestLifecycle";
+import {
+  formatWhatsAppMissingFieldLabel,
+  getWhatsAppLeadGate,
+  getWhatsAppLeadQualityBadgeClass,
+  getWhatsAppLeadQualityCardClass,
+  getWhatsAppLeadQualityFromIntakePayload,
+  getWhatsAppLeadSource,
+} from "@/lib/whatsappLeadQuality";
 import { Cell, Pie, PieChart } from "recharts";
 
 type ServiceRequestRecord = Tables<"service_requests">;
@@ -94,7 +103,7 @@ const STATUS_CHART_COLORS = {
 const SUMMARY_CARD_STYLES = [
   { key: "active", title: "Active Leads", color: "bg-blue-50 text-blue-600", icon: Target },
   { key: "reactivated", title: "Reactivated Leads", color: "bg-green-50 text-green-600", icon: RefreshCcw },
-  { key: "pendingConfirmation", title: "Pending Confirmation", color: "bg-orange-50 text-orange-600", icon: Clock3 },
+  { key: "pendingConfirmation", title: "Pending Review", color: "bg-orange-50 text-orange-600", icon: Clock3 },
   { key: "expired", title: "Expired Leads", color: "bg-violet-50 text-violet-600", icon: TriangleAlert },
   { key: "practitionerResponses", title: "Total Responses", color: "bg-cyan-50 text-cyan-600", icon: Megaphone },
   { key: "avgResponseTime", title: "Avg. Response Time", color: "bg-amber-50 text-amber-600", icon: Clock3 },
@@ -174,7 +183,83 @@ function getDashboardRangeBounds(range: DashboardDateRange) {
   return { start: null, end, comparisonDays: 30, label: "All Time" };
 }
 
-export default function AdminServiceRequests() {
+type DuplicateLeadMatch = {
+  request: ServiceRequestRecord;
+  reason: string;
+};
+
+function normalizeLeadPhone(value: string | null) {
+  const digits = (value || "").replace(/\D/g, "");
+  return digits.length >= 7 ? digits.slice(-10) : "";
+}
+
+function normalizeLeadEmail(value: string | null) {
+  const email = (value || "").trim().toLowerCase();
+  return email && !email.endsWith("@acapolite.local") ? email : "";
+}
+
+function normalizeLeadName(value: string | null) {
+  const name = (value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!name || name.startsWith("whatsapp ")) return "";
+  return name;
+}
+
+function getDuplicateLeadMatches(request: ServiceRequestRecord, requests: ServiceRequestRecord[]): DuplicateLeadMatch[] {
+  const phone = normalizeLeadPhone(request.phone);
+  const email = normalizeLeadEmail(request.email);
+  const registration = normalizeLeadName(request.company_registration_number);
+  const company = normalizeLeadName(request.company_name);
+  const fullName = normalizeLeadName(request.full_name);
+  const matches: DuplicateLeadMatch[] = [];
+
+  for (const other of requests) {
+    if (other.id === request.id) continue;
+    const otherPhone = normalizeLeadPhone(other.phone);
+    const otherEmail = normalizeLeadEmail(other.email);
+    const otherRegistration = normalizeLeadName(other.company_registration_number);
+    const otherCompany = normalizeLeadName(other.company_name);
+    const otherFullName = normalizeLeadName(other.full_name);
+
+    let reason = "";
+    if (phone && otherPhone && phone === otherPhone) reason = "Same WhatsApp or phone number";
+    else if (email && otherEmail && email === otherEmail) reason = "Same email address";
+    else if (registration && otherRegistration && registration === otherRegistration) reason = "Same company registration";
+    else if (company && otherCompany && company === otherCompany) reason = "Same company name";
+    else if (fullName && otherFullName && fullName === otherFullName && request.province && other.province === request.province) reason = "Same client name and province";
+
+    if (reason) matches.push({ request: other, reason });
+  }
+
+  return matches.slice(0, 5);
+}
+
+function getWhatsAppReviewLabel(request: ServiceRequestRecord) {
+  if (request.lifecycle_stage !== "pending_client_confirmation") {
+    return null;
+  }
+
+  const whatsappLeadQuality = getWhatsAppLeadQualityFromIntakePayload(request.intake_payload);
+  if (!whatsappLeadQuality) return null;
+  return whatsappLeadQuality.status === "ready" ? "Admin Review" : "WhatsApp Info Hold";
+}
+
+function formatRequestLifecycleLabel(request: ServiceRequestRecord) {
+  return getWhatsAppReviewLabel(request) || formatLifecycleStageLabel(request.lifecycle_stage);
+}
+
+function formatRequestStatusLabel(request: ServiceRequestRecord) {
+  return getWhatsAppReviewLabel(request) || formatServiceRequestLabel(request.status);
+}
+
+function getRequestLifecycleCountdownLabel(request: ServiceRequestRecord, fallback = "No active countdown") {
+  if (getWhatsAppReviewLabel(request) === "Admin Review") {
+    return "Awaiting admin review";
+  }
+
+  return getLifecycleCountdownLabel(request) || fallback;
+}
+
+function AdminServiceRequestsWorkspace() {
   const { role, user, profile } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -198,6 +283,7 @@ export default function AdminServiceRequests() {
   const [resettingTimerId, setResettingTimerId] = useState<string | null>(null);
   const [returningToMarketplaceId, setReturningToMarketplaceId] = useState<string | null>(null);
   const [openingMarketplaceId, setOpeningMarketplaceId] = useState<string | null>(null);
+  const [applyingWhatsAppGateId, setApplyingWhatsAppGateId] = useState<string | null>(null);
   const [selectedReviveStage, setSelectedReviveStage] = useState<Enums<"service_request_lifecycle_stage">>("open_marketplace");
   const [leadArchiveReason, setLeadArchiveReason] = useState<string>("inactive");
   const [leadArchiveNotes, setLeadArchiveNotes] = useState("");
@@ -244,10 +330,6 @@ export default function AdminServiceRequests() {
     enabled: role !== "consultant",
     staleTime: 60_000,
   });
-
-  if (role === "consultant") {
-    return <PractitionerLeads />;
-  }
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["staff-service-requests"],
@@ -480,6 +562,18 @@ export default function AdminServiceRequests() {
   ].some((value) => value && value !== "all");
 
   const selectedRequest = (requests ?? []).find((request) => request.id === selectedRequestId) ?? null;
+  const selectedDuplicateMatches = useMemo(
+    () => selectedRequest ? getDuplicateLeadMatches(selectedRequest, requests ?? []) : [],
+    [requests, selectedRequest],
+  );
+  const duplicateCountByRequestId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const request of requests ?? []) {
+      const matches = getDuplicateLeadMatches(request, requests ?? []);
+      if (matches.length) counts.set(request.id, matches.length);
+    }
+    return counts;
+  }, [requests]);
 
   useEffect(() => {
     if (!(requests ?? []).length) {
@@ -611,6 +705,26 @@ export default function AdminServiceRequests() {
 
   function getPractitionerMarketplaceVisibility(request: ServiceRequestRecord) {
     if (request.lifecycle_stage === "pending_client_confirmation") {
+      const whatsappLeadQuality = getWhatsAppLeadQualityFromIntakePayload(request.intake_payload);
+      if (whatsappLeadQuality?.status === "ready") {
+        return {
+          visible: false,
+          label: "Hidden for admin review",
+          description: "The client confirmed this WhatsApp request. Admin must approve it before practitioners can see it.",
+          toneClass: "border-orange-200 bg-orange-50 text-orange-700",
+          action: "return_to_marketplace" as const,
+        };
+      }
+      if (whatsappLeadQuality) {
+        return {
+          visible: false,
+          label: "Hidden for missing info",
+          description: "This WhatsApp lead is held until staff collects enough detail for review.",
+          toneClass: "border-orange-200 bg-orange-50 text-orange-700",
+          action: "return_to_marketplace" as const,
+        };
+      }
+
       return {
         visible: false,
         label: "Hidden from practitioners",
@@ -786,6 +900,7 @@ export default function AdminServiceRequests() {
         assignedPractitionerName,
         serviceLabels,
         categoryLabels,
+        formatRequestStatusLabel(request),
         formatServiceRequestLabel(request.status),
         formatServiceRequestLabel(request.priority_level),
         formatServiceRequestLabel(request.client_type),
@@ -954,7 +1069,7 @@ export default function AdminServiceRequests() {
     return [
       { key: "active", label: "Active Leads", value: activeLeads, fill: STATUS_CHART_COLORS.active, percentage: Math.round((activeLeads / total) * 100) },
       { key: "reactivated", label: "Reactivated Leads", value: reactivatedLeads, fill: STATUS_CHART_COLORS.reactivated, percentage: Math.round((reactivatedLeads / total) * 100) },
-      { key: "pending", label: "Pending Confirmation", value: requestMetrics.pendingConfirmation, fill: STATUS_CHART_COLORS.pending, percentage: Math.round((requestMetrics.pendingConfirmation / total) * 100) },
+      { key: "pending", label: "Pending Review", value: requestMetrics.pendingConfirmation, fill: STATUS_CHART_COLORS.pending, percentage: Math.round((requestMetrics.pendingConfirmation / total) * 100) },
       { key: "expired", label: "Expired Leads", value: requestMetrics.expired, fill: STATUS_CHART_COLORS.expired, percentage: Math.round((requestMetrics.expired / total) * 100) },
       { key: "archived", label: "Archived Leads", value: requestMetrics.archived, fill: STATUS_CHART_COLORS.archived, percentage: Math.round((requestMetrics.archived / total) * 100) },
       { key: "completed", label: "Completed Leads", value: requestMetrics.completed, fill: "#14B8A6", percentage: Math.round((requestMetrics.completed / total) * 100) },
@@ -1064,6 +1179,59 @@ export default function AdminServiceRequests() {
     await queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] });
   };
 
+  const openWhatsAppChat = (conversationId: string) => {
+    window.location.assign(`/dashboard/staff/whatsapp-qa?conversationId=${encodeURIComponent(conversationId)}`);
+  };
+
+  const openWhatsAppMissingInfo = (conversationId: string) => {
+    window.location.assign(`/dashboard/staff/whatsapp-qa?conversationId=${encodeURIComponent(conversationId)}&draft=missing_info`);
+  };
+
+  const applyWhatsAppQualityGate = async (request: ServiceRequestRecord) => {
+    const whatsappLeadQuality = getWhatsAppLeadQualityFromIntakePayload(request.intake_payload);
+    if (!whatsappLeadQuality) return;
+    const whatsappLeadGate = getWhatsAppLeadGate(whatsappLeadQuality);
+    if (whatsappLeadGate.marketplaceVisible) {
+      toast.success("This WhatsApp lead is already marketplace ready.");
+      return;
+    }
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const dueAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+    const isAdminReview = whatsappLeadQuality.status === "ready";
+    const updates: Tables<"service_requests">["Update"] = {
+      status: whatsappLeadGate.serviceRequestStatus,
+      lifecycle_stage: whatsappLeadGate.lifecycleStage,
+      lifecycle_stage_started_at: nowIso,
+      lifecycle_stage_expires_at: whatsappLeadGate.lifecycleStage === "pending_client_confirmation" && !isAdminReview ? dueAt : null,
+      client_confirmation_requested_at: whatsappLeadGate.lifecycleStage === "pending_client_confirmation" && !isAdminReview ? nowIso : null,
+      client_confirmation_due_at: whatsappLeadGate.lifecycleStage === "pending_client_confirmation" && !isAdminReview ? dueAt : null,
+      client_confirmation_answered_at: isAdminReview ? nowIso : null,
+      client_confirmation_origin_stage: whatsappLeadGate.lifecycleStage === "pending_client_confirmation" ? request.lifecycle_stage : null,
+      expired_at: whatsappLeadGate.lifecycleStage === "expired" ? nowIso : null,
+      is_archived: false,
+    };
+
+    setApplyingWhatsAppGateId(request.id);
+    const { error } = await supabase
+      .from("service_requests")
+      .update(updates)
+      .eq("id", request.id);
+    setApplyingWhatsAppGateId(null);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("WhatsApp quality gate applied.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["staff-service-request-lifecycle-history"] }),
+    ]);
+  };
+
   const updateStatus = async (requestId: string, status: Enums<"service_request_status">) => {
     const currentRequest = (requests ?? []).find((request) => request.id === requestId);
     if (
@@ -1071,7 +1239,12 @@ export default function AdminServiceRequests() {
       && currentRequest.status !== status
       && currentRequest.lifecycle_stage === "pending_client_confirmation"
     ) {
-      toast.error("This lead is still waiting for client confirmation. Use Return to Marketplace instead of changing status.");
+      const whatsappLeadQuality = getWhatsAppLeadQualityFromIntakePayload(currentRequest.intake_payload);
+      toast.error(
+        whatsappLeadQuality?.status === "ready"
+          ? "This WhatsApp request is waiting for admin review. Use Approve to Marketplace instead of changing status."
+          : "This lead is still waiting for client confirmation. Use Return to Marketplace instead of changing status.",
+      );
       return;
     }
 
@@ -1265,6 +1438,8 @@ export default function AdminServiceRequests() {
   };
 
   const returnLeadToMarketplace = async (requestId: string) => {
+    const currentRequest = (requests ?? []).find((request) => request.id === requestId);
+    const whatsappLeadQuality = currentRequest ? getWhatsAppLeadQualityFromIntakePayload(currentRequest.intake_payload) : null;
     setReturningToMarketplaceId(requestId);
     const { error } = await supabase.rpc("admin_return_service_request_to_marketplace", {
       p_request_id: requestId,
@@ -1276,7 +1451,7 @@ export default function AdminServiceRequests() {
       return;
     }
 
-    toast.success("Lead returned to the marketplace.");
+    toast.success(whatsappLeadQuality?.status === "ready" ? "WhatsApp request approved for marketplace." : "Lead returned to the marketplace.");
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["staff-service-requests"] }),
       queryClient.invalidateQueries({ queryKey: ["staff-service-request-lifecycle-history"] }),
@@ -1420,7 +1595,7 @@ export default function AdminServiceRequests() {
   const summaryCards = [
     { title: "Active Leads", value: requestMetrics.active.toLocaleString(), delta: requestMetrics.trends.active, icon: Target, color: "bg-blue-50 text-blue-600" },
     { title: "Reactivated Leads", value: requestMetrics.reactivated.toLocaleString(), delta: requestMetrics.trends.reactivated, icon: RefreshCcw, color: "bg-green-50 text-green-600" },
-    { title: "Pending Confirmation", value: requestMetrics.pendingConfirmation.toLocaleString(), delta: requestMetrics.trends.pendingConfirmation, icon: Clock3, color: "bg-orange-50 text-orange-600" },
+    { title: "Pending Review", value: requestMetrics.pendingConfirmation.toLocaleString(), delta: requestMetrics.trends.pendingConfirmation, icon: Clock3, color: "bg-orange-50 text-orange-600" },
     { title: "Expired Leads", value: requestMetrics.expired.toLocaleString(), delta: requestMetrics.trends.expired, icon: TriangleAlert, color: "bg-violet-50 text-violet-600" },
     { title: "Total Responses", value: requestMetrics.practitionerResponses.toLocaleString(), delta: requestMetrics.trends.practitionerResponses, icon: Megaphone, color: "bg-cyan-50 text-cyan-600" },
     { title: "Avg. Response Time", value: formatCompactDuration(requestMetrics.avgResponseTime), delta: -Math.abs(requestMetrics.trends.avgResponseTime), icon: Clock3, color: "bg-amber-50 text-amber-600" },
@@ -1451,9 +1626,9 @@ export default function AdminServiceRequests() {
       iconClassName: "bg-emerald-50 text-emerald-600",
     },
     {
-      title: "Pending Client Confirmation",
+      title: "Review / Confirmation Hold",
       time: formatStageHours(lifecycleSettings?.pending_client_confirmation_hours ?? 24),
-      description: "Client Response Deadline",
+      description: "Admin or Client Response Deadline",
       icon: Clock3,
       iconClassName: "bg-orange-50 text-orange-600",
     },
@@ -1565,7 +1740,7 @@ export default function AdminServiceRequests() {
                 config={{
                   active: { label: "Active Leads", color: STATUS_CHART_COLORS.active },
                   reactivated: { label: "Reactivated Leads", color: STATUS_CHART_COLORS.reactivated },
-                  pending: { label: "Pending Confirmation", color: STATUS_CHART_COLORS.pending },
+                  pending: { label: "Pending Review", color: STATUS_CHART_COLORS.pending },
                   expired: { label: "Expired Leads", color: STATUS_CHART_COLORS.expired },
                   archived: { label: "Archived Leads", color: STATUS_CHART_COLORS.archived },
                   completed: { label: "Completed Leads", color: "#14B8A6" },
@@ -1622,7 +1797,7 @@ export default function AdminServiceRequests() {
         <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_32px_rgba(15,23,42,0.05)] xl:col-span-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Pending Client Confirmation</h2>
+              <h2 className="text-lg font-semibold text-slate-900">Pending Review</h2>
               <p className="mt-1 text-sm text-slate-500">Leads waiting for a client decision before they return to the marketplace or expire.</p>
             </div>
             <button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => moveToWorkspaceTab("pending")}>
@@ -1648,7 +1823,7 @@ export default function AdminServiceRequests() {
                 </div>
                 <div className="shrink-0 pl-[52px] text-left sm:pl-0 sm:text-right">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">Expiry countdown</p>
-                  <p className="mt-1 text-sm font-medium text-rose-600">{getLifecycleCountdownLabel(request) || "Expires soon"}</p>
+                  <p className="mt-1 text-sm font-medium text-rose-600">{getRequestLifecycleCountdownLabel(request, "Expires soon")}</p>
                 </div>
               </button>
             )) : (
@@ -1861,7 +2036,7 @@ export default function AdminServiceRequests() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
-                        {formatLifecycleStageLabel(request.lifecycle_stage)}
+                        {formatRequestLifecycleLabel(request)}
                       </Badge>
                       <Badge className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${request.priority_level === "high" || request.priority_level === "urgent" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
                         {formatServiceRequestLabel(request.priority_level)}
@@ -1871,7 +2046,7 @@ export default function AdminServiceRequests() {
                     <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                       <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Time Left</p>
-                        <p className="mt-2 text-sm font-semibold text-slate-900">{getLifecycleCountdownLabel(request) || "—"}</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">{getRequestLifecycleCountdownLabel(request, "—")}</p>
                       </div>
                       <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Responses</p>
@@ -1883,7 +2058,7 @@ export default function AdminServiceRequests() {
                       </div>
                       <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Visibility</p>
-                        <p className="mt-2 text-sm font-semibold text-slate-900">{formatLifecycleStageLabel(request.lifecycle_stage)}</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">{formatRequestLifecycleLabel(request)}</p>
                       </div>
                     </div>
                   </div>
@@ -1928,7 +2103,7 @@ export default function AdminServiceRequests() {
                     <TableCell className="truncate font-medium text-slate-700">{request.full_name}</TableCell>
                     <TableCell>
                       <Badge className={`max-w-full truncate rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getLifecycleStageBadgeClass(request.lifecycle_stage)}`}>
-                        {formatLifecycleStageLabel(request.lifecycle_stage)}
+                        {formatRequestLifecycleLabel(request)}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -1936,7 +2111,7 @@ export default function AdminServiceRequests() {
                         {formatServiceRequestLabel(request.priority_level)}
                       </Badge>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-slate-700">{getLifecycleCountdownLabel(request) || "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap text-slate-700">{getRequestLifecycleCountdownLabel(request, "—")}</TableCell>
                     <TableCell className="text-center font-medium text-slate-700">{responsesByRequest.get(request.id)?.length ?? 0}</TableCell>
                     <TableCell className="text-center font-medium text-slate-700">{request.viewed_at ? 1 : 0}</TableCell>
                     <TableCell className="text-right">
@@ -2104,7 +2279,7 @@ export default function AdminServiceRequests() {
             { value: "professional", label: "Professional Stage" },
             { value: "open", label: "Open Marketplace" },
             { value: "reactivated", label: "Reactivated Leads" },
-            { value: "pending", label: "Pending Confirmation" },
+            { value: "pending", label: "Pending Review" },
             { value: "expired", label: "Expired Leads" },
             { value: "hidden", label: "Hidden From Practitioners" },
             { value: "archived", label: "Archived Leads" },
@@ -2247,7 +2422,7 @@ export default function AdminServiceRequests() {
           <p className="font-display text-3xl text-violet-700">{requestMetrics.reactivated}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Pending Confirmation</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Pending Review</p>
           <p className="font-display text-3xl text-orange-700">{requestMetrics.pendingConfirmation}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
@@ -2275,6 +2450,7 @@ export default function AdminServiceRequests() {
               missingDocumentsFlag: request.missing_documents_flag,
             });
             const practitionerVisibility = getPractitionerMarketplaceVisibility(request);
+            const whatsappLeadQuality = getWhatsAppLeadQualityFromIntakePayload(request.intake_payload);
             return (
               <button
                 key={request.id}
@@ -2287,10 +2463,10 @@ export default function AdminServiceRequests() {
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       <h2 className="font-display text-lg font-semibold text-foreground">{request.full_name}</h2>
                       <Badge variant="outline" className={getServiceRequestStatusClass(request.status)}>
-                        {formatServiceRequestLabel(request.status)}
+                        {formatRequestStatusLabel(request)}
                       </Badge>
                       <Badge variant="outline" className={getLifecycleStageBadgeClass(request.lifecycle_stage)}>
-                        {formatLifecycleStageLabel(request.lifecycle_stage)}
+                        {formatRequestLifecycleLabel(request)}
                       </Badge>
                       <Badge variant="outline" className={getServiceRequestRiskClass(request.risk_indicator)}>
                         {formatServiceRequestLabel(request.risk_indicator)} Risk
@@ -2298,6 +2474,17 @@ export default function AdminServiceRequests() {
                       <Badge variant="outline" className={practitionerVisibility.toneClass}>
                         {practitionerVisibility.label}
                       </Badge>
+                      {whatsappLeadQuality ? (
+                        <Badge variant="outline" className={getWhatsAppLeadQualityBadgeClass(whatsappLeadQuality.status)}>
+                          <MessageCircle className="mr-1 h-3.5 w-3.5" />
+                          WhatsApp {whatsappLeadQuality.score}%
+                        </Badge>
+                      ) : null}
+                      {(duplicateCountByRequestId.get(request.id) ?? 0) > 0 ? (
+                        <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+                          Possible duplicate
+                        </Badge>
+                      ) : null}
                       {request.lifecycle_reactivation_count > 0 ? (
                         <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700">
                           Reactivated x{request.lifecycle_reactivation_count}
@@ -2312,14 +2499,16 @@ export default function AdminServiceRequests() {
                       {formatServiceRequestLabel(request.client_type)} | {formatServiceList(resolveServiceList(request))} | Priority {formatServiceRequestLabel(request.priority_level)}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground font-body">
-                      {getLifecycleCountdownLabel(request) || "No active countdown"}
+                      {getRequestLifecycleCountdownLabel(request)}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground font-body">
                       {practitionerVisibility.description}
                       {!practitionerVisibility.visible && practitionerVisibility.action === "restart_cycle"
                         ? " Open this lead and use Restart cycle."
                         : !practitionerVisibility.visible && practitionerVisibility.action === "return_to_marketplace"
-                          ? " Open this lead and use Return to Marketplace."
+                          ? getWhatsAppReviewLabel(request) === "Admin Review"
+                            ? " Open this lead and approve it for the marketplace."
+                            : " Open this lead and use Return to Marketplace."
                           : practitionerVisibility.action === "move_to_open_marketplace"
                             ? " Open this lead and use Move to Open Marketplace if you want all practitioners to see it now."
                           : ""}
@@ -2391,6 +2580,7 @@ export default function AdminServiceRequests() {
           <div className="space-y-6">
             {(() => {
               const practitionerVisibility = getPractitionerMarketplaceVisibility(selectedRequest);
+              const whatsappReviewLabel = getWhatsAppReviewLabel(selectedRequest);
 
               return (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -2410,7 +2600,9 @@ export default function AdminServiceRequests() {
                   </SelectTrigger>
                   <SelectContent>
                     {serviceRequestStatusOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.value === "pending_client_confirmation" && whatsappReviewLabel ? whatsappReviewLabel : option.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2419,7 +2611,9 @@ export default function AdminServiceRequests() {
                 ) : null}
                 {selectedRequest.lifecycle_stage === "pending_client_confirmation" ? (
                   <p className="mt-2 text-xs text-orange-600 font-body">
-                    Use Return to Marketplace to make this lead visible again.
+                    {whatsappReviewLabel === "Admin Review"
+                      ? "Use Approve to Marketplace after admin review."
+                      : "Use Return to Marketplace to make this lead visible again."}
                   </p>
                 ) : null}
                 {selectedRequest.lifecycle_stage === "expired" ? (
@@ -2460,7 +2654,7 @@ export default function AdminServiceRequests() {
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">Lifecycle</p>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline" className={getLifecycleStageBadgeClass(selectedRequest.lifecycle_stage)}>
-                    {formatLifecycleStageLabel(selectedRequest.lifecycle_stage)}
+                    {formatRequestLifecycleLabel(selectedRequest)}
                   </Badge>
                   {selectedRequest.lifecycle_reactivation_count > 0 ? (
                     <Badge className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
@@ -2469,7 +2663,7 @@ export default function AdminServiceRequests() {
                   ) : null}
                 </div>
                 <p className="mt-2 text-sm text-foreground font-body">
-                  {getLifecycleCountdownLabel(selectedRequest) || "No active countdown"}
+                  {getRequestLifecycleCountdownLabel(selectedRequest)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground font-body">
                   Last client activity: {selectedRequest.lifecycle_last_client_activity_at
@@ -2489,7 +2683,11 @@ export default function AdminServiceRequests() {
                   <p className="mt-1 text-xs text-muted-foreground font-body">Use Restart cycle to return this lead to the practitioner marketplace.</p>
                 ) : null}
                 {!practitionerVisibility.visible && practitionerVisibility.action === "return_to_marketplace" ? (
-                  <p className="mt-1 text-xs text-muted-foreground font-body">Use Return to Marketplace to reopen this lead for practitioners.</p>
+                  <p className="mt-1 text-xs text-muted-foreground font-body">
+                    {whatsappReviewLabel === "Admin Review"
+                      ? "Use Approve to Marketplace once admin has checked the request."
+                      : "Use Return to Marketplace to reopen this lead for practitioners."}
+                  </p>
                 ) : null}
                 {practitionerVisibility.action === "move_to_open_marketplace" ? (
                   <p className="mt-1 text-xs text-muted-foreground font-body">Use Move to Open Marketplace if you want all practitioners to see this lead immediately.</p>
@@ -2498,6 +2696,155 @@ export default function AdminServiceRequests() {
             </div>
               );
             })()}
+
+            {(() => {
+              const whatsappLeadQuality = getWhatsAppLeadQualityFromIntakePayload(selectedRequest.intake_payload);
+              const whatsappSource = getWhatsAppLeadSource(selectedRequest.intake_payload);
+              if (!whatsappLeadQuality) return null;
+              const whatsappLeadGate = getWhatsAppLeadGate(whatsappLeadQuality);
+              const whatsappConversationId = whatsappSource?.qaConversationId || "";
+              const whatsappGateApplied = selectedRequest.status === whatsappLeadGate.serviceRequestStatus
+                && selectedRequest.lifecycle_stage === whatsappLeadGate.lifecycleStage;
+
+              return (
+                <div className={`rounded-2xl border p-4 ${getWhatsAppLeadQualityCardClass(whatsappLeadQuality.status)}`}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-2">WhatsApp Lead Quality</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className={getWhatsAppLeadQualityBadgeClass(whatsappLeadQuality.status)}>
+                          <MessageCircle className="mr-1 h-3.5 w-3.5" />
+                          {whatsappLeadQuality.label}
+                        </Badge>
+                        <Badge variant="outline" className="bg-background/80">
+                          {whatsappLeadGate.label}
+                        </Badge>
+                        {whatsappSource?.waId ? (
+                          <Badge variant="outline" className="bg-background/80">+{whatsappSource.waId}</Badge>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground font-body">{whatsappLeadQuality.description}</p>
+                      <p className="mt-1 text-sm text-foreground font-body">{whatsappLeadQuality.nextAction}</p>
+                      <p className="mt-1 text-sm text-foreground font-body">{whatsappLeadGate.description}</p>
+                      {whatsappConversationId ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {whatsappLeadQuality.followUpFields.length ? (
+                            <Button type="button" variant="default" size="sm" className="rounded-xl" onClick={() => openWhatsAppMissingInfo(whatsappConversationId)}>
+                              <MessageCircle className="mr-2 h-4 w-4" />
+                              Ask missing info
+                            </Button>
+                          ) : null}
+                          <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => openWhatsAppChat(whatsappConversationId)}>
+                            <MessageCircle className="mr-2 h-4 w-4" />
+                            Open WhatsApp chat
+                          </Button>
+                        </div>
+                      ) : null}
+                      {role === "admin" && !whatsappLeadGate.marketplaceVisible && !whatsappGateApplied ? (
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="sm"
+                          className="mt-3 rounded-xl"
+                          onClick={() => void applyWhatsAppQualityGate(selectedRequest)}
+                          disabled={applyingWhatsAppGateId === selectedRequest.id}
+                        >
+                          {applyingWhatsAppGateId === selectedRequest.id ? "Applying..." : "Apply Review Gate"}
+                        </Button>
+                      ) : null}
+                      {role === "admin" && !whatsappLeadGate.marketplaceVisible ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {selectedRequest.lifecycle_stage === "pending_client_confirmation" ? (
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => void returnLeadToMarketplace(selectedRequest.id)}
+                              disabled={returningToMarketplaceId === selectedRequest.id}
+                            >
+                              {returningToMarketplaceId === selectedRequest.id ? "Approving..." : "Approve to Marketplace"}
+                            </Button>
+                          ) : null}
+                          {selectedRequest.lifecycle_stage === "expired" || selectedRequest.status === "dead_lead" ? (
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => void reviveLead(selectedRequest.id)}
+                              disabled={revivingLeadId === selectedRequest.id}
+                            >
+                              {revivingLeadId === selectedRequest.id ? "Reviving..." : "Revive to Marketplace"}
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    <span className="text-3xl font-semibold text-foreground">{whatsappLeadQuality.score}%</span>
+                  </div>
+                  {whatsappLeadQuality.followUpFields.length ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {whatsappLeadQuality.followUpFields.map((field) => (
+                        <span key={field} className="rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-semibold text-foreground">
+                          {formatWhatsAppMissingFieldLabel(field)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {whatsappLeadQuality.checks.map((check) => (
+                      <div key={check.key} className="flex items-center gap-2 rounded-xl border border-border bg-background/80 px-3 py-2 text-xs">
+                        {check.passed ? <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />}
+                        <span className="min-w-0 flex-1 truncate">{check.label}</span>
+                        <span className="shrink-0 text-muted-foreground">{check.passed ? `+${check.weight}` : "missing"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {selectedDuplicateMatches.length ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-amber-800 font-body mb-1">Possible Client Match</p>
+                    <p className="text-sm text-amber-900 font-body">
+                      This lead looks similar to {selectedDuplicateMatches.length} existing request{selectedDuplicateMatches.length === 1 ? "" : "s"}.
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="border-amber-300 bg-background/80 text-amber-800">
+                    Check before assigning
+                  </Badge>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {selectedDuplicateMatches.map((match) => (
+                    <button
+                      key={match.request.id}
+                      type="button"
+                      className="w-full rounded-xl border border-amber-200 bg-background/80 p-3 text-left transition-colors hover:bg-background"
+                      onClick={() => setSelectedRequestId(match.request.id)}
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground font-body">{match.request.full_name}</p>
+                          <p className="truncate text-xs text-muted-foreground font-body">{match.reason}</p>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <Badge variant="outline" className={getServiceRequestStatusClass(match.request.status)}>
+                            {formatRequestStatusLabel(match.request)}
+                          </Badge>
+                          <Badge variant="outline" className={getLifecycleStageBadgeClass(match.request.lifecycle_stage)}>
+                            {formatRequestLifecycleLabel(match.request)}
+                          </Badge>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-border p-4">
@@ -2548,7 +2895,7 @@ export default function AdminServiceRequests() {
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-body mb-1">Lifecycle History</p>
                   <p className="text-sm text-muted-foreground font-body">
-                    Track automatic stage changes, reactivations, and client confirmation outcomes.
+                    Track automatic stage changes, admin approvals, reactivations, and client confirmation outcomes.
                   </p>
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -2571,7 +2918,9 @@ export default function AdminServiceRequests() {
                       onClick={() => void returnLeadToMarketplace(selectedRequest.id)}
                       disabled={returningToMarketplaceId === selectedRequest.id}
                     >
-                      {returningToMarketplaceId === selectedRequest.id ? "Returning..." : "Return to Marketplace"}
+                      {getWhatsAppReviewLabel(selectedRequest) === "Admin Review"
+                        ? returningToMarketplaceId === selectedRequest.id ? "Approving..." : "Approve to Marketplace"
+                        : returningToMarketplaceId === selectedRequest.id ? "Returning..." : "Return to Marketplace"}
                     </Button>
                   ) : null}
                   {role === "admin" && canResetSelectedTimer ? (
@@ -2949,4 +3298,9 @@ export default function AdminServiceRequests() {
       </AlertDialog>
     </div>
   );
+}
+
+export default function AdminServiceRequests() {
+  const { role } = useAuth();
+  return role === "consultant" ? <PractitionerLeads /> : <AdminServiceRequestsWorkspace />;
 }

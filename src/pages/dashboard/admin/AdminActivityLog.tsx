@@ -39,6 +39,17 @@ const actionLabels: Record<string, string> = {
   invoice_created: "Invoice created",
   invoice_sent: "Invoice sent",
   invoice_marked_paid: "Invoice marked as paid",
+  whatsapp_assigned: "WhatsApp assigned",
+  whatsapp_reassigned: "WhatsApp reassigned",
+  whatsapp_staff_reply: "WhatsApp reply",
+  whatsapp_returned_to_ai: "WhatsApp returned to AI",
+  whatsapp_resolved: "WhatsApp resolved",
+  whatsapp_reopened: "WhatsApp reopened",
+  whatsapp_service_request_created: "WhatsApp lead created",
+  whatsapp_service_request_synced: "WhatsApp lead refreshed",
+  whatsapp_internal_note_added: "WhatsApp private note",
+  whatsapp_client_linked: "WhatsApp client linked",
+  whatsapp_client_unlinked: "WhatsApp client unlinked",
 };
 
 const roleLabels: Record<string, string> = {
@@ -58,6 +69,10 @@ const actionOptions = [
   { value: "invoice_created", label: "Invoice Created" },
   { value: "invoice_sent", label: "Invoice Sent" },
   { value: "invoice_marked_paid", label: "Invoice Marked Paid" },
+  { value: "whatsapp_staff_reply", label: "WhatsApp Reply" },
+  { value: "whatsapp_service_request_created", label: "WhatsApp Lead Created" },
+  { value: "whatsapp_internal_note_added", label: "WhatsApp Note" },
+  { value: "whatsapp_client_linked", label: "WhatsApp Client Link" },
 ];
 
 function getActorLabel(record: ActivityLogRecord) {
@@ -107,6 +122,11 @@ function getActivitySentence(record: ActivityLogRecord, targetDetails?: TargetDe
   const targetLabel = targetDetails?.label || toSentenceCase(record.target_type) || "item";
   const targetNote = targetDetails?.sublabel ? ` for ${targetDetails.sublabel}` : "";
   const metadata = record.metadata ?? {};
+  const whatsappName = typeof metadata.conversation_name === "string" && metadata.conversation_name
+    ? metadata.conversation_name
+    : typeof metadata.wa_id === "string" && metadata.wa_id
+      ? `+${metadata.wa_id}`
+      : "a WhatsApp chat";
 
   switch (record.action) {
     case "invoice_created":
@@ -135,6 +155,31 @@ function getActivitySentence(record: ActivityLogRecord, targetDetails?: TargetDe
     }
     case "case_assignment_updated":
       return `${actor} updated the practitioner assignment for ${targetLabel}${targetNote}.`;
+    case "whatsapp_assigned":
+    case "whatsapp_reassigned": {
+      const staffName = typeof metadata.staff_name === "string" ? metadata.staff_name : "staff";
+      return `${actor} assigned ${whatsappName} to ${staffName}.`;
+    }
+    case "whatsapp_staff_reply":
+      return `${actor} replied to ${whatsappName}.`;
+    case "whatsapp_returned_to_ai":
+      return `${actor} returned ${whatsappName} to AI.`;
+    case "whatsapp_resolved":
+      return `${actor} resolved ${whatsappName}.`;
+    case "whatsapp_reopened":
+      return `${actor} reopened ${whatsappName}.`;
+    case "whatsapp_service_request_created":
+      return `${actor} sent ${whatsappName} to the leads dashboard.`;
+    case "whatsapp_service_request_synced":
+      return `${actor} refreshed the lead for ${whatsappName}.`;
+    case "whatsapp_internal_note_added":
+      return `${actor} added a private note to ${whatsappName}.`;
+    case "whatsapp_client_linked": {
+      const clientLabel = typeof metadata.client_label === "string" && metadata.client_label ? metadata.client_label : "Client 360";
+      return `${actor} linked ${whatsappName} to ${clientLabel}.`;
+    }
+    case "whatsapp_client_unlinked":
+      return `${actor} removed the Client 360 link from ${whatsappName}.`;
     default:
       return `${actor} completed ${toSentenceCase(record.action).toLowerCase()} on ${targetLabel}${targetNote}.`;
   }
@@ -187,12 +232,14 @@ export default function AdminActivityLog() {
       const actionLabel = (actionLabels[record.action] || record.action).toLowerCase();
       const roleLabel = record.actor_role.toLowerCase();
       const targetLabel = `${record.target_type} ${record.target_id ?? ""}`.toLowerCase();
+      const metadataLabel = JSON.stringify(record.metadata ?? {}).toLowerCase();
 
       return (
         actorLabel.includes(normalizedSearch)
         || actionLabel.includes(normalizedSearch)
         || roleLabel.includes(normalizedSearch)
         || targetLabel.includes(normalizedSearch)
+        || metadataLabel.includes(normalizedSearch)
       );
     });
   }, [actionFilter, logs, searchQuery]);
@@ -285,7 +332,17 @@ export default function AdminActivityLog() {
   });
 
   const targetDisplay = selectedLog
-    ? (targetDetails ?? { kind: "generic", label: selectedLog.target_type.replace(/_/g, " ") })
+    ? (targetDetails ?? (selectedLog.target_type === "whatsapp_conversation"
+      ? {
+        kind: "generic",
+        label: "WhatsApp chat",
+        sublabel: typeof selectedLog.metadata?.conversation_name === "string" && selectedLog.metadata.conversation_name
+          ? selectedLog.metadata.conversation_name
+          : typeof selectedLog.metadata?.wa_id === "string" && selectedLog.metadata.wa_id
+            ? `+${selectedLog.metadata.wa_id}`
+            : null,
+      }
+      : { kind: "generic", label: selectedLog.target_type.replace(/_/g, " ") }))
     : null;
 
   return (

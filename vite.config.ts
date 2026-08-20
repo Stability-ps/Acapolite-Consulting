@@ -57,6 +57,22 @@ export default defineConfig(({ mode }) => {
       hmr: {
         overlay: false,
       },
+      proxy: {
+        "/api/whatsapp-qa-feed": {
+          target: "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1",
+          changeOrigin: true,
+          rewrite: () => "/whatsapp-qa-feed",
+        },
+        "/api/whatsapp-lead-link": {
+          target: "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1",
+          changeOrigin: true,
+          rewrite: () => "/whatsapp-lead-link",
+        },
+        "/whatsapp-qa-feed": {
+          target: "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1",
+          changeOrigin: true,
+        },
+      },
     },
     plugins: [react()],
     resolve: {

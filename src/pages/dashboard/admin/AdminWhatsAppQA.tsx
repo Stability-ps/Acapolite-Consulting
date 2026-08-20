@@ -1,21 +1,40 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Bot, CheckCircle2, Download, FileSpreadsheet, FileText, ImageIcon, MessageCircle, Paperclip, RefreshCw, Send, ShieldCheck, Trash2, UserRoundCheck, Users, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, ArrowUpDown, BarChart3, Bell, Bot, CheckCircle2, ClipboardList, Clock3, Copy, Download, ExternalLink, FileSpreadsheet, FileText, Headphones, ImageIcon, Link2, MessageCircle, Paperclip, RefreshCw, Search, Send, ShieldCheck, StickyNote, Timer, Trash2, UserCheck, UserRoundCheck, Users, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import type { Enums } from "@/integrations/supabase/types";
+import { getCategoryForService, type WizardEntityType, type WizardService } from "@/lib/requestWizard";
+import { formatServiceRequestLabel, serviceNeededOptions } from "@/lib/serviceRequests";
+import {
+  buildWhatsAppMissingInfoReply,
+  formatWhatsAppMissingFieldLabel,
+  getWhatsAppLeadGate,
+  getWhatsAppLeadQuality,
+  getWhatsAppLeadQualityBadgeClass,
+  getWhatsAppLeadQualityCardClass,
+} from "@/lib/whatsappLeadQuality";
+import { useSearchParams } from "react-router-dom";
 
 type Conversation = {
   id: string;
   wa_id: string;
   display_name: string | null;
+  linked_client_id: string | null;
+  linked_client_profile_id: string | null;
+  linked_client_at: string | null;
+  linked_client_by: string | null;
   status: string;
+  inbox_status: "new" | "unassigned" | "assigned" | "waiting_client" | "resolved";
+  priority_level: "normal" | "high" | "urgent";
   ai_enabled: boolean;
   human_handoff_requested_at: string | null;
   service_request_id: string | null;
@@ -30,6 +49,10 @@ type Conversation = {
   assigned_staff_name: string | null;
   assigned_at: string | null;
   last_staff_reply_at: string | null;
+  first_staff_reply_at: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  unread_count: number;
   created_at: string;
   updated_at: string;
 };
@@ -45,6 +68,7 @@ type Message = {
   media_mime_type: string | null;
   media_filename: string | null;
   media_size_bytes: number | null;
+  media_storage_path: string | null;
   attachment_url: string | null;
   staff_sender_id: string | null;
   staff_sender_name: string | null;
@@ -62,6 +86,80 @@ type FeedPayload = {
   evaluations: Evaluation[];
   staff: StaffProfile[];
   currentStaff: StaffProfile | null;
+  alerts: WhatsAppAlert[];
+  notes: WhatsAppNote[];
+  staffActions: WhatsAppStaffAction[];
+  clientMatches: ClientMatch[];
+  relatedServiceRequests: RelatedServiceRequest[];
+  inboxReady: boolean;
+};
+
+type WhatsAppAlert = {
+  id: string;
+  conversation_id: string;
+  alert_type: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  body: string | null;
+  assigned_staff_id: string | null;
+  created_at: string;
+};
+
+type WhatsAppNote = {
+  id: string;
+  conversation_id: string;
+  author_id: string;
+  author_name: string;
+  body: string;
+  mentioned_staff_ids: string[];
+  created_at: string;
+};
+
+type WhatsAppStaffAction = {
+  id: string;
+  conversation_id: string;
+  actor_id: string;
+  actor_name: string;
+  action: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+};
+
+type ClientMatch = {
+  conversation_id: string;
+  client_id: string;
+  profile_id: string;
+  client_code: string | null;
+  client_type: string | null;
+  label: string;
+  company_name: string | null;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  province: string | null;
+  confidence: number;
+  reason: string;
+  linked: boolean;
+  updated_at: string | null;
+};
+
+type RelatedServiceRequest = {
+  conversation_id: string;
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  company_name: string | null;
+  client_profile_id: string | null;
+  service_needed: string | null;
+  status: string | null;
+  lifecycle_stage: string | null;
+  priority_level: string | null;
+  confidence: number;
+  reason: string;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 type RuleResult = {
@@ -81,7 +179,64 @@ type Evaluation = {
   status: "passed" | "needs_attention" | "failed";
 };
 
-const QA_FEED_URL = "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1/whatsapp-qa-feed";
+type WhatsAppAction = "assign" | "reply" | "return_to_ai" | "mark_read" | "resolve" | "reopen" | "create_service_request" | "add_note" | "link_client" | "unlink_client";
+type ReplyTemplateKey = "missing_info" | "document_request" | "appointment" | "handoff" | "follow_up";
+type QueueFilter = "all" | "needs_response" | "needs_info" | "ready_leads" | "human" | "new" | "unassigned" | "assigned" | "waiting" | "resolved" | "unread" | "mine" | "passed" | "failed" | "failed_delivery" | "converted";
+type ConversationSort = "priority" | "newest" | "oldest" | "name" | "messages";
+type LeadSort = "newest" | "oldest" | "name" | "debt";
+type ReviewTab = "overview" | "client" | "analysis" | "crm" | "team";
+type SavedQueueViewKey = "my_inbox" | "urgent_sars" | "needs_info" | "marketplace_ready" | "overdue" | "created_leads";
+type ReplyTemplateMeta = {
+  value: ReplyTemplateKey;
+  label: string;
+  detail: string;
+};
+
+const QA_FEED_URL = import.meta.env.VITE_WHATSAPP_QA_FEED_URL || "/api/whatsapp-qa-feed";
+const QA_LEAD_LINK_URL = import.meta.env.VITE_WHATSAPP_LEAD_LINK_URL || "/api/whatsapp-lead-link";
+const MAIN_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://frormnagythfpiuzgfkz.supabase.co";
+const MAIN_SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+const MAIN_LEAD_SYNC_URL = `${MAIN_SUPABASE_URL}/functions/v1/whatsapp-lead-sync`;
+const SERVICE_OPTIONS = new Set<string>(serviceNeededOptions.map((option) => option.value));
+const CLIENT_TYPES = new Set(["individual", "company", "trust", "npo_organisation"]);
+const PRIORITY_VALUES = new Set(["low", "medium", "high", "urgent"]);
+const RISK_VALUES = new Set(["low", "medium", "high"]);
+const REPLY_TEMPLATE_DETAILS: Record<ReplyTemplateKey, Omit<ReplyTemplateMeta, "value">> = {
+  missing_info: { label: "Missing info", detail: "Collect the fields blocking lead quality." },
+  document_request: { label: "Request documents", detail: "Ask for SARS letters, notices, and account statements." },
+  appointment: { label: "Book consultation", detail: "Move a strong lead toward a consult time." },
+  handoff: { label: "Human takeover", detail: "Introduce staff control after AI handoff." },
+  follow_up: { label: "Follow up", detail: "Nudge a quiet client for outstanding details." },
+};
+const REPLY_TEMPLATES: ReplyTemplateMeta[] = (Object.entries(REPLY_TEMPLATE_DETAILS) as [ReplyTemplateKey, Omit<ReplyTemplateMeta, "value">][])
+  .map(([value, meta]) => ({ value, ...meta }));
+const QUEUE_FILTER_LABELS: Record<QueueFilter, string> = {
+  all: "All chats",
+  needs_response: "Needs response",
+  needs_info: "Needs info",
+  ready_leads: "Quality leads",
+  human: "Human chats",
+  new: "New",
+  unassigned: "Unassigned",
+  assigned: "Assigned",
+  waiting: "Waiting for client",
+  resolved: "Resolved",
+  unread: "Unread",
+  mine: "Assigned to me",
+  passed: "Passed QA",
+  failed: "Critical failures",
+  failed_delivery: "Failed sends",
+  converted: "Lead created",
+};
+
+const SAVED_QUEUE_VIEWS: { key: SavedQueueViewKey; label: string; filter: QueueFilter; sort: ConversationSort; search?: string }[] = [
+  { key: "my_inbox", label: "My inbox", filter: "mine", sort: "priority" },
+  { key: "urgent_sars", label: "Urgent SARS", filter: "human", sort: "priority", search: "sars" },
+  { key: "needs_info", label: "Needs info", filter: "needs_info", sort: "newest" },
+  { key: "marketplace_ready", label: "Quality leads", filter: "ready_leads", sort: "newest" },
+  { key: "overdue", label: "Overdue", filter: "needs_response", sort: "priority" },
+  { key: "created_leads", label: "Lead created", filter: "converted", sort: "newest" },
+];
 
 const CITY_PROVINCE: Record<string, string> = {
   pretoria: "Gauteng",
@@ -203,6 +358,240 @@ function fileSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function recordString(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function recordBoolean(record: Record<string, unknown>, key: string) {
+  return typeof record[key] === "boolean" ? record[key] as boolean : null;
+}
+
+function recordNumber(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^0-9.]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function recordArray(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return Array.isArray(value) ? value.filter((item) => typeof item === "string") as string[] : [];
+}
+
+function isWizardService(value: string): value is WizardService {
+  return SERVICE_OPTIONS.has(value);
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizePhone(waId: string) {
+  const digits = waId.replace(/\D/g, "");
+  return digits ? `+${digits}` : "";
+}
+
+function chooseLeadClientType(intake: Record<string, unknown>): WizardEntityType {
+  const explicit = recordString(intake, "client_type");
+  if (CLIENT_TYPES.has(explicit)) return explicit as WizardEntityType;
+  if (recordString(intake, "company_name") || recordString(intake, "company_registration_number")) return "company";
+  const service = recordString(intake, "service_needed");
+  if (service.startsWith("business_") || service.startsWith("support_") || service.startsWith("accounting_")) return "company";
+  if (service.startsWith("trust_")) return "trust";
+  if (service.startsWith("npo_")) return "npo_organisation";
+  return "individual";
+}
+
+function chooseLeadService(intake: Record<string, unknown>, clientType: WizardEntityType): WizardService {
+  const explicit = recordString(intake, "service_needed");
+  if (isWizardService(explicit)) return explicit;
+  const text = [
+    recordString(intake, "description"),
+    recordString(intake, "tax_types"),
+    recordString(intake, "enforcement_stage"),
+    recordString(intake, "desired_outcome"),
+  ].join(" ").toLowerCase();
+  const hasDebt = recordBoolean(intake, "has_debt_flag") === true
+    || recordNumber(intake, "sars_debt_amount") > 0
+    || /\bdebt|arrangement|compromise|owe|owed|outstanding\b/.test(text);
+  if (clientType === "company" && hasDebt) return text.includes("compromise") ? "business_tax_debt_compromise" : "business_sars_debt_arrangements";
+  if (clientType === "individual" && hasDebt) return "individual_sars_debt_assistance";
+  if (clientType === "trust") return "trust_sars_assistance";
+  if (clientType === "npo_organisation") return "npo_sars_compliance";
+  if (clientType === "company") return "business_tax_other";
+  return "individual_other";
+}
+
+function chooseLeadPriority(intake: Record<string, unknown>, debtAmount: number): Enums<"service_request_priority"> {
+  const explicit = recordString(intake, "priority_level").toLowerCase();
+  if (PRIORITY_VALUES.has(explicit)) return explicit as Enums<"service_request_priority">;
+  const urgency = recordString(intake, "urgency").toLowerCase();
+  const enforcement = recordString(intake, "enforcement_stage").toLowerCase();
+  if (urgency.includes("urgent") || debtAmount >= 1_000_000 || /(final demand|bank|attachment|judgment|levy|collection)/i.test(enforcement)) return "urgent";
+  if (debtAmount >= 250_000) return "high";
+  return "medium";
+}
+
+function chooseLeadRisk(intake: Record<string, unknown>, priority: string, debtAmount: number): Enums<"service_request_risk_indicator"> {
+  const explicit = recordString(intake, "risk_indicator").toLowerCase();
+  if (RISK_VALUES.has(explicit)) return explicit as Enums<"service_request_risk_indicator">;
+  if (priority === "urgent" || debtAmount >= 1_000_000) return "high";
+  if (priority === "high" || debtAmount > 0) return "medium";
+  return "low";
+}
+
+function buildLeadDescription(conversation: Conversation, intake: Record<string, unknown>, service: WizardService) {
+  const description = recordString(intake, "description");
+  if (description) return description;
+  const pieces = [
+    conversation.ai_summary,
+    recordString(intake, "document_summary"),
+    recordString(intake, "desired_outcome") ? `Desired outcome: ${recordString(intake, "desired_outcome")}` : "",
+    recordString(intake, "enforcement_stage") ? `Enforcement stage: ${recordString(intake, "enforcement_stage")}` : "",
+  ].filter(Boolean);
+  return pieces.join("\n") || `WhatsApp lead for ${formatServiceRequestLabel(service)}. Staff review is needed because the WhatsApp intake is still incomplete.`;
+}
+
+function buildLeadPayload(conversation: Conversation, messages: Message[] = []) {
+  const intake = asRecord(conversation.intake_payload);
+  const clientType = chooseLeadClientType(intake);
+  const service = chooseLeadService(intake, clientType);
+  const category = getCategoryForService(service);
+  const leadQuality = getConversationLeadQuality(conversation, messages);
+  const leadGate = getWhatsAppLeadGate(leadQuality);
+  const debtAmount = recordNumber(intake, "sars_debt_amount");
+  const priority = chooseLeadPriority(intake, debtAmount);
+  const risk = chooseLeadRisk(intake, priority, debtAmount);
+  const phone = recordString(intake, "phone") || normalizePhone(conversation.wa_id);
+  const capturedEmail = recordString(intake, "email").toLowerCase();
+  const hasRealEmail = isValidEmail(capturedEmail);
+  const email = hasRealEmail ? capturedEmail : `whatsapp-${conversation.wa_id.replace(/\D/g, "") || conversation.id.slice(0, 8)}@acapolite.local`;
+  const fullName = recordString(intake, "full_name")
+    || conversation.display_name?.trim()
+    || `WhatsApp ${phone || conversation.wa_id}`;
+  const returnsFiled = recordBoolean(intake, "returns_filed");
+  const missingFields = Array.isArray(conversation.intake_missing_fields) ? conversation.intake_missing_fields : [];
+  const description = buildLeadDescription(conversation, intake, service);
+  const services = Array.from(new Set([service, ...recordArray(intake, "service_needed_list").filter(isWizardService)]));
+  const categories = Array.from(new Set([category, ...services.map((item) => getCategoryForService(item))]));
+
+  return {
+    full_name: fullName,
+    email,
+    phone,
+    client_type: clientType,
+    company_name: clientType === "company" ? recordString(intake, "company_name") || conversation.display_name?.trim() || null : null,
+    company_registration_number: clientType === "company" ? recordString(intake, "company_registration_number") || null : null,
+    service_category: category,
+    service_categories: categories,
+    service_needed: service,
+    service_needed_list: services,
+    description,
+    province: recordString(intake, "province") || null,
+    city: recordString(intake, "city") || null,
+    priority_level: priority,
+    risk_indicator: risk,
+    sars_debt_amount: debtAmount,
+    has_debt_flag: recordBoolean(intake, "has_debt_flag") === true || debtAmount > 0,
+    returns_filed: returnsFiled ?? true,
+    missing_returns_flag: returnsFiled === false,
+    missing_documents_flag: leadQuality.status !== "ready" || missingFields.includes("documents") || !conversation.intake_ready,
+    has_sars_audit: /\baudit|verification\b/i.test(description),
+    has_adr: /\badr\b/i.test(description),
+    has_vat_investigation: /\bvat\b/i.test(description) && /\binvestigation|audit|verification\b/i.test(description),
+    has_payroll_dispute: /\bpaye|emp201|emp501|payroll\b/i.test(description) && /\bdispute|audit|verification\b/i.test(description),
+    has_multiple_tax_types: /\b(vat|paye|income tax|cit|payroll)\b.*\b(vat|paye|income tax|cit|payroll)\b/i.test(recordString(intake, "tax_types")),
+    has_legal_complexity: /\bjudgment|attorney|court|sheriff|legal|summons\b/i.test(description),
+    status: leadGate.serviceRequestStatus,
+    lifecycle_stage: leadGate.lifecycleStage,
+    contact_preference: "WhatsApp",
+    marketing_consent: false,
+    submitted_with_account: false,
+    client_profile_id: null,
+    intake_payload: {
+      who: { entityType: clientType, province: recordString(intake, "province") || null, city: recordString(intake, "city") || "" },
+      what: { selectedServices: services.map((item) => ({ value: item, label: formatServiceRequestLabel(item), category: getCategoryForService(item) })), otherDetails: {} },
+      details: {
+        answers: {
+          efilingAccess: recordString(intake, "efiling_access") || null,
+          taxTypes: recordString(intake, "tax_types") || null,
+          enforcementStage: recordString(intake, "enforcement_stage") || null,
+          desiredOutcome: recordString(intake, "desired_outcome") || null,
+          authorisedRepresentative: recordBoolean(intake, "authorised_representative"),
+        },
+        additionalNotes: description,
+        questions: [],
+      },
+      contact: {
+        fullName,
+        email: hasRealEmail ? email : "",
+        phone,
+        province: recordString(intake, "province") || null,
+        city: recordString(intake, "city") || "",
+        contactPreference: "WhatsApp",
+        marketingConsent: false,
+      },
+      whatsapp: {
+        source: "whatsapp_qa_inbox",
+        sourceProject: "whatsapp-admin-ai-test",
+        qaConversationId: conversation.id,
+        waId: conversation.wa_id,
+        displayName: conversation.display_name,
+        aiSummary: conversation.ai_summary,
+        submissionState: conversation.submission_state || "collecting",
+        intakeReady: Boolean(conversation.intake_ready),
+        missingFields,
+        leadQuality: {
+          score: leadQuality.score,
+          status: leadQuality.status,
+          label: leadQuality.label,
+          missingFields: leadQuality.missingFields,
+          blockingFields: leadQuality.blockingFields,
+          nextAction: leadQuality.nextAction,
+          evaluatedAt: new Date().toISOString(),
+        },
+        leadGate: {
+          label: leadGate.label,
+          marketplaceVisible: leadGate.marketplaceVisible,
+          serviceRequestStatus: leadGate.serviceRequestStatus,
+          lifecycleStage: leadGate.lifecycleStage,
+          evaluatedAt: new Date().toISOString(),
+        },
+        placeholderEmail: hasRealEmail ? null : email,
+        allCapturedDetails: intake,
+        createdFrom: "staff_whatsapp_qa",
+      },
+    },
+  };
+}
+
+function buildLeadAttachments(messages: Message[]) {
+  return messages
+    .filter((message) => message.direction === "inbound" && message.attachment_url && message.media_storage_path)
+    .slice(0, 10)
+    .map((message) => {
+      const sourcePath = message.media_storage_path || "";
+      const fileName = message.media_filename || sourcePath.split("/").pop() || "whatsapp-document";
+      return {
+        source_path: sourcePath,
+        signed_url: message.attachment_url,
+        file_name: fileName,
+        title: message.media_filename || "WhatsApp document",
+        mime_type: message.media_mime_type || null,
+        file_size: message.media_size_bytes || null,
+        uploaded_at: message.created_at || null,
+      };
+    });
+}
+
 function csvCell(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
   return `"${text.replace(/"/g, '""')}"`;
@@ -214,12 +603,195 @@ function replyWindowOpen(lastInboundAt: string | null) {
   return Number.isFinite(elapsed) && elapsed >= 0 && elapsed < 24 * 60 * 60 * 1000;
 }
 
+function firstNameForConversation(conversation: Conversation) {
+  const intake = asRecord(conversation.intake_payload);
+  const name = recordString(intake, "full_name") || conversation.display_name || "";
+  return name.trim().split(/\s+/)[0] || "";
+}
+
+function getDeliverySummary(messages: Message[]) {
+  const outbound = messages.filter((message) => message.direction === "outbound");
+  const statusCounts = outbound.reduce<Record<string, number>>((counts, message) => {
+    const status = (message.delivery_status || "unknown").toLowerCase();
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  }, {});
+  const failed = Object.entries(statusCounts)
+    .filter(([status]) => /fail|error|undeliver|rejected/.test(status))
+    .reduce((sum, [, count]) => sum + count, 0);
+  const read = statusCounts.read || 0;
+  const delivered = (statusCounts.delivered || 0) + read;
+  const sent = (statusCounts.sent || 0) + delivered;
+  const pending = Math.max(0, outbound.length - sent - failed);
+  return { outbound: outbound.length, sent, delivered, read, failed, pending };
+}
+
+function deliveryLabel(status: string | null) {
+  if (!status) return "Status pending";
+  return status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function deliveryTone(status: string | null) {
+  const value = (status || "").toLowerCase();
+  if (/read|delivered/.test(value)) return "text-emerald-600";
+  if (/fail|error|undeliver|rejected/.test(value)) return "text-red-600";
+  return "text-muted-foreground";
+}
+
+function latestInboundAt(conversation: Conversation, messages: Message[]) {
+  const inboundTimes = messages
+    .filter((message) => message.direction === "inbound")
+    .map((message) => new Date(message.created_at).getTime())
+    .filter(Number.isFinite);
+  const latestMessageTime = inboundTimes.length ? Math.max(...inboundTimes) : null;
+  const conversationTime = conversation.last_inbound_at ? new Date(conversation.last_inbound_at).getTime() : null;
+  const candidates = [latestMessageTime, conversationTime].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return candidates.length ? Math.max(...candidates) : null;
+}
+
+function latestStaffReplyAt(conversation: Conversation, messages: Message[]) {
+  const staffTimes = messages
+    .filter((message) => message.direction === "outbound" && message.sender_type === "staff")
+    .map((message) => new Date(message.created_at).getTime())
+    .filter(Number.isFinite);
+  const latestMessageTime = staffTimes.length ? Math.max(...staffTimes) : null;
+  const conversationTime = conversation.last_staff_reply_at ? new Date(conversation.last_staff_reply_at).getTime() : null;
+  const candidates = [latestMessageTime, conversationTime].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return candidates.length ? Math.max(...candidates) : null;
+}
+
+function getConversationSla(conversation: Conversation, messages: Message[]) {
+  if (conversation.inbox_status === "resolved") {
+    return { status: "closed", label: "Resolved", detail: "No staff response is pending.", minutesLeft: null };
+  }
+  const inboundAt = latestInboundAt(conversation, messages);
+  if (!inboundAt) {
+    return { status: "none", label: "No inbound message", detail: "SLA starts after a client message.", minutesLeft: null };
+  }
+  const staffReplyAt = latestStaffReplyAt(conversation, messages);
+  const waitingForStaff = conversation.unread_count > 0 || !staffReplyAt || staffReplyAt < inboundAt;
+  if (!waitingForStaff) {
+    return { status: "ok", label: "Staff replied", detail: "Latest client message has a staff response.", minutesLeft: null };
+  }
+  const limitMinutes = conversation.priority_level === "urgent" ? 15 : conversation.priority_level === "high" ? 30 : 60;
+  const ageMinutes = Math.floor((Date.now() - inboundAt) / 60_000);
+  const minutesLeft = limitMinutes - ageMinutes;
+  if (minutesLeft <= 0) return { status: "overdue", label: "Response overdue", detail: `${Math.abs(minutesLeft)} min past target.`, minutesLeft };
+  if (minutesLeft <= 10) return { status: "due_soon", label: "Due soon", detail: `${minutesLeft} min left to respond.`, minutesLeft };
+  return { status: "ok", label: "On track", detail: `${minutesLeft} min left to respond.`, minutesLeft };
+}
+
+function slaTone(status: string) {
+  if (status === "overdue") return "border-red-200 bg-red-50 text-red-700";
+  if (status === "due_soon") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (status === "closed") return "border-slate-200 bg-slate-50 text-slate-700";
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function getConversationLeadQuality(conversation: Conversation, messages: Message[] = []) {
+  return getWhatsAppLeadQuality({
+    intakePayload: conversation.intake_payload,
+    displayName: conversation.display_name,
+    waId: conversation.wa_id,
+    aiSummary: conversation.ai_summary,
+    intakeReady: conversation.intake_ready,
+    missingFields: conversation.intake_missing_fields,
+    hasAttachments: messages.some((message) => message.direction === "inbound" && Boolean(message.media_storage_path || message.attachment_url)),
+  });
+}
+
+function buildMissingInfoReplyForEvaluation(evaluation: Evaluation, leadQuality = getConversationLeadQuality(evaluation.conversation, evaluation.messages)) {
+  return buildWhatsAppMissingInfoReply({
+    intakePayload: evaluation.conversation.intake_payload,
+    displayName: evaluation.conversation.display_name,
+    waId: evaluation.conversation.wa_id,
+    aiSummary: evaluation.conversation.ai_summary,
+    intakeReady: evaluation.conversation.intake_ready,
+    missingFields: evaluation.conversation.intake_missing_fields,
+    hasAttachments: evaluation.messages.some((item) => item.direction === "inbound" && Boolean(item.media_storage_path || item.attachment_url)),
+  }, leadQuality);
+}
+
+function buildReplyTemplate(template: ReplyTemplateKey, evaluation: Evaluation, leadQuality = getConversationLeadQuality(evaluation.conversation, evaluation.messages)) {
+  const firstName = firstNameForConversation(evaluation.conversation);
+  const greeting = `Thanks${firstName ? ` ${firstName}` : ""}.`;
+  if (template === "missing_info") return buildMissingInfoReplyForEvaluation(evaluation, leadQuality);
+  if (template === "document_request") {
+    return `${greeting} Please send any SARS letter, bank notice, statement of account, or demand linked to this matter so we can review the details accurately.`;
+  }
+  if (template === "appointment") {
+    return `${greeting} We can arrange a consultation for this matter. Please send two times that work for you, and confirm the best email address for the booking.`;
+  }
+  if (template === "handoff") {
+    return `${greeting} I am taking over from the Acapolite assistant now. I will review your details and come back with the next step.`;
+  }
+  return `${greeting} Just following up on your Acapolite request. Please send the outstanding details when you are ready so we can move this forward.`;
+}
+
+function getRecommendedReplyTemplates(evaluation: Evaluation, leadQuality: ReturnType<typeof getConversationLeadQuality>, sla: ReturnType<typeof getConversationSla> | null) {
+  const text = normalize([
+    evaluation.conversation.ai_summary,
+    evaluation.conversation.intake_payload?.description,
+    evaluation.messages.map((message) => message.content || "").join(" "),
+  ].filter(Boolean).join(" "));
+  const missingFields = new Set(leadQuality.followUpFields);
+  const recommendations: ReplyTemplateKey[] = [];
+
+  if (leadQuality.followUpFields.length) recommendations.push("missing_info");
+  if (
+    missingFields.has("documents")
+    || /\b(letter|notice|statement|bank|attachment|document|demand|audit|verification|assessment)\b/.test(text)
+  ) {
+    recommendations.push("document_request");
+  }
+  if (evaluation.conversation.status === "human_handoff" || evaluation.conversation.ai_enabled) recommendations.push("handoff");
+  if (leadQuality.status === "ready") recommendations.push("appointment");
+  if (sla?.status === "overdue" || sla?.status === "due_soon") recommendations.push("follow_up");
+
+  return [...new Set([...recommendations, "missing_info", "document_request", "appointment"])]
+    .slice(0, 4)
+    .map((value) => ({ value, ...REPLY_TEMPLATE_DETAILS[value] }));
+}
+
+function formatStaffActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    assigned: "Assigned",
+    reassigned: "Reassigned",
+    staff_reply: "Staff reply",
+    returned_to_ai: "Returned to AI",
+    resolved: "Resolved",
+    reopened: "Reopened",
+    service_request_created: "Lead created",
+    service_request_synced: "Lead refreshed",
+    internal_note_added: "Private note",
+    client_linked: "Client linked",
+    client_unlinked: "Client unlinked",
+  };
+  return labels[action] || action.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatNullableDate(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString() : "—";
+}
+
 export default function AdminWhatsAppQA() {
+  const [searchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [actionPending, setActionPending] = useState(false);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [draftRequestedFor, setDraftRequestedFor] = useState<string | null>(null);
+  const [replyTemplate, setReplyTemplate] = useState<ReplyTemplateKey>("missing_info");
+  const [queueFilter, setQueueFilter] = useState<QueueFilter>("all");
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [conversationSort, setConversationSort] = useState<ConversationSort>("newest");
+  const [leadSearch, setLeadSearch] = useState("");
+  const [leadSort, setLeadSort] = useState<LeadSort>("newest");
+  const [reviewTab, setReviewTab] = useState<ReviewTab>("overview");
+  const [internalNote, setInternalNote] = useState("");
   const { session, loading: authLoading } = useAuth();
+  const conversationIdFromQuery = searchParams.get("conversationId");
+  const draftIntent = searchParams.get("draft");
   const query = useQuery({
     queryKey: ["whatsapp-qa-scorecard", session?.user.id],
     queryFn: async () => {
@@ -229,29 +801,242 @@ export default function AdminWhatsAppQA() {
       if (!response.ok) throw new Error(`QA feed failed (${response.status})`);
       const payload = await response.json();
       const allMessages = (payload.messages || []) as Message[];
+      const readTimes = new Map<string, string>((payload.reads || []).map((read: { conversation_id: string; last_read_at: string }) => [read.conversation_id, read.last_read_at]));
       return {
-        evaluations: ((payload.conversations || []) as Conversation[]).map((conversation) =>
-          evaluateConversation(conversation, allMessages.filter((message) => message.conversation_id === conversation.id)),
-        ),
+        evaluations: ((payload.conversations || []) as Conversation[]).map((conversation) => {
+          const conversationMessages = allMessages.filter((message) => message.conversation_id === conversation.id);
+          const lastReadAt = readTimes.get(conversation.id);
+          const unreadCount = conversationMessages.filter((message) => message.direction === "inbound" && (!lastReadAt || new Date(message.created_at) > new Date(lastReadAt))).length;
+          const inboxStatus = conversation.inbox_status || (conversation.status === "human_handoff" ? conversation.assigned_staff_id ? "assigned" : "unassigned" : "resolved");
+          return evaluateConversation({
+            ...conversation,
+            linked_client_id: conversation.linked_client_id || null,
+            linked_client_profile_id: conversation.linked_client_profile_id || null,
+            linked_client_at: conversation.linked_client_at || null,
+            linked_client_by: conversation.linked_client_by || null,
+            inbox_status: inboxStatus,
+            priority_level: conversation.priority_level || "normal",
+            first_staff_reply_at: conversation.first_staff_reply_at || null,
+            resolved_at: conversation.resolved_at || null,
+            resolved_by: conversation.resolved_by || null,
+            unread_count: unreadCount,
+          }, conversationMessages);
+        }),
         staff: (payload.staff || []) as StaffProfile[],
         currentStaff: (payload.current_staff || null) as StaffProfile | null,
+        alerts: (payload.alerts || []) as WhatsAppAlert[],
+        notes: (payload.notes || []) as WhatsAppNote[],
+        staffActions: (payload.staff_actions || []) as WhatsAppStaffAction[],
+        clientMatches: (payload.client_matches || []) as ClientMatch[],
+        relatedServiceRequests: (payload.related_service_requests || []) as RelatedServiceRequest[],
+        inboxReady: payload.features?.inbox_v2 === true,
       } satisfies FeedPayload;
     },
     enabled: !authLoading && Boolean(session?.access_token),
+    refetchInterval: 30_000,
   });
 
   const evaluations = useMemo(() => query.data?.evaluations || [], [query.data?.evaluations]);
   const staff = query.data?.staff || [];
-  const selected = evaluations.find((evaluation) => evaluation.conversation.id === selectedId) || evaluations[0] || null;
+  const alerts = query.data?.alerts || [];
+  const visibleEvaluations = useMemo(() => {
+    const needle = normalize(conversationSearch);
+    const filtered = evaluations.filter((evaluation) => {
+      const { conversation, messages } = evaluation;
+      const leadQuality = getConversationLeadQuality(conversation, messages);
+      const sla = getConversationSla(conversation, messages);
+      const delivery = getDeliverySummary(messages);
+      const matchesQueue = queueFilter === "all"
+        || queueFilter === "human" && conversation.status === "human_handoff"
+        || queueFilter === "needs_info" && leadQuality.status !== "ready"
+        || queueFilter === "ready_leads" && leadQuality.status === "ready"
+        || queueFilter === "needs_response" && ["overdue", "due_soon"].includes(sla.status)
+        || queueFilter === "new" && conversation.inbox_status === "new"
+        || queueFilter === "unassigned" && conversation.inbox_status === "unassigned"
+        || queueFilter === "assigned" && conversation.inbox_status === "assigned"
+        || queueFilter === "waiting" && conversation.inbox_status === "waiting_client"
+        || queueFilter === "resolved" && conversation.inbox_status === "resolved"
+        || queueFilter === "mine" && conversation.assigned_staff_id === query.data?.currentStaff?.id
+        || queueFilter === "unread" && conversation.unread_count > 0
+        || queueFilter === "passed" && evaluation.status === "passed"
+        || queueFilter === "failed" && evaluation.status === "failed"
+        || queueFilter === "failed_delivery" && delivery.failed > 0
+        || queueFilter === "converted" && Boolean(conversation.service_request_id);
+      const intake = conversation.intake_payload || {};
+      const haystack = normalize([conversation.display_name, conversation.wa_id, intake.full_name, intake.company_name, intake.email, intake.service_needed, intake.tax_types, intake.province, intake.city, conversation.ai_summary].filter(Boolean).join(" "));
+      return matchesQueue && (!needle || haystack.includes(needle));
+    });
+    return [...filtered].sort((a, b) => {
+      if (conversationSort === "priority") {
+        const rank = { urgent: 3, high: 2, normal: 1 };
+        return rank[b.conversation.priority_level] - rank[a.conversation.priority_level] || b.conversation.unread_count - a.conversation.unread_count;
+      }
+      if (conversationSort === "oldest") return new Date(a.conversation.updated_at).getTime() - new Date(b.conversation.updated_at).getTime();
+      if (conversationSort === "name") return (a.conversation.display_name || a.conversation.wa_id).localeCompare(b.conversation.display_name || b.conversation.wa_id);
+      if (conversationSort === "messages") return b.messages.length - a.messages.length;
+      return new Date(b.conversation.updated_at).getTime() - new Date(a.conversation.updated_at).getTime();
+    });
+  }, [conversationSearch, conversationSort, evaluations, query.data?.currentStaff?.id, queueFilter]);
+  useEffect(() => {
+    if (!conversationIdFromQuery || selectedId === conversationIdFromQuery) return;
+    if (evaluations.some((evaluation) => evaluation.conversation.id === conversationIdFromQuery)) {
+      setSelectedId(conversationIdFromQuery);
+      setQueueFilter("all");
+      setReviewTab("overview");
+    }
+  }, [conversationIdFromQuery, evaluations, selectedId]);
+  const filteredLeadEvaluations = useMemo(() => {
+    const needle = normalize(leadSearch);
+    const filtered = evaluations.filter(({ conversation }) => {
+      const intake = conversation.intake_payload || {};
+      return !needle || normalize([conversation.display_name, conversation.wa_id, intake.full_name, intake.company_name, intake.email, intake.city, intake.service_needed].filter(Boolean).join(" ")).includes(needle);
+    });
+    return [...filtered].sort((a, b) => {
+      if (leadSort === "oldest") return new Date(a.conversation.updated_at).getTime() - new Date(b.conversation.updated_at).getTime();
+      if (leadSort === "name") return (a.conversation.display_name || a.conversation.wa_id).localeCompare(b.conversation.display_name || b.conversation.wa_id);
+      if (leadSort === "debt") return Number(b.conversation.intake_payload?.sars_debt_amount || 0) - Number(a.conversation.intake_payload?.sars_debt_amount || 0);
+      return new Date(b.conversation.updated_at).getTime() - new Date(a.conversation.updated_at).getTime();
+    });
+  }, [evaluations, leadSearch, leadSort]);
+  const selected = (selectedId ? visibleEvaluations.find((evaluation) => evaluation.conversation.id === selectedId) : null) || visibleEvaluations[0] || null;
+  const selectedLeadQuality = selected ? getConversationLeadQuality(selected.conversation, selected.messages) : null;
+  const selectedLeadGate = selectedLeadQuality ? getWhatsAppLeadGate(selectedLeadQuality) : null;
+  const selectedSla = selected ? getConversationSla(selected.conversation, selected.messages) : null;
+  const selectedDelivery = selected ? getDeliverySummary(selected.messages) : null;
+  const notes = query.data?.notes || [];
+  const staffActions = query.data?.staffActions || [];
+  const clientMatches = query.data?.clientMatches || [];
+  const relatedServiceRequests = query.data?.relatedServiceRequests || [];
+  const selectedNotes = selected ? notes.filter((note) => note.conversation_id === selected.conversation.id) : [];
+  const selectedStaffActions = selected ? staffActions.filter((action) => action.conversation_id === selected.conversation.id) : [];
+  const selectedClientMatches = selected ? clientMatches.filter((match) => match.conversation_id === selected.conversation.id) : [];
+  const selectedRelatedServiceRequests = selected ? relatedServiceRequests.filter((request) => request.conversation_id === selected.conversation.id) : [];
+  const linkedClientMatch = selected
+    ? selectedClientMatches.find((match) => match.client_id === selected.conversation.linked_client_id) || selectedClientMatches.find((match) => match.linked) || null
+    : null;
+  const bestClientMatch = linkedClientMatch || selectedClientMatches[0] || null;
+  const selectedReplyTemplates = useMemo(
+    () => selected && selectedLeadQuality ? getRecommendedReplyTemplates(selected, selectedLeadQuality, selectedSla) : [],
+    [selected, selectedLeadQuality, selectedSla],
+  );
+  useEffect(() => {
+    if (draftIntent !== "missing_info" || !selected || !selectedLeadQuality) return;
+    if (conversationIdFromQuery && selected.conversation.id !== conversationIdFromQuery) return;
+    if (draftRequestedFor === selected.conversation.id) return;
+    if (!selectedLeadQuality.followUpFields.length) return;
+
+    setReply(buildMissingInfoReplyForEvaluation(selected, selectedLeadQuality));
+    setDraftRequestedFor(selected.conversation.id);
+    toast.message("Missing-info reply drafted from the lead dashboard.");
+  }, [conversationIdFromQuery, draftIntent, draftRequestedFor, selected, selectedLeadQuality]);
+  useEffect(() => {
+    setInternalNote("");
+  }, [selected?.conversation.id]);
   const totals = useMemo(() => ({
     conversations: evaluations.length,
     passed: evaluations.filter((evaluation) => evaluation.status === "passed").length,
     failed: evaluations.filter((evaluation) => evaluation.status === "failed").length,
     average: evaluations.length ? Math.round(evaluations.reduce((sum, evaluation) => sum + evaluation.score, 0) / evaluations.length) : 0,
+    human: evaluations.filter((evaluation) => evaluation.conversation.status === "human_handoff").length,
+    unassigned: evaluations.filter((evaluation) => evaluation.conversation.inbox_status === "unassigned").length,
+    unread: evaluations.reduce((sum, evaluation) => sum + evaluation.conversation.unread_count, 0),
+    resolved: evaluations.filter((evaluation) => evaluation.conversation.status === "human_handoff" && evaluation.conversation.inbox_status === "resolved").length,
+    needsInfo: evaluations.filter((evaluation) => getConversationLeadQuality(evaluation.conversation, evaluation.messages).status !== "ready").length,
+    qualityLeads: evaluations.filter((evaluation) => getConversationLeadQuality(evaluation.conversation, evaluation.messages).status === "ready").length,
+    needsResponse: evaluations.filter((evaluation) => ["overdue", "due_soon"].includes(getConversationSla(evaluation.conversation, evaluation.messages).status)).length,
+    failedDeliveries: evaluations.reduce((sum, evaluation) => sum + getDeliverySummary(evaluation.messages).failed, 0),
   }), [evaluations]);
 
-  const runAction = async (action: "assign" | "reply" | "return_to_ai", values: Record<string, unknown> = {}) => {
-    if (!session?.access_token || !selected) return;
+  const reports = useMemo(() => {
+    const handoffs = evaluations.filter(({ conversation }) => conversation.human_handoff_requested_at);
+    const responseMinutes = handoffs.flatMap(({ conversation }) => conversation.first_staff_reply_at && conversation.human_handoff_requested_at
+      ? [(new Date(conversation.first_staff_reply_at).getTime() - new Date(conversation.human_handoff_requested_at).getTime()) / 60000]
+      : []).filter((minutes) => minutes >= 0);
+    const serviceCounts = new Map<string, number>();
+    const staffStats = new Map<string, { replies: number; conversations: Set<string> }>();
+    evaluations.forEach(({ conversation, messages }) => {
+      const service = String(conversation.intake_payload?.service_needed || "Not classified").replace(/_/g, " ");
+      serviceCounts.set(service, (serviceCounts.get(service) || 0) + 1);
+      messages.filter((message) => message.sender_type === "staff").forEach((message) => {
+        const name = message.staff_sender_name || "Unknown staff";
+        const stat = staffStats.get(name) || { replies: 0, conversations: new Set<string>() };
+        stat.replies += 1;
+        stat.conversations.add(conversation.id);
+        staffStats.set(name, stat);
+      });
+    });
+    const byDay = new Map<string, number>();
+    handoffs.forEach(({ conversation }) => {
+      const day = new Date(conversation.human_handoff_requested_at!).toLocaleDateString("en-ZA", { month: "short", day: "numeric" });
+      byDay.set(day, (byDay.get(day) || 0) + 1);
+    });
+    return {
+      averageFirstResponse: responseMinutes.length ? Math.round(responseMinutes.reduce((sum, value) => sum + value, 0) / responseMinutes.length) : null,
+      converted: evaluations.filter(({ conversation }) => conversation.service_request_id).length,
+      conversionRate: evaluations.length ? Math.round(evaluations.filter(({ conversation }) => conversation.service_request_id).length / evaluations.length * 100) : 0,
+      services: [...serviceCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5),
+      byDay: [...byDay.entries()].slice(-7),
+      staff: [...staffStats.entries()].map(([name, stat]) => ({ name, replies: stat.replies, conversations: stat.conversations.size })).sort((a, b) => b.replies - a.replies),
+    };
+  }, [evaluations]);
+
+  const leadFunnel = useMemo(() => {
+    const total = Math.max(1, totals.conversations);
+    return [
+      { label: "Chats captured", count: totals.conversations, filter: "all" as QueueFilter },
+      { label: "Human handoffs", count: totals.human, filter: "human" as QueueFilter },
+      { label: "Quality leads", count: totals.qualityLeads, filter: "ready_leads" as QueueFilter },
+      { label: "Lead records", count: reports.converted, filter: "converted" as QueueFilter },
+      { label: "Needs response", count: totals.needsResponse, filter: "needs_response" as QueueFilter },
+    ].map((item) => ({ ...item, percent: Math.round((item.count / total) * 100) }));
+  }, [reports.converted, totals.conversations, totals.human, totals.needsResponse, totals.qualityLeads]);
+
+  const setConversationQueueFilter = (filter: QueueFilter) => {
+    setQueueFilter(filter);
+    setSelectedId(null);
+    setReviewTab("overview");
+  };
+
+  const toggleQueueFilter = (filter: QueueFilter) => {
+    setConversationQueueFilter(queueFilter === filter ? "all" : filter);
+  };
+
+  const openConversation = (conversationId: string, tab: ReviewTab = "overview") => {
+    if (!visibleEvaluations.some((evaluation) => evaluation.conversation.id === conversationId)) {
+      setQueueFilter("all");
+    }
+    setSelectedId(conversationId);
+    setReviewTab(tab);
+  };
+
+  const filterCardClass = (filter: QueueFilter) => queueFilter === filter
+    ? "border-primary ring-1 ring-primary"
+    : "transition-colors hover:border-primary/50";
+
+  const openLead = (requestId: string) => {
+    window.location.assign(`/dashboard/staff/service-requests?leadId=${encodeURIComponent(requestId)}`);
+  };
+
+  const openClient = (clientId: string) => {
+    window.location.assign(`/dashboard/staff/client-workspace?clientId=${encodeURIComponent(clientId)}`);
+  };
+
+  const applySavedQueueView = (viewKey: SavedQueueViewKey) => {
+    const view = SAVED_QUEUE_VIEWS.find((item) => item.key === viewKey);
+    if (!view) return;
+    setQueueFilter(view.filter);
+    setConversationSort(view.sort);
+    setConversationSearch(view.search || "");
+    setSelectedId(null);
+    setReviewTab("overview");
+  };
+
+  const runAction = async (action: WhatsAppAction, values: Record<string, unknown> = {}) => {
+    if (!session?.access_token || !selected) return null;
+    if (["mark_read", "resolve", "reopen"].includes(action) && !query.data?.inboxReady) {
+      toast.error("This inbox action will be available after the WhatsApp backend upgrade");
+      return null;
+    }
     setActionPending(true);
     try {
       const response = await fetch(QA_FEED_URL, {
@@ -259,24 +1044,185 @@ export default function AdminWhatsAppQA() {
         headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ action, conversation_id: selected.conversation.id, ...values }),
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || `Action failed (${response.status})`);
+      const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+      if (!response.ok) {
+        throw new Error(typeof payload.error === "string" ? payload.error : `Action failed (${response.status})`);
+      }
       if (action === "reply") setReply("");
-      toast.success(action === "reply" ? "Reply sent on WhatsApp" : action === "assign" ? "Chat assigned" : "AI replies restored");
+      const message = action === "reply"
+        ? "Reply sent on WhatsApp"
+        : action === "assign"
+          ? "Chat assigned"
+          : action === "resolve"
+            ? "Chat resolved"
+            : action === "reopen"
+              ? "Chat reopened"
+              : action === "mark_read"
+                ? "Chat marked as read"
+                : action === "create_service_request"
+                  ? payload.created === true ? "Lead sent to dashboard" : "Lead refreshed in dashboard"
+                  : action === "add_note"
+                    ? "Private note saved"
+                    : action === "link_client"
+                      ? "Client linked to this WhatsApp chat"
+                      : action === "unlink_client"
+                        ? "Client link removed"
+                        : "AI replies restored";
+      toast.success(message);
+      if (typeof payload.link_warning === "string" && payload.link_warning) toast.warning(payload.link_warning);
+      if (action === "create_service_request") {
+        const skippedDocuments = typeof payload.skipped_documents === "number" ? payload.skipped_documents : 0;
+        if (skippedDocuments > 0) toast.warning(`${skippedDocuments} WhatsApp attachment${skippedDocuments === 1 ? "" : "s"} could not be copied to the lead`);
+        const warnings = Array.isArray(payload.warnings) ? payload.warnings.filter((warning) => typeof warning === "string") : [];
+        if (typeof warnings[0] === "string") toast.warning(warnings[0]);
+      }
       await query.refetch();
+      return payload;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to update this chat");
+      return null;
     } finally {
       setActionPending(false);
     }
   };
 
+  const saveInternalNote = async () => {
+    const note = internalNote.trim();
+    if (!note) return toast.error("Write a private note first");
+    const mentionedStaffIds = staff
+      .filter((person) => {
+        const name = staffLabel(person);
+        return note.toLowerCase().includes(`@${name.toLowerCase()}`) || Boolean(person.email && note.toLowerCase().includes(`@${person.email.toLowerCase()}`));
+      })
+      .map((person) => person.id);
+    const payload = await runAction("add_note", { note, mentioned_staff_ids: mentionedStaffIds });
+    if (payload) setInternalNote("");
+  };
+
+  const linkClientMatch = async (match: ClientMatch) => {
+    await runAction("link_client", {
+      client_id: match.client_id,
+      client_profile_id: match.profile_id,
+      client_label: match.label,
+    });
+  };
+
+  const sendSelectedToLeads = async () => {
+    if (!session?.access_token || !selected) return;
+    if (!MAIN_SUPABASE_PUBLISHABLE_KEY) {
+      toast.error("The main Acapolite connection is not configured");
+      return;
+    }
+    const leadQuality = getConversationLeadQuality(selected.conversation, selected.messages);
+    const leadGate = getWhatsAppLeadGate(leadQuality);
+    if (leadGate.qualityStatus !== "ready") {
+      const missing = leadQuality.followUpFields.length
+        ? `\n\nMissing: ${leadQuality.followUpFields.map(formatWhatsAppMissingFieldLabel).join(", ")}.`
+        : "";
+      const confirmed = window.confirm(`${leadGate.confirmTitle}\n\n${leadGate.confirmBody}${missing}`);
+      if (!confirmed) return;
+    }
+
+    setActionPending(true);
+    try {
+      const response = await fetch(MAIN_LEAD_SYNC_URL, {
+        method: "POST",
+        headers: {
+          apikey: MAIN_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "upsert_lead",
+          service_request_id: selected.conversation.service_request_id,
+          payload: buildLeadPayload(selected.conversation, selected.messages),
+          attachments: buildLeadAttachments(selected.messages),
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+      const leadId = typeof payload.service_request_id === "string"
+        ? payload.service_request_id
+        : typeof payload.id === "string"
+          ? payload.id
+          : "";
+      if (!response.ok || !leadId) {
+        throw new Error(typeof payload.error === "string" ? payload.error : `Lead sync failed (${response.status})`);
+      }
+
+      const linkResponse = await fetch(QA_LEAD_LINK_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_id: selected.conversation.id,
+          service_request_id: leadId,
+          created: payload.created === true,
+          updated: payload.updated === true,
+          synced_documents: typeof payload.synced_documents === "number" ? payload.synced_documents : 0,
+          skipped_documents: typeof payload.skipped_documents === "number" ? payload.skipped_documents : 0,
+          warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((warning) => typeof warning === "string") : [],
+        }),
+      });
+      const linkPayload = await linkResponse.json().catch(() => ({})) as Record<string, unknown>;
+      if (!linkResponse.ok) {
+        toast.warning(typeof linkPayload.error === "string" ? linkPayload.error : "Lead created, but the WhatsApp chat link could not be saved automatically");
+      }
+
+      toast.success(payload.created === true ? leadGate.savedMessage : "Lead refreshed in dashboard");
+      if (!leadGate.marketplaceVisible) toast.message("This lead is hidden from practitioners until staff approves it.");
+      const skippedDocuments = typeof payload.skipped_documents === "number" ? payload.skipped_documents : 0;
+      if (skippedDocuments > 0) toast.warning(`${skippedDocuments} WhatsApp attachment${skippedDocuments === 1 ? "" : "s"} could not be copied to the lead`);
+      const warnings = Array.isArray(payload.warnings) ? payload.warnings.filter((warning) => typeof warning === "string") : [];
+      if (typeof warnings[0] === "string") toast.warning(warnings[0]);
+      await query.refetch();
+      openLead(leadId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send this chat to the leads dashboard");
+    } finally {
+      setActionPending(false);
+    }
+  };
+
+  const draftMissingInfoReply = () => {
+    if (!selected || !selectedLeadQuality) return;
+    if (selectedLeadQuality.followUpFields.length === 0) {
+      toast.success("This lead already has the main details.");
+      return;
+    }
+    const message = buildMissingInfoReplyForEvaluation(selected, selectedLeadQuality);
+    setReply(message);
+    if (!replyWindowOpen(selected.conversation.last_inbound_at)) {
+      toast.warning("Missing-info reply drafted, but the 24-hour WhatsApp window is closed.");
+      return;
+    }
+    if (selected.conversation.ai_enabled) {
+      toast.message("Missing-info reply drafted. Take over the chat before sending.");
+      return;
+    }
+    toast.message("Missing-info reply drafted.");
+  };
+
+  const applyReplyTemplate = (templateKey: ReplyTemplateKey = replyTemplate) => {
+    if (!selected || !selectedLeadQuality) return;
+    setReplyTemplate(templateKey);
+    setReply(buildReplyTemplate(templateKey, selected, selectedLeadQuality));
+    if (selected.conversation.ai_enabled) {
+      toast.message("Reply drafted. Take over the chat before sending.");
+      return;
+    }
+    if (!replyWindowOpen(selected.conversation.last_inbound_at)) {
+      toast.warning("Reply drafted, but the 24-hour WhatsApp window is closed.");
+      return;
+    }
+    toast.message("Reply template drafted.");
+  };
+
   const exportLeadData = () => {
-    const rows = evaluations.filter((evaluation) => selectedLeadIds.size === 0 || selectedLeadIds.has(evaluation.conversation.id));
+    const rows = filteredLeadEvaluations.filter((evaluation) => selectedLeadIds.size === 0 || selectedLeadIds.has(evaluation.conversation.id));
     if (!rows.length) return toast.error("There is no client data to export");
-    const headers = ["WhatsApp name", "Full name", "Phone", "Email", "Client type", "Company", "City", "Province", "Service", "Tax types", "SARS debt", "Enforcement stage", "Urgency", "eFiling access", "Desired outcome", "Conversation status", "Submission state", "Assigned staff", "Service request ID", "Summary", "Started", "Last activity"];
-    const data = rows.map(({ conversation }) => {
+    const headers = ["WhatsApp name", "Full name", "Phone", "Email", "Client type", "Company", "City", "Province", "Service", "Tax types", "SARS debt", "Enforcement stage", "Urgency", "Lead quality", "Lead quality score", "Missing fields", "eFiling access", "Desired outcome", "Conversation status", "Submission state", "Assigned staff", "Service request ID", "Summary", "Started", "Last activity"];
+    const data = rows.map(({ conversation, messages }) => {
       const intake = conversation.intake_payload || {};
+      const leadQuality = getConversationLeadQuality(conversation, messages);
       return [
         conversation.display_name,
         intake.full_name,
@@ -291,6 +1237,9 @@ export default function AdminWhatsAppQA() {
         intake.sars_debt_amount,
         intake.enforcement_stage,
         intake.urgency,
+        leadQuality.label,
+        leadQuality.score,
+        leadQuality.missingFields.map(formatWhatsAppMissingFieldLabel).join(", "),
         intake.efiling_access,
         intake.desired_outcome,
         conversation.status,
@@ -343,40 +1292,198 @@ export default function AdminWhatsAppQA() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">WhatsApp QA</h1>
-          <p className="text-sm text-muted-foreground">Live safety and conversation-quality checks for the Acapolite assistant.</p>
+          <p className="text-sm text-muted-foreground">Live WhatsApp conversations, lead quality, and staff handoff checks.</p>
         </div>
         <Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}>
           <RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />
-          Refresh scorecard
+          Refresh WhatsApp data
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Average score</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.average}%</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Passed</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.passed}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Critical failures</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-destructive"><XCircle className="h-6 w-6" />{totals.failed}</CardContent></Card>
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
+        <button type="button" className="text-left" onClick={() => setConversationQueueFilter("all")} aria-pressed={queueFilter === "all"}>
+          <Card className={filterCardClass("all")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("human")} aria-pressed={queueFilter === "human"}>
+          <Card className={filterCardClass("human")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Human chats</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-primary"><Headphones className="h-6 w-6" />{totals.human}<span className="ml-auto text-xs font-normal text-muted-foreground">{totals.unassigned} unassigned</span></CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("unread")} aria-pressed={queueFilter === "unread"}>
+          <Card className={filterCardClass("unread")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Unread messages</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold"><Bell className="h-6 w-6 text-amber-600" />{totals.unread}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("needs_info")} aria-pressed={queueFilter === "needs_info"}>
+          <Card className={filterCardClass("needs_info")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Needs info</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-amber-700"><Clock3 className="h-6 w-6" />{totals.needsInfo}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("ready_leads")} aria-pressed={queueFilter === "ready_leads"}>
+          <Card className={filterCardClass("ready_leads")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Quality leads</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.qualityLeads}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("passed")} aria-pressed={queueFilter === "passed"}>
+          <Card className={filterCardClass("passed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Passed QA</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.passed}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("failed")} aria-pressed={queueFilter === "failed"}>
+          <Card className={filterCardClass("failed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Critical failures</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-destructive"><XCircle className="h-6 w-6" />{totals.failed}</CardContent></Card>
+        </button>
       </div>
 
       {query.error ? (
         <Card className="border-destructive/40"><CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertTriangle className="h-5 w-5 shrink-0" /><span>Unable to load WhatsApp QA data. {query.error instanceof Error ? query.error.message : "Please try again."}</span></CardContent></Card>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(250px,0.72fr)_minmax(390px,1.15fr)_minmax(320px,0.85fr)]">
+      {selected && selectedLeadQuality && selectedLeadGate ? (
+        <Card className={`border ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
+          <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Selected WhatsApp request</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className={getWhatsAppLeadQualityBadgeClass(selectedLeadQuality.status)}>
+                  {selectedLeadQuality.label} · {selectedLeadQuality.score}%
+                </Badge>
+                <Badge variant="outline" className="bg-background/80">
+                  {selectedLeadGate.label}
+                </Badge>
+                <span className="truncate text-sm font-semibold">{selected.conversation.display_name || `+${selected.conversation.wa_id}`}</span>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {selected.conversation.service_request_id
+                  ? "This WhatsApp chat is already linked to a Service Request. Open it to review, approve, assign, or adjust marketplace visibility."
+                  : selectedLeadGate.description}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+              {selectedLeadQuality.followUpFields.length ? (
+                <Button type="button" variant="outline" onClick={draftMissingInfoReply} disabled={actionPending}>
+                  <MessageCircle className="mr-2 h-4 w-4" />Ask missing info
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant={selected.conversation.service_request_id ? "outline" : "default"}
+                onClick={() => selected.conversation.service_request_id ? openLead(selected.conversation.service_request_id) : void sendSelectedToLeads()}
+                disabled={actionPending}
+              >
+                {selected.conversation.service_request_id ? <ExternalLink className="mr-2 h-4 w-4" /> : <FileText className="mr-2 h-4 w-4" />}
+                {selected.conversation.service_request_id ? "Open request" : selectedLeadGate.actionLabel}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.4fr]">
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5" />Conversation results</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            {authLoading || query.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Evaluating conversations…</p> : null}
-            {!authLoading && !query.isLoading && evaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No WhatsApp conversations found.</p> : null}
-            {evaluations.map((evaluation) => (
-              <button key={evaluation.conversation.id} type="button" onClick={() => setSelectedId(evaluation.conversation.id)} className={`flex w-full items-center justify-between gap-4 rounded-xl border p-4 text-left transition-colors ${selected?.conversation.id === evaluation.conversation.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}>
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{evaluation.conversation.display_name || evaluation.conversation.wa_id}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{evaluation.messages.length} messages · {new Date(evaluation.conversation.updated_at).toLocaleString()}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">{statusBadge(evaluation.status)}<span className="w-12 text-right text-lg font-semibold">{evaluation.score}%</span></div>
+          <CardHeader className="pb-3"><CardTitle className="flex items-center justify-between gap-3 text-base"><span className="flex items-center gap-2"><Bell className="h-4 w-4" />Operational alerts</span><Badge variant={alerts.some((alert) => alert.severity === "critical") ? "destructive" : "secondary"}>{alerts.length} open</Badge></CardTitle></CardHeader>
+          <CardContent className="max-h-60 space-y-2 overflow-y-auto">
+            {alerts.length === 0 ? <p className="py-6 text-center text-xs text-muted-foreground">No open WhatsApp alerts.</p> : alerts.map((alert) => (
+              <button key={alert.id} type="button" onClick={() => openConversation(alert.conversation_id, "overview")} className={`w-full rounded-lg border p-3 text-left ${alert.severity === "critical" ? "border-red-200 bg-red-50/60" : alert.severity === "warning" ? "border-amber-200 bg-amber-50/60" : "bg-muted/20"}`}>
+                <div className="flex items-start justify-between gap-2"><p className="text-sm font-medium">{alert.title}</p><span className="shrink-0 text-[10px] text-muted-foreground">{new Date(alert.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>
+                {alert.body ? <p className="mt-1 text-xs text-muted-foreground">{alert.body}</p> : null}
               </button>
             ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><BarChart3 className="h-4 w-4" />Human chat reporting</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(145px,1fr))]">
+              <button type="button" className={`rounded-lg border p-3 text-left ${filterCardClass("needs_response")}`} onClick={() => toggleQueueFilter("needs_response")} aria-pressed={queueFilter === "needs_response"}><p className="text-[11px] text-muted-foreground">Needs response</p><p className="mt-1 text-xl font-semibold">{totals.needsResponse}</p></button>
+              <button type="button" className={`rounded-lg border p-3 text-left ${filterCardClass("human")}`} onClick={() => toggleQueueFilter("human")} aria-pressed={queueFilter === "human"}><p className="text-[11px] text-muted-foreground">Avg first response</p><p className="mt-1 text-xl font-semibold">{reports.averageFirstResponse === null ? "—" : `${reports.averageFirstResponse} min`}</p></button>
+              <button type="button" className={`rounded-lg border p-3 text-left ${filterCardClass("unassigned")}`} onClick={() => toggleQueueFilter("unassigned")} aria-pressed={queueFilter === "unassigned"}><p className="text-[11px] text-muted-foreground">Unassigned</p><p className="mt-1 text-xl font-semibold">{totals.unassigned}</p></button>
+              <button type="button" className={`rounded-lg border p-3 text-left ${filterCardClass("human")}`} onClick={() => toggleQueueFilter("human")} aria-pressed={queueFilter === "human"}><p className="text-[11px] text-muted-foreground">Resolved / open</p><p className="mt-1 text-xl font-semibold">{totals.resolved} / {Math.max(0, totals.human - totals.resolved)}</p></button>
+              <button type="button" className={`rounded-lg border p-3 text-left ${filterCardClass("failed_delivery")}`} onClick={() => toggleQueueFilter("failed_delivery")} aria-pressed={queueFilter === "failed_delivery"}><p className="text-[11px] text-muted-foreground">Failed sends</p><p className="mt-1 text-xl font-semibold">{totals.failedDeliveries}</p></button>
+              <button type="button" className={`rounded-lg border p-3 text-left ${filterCardClass("converted")}`} onClick={() => toggleQueueFilter("converted")} aria-pressed={queueFilter === "converted"}><p className="text-[11px] text-muted-foreground">Lead conversion</p><p className="mt-1 text-xl font-semibold">{reports.conversionRate}%</p><p className="text-[10px] text-muted-foreground">{reports.converted} requests</p></button>
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <div className="mb-3 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-primary" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">WhatsApp lead funnel</p>
+              </div>
+              <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(125px,1fr))]">
+                {leadFunnel.map((item) => (
+                  <button key={item.label} type="button" onClick={() => setConversationQueueFilter(item.filter)} className={`min-w-0 rounded-lg border bg-background p-3 text-left transition-colors hover:border-primary/50 ${queueFilter === item.filter ? "border-primary ring-1 ring-primary" : ""}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 text-[11px] text-muted-foreground">{item.label}</span>
+                      <span className="text-[11px] font-semibold">{item.percent}%</span>
+                    </div>
+                    <p className="mt-1 text-xl font-semibold">{item.count}</p>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, item.percent)}%` }} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div><p className="mb-2 text-xs font-semibold">Handoffs by day</p>{reports.byDay.length ? reports.byDay.map(([day, count]) => <div key={day} className="flex justify-between border-b py-1.5 text-xs"><span>{day}</span><span className="font-medium">{count}</span></div>) : <p className="text-xs text-muted-foreground">No handoffs yet.</p>}</div>
+              <div><p className="mb-2 text-xs font-semibold">Common services</p>{reports.services.map(([service, count]) => <div key={service} className="flex justify-between gap-3 border-b py-1.5 text-xs"><span className="truncate capitalize">{service}</span><span className="font-medium">{count}</span></div>)}</div>
+              <div><p className="mb-2 text-xs font-semibold">Admin responses</p>{reports.staff.length ? reports.staff.map((stat) => <div key={stat.name} className="border-b py-1.5 text-xs"><div className="flex justify-between gap-3"><span className="truncate">{stat.name}</span><span className="font-medium">{stat.replies}</span></div><p className="text-[10px] text-muted-foreground">{stat.conversations} chats</p></div>) : <p className="text-xs text-muted-foreground">No staff replies yet.</p>}</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(215px,0.56fr)_minmax(430px,1.22fr)_minmax(320px,0.9fr)]">
+        <Card>
+          <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
+            <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Name or WhatsApp number" className="h-9 pl-8 text-xs" /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={queueFilter} onValueChange={(value) => setConversationQueueFilter(value as QueueFilter)}><SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All chats</SelectItem><SelectItem value="needs_response">Needs response</SelectItem><SelectItem value="needs_info">Needs info</SelectItem><SelectItem value="ready_leads">Quality leads</SelectItem><SelectItem value="human">Human chats</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="unassigned">Unassigned</SelectItem><SelectItem value="assigned">Assigned</SelectItem><SelectItem value="waiting">Waiting for client</SelectItem><SelectItem value="resolved">Resolved</SelectItem><SelectItem value="unread">Unread</SelectItem><SelectItem value="mine">Assigned to me</SelectItem><SelectItem value="passed">Passed QA</SelectItem><SelectItem value="failed">Critical failures</SelectItem><SelectItem value="failed_delivery">Failed sends</SelectItem><SelectItem value="converted">Lead created</SelectItem></SelectContent></Select>
+              <Select value={conversationSort} onValueChange={(value) => setConversationSort(value as ConversationSort)}><SelectTrigger className="h-9 text-xs"><ArrowUpDown className="mr-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">Urgent first</SelectItem><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest waiting</SelectItem><SelectItem value="name">Name</SelectItem><SelectItem value="messages">Most messages</SelectItem></SelectContent></Select>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {SAVED_QUEUE_VIEWS.map((view) => (
+                <Button key={view.key} type="button" size="sm" variant={queueFilter === view.filter && conversationSort === view.sort && conversationSearch === (view.search || "") ? "default" : "outline"} className="h-7 rounded-full px-2 text-[10px]" onClick={() => applySavedQueueView(view.key)}>
+                  {view.label}
+                </Button>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent className="max-h-[820px] space-y-1.5 overflow-y-auto px-3 pb-3">
+            {queueFilter !== "all" ? (
+              <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+                <span>Showing {QUEUE_FILTER_LABELS[queueFilter]}</span>
+                <button type="button" className="font-medium text-primary hover:underline" onClick={() => setConversationQueueFilter("all")}>Clear</button>
+              </div>
+            ) : null}
+            {authLoading || query.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Evaluating conversations…</p> : null}
+            {!authLoading && !query.isLoading && visibleEvaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No matching WhatsApp conversations.</p> : null}
+            {visibleEvaluations.map((evaluation) => {
+              const leadQuality = getConversationLeadQuality(evaluation.conversation, evaluation.messages);
+              const leadGate = getWhatsAppLeadGate(leadQuality);
+              const sla = getConversationSla(evaluation.conversation, evaluation.messages);
+              return (
+                <button key={evaluation.conversation.id} type="button" onClick={() => openConversation(evaluation.conversation.id, "overview")} className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${selected?.conversation.id === evaluation.conversation.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{evaluation.conversation.display_name || `+${evaluation.conversation.wa_id}`}</p>
+                      <p className="truncate text-[11px] font-medium text-primary">+{evaluation.conversation.wa_id}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <div className="flex items-center gap-1">
+                        {evaluation.conversation.unread_count > 0 ? <Badge className="h-5 min-w-5 justify-center rounded-full bg-primary px-1.5 text-[10px]">{evaluation.conversation.unread_count}</Badge> : null}
+                        <Badge variant="outline" className={`h-6 px-2 text-[10px] font-semibold ${getWhatsAppLeadQualityBadgeClass(leadQuality.status)}`}>
+                          {leadQuality.score}% lead
+                        </Badge>
+                      </div>
+                      <span className="text-[9px] font-medium text-muted-foreground">Lead quality</span>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <Badge variant="outline" className={`h-5 px-1.5 text-[9px] ${getWhatsAppLeadQualityBadgeClass(leadQuality.status)}`}>
+                      {leadQuality.label}
+                    </Badge>
+                    <Badge variant="outline" className="h-5 bg-background/80 px-1.5 text-[9px]">
+                      {leadGate.label}
+                    </Badge>
+                    {["overdue", "due_soon"].includes(sla.status) ? (
+                      <Badge variant="outline" className={`h-5 px-1.5 text-[9px] ${slaTone(sla.status)}`}>
+                        {sla.label}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"><span>{evaluation.messages.length} messages · {new Date(evaluation.conversation.updated_at).toLocaleDateString()}</span><div className="flex gap-1">{evaluation.conversation.priority_level !== "normal" ? <Badge variant="destructive" className="h-5 px-1.5 text-[9px]">{evaluation.conversation.priority_level}</Badge> : null}<Badge variant="outline" className="h-5 px-1.5 text-[9px] capitalize">{evaluation.conversation.inbox_status.replace(/_/g, " ")}</Badge></div></div>
+                </button>
+              );
+            })}
           </CardContent>
         </Card>
 
@@ -435,6 +1542,7 @@ export default function AdminWhatsAppQA() {
                             <div className="flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs"><Paperclip className="h-4 w-4" />Attachment link expired. Refresh the conversation.</div>
                           ) : null}
                           {message.content && !/^\[(?:Image|Document) attached\]$/i.test(message.content) ? <div>{message.content}</div> : null}
+                          {!customer ? <p className={`text-[10px] ${deliveryTone(message.delivery_status)}`}>{deliveryLabel(message.delivery_status)}</p> : null}
                         </div>
                       </div>
                     </div>
@@ -444,6 +1552,83 @@ export default function AdminWhatsAppQA() {
             )}
             {selected ? (
               <div className="space-y-3 border-t bg-background p-4">
+                {selectedLeadQuality ? (
+                  <button type="button" onClick={() => setReviewTab("overview")} className={`w-full rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Lead quality</p>
+                        <p className="mt-1 text-sm font-semibold">{selectedLeadQuality.label}</p>
+	                        <p className="mt-1 text-xs text-muted-foreground">{selectedLeadQuality.nextAction}</p>
+                          {selectedLeadGate ? <p className="mt-1 text-xs font-medium">{selectedLeadGate.description}</p> : null}
+	                      </div>
+	                      <div className="flex shrink-0 flex-col items-end gap-1">
+	                        <Badge variant="outline" className={getWhatsAppLeadQualityBadgeClass(selectedLeadQuality.status)}>{selectedLeadQuality.score}%</Badge>
+                          {selectedLeadGate ? <Badge variant="outline" className="bg-background/80 text-[10px]">{selectedLeadGate.label}</Badge> : null}
+                        </div>
+	                    </div>
+                    {selectedLeadQuality.followUpFields.length ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {selectedLeadQuality.followUpFields.slice(0, 5).map((field) => (
+                          <Badge key={field} variant="outline" className="bg-background/80 text-[10px]">
+                            {formatWhatsAppMissingFieldLabel(field)}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                  </button>
+                ) : null}
+
+                {selectedLeadQuality && selectedSla && selectedDelivery ? (
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                    {(() => {
+                      const requiredChecks = selectedLeadQuality.checks.filter((check) => check.required);
+                      const passedRequired = requiredChecks.filter((check) => check.passed).length;
+                      return (
+                        <button type="button" onClick={() => setReviewTab("client")} className="rounded-lg border bg-muted/20 p-3 text-left transition-colors hover:border-primary/50">
+                          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            Structured intake
+                          </div>
+                          <p className="mt-1 text-sm font-semibold">{passedRequired}/{requiredChecks.length} required</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{selectedLeadQuality.followUpFields.length ? selectedLeadQuality.nextAction : "Core intake complete."}</p>
+                        </button>
+                      );
+                    })()}
+                    <button type="button" onClick={() => setReviewTab("analysis")} className={`rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${slaTone(selectedSla.status)}`}>
+                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                        <Timer className="h-3.5 w-3.5" />
+                        SLA
+                      </div>
+                      <p className="mt-1 text-sm font-semibold">{selectedSla.label}</p>
+                      <p className="mt-1 text-xs">{selectedSla.detail}</p>
+                    </button>
+                    <button type="button" onClick={() => setReviewTab("analysis")} className={`rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${selectedDelivery.failed ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Delivery
+                      </div>
+                      <p className="mt-1 text-sm font-semibold">{selectedDelivery.failed ? `${selectedDelivery.failed} failed` : `${selectedDelivery.delivered}/${selectedDelivery.outbound} delivered`}</p>
+                      <p className="mt-1 text-xs">{selectedDelivery.read} read · {selectedDelivery.pending} pending</p>
+                    </button>
+                    <button type="button" onClick={() => setReviewTab("crm")} className={`rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${bestClientMatch ? "border-sky-200 bg-sky-50 text-sky-800" : "bg-muted/20"}`}>
+                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                        <Link2 className="h-3.5 w-3.5" />
+                        CRM link
+                      </div>
+                      <p className="mt-1 text-sm font-semibold">{linkedClientMatch ? "Linked" : bestClientMatch ? "Match found" : "No match"}</p>
+                      <p className="mt-1 text-xs">{bestClientMatch ? bestClientMatch.label : "Send request first."}</p>
+                    </button>
+                    <button type="button" onClick={() => setReviewTab("team")} className="rounded-lg border bg-muted/20 p-3 text-left transition-colors hover:border-primary/50">
+                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <StickyNote className="h-3.5 w-3.5" />
+                        Team notes
+                      </div>
+                      <p className="mt-1 text-sm font-semibold">{selectedNotes.length} note{selectedNotes.length === 1 ? "" : "s"}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{selectedStaffActions.length} actions logged</p>
+                    </button>
+                  </div>
+                ) : null}
+
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <Select
                     value={selected.conversation.assigned_staff_id || "unassigned"}
@@ -467,10 +1652,80 @@ export default function AdminWhatsAppQA() {
                   )}
                 </div>
 
+	                <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={draftMissingInfoReply} disabled={actionPending || !selectedLeadQuality?.followUpFields.length}>
+                      <MessageCircle className="mr-2 h-4 w-4" />Ask missing info
+                    </Button>
+		                  <Button
+                        size="sm"
+                        variant={selected.conversation.service_request_id ? "outline" : "default"}
+                        onClick={() => selected.conversation.service_request_id ? openLead(selected.conversation.service_request_id) : void sendSelectedToLeads()}
+                        disabled={actionPending}
+                      >
+		                    {selected.conversation.service_request_id ? <ExternalLink className="mr-2 h-4 w-4" /> : <FileText className="mr-2 h-4 w-4" />}
+		                    {selected.conversation.service_request_id ? "Open request" : selectedLeadGate?.actionLabel || "Send request"}
+		                  </Button>
+	                  {selected.conversation.unread_count > 0 ? <Button size="sm" variant="outline" onClick={() => runAction("mark_read")} disabled={actionPending || !query.data?.inboxReady} title={query.data?.inboxReady ? undefined : "Requires the WhatsApp backend upgrade"}><CheckCircle2 className="mr-2 h-4 w-4" />Mark read</Button> : null}
+	                  {selected.conversation.inbox_status === "resolved" ? (
+	                    <Button size="sm" variant="outline" onClick={() => runAction("reopen")} disabled={actionPending || !query.data?.inboxReady}><RefreshCw className="mr-2 h-4 w-4" />Reopen chat</Button>
+	                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => window.confirm("Mark this human chat as resolved? AI will remain silent.") && runAction("resolve")} disabled={actionPending || selected.conversation.ai_enabled || !query.data?.inboxReady}><CheckCircle2 className="mr-2 h-4 w-4" />Resolve</Button>
+                  )}
+                </div>
+
+                {!query.data?.inboxReady ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Inbox read and resolution controls are waiting for the WhatsApp backend upgrade.
+                  </div>
+                ) : null}
+
                 <div className={`rounded-lg border px-3 py-2 text-xs ${selected.conversation.ai_enabled ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
                   {selected.conversation.ai_enabled
                     ? "AI is active. Take over or assign the chat before replying."
                     : `Human control is active${selected.conversation.assigned_staff_name ? `, assigned to ${selected.conversation.assigned_staff_name}` : ""}. AI replies are locked.`}
+                </div>
+
+                {selectedReplyTemplates.length ? (
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Recommended replies</p>
+                      <Badge variant="outline" className="bg-background text-[10px]">Templates</Badge>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {selectedReplyTemplates.map((template) => (
+                        <button
+                          key={template.value}
+                          type="button"
+                          onClick={() => applyReplyTemplate(template.value)}
+                          className={`rounded-lg border bg-background p-3 text-left transition-colors hover:border-primary/50 ${replyTemplate === template.value ? "border-primary ring-1 ring-primary" : ""}`}
+                          disabled={actionPending}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold">{template.label}</span>
+                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">{template.detail}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <Select value={replyTemplate} onValueChange={(value) => setReplyTemplate(value as ReplyTemplateKey)}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Choose reply template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REPLY_TEMPLATES.map((template) => (
+                        <SelectItem key={template.value} value={template.value}>{template.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="outline" onClick={applyReplyTemplate} disabled={actionPending}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Use template
+                  </Button>
                 </div>
 
                 <Textarea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a WhatsApp reply…" maxLength={1000} rows={3} disabled={selected.conversation.ai_enabled || actionPending} />
@@ -491,21 +1746,49 @@ export default function AdminWhatsAppQA() {
           {!selected ? (
             <CardContent><p className="py-8 text-center text-sm text-muted-foreground">Select a conversation to inspect its details.</p></CardContent>
           ) : (
-            <Tabs defaultValue="overview">
+            <Tabs value={reviewTab} onValueChange={(value) => setReviewTab(value as ReviewTab)}>
               <CardHeader className="border-b pb-0">
                 <CardTitle className="flex items-center gap-2 pb-4"><ShieldCheck className="h-5 w-5" />Review</CardTitle>
-                <TabsList className="grid h-auto w-full grid-cols-3 rounded-b-none bg-transparent p-0">
-                  <TabsTrigger value="overview" className="rounded-b-none border-b-2 border-transparent px-2 py-3 data-[state=active]:border-primary data-[state=active]:shadow-none">Overview</TabsTrigger>
-                  <TabsTrigger value="client" className="rounded-b-none border-b-2 border-transparent px-2 py-3 data-[state=active]:border-primary data-[state=active]:shadow-none">Client data</TabsTrigger>
-                  <TabsTrigger value="analysis" className="rounded-b-none border-b-2 border-transparent px-2 py-3 data-[state=active]:border-primary data-[state=active]:shadow-none">Analysis</TabsTrigger>
+                <TabsList className="grid h-auto w-full grid-cols-5 rounded-b-none bg-transparent p-0">
+                  <TabsTrigger value="overview" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Overview</TabsTrigger>
+                  <TabsTrigger value="client" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Client</TabsTrigger>
+                  <TabsTrigger value="analysis" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Quality</TabsTrigger>
+                  <TabsTrigger value="crm" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">CRM</TabsTrigger>
+                  <TabsTrigger value="team" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Team</TabsTrigger>
                 </TabsList>
               </CardHeader>
               <CardContent className="max-h-[720px] overflow-y-auto pt-5">
                 <TabsContent value="overview" className="mt-0 space-y-5">
                   <div className="flex items-center justify-between rounded-xl bg-muted/60 p-4"><div><p className="font-medium">{selected.conversation.display_name || selected.conversation.wa_id}</p><p className="text-xs text-muted-foreground">{selected.messages.length} messages</p></div>{statusBadge(selected.status)}</div>
+                  {selectedLeadQuality ? (
+                    <div className={`rounded-xl border p-4 ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lead quality</p>
+                          <p className="mt-1 text-base font-semibold">{selectedLeadQuality.label}</p>
+	                        <p className="mt-1 text-sm text-muted-foreground">{selectedLeadQuality.description}</p>
+                            {selectedLeadGate ? <p className="mt-1 text-sm">{selectedLeadGate.description}</p> : null}
+	                      </div>
+	                      <span className="text-2xl font-semibold">{selectedLeadQuality.score}%</span>
+	                    </div>
+                      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Why this score?</p>
+	                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+	                        {selectedLeadQuality.checks.map((check) => (
+	                          <div key={check.key} className="flex items-center gap-2 rounded-lg border bg-background/70 px-3 py-2 text-xs">
+	                            {check.passed ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />}
+	                            <span className="min-w-0 flex-1 truncate">{check.label}</span>
+                              <span className="shrink-0 text-[10px] text-muted-foreground">{check.passed ? `+${check.weight}` : "missing"}</span>
+	                          </div>
+	                        ))}
+	                      </div>
+                    </div>
+                  ) : null}
                   <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p><p className="rounded-xl border bg-muted/20 p-4 text-sm leading-relaxed">{selected.conversation.ai_summary || intakeValue(selected.conversation.intake_payload?.description)}</p></div>
                   <div>
                     <DetailRow label="Conversation status" value={selected.conversation.status.replace(/_/g, " ")} />
+                    <DetailRow label="Inbox status" value={selected.conversation.inbox_status.replace(/_/g, " ")} />
+                    <DetailRow label="Priority" value={selected.conversation.priority_level} />
+                    <DetailRow label="Unread for me" value={selected.conversation.unread_count} />
                     <DetailRow label="AI responding" value={selected.conversation.ai_enabled ? "Yes" : "No"} />
                     <DetailRow label="Submission state" value={selected.conversation.submission_state.replace(/_/g, " ")} />
                     <DetailRow label="Intake complete" value={selected.conversation.intake_ready ? "Yes" : "No"} />
@@ -513,11 +1796,20 @@ export default function AdminWhatsAppQA() {
                     <DetailRow label="Human handoff" value={selected.conversation.human_handoff_requested_at ? new Date(selected.conversation.human_handoff_requested_at).toLocaleString() : "Not requested"} />
                     <DetailRow label="Assigned staff" value={selected.conversation.assigned_staff_name || "Unassigned"} />
                     <DetailRow label="Assigned at" value={selected.conversation.assigned_at ? new Date(selected.conversation.assigned_at).toLocaleString() : "—"} />
-                    <DetailRow label="Last staff reply" value={selected.conversation.last_staff_reply_at ? new Date(selected.conversation.last_staff_reply_at).toLocaleString() : "—"} />
-                    <DetailRow label="Service request" value={selected.conversation.service_request_id || "Not created"} />
-                    <DetailRow label="Started" value={new Date(selected.conversation.created_at).toLocaleString()} />
-                    <DetailRow label="Last activity" value={new Date(selected.conversation.updated_at).toLocaleString()} />
-                  </div>
+	                    <DetailRow label="Last staff reply" value={selected.conversation.last_staff_reply_at ? new Date(selected.conversation.last_staff_reply_at).toLocaleString() : "—"} />
+	                    <DetailRow label="First staff reply" value={selected.conversation.first_staff_reply_at ? new Date(selected.conversation.first_staff_reply_at).toLocaleString() : "—"} />
+	                    <DetailRow label="Resolved" value={selected.conversation.resolved_at ? new Date(selected.conversation.resolved_at).toLocaleString() : "No"} />
+	                    <DetailRow
+	                      label="Service request"
+	                      value={selected.conversation.service_request_id ? (
+		                        <button type="button" onClick={() => selected.conversation.service_request_id && openLead(selected.conversation.service_request_id)} className="inline-flex items-center justify-end gap-1 text-primary hover:underline">
+		                          Open lead <ExternalLink className="h-3.5 w-3.5" />
+		                        </button>
+	                      ) : "Not created"}
+	                    />
+	                    <DetailRow label="Started" value={new Date(selected.conversation.created_at).toLocaleString()} />
+	                    <DetailRow label="Last activity" value={new Date(selected.conversation.updated_at).toLocaleString()} />
+	                  </div>
                 </TabsContent>
                 <TabsContent value="client" className="mt-0 space-y-6">
                   <div>
@@ -542,17 +1834,21 @@ export default function AdminWhatsAppQA() {
                   <div className="space-y-3 border-t pt-5">
                     <div className="flex items-center gap-2"><Users className="h-4 w-4" /><p className="text-sm font-semibold">Lead data</p></div>
                     <p className="text-xs text-muted-foreground">Select clients to export for Excel or permanently remove their WhatsApp records.</p>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
+                      <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={leadSearch} onChange={(event) => setLeadSearch(event.target.value)} placeholder="Search client data" className="h-9 pl-8 text-xs" /></div>
+                      <Select value={leadSort} onValueChange={(value) => setLeadSort(value as LeadSort)}><SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest</SelectItem><SelectItem value="name">Name</SelectItem><SelectItem value="debt">Highest debt</SelectItem></SelectContent></Select>
+                    </div>
                     <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3">
                       <Checkbox
-                        checked={evaluations.length > 0 && selectedLeadIds.size === evaluations.length}
-                        onCheckedChange={(checked) => setSelectedLeadIds(checked ? new Set(evaluations.map((evaluation) => evaluation.conversation.id)) : new Set())}
+                        checked={filteredLeadEvaluations.length > 0 && filteredLeadEvaluations.every((evaluation) => selectedLeadIds.has(evaluation.conversation.id))}
+                        onCheckedChange={(checked) => setSelectedLeadIds(checked ? new Set(filteredLeadEvaluations.map((evaluation) => evaluation.conversation.id)) : new Set())}
                         aria-label="Select all clients"
                       />
                       <span className="text-sm">Select all clients</span>
                       <span className="ml-auto text-xs text-muted-foreground">{selectedLeadIds.size} selected</span>
                     </div>
                     <div className="max-h-64 space-y-2 overflow-y-auto">
-                      {evaluations.map((evaluation) => {
+                      {filteredLeadEvaluations.map((evaluation) => {
                         const conversation = evaluation.conversation;
                         return (
                           <div key={conversation.id} className={`flex items-center gap-3 rounded-lg border p-3 ${selectedLeadIds.has(conversation.id) ? "border-primary bg-primary/5" : ""}`}>
@@ -565,7 +1861,7 @@ export default function AdminWhatsAppQA() {
                               })}
                               aria-label={`Select ${conversation.display_name || conversation.wa_id}`}
                             />
-                            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedId(conversation.id)}>
+                            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openConversation(conversation.id, "client")}>
                               <p className="truncate text-sm font-medium">{conversation.display_name || intakeValue(conversation.intake_payload?.full_name)}</p>
                               <p className="truncate text-xs text-muted-foreground">+{conversation.wa_id} · {conversation.status.replace(/_/g, " ")}</p>
                             </button>
@@ -574,14 +1870,123 @@ export default function AdminWhatsAppQA() {
                       })}
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <Button variant="outline" onClick={exportLeadData} disabled={!evaluations.length}>
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />{selectedLeadIds.size ? "Export selected" : "Export all"}
+                      <Button variant="outline" onClick={exportLeadData} disabled={!filteredLeadEvaluations.length}>
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />{selectedLeadIds.size ? "Export selected" : leadSearch ? "Export filtered" : "Export all"}
                       </Button>
                       <Button variant="destructive" onClick={deleteSelectedLeads} disabled={selectedLeadIds.size === 0 || actionPending}>
                         <Trash2 className="mr-2 h-4 w-4" />Delete selected
                       </Button>
                     </div>
                     <p className="text-[11px] text-muted-foreground">Exports use an Excel-compatible CSV file. Deleting removes the WhatsApp chat and private attachments, while any linked service request remains preserved.</p>
+                  </div>
+                </TabsContent>
+                <TabsContent value="crm" className="mt-0 space-y-5">
+                  <div className="rounded-xl border bg-muted/20 p-4">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contact profile</p>
+                        <p className="mt-1 text-base font-semibold">{selected.conversation.intake_payload?.full_name ? String(selected.conversation.intake_payload.full_name) : selected.conversation.display_name || `+${selected.conversation.wa_id}`}</p>
+                      </div>
+                      <Badge variant="outline" className={bestClientMatch ? "border-sky-200 bg-sky-50 text-sky-800" : "bg-background"}>
+                        {linkedClientMatch ? "Linked" : bestClientMatch ? "Match found" : "No CRM link"}
+                      </Badge>
+                    </div>
+                    <DetailRow label="WhatsApp" value={`+${selected.conversation.wa_id}`} />
+                    <DetailRow label="Email" value={intakeValue(selected.conversation.intake_payload?.email)} />
+                    <DetailRow label="Company" value={intakeValue(selected.conversation.intake_payload?.company_name)} />
+                    <DetailRow label="Location" value={[selected.conversation.intake_payload?.city, selected.conversation.intake_payload?.province].filter(Boolean).join(", ") || "—"} />
+                    <DetailRow label="Linked client" value={linkedClientMatch?.label || selected.conversation.linked_client_id || "Not linked"} />
+                    <DetailRow label="Linked at" value={formatNullableDate(selected.conversation.linked_client_at)} />
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {linkedClientMatch ? (
+                        <Button type="button" size="sm" variant="default" onClick={() => openClient(linkedClientMatch.client_id)}>
+                          <UserCheck className="mr-2 h-4 w-4" />Open Client 360
+                        </Button>
+                      ) : bestClientMatch ? (
+                        <Button type="button" size="sm" variant="default" onClick={() => linkClientMatch(bestClientMatch)} disabled={actionPending}>
+                          <Link2 className="mr-2 h-4 w-4" />Link best match
+                        </Button>
+                      ) : null}
+                      {selected.conversation.service_request_id ? (
+                        <Button type="button" size="sm" variant="outline" onClick={() => selected.conversation.service_request_id && openLead(selected.conversation.service_request_id)}>
+                          <FileText className="mr-2 h-4 w-4" />Open request
+                        </Button>
+                      ) : (
+                        <Button type="button" size="sm" variant="outline" onClick={() => void sendSelectedToLeads()} disabled={actionPending}>
+                          <FileText className="mr-2 h-4 w-4" />Send request
+                        </Button>
+                      )}
+                      {selected.conversation.linked_client_id ? (
+                        <Button type="button" size="sm" variant="outline" onClick={() => runAction("unlink_client")} disabled={actionPending}>
+                          Remove link
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Client 360 matches</p>
+                      <Badge variant="outline">{selectedClientMatches.length}</Badge>
+                    </div>
+                    {selectedClientMatches.length ? (
+                      <div className="space-y-2">
+                        {selectedClientMatches.map((match) => (
+                          <div key={`${match.client_id}-${match.profile_id}`} className={`rounded-xl border p-3 ${match.linked || match.client_id === selected.conversation.linked_client_id ? "border-sky-200 bg-sky-50" : "bg-background"}`}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold">{match.label}</p>
+                                <p className="truncate text-xs text-muted-foreground">{[match.email, match.phone].filter(Boolean).join(" · ") || "No contact details"}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">{match.reason}</p>
+                              </div>
+                              <Badge variant="outline" className="shrink-0">{match.confidence}%</Badge>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button type="button" size="sm" variant="outline" onClick={() => openClient(match.client_id)}>
+                                <ExternalLink className="mr-2 h-4 w-4" />Open
+                              </Button>
+                              {match.client_id === selected.conversation.linked_client_id || match.linked ? (
+                                <Badge variant="outline" className="h-9 rounded-md border-sky-200 bg-sky-50 px-3 text-sky-800">Current link</Badge>
+                              ) : (
+                                <Button type="button" size="sm" variant="default" onClick={() => linkClientMatch(match)} disabled={actionPending}>
+                                  <Link2 className="mr-2 h-4 w-4" />Link
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">No exact CRM match yet. Send the chat to leads, then create or merge the client from the Service Request workflow.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Related Service Requests</p>
+                      <Badge variant="outline">{selectedRelatedServiceRequests.length}</Badge>
+                    </div>
+                    {selectedRelatedServiceRequests.length ? (
+                      <div className="space-y-2">
+                        {selectedRelatedServiceRequests.map((request) => (
+                          <button key={request.id} type="button" onClick={() => openLead(request.id)} className="w-full rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/50">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold">{request.full_name || request.company_name || "Service request"}</p>
+                                <p className="truncate text-xs text-muted-foreground">{request.service_needed ? request.service_needed.replace(/_/g, " ") : "Service not classified"}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">{request.reason}</p>
+                              </div>
+                              <div className="flex shrink-0 flex-col items-end gap-1">
+                                <Badge variant="outline">{request.confidence}%</Badge>
+                                <Badge variant="outline" className="capitalize">{(request.status || "new").replace(/_/g, " ")}</Badge>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">No related lead records found yet.</p>
+                    )}
                   </div>
                 </TabsContent>
                 <TabsContent value="analysis" className="mt-0 space-y-3">
@@ -594,6 +1999,80 @@ export default function AdminWhatsAppQA() {
                       </div>
                     </div>
                   ))}
+                </TabsContent>
+                <TabsContent value="team" className="mt-0 space-y-5">
+                  <div className="rounded-xl border bg-muted/20 p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <StickyNote className="h-4 w-4 text-primary" />
+                      <p className="text-sm font-semibold">Private team note</p>
+                    </div>
+                    <Textarea
+                      value={internalNote}
+                      onChange={(event) => setInternalNote(event.target.value)}
+                      placeholder="Add an internal note. This is not sent to WhatsApp."
+                      maxLength={2000}
+                      rows={3}
+                      disabled={actionPending}
+                    />
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="text-xs text-muted-foreground">{internalNote.length}/2000</p>
+                      <Button type="button" size="sm" onClick={saveInternalNote} disabled={actionPending || !internalNote.trim()}>
+                        <StickyNote className="mr-2 h-4 w-4" />Save note
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
+                      <Badge variant="outline">{selectedNotes.length}</Badge>
+                    </div>
+                    {selectedNotes.length ? (
+                      <div className="space-y-2">
+                        {selectedNotes.map((note) => (
+                          <div key={note.id} className="rounded-xl border bg-background p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-sm font-semibold">{note.author_name}</p>
+                              <span className="shrink-0 text-[11px] text-muted-foreground">{formatNullableDate(note.created_at)}</span>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{note.body}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">No private notes yet.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Action history</p>
+                      <Badge variant="outline">{selectedStaffActions.length}</Badge>
+                    </div>
+                    {selectedStaffActions.length ? (
+                      <div className="space-y-2">
+                        {selectedStaffActions.map((action) => (
+                          <div key={action.id} className="rounded-xl border bg-background p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold">{formatStaffActionLabel(action.action)}</p>
+                                <p className="text-xs text-muted-foreground">{action.actor_name}</p>
+                              </div>
+                              <span className="shrink-0 text-[11px] text-muted-foreground">{formatNullableDate(action.created_at)}</span>
+                            </div>
+                            {action.details && typeof action.details.preview === "string" ? (
+                              <p className="mt-2 rounded-lg bg-muted/40 p-2 text-xs text-muted-foreground">{action.details.preview}</p>
+                            ) : null}
+                            {action.details && typeof action.details.staff_name === "string" ? (
+                              <p className="mt-2 text-xs text-muted-foreground">Staff: {action.details.staff_name}</p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">No staff actions logged yet.</p>
+                    )}
+                  </div>
                 </TabsContent>
               </CardContent>
             </Tabs>

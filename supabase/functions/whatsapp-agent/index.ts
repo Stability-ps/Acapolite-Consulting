@@ -5,8 +5,32 @@ const TEXT_HEADERS = { "Content-Type": "text/plain" };
 const MEDIA_BUCKET = "service-request-attachments";
 const MAX_MEDIA_BYTES = 12 * 1024 * 1024;
 const encoder = new TextEncoder();
+const DEFAULT_ADMIN_ID = Deno.env.get("DEFAULT_WHATSAPP_ADMIN_ID")?.trim() || "5b8c712b-aa4c-47de-8551-0a8e85492165";
+const DEFAULT_ADMIN_NAME = Deno.env.get("DEFAULT_WHATSAPP_ADMIN_NAME")?.trim() || "Super Admin";
+const DEFAULT_MAIN_SUPABASE_URL = "https://frormnagythfpiuzgfkz.supabase.co";
 
 type Intake = Record<string, unknown>;
+type SupabaseClient = ReturnType<typeof createClient>;
+type JsonRecord = Record<string, unknown>;
+type ConversationHistoryMessage = {
+  direction: string;
+  content: string | null;
+};
+type ServiceRequestNotificationPayload = Intake & {
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  company_name?: string | null;
+  service_needed?: string | null;
+  province?: string | null;
+  priority_level?: string | null;
+  description?: string | null;
+};
+type RequestPayloadOptions = {
+  includeAdminReviewGate?: boolean;
+  conversationId?: string | null;
+  waId?: string | null;
+};
 type Incoming = {
   waId: string;
   messageId: string;
@@ -52,11 +76,35 @@ type AIResult = {
   extracted: Extracted;
 };
 
+function asRecord(value: unknown): JsonRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 const env = (name: string) => {
   const value = Deno.env.get(name)?.trim();
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 };
+
+const optionalEnv = (name: string) => Deno.env.get(name)?.trim() || "";
+
+function adminHandoffPatch(timestamp: string) {
+  return {
+    status: "human_handoff",
+    inbox_status: "assigned",
+    ai_enabled: false,
+    human_handoff_requested_at: timestamp,
+    assigned_staff_id: DEFAULT_ADMIN_ID,
+    assigned_staff_name: DEFAULT_ADMIN_NAME,
+    assigned_at: timestamp,
+    assigned_by: DEFAULT_ADMIN_ID,
+    updated_at: timestamp,
+  };
+}
 
 function timingSafeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
@@ -77,26 +125,35 @@ async function validSignature(req: Request, body: string) {
   return timingSafeEqual(provided, `sha256=${await hmacSha256(env("WHATSAPP_APP_SECRET"), body)}`);
 }
 
-function incomingEvents(payload: any): Incoming[] {
+function incomingEvents(payload: unknown): Incoming[] {
   const out: Incoming[] = [];
-  for (const entry of payload?.entry || []) {
-    for (const change of entry?.changes || []) {
-      const value = change?.value || {};
+  for (const entryValue of asArray(asRecord(payload).entry)) {
+    const entry = asRecord(entryValue);
+    for (const changeValue of asArray(entry.changes)) {
+      const change = asRecord(changeValue);
+      const value = asRecord(change.value);
       const names = new Map<string, string>();
-      for (const contact of value?.contacts || []) {
-        if (contact?.wa_id && contact?.profile?.name) names.set(String(contact.wa_id), String(contact.profile.name));
+      for (const contactValue of asArray(value.contacts)) {
+        const contact = asRecord(contactValue);
+        const profile = asRecord(contact.profile);
+        if (contact.wa_id && profile.name) names.set(String(contact.wa_id), String(profile.name));
       }
-      for (const m of value?.messages || []) {
-        const waId = String(m?.from || "").trim();
-        const messageId = String(m?.id || "").trim();
+      for (const messageValue of asArray(value.messages)) {
+        const m = asRecord(messageValue);
+        const text = asRecord(m.text);
+        const image = asRecord(m.image);
+        const document = asRecord(m.document);
+        const waId = String(m.from || "").trim();
+        const messageId = String(m.id || "").trim();
         if (!waId || !messageId) continue;
-        const base = { waId, messageId, displayName: names.get(waId) || null, referral: m.referral || null };
-        if (m.type === "text" && m.text?.body) {
-          out.push({ ...base, kind: "text", text: String(m.text.body).trim(), mediaId: null, mime: null, filename: null, sha256: null });
+        const referral = m.referral && typeof m.referral === "object" ? asRecord(m.referral) : null;
+        const base = { waId, messageId, displayName: names.get(waId) || null, referral };
+        if (m.type === "text" && text.body) {
+          out.push({ ...base, kind: "text", text: String(text.body).trim(), mediaId: null, mime: null, filename: null, sha256: null });
         } else if (m.type === "image") {
-          out.push({ ...base, kind: "image", text: String(m.image?.caption || "").trim(), mediaId: m.image?.id || null, mime: m.image?.mime_type || null, filename: null, sha256: m.image?.sha256 || null });
+          out.push({ ...base, kind: "image", text: String(image.caption || "").trim(), mediaId: image.id ? String(image.id) : null, mime: image.mime_type ? String(image.mime_type) : null, filename: null, sha256: image.sha256 ? String(image.sha256) : null });
         } else if (m.type === "document") {
-          out.push({ ...base, kind: "document", text: String(m.document?.caption || "").trim(), mediaId: m.document?.id || null, mime: m.document?.mime_type || null, filename: m.document?.filename || null, sha256: m.document?.sha256 || null });
+          out.push({ ...base, kind: "document", text: String(document.caption || "").trim(), mediaId: document.id ? String(document.id) : null, mime: document.mime_type ? String(document.mime_type) : null, filename: document.filename ? String(document.filename) : null, sha256: document.sha256 ? String(document.sha256) : null });
         } else {
           out.push({ ...base, kind: "unsupported", text: "", mediaId: null, mime: null, filename: null, sha256: null });
         }
@@ -306,12 +363,52 @@ function inferCategory(intake: Intake) {
   return intake.client_type === "company" ? "business_tax" : "individual_tax";
 }
 
-function requestPayload(intake: Intake) {
+function sameSupabaseProject(leftUrl: string, rightUrl: string) {
+  try {
+    return new URL(leftUrl).host === new URL(rightUrl).host;
+  } catch {
+    return leftUrl === rightUrl;
+  }
+}
+
+function requestPayload(intake: Intake, options: RequestPayloadOptions = {}): ServiceRequestNotificationPayload {
   const company = intake.client_type === "company";
   const service = String(intake.service_needed || (company ? "business_tax_other" : "individual_other"));
   const category = inferCategory(intake);
   const returnsFiled = typeof intake.returns_filed === "boolean" ? intake.returns_filed : true;
-  return {
+  const missingFields = coreMissing(intake);
+  const isReady = missingFields.length === 0;
+  const evaluatedAt = new Date().toISOString();
+  const whatsappDetails: JsonRecord = {
+    source: "whatsapp_admin_ai",
+    qaConversationId: options.conversationId || null,
+    waId: options.waId || intake.phone || null,
+    authorisedRepresentative: intake.authorised_representative ?? null,
+    documentSummary: intake.document_summary ?? null,
+    displayName: intake.whatsapp_display_name ?? null,
+    intakeReady: isReady,
+    missingFields,
+    leadQuality: {
+      score: isReady ? 100 : Math.max(0, 100 - missingFields.length * 12),
+      status: isReady ? "ready" : "needs_info",
+      label: isReady ? "Quality lead" : "Needs info",
+      missingFields,
+      blockingFields: missingFields,
+      nextAction: isReady ? "Admin should review and approve marketplace visibility." : "Staff should collect missing WhatsApp details before marketplace release.",
+      evaluatedAt,
+    },
+    leadGate: {
+      label: isReady ? "Ready for admin review" : "Hold for missing info",
+      marketplaceVisible: false,
+      serviceRequestStatus: "pending_client_confirmation",
+      lifecycleStage: "pending_client_confirmation",
+      evaluatedAt,
+    },
+    allCapturedDetails: intake,
+    createdFrom: options.includeAdminReviewGate ? "whatsapp_client_confirmation" : "whatsapp_agent_update",
+  };
+
+  const payload: ServiceRequestNotificationPayload = {
     full_name: String(intake.full_name || "").trim(),
     email: String(intake.email || "").trim().toLowerCase(),
     phone: String(intake.phone || "").trim(),
@@ -347,9 +444,27 @@ function requestPayload(intake: Intake) {
       what: { selectedServices: [{ value: service, label: service.replace(/_/g, " "), category }], otherDetails: {} },
       details: { answers: { efilingAccess: intake.efiling_access || null, taxTypes: intake.tax_types || null, enforcementStage: intake.enforcement_stage || null, desiredOutcome: intake.desired_outcome || null }, additionalNotes: String(intake.description || ""), questions: [] },
       contact: { fullName: intake.full_name, email: intake.email, phone: intake.phone, province: intake.province, city: intake.city || "", contactPreference: "WhatsApp", marketingConsent: false },
-      whatsapp: { source: "whatsapp_admin_ai", authorisedRepresentative: intake.authorised_representative ?? null, documentSummary: intake.document_summary ?? null, displayName: intake.whatsapp_display_name ?? null, allCapturedDetails: intake }
+      whatsapp: whatsappDetails
     }
   };
+
+  if (options.includeAdminReviewGate) {
+    Object.assign(payload, {
+      status: "pending_client_confirmation",
+      lifecycle_stage: "pending_client_confirmation",
+      lifecycle_stage_started_at: evaluatedAt,
+      lifecycle_stage_expires_at: null,
+      lifecycle_last_client_activity_at: evaluatedAt,
+      client_confirmation_requested_at: null,
+      client_confirmation_due_at: null,
+      client_confirmation_answered_at: evaluatedAt,
+      client_confirmation_origin_stage: "open_marketplace",
+      expired_at: null,
+      is_archived: false,
+    });
+  }
+
+  return payload;
 }
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -383,14 +498,14 @@ async function sendText(to: string, body: string) {
   return String(data?.messages?.[0]?.id || "") || null;
 }
 
-async function storeOutbound(sb: any, conversationId: string, waId: string, text: string, sender = "ai") {
+async function storeOutbound(sb: SupabaseClient, conversationId: string, waId: string, text: string, sender = "ai") {
   const body = cleanReply(text);
   if (!body) return;
   const metaId = await sendText(waId, body);
   await sb.from("whatsapp_messages").insert({ conversation_id: conversationId, meta_message_id: metaId, direction: "outbound", sender_type: sender, message_type: "text", content: body, delivery_status: "submitted" });
 }
 
-async function localize(message: string, latest: string, history: any[]) {
+async function localize(message: string, latest: string, history: ConversationHistoryMessage[]) {
   const recent = history.slice(-8).map((m) => `${m.direction}: ${m.content || ""}`).join("\n");
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -409,7 +524,7 @@ async function localize(message: string, latest: string, history: any[]) {
   return unsafeLocalizedRewrite(message, localized) ? cleanReply(message) : localized;
 }
 
-async function askAI(history: any[], latest: string, current: Intake, state: string, attachment?: { kind: "image" | "document"; bytes: Uint8Array; mime: string; filename?: string | null }) {
+async function askAI(history: ConversationHistoryMessage[], latest: string, current: Intake, state: string, attachment?: { kind: "image" | "document"; bytes: Uint8Array; mime: string; filename?: string | null }) {
   const recent = history.slice(-16).map((m) => `${m.direction === "inbound" ? "Customer" : "Acapolite"}: ${m.content || ""}`).join("\n");
   const priority = nextPriority(current);
   const instructions = [
@@ -441,7 +556,7 @@ async function askAI(history: any[], latest: string, current: Intake, state: str
     "description is a concise cumulative summary of the customer's tax or compliance matter only. Never include greetings, assistant statements, assistant errors or discussion about the assistant."
   ].join(" ");
 
-  const content: any[] = [{ type: "input_text", text: `Current details: ${JSON.stringify(current)}\nSuggested next priority: ${priority || "none"}\nRecent chat:\n${recent}\nLatest customer message: ${latest || "Please review the attached document."}` }];
+  const content: JsonRecord[] = [{ type: "input_text", text: `Current details: ${JSON.stringify(current)}\nSuggested next priority: ${priority || "none"}\nRecent chat:\n${recent}\nLatest customer message: ${latest || "Please review the attached document."}` }];
   if (attachment) {
     const b64 = bytesToBase64(attachment.bytes);
     if (attachment.kind === "image") content.push({ type: "input_image", image_url: `data:${attachment.mime};base64,${b64}`, detail: "high" });
@@ -487,7 +602,7 @@ async function askAI(history: any[], latest: string, current: Intake, state: str
   return JSON.parse(output) as AIResult;
 }
 
-async function storePrivateMedia(sb: any, conversationId: string, event: Incoming, bytes: Uint8Array, mime: string) {
+async function storePrivateMedia(sb: SupabaseClient, conversationId: string, event: Incoming, bytes: Uint8Array, mime: string) {
   const ext = mime === "application/pdf" ? "pdf" : mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
   const safe = (event.filename || `whatsapp.${ext}`).replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `whatsapp/${conversationId}/${Date.now()}-${event.messageId}-${safe}`;
@@ -496,7 +611,7 @@ async function storePrivateMedia(sb: any, conversationId: string, event: Incomin
   return path;
 }
 
-async function linkDocuments(sb: any, conversationId: string, requestId: string) {
+async function linkDocuments(sb: SupabaseClient, conversationId: string, requestId: string) {
   const { data: rows, error } = await sb.from("whatsapp_messages").select("media_storage_path,media_filename,media_mime_type,media_size_bytes,created_at").eq("conversation_id", conversationId).eq("direction", "inbound").not("media_storage_path", "is", null);
   if (error) throw error;
   for (const row of rows || []) {
@@ -508,13 +623,117 @@ async function linkDocuments(sb: any, conversationId: string, requestId: string)
   }
 }
 
-async function notifyRequest(sb: any, requestId: string, p: any) {
-  const common = { requestId, clientName: p.full_name, clientEmail: p.email, serviceType: String(p.service_needed || "Tax assistance").replace(/_/g, " "), province: p.province || "South Africa", status: "Open", priority: p.priority_level || "medium", submittedAt: new Date().toLocaleDateString("en-ZA"), summary: p.description };
-  await Promise.allSettled([
+function safePathSegment(value: string, fallback: string) {
+  const safe = value.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+  return (safe || fallback).slice(-180);
+}
+
+function copiedDocumentPath(requestId: string, sourcePath: string, fileName: string | null, index: number) {
+  const sourceBase = sourcePath.split("/").pop() || fileName || `whatsapp-${index + 1}`;
+  return `service-requests/${requestId}/whatsapp/${Date.now()}-${index + 1}-${safePathSegment(sourceBase, `whatsapp-${index + 1}`)}`;
+}
+
+async function copyDocumentsToRequest(sourceSb: SupabaseClient, targetSb: SupabaseClient, conversationId: string, requestId: string) {
+  const { data: rows, error } = await sourceSb.from("whatsapp_messages").select("media_storage_path,media_filename,media_mime_type,media_size_bytes,created_at").eq("conversation_id", conversationId).eq("direction", "inbound").not("media_storage_path", "is", null);
+  if (error) throw error;
+
+  for (const [index, row] of (rows || []).entries()) {
+    const sourcePath = String(row.media_storage_path || "");
+    if (!sourcePath) continue;
+
+    const fileName = row.media_filename || sourcePath.split("/").pop() || "WhatsApp document";
+    const targetPath = copiedDocumentPath(requestId, sourcePath, row.media_filename || null, index);
+    const { data: file, error: downloadError } = await sourceSb.storage.from(MEDIA_BUCKET).download(sourcePath);
+    if (downloadError || !file) {
+      console.error("WhatsApp document download failed", downloadError);
+      continue;
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const { error: uploadError } = await targetSb.storage.from(MEDIA_BUCKET).upload(targetPath, bytes, {
+      contentType: row.media_mime_type || "application/octet-stream",
+      upsert: false,
+    });
+    if (uploadError) {
+      console.error("WhatsApp document copy failed", uploadError);
+      continue;
+    }
+
+    const { error: insertError } = await targetSb.from("service_request_documents").insert({
+      service_request_id: requestId,
+      title: row.media_filename || "WhatsApp document",
+      file_name: fileName,
+      file_path: targetPath,
+      file_size: row.media_size_bytes || bytes.byteLength || null,
+      mime_type: row.media_mime_type || null,
+      uploaded_at: row.created_at || new Date().toISOString(),
+    });
+    if (insertError) console.error("WhatsApp document link failed", insertError);
+  }
+}
+
+async function attachDocumentsToRequest(sourceSb: SupabaseClient, targetSb: SupabaseClient, sameProject: boolean, conversationId: string, requestId: string) {
+  if (sameProject) {
+    await linkDocuments(sourceSb, conversationId, requestId);
+    return;
+  }
+
+  await copyDocumentsToRequest(sourceSb, targetSb, conversationId, requestId);
+}
+
+async function notifyRequest(sb: SupabaseClient, requestId: string, p: ServiceRequestNotificationPayload, options: { notifyPractitioners?: boolean } = {}) {
+  const common = { requestId, clientName: p.full_name, clientEmail: p.email, serviceType: String(p.service_needed || "Tax assistance").replace(/_/g, " "), province: p.province || "South Africa", status: "Admin review", priority: p.priority_level || "medium", submittedAt: new Date().toLocaleDateString("en-ZA"), summary: p.description };
+  const notifications = [
     sb.functions.invoke("send-portal-email", { body: { type: "service_request_received", ...common, clientPhone: p.phone } }),
     sb.functions.invoke("send-portal-email", { body: { type: "service_request_received_admin", ...common } }),
-    sb.functions.invoke("send-portal-email", { body: { type: "service_request_received_practitioner", ...common } })
-  ]);
+  ];
+  if (options.notifyPractitioners) {
+    notifications.push(sb.functions.invoke("send-portal-email", { body: { type: "service_request_received_practitioner", ...common } }));
+  }
+  await Promise.allSettled(notifications);
+}
+
+function requestDisplayName(p: ServiceRequestNotificationPayload) {
+  return String(p.company_name || p.full_name || p.phone || "WhatsApp client").trim();
+}
+
+async function recordAdminReviewTrail(whatsappSb: SupabaseClient, leadSb: SupabaseClient, conversationId: string, requestId: string, p: ServiceRequestNotificationPayload) {
+  const clientLabel = requestDisplayName(p);
+  const action = await whatsappSb.from("whatsapp_staff_actions").insert({
+    conversation_id: conversationId,
+    actor_id: DEFAULT_ADMIN_ID,
+    actor_name: DEFAULT_ADMIN_NAME,
+    action: "service_request_created",
+    details: {
+      conversation_name: clientLabel,
+      wa_id: p.phone || null,
+      service_request_id: requestId,
+      lead_url: `/dashboard/staff/service-requests?leadId=${requestId}`,
+      missing_fields: [],
+      created_from: "whatsapp_client_confirmation",
+      admin_review_required: true,
+      marketplace_visible: false,
+    },
+  });
+  if (action.error) console.error("WhatsApp request creation audit failed", action.error);
+
+  const notification = await leadSb.rpc("create_notification", {
+    p_recipient_profile_id: DEFAULT_ADMIN_ID,
+    p_actor_profile_id: null,
+    p_category: "whatsapp_service_request_created",
+    p_section: "requests",
+    p_title: "WhatsApp request ready for review",
+    p_body: `${clientLabel} confirmed their WhatsApp request. Review it before practitioners can see it.`,
+    p_link: `/dashboard/staff/service-requests?leadId=${requestId}`,
+    p_entity_type: "service_request",
+    p_entity_id: requestId,
+    p_metadata: {
+      conversation_id: conversationId,
+      source: "whatsapp_client_confirmation",
+      marketplace_visible: false,
+    },
+  });
+  if (notification.error) console.error("WhatsApp admin review notification failed", notification.error);
 }
 
 Deno.serve(async (req: Request) => {
@@ -533,7 +752,19 @@ Deno.serve(async (req: Request) => {
     const events = incomingEvents(JSON.parse(rawBody));
     if (!events.length) return new Response(JSON.stringify({ ok: true, ignored: true }), { status: 200, headers: JSON_HEADERS });
 
-    const sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } });
+    const whatsappUrl = env("SUPABASE_URL");
+    const whatsappServiceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+    const leadUrl = optionalEnv("MAIN_SUPABASE_URL") || DEFAULT_MAIN_SUPABASE_URL;
+    const configuredLeadServiceKey = optionalEnv("MAIN_SUPABASE_SERVICE_ROLE_KEY");
+    const leadServiceKey = configuredLeadServiceKey || whatsappServiceKey;
+    const leadsShareProject = sameSupabaseProject(whatsappUrl, leadUrl);
+    if (!leadsShareProject && !configuredLeadServiceKey) {
+      throw new Error("Missing MAIN_SUPABASE_SERVICE_ROLE_KEY for cross-project WhatsApp lead creation");
+    }
+    const sb = createClient(whatsappUrl, whatsappServiceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const leadSb = leadsShareProject && leadServiceKey === whatsappServiceKey
+      ? sb
+      : createClient(leadUrl, leadServiceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
     for (const event of events) {
       try {
@@ -587,7 +818,8 @@ Deno.serve(async (req: Request) => {
         }
 
         if (event.kind === "text" && requestsHumanHandoff(event.text)) {
-          await sb.from("whatsapp_conversations").update({ status: "human_handoff", ai_enabled: false, human_handoff_requested_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+          const handoffAt = new Date().toISOString();
+          await sb.from("whatsapp_conversations").update(adminHandoffPatch(handoffAt)).eq("id", conversation.id);
           await storeOutbound(sb, conversation.id, event.waId, "Of course. I’ll hand this chat over to the Acapolite team so someone can assist you.", "system");
           continue;
         }
@@ -598,7 +830,8 @@ Deno.serve(async (req: Request) => {
         const ai = await askAI(history, event.text, current, conversation.submission_state || "collecting", attachment);
 
         if (ai.human_handoff_requested) {
-          await sb.from("whatsapp_conversations").update({ status: "human_handoff", ai_enabled: false, human_handoff_requested_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", conversation.id);
+          const handoffAt = new Date().toISOString();
+          await sb.from("whatsapp_conversations").update(adminHandoffPatch(handoffAt)).eq("id", conversation.id);
           await storeOutbound(sb, conversation.id, event.waId, await localize("Of course. I’ll hand this chat over to the Acapolite team so someone can assist you.", event.text, history), "system");
           continue;
         }
@@ -617,10 +850,10 @@ Deno.serve(async (req: Request) => {
         }
 
         if (conversation.service_request_id) {
-          const p = requestPayload(next);
-          const { error: requestUpdateError } = await sb.from("service_requests").update({ ...p, updated_at: new Date().toISOString() }).eq("id", conversation.service_request_id);
+          const p = requestPayload(next, { conversationId: conversation.id, waId: event.waId });
+          const { error: requestUpdateError } = await leadSb.from("service_requests").update({ ...p, updated_at: new Date().toISOString() }).eq("id", conversation.service_request_id);
           if (requestUpdateError) throw requestUpdateError;
-          if (storagePath) await linkDocuments(sb, conversation.id, conversation.service_request_id);
+          if (storagePath) await attachDocumentsToRequest(sb, leadSb, leadsShareProject, conversation.id, conversation.service_request_id);
           let answer = cleanReply(ai.reply);
           if (containsInventedPersonalIdentity(answer)) answer = "I’m Acapolite’s AI-assisted WhatsApp assistant. A practitioner will decide the correct next step after reviewing the matter.";
           if (containsFalseActionClaim(answer)) answer = "A practitioner will decide the correct next step after reviewing the matter.";
@@ -632,13 +865,20 @@ Deno.serve(async (req: Request) => {
 
         if (ready && conversation.submission_state === "awaiting_confirmation") {
           if (ai.submission_decision === "yes") {
-            const p = requestPayload(next);
-            const { data: created, error } = await sb.from("service_requests").insert(p).select("id").single();
+            const p = requestPayload(next, { includeAdminReviewGate: true, conversationId: conversation.id, waId: event.waId });
+            const { data: created, error } = await leadSb.from("service_requests").insert(p).select("id").single();
             if (error || !created?.id) throw new Error(`Service request creation failed: ${error?.message || "unknown"}`);
-            await linkDocuments(sb, conversation.id, created.id);
-            await sb.from("whatsapp_conversations").update({ service_request_id: created.id, submission_state: "submitted", intake_ready: true, updated_at: new Date().toISOString() }).eq("id", conversation.id);
-            await notifyRequest(sb, created.id, p);
-            await storeOutbound(sb, conversation.id, event.waId, await localize("Your Acapolite request has been created and sent to the team for review. Any documents you sent here are attached to the request. Nothing has been submitted to SARS yet.", event.text, history), "system");
+            await attachDocumentsToRequest(sb, leadSb, leadsShareProject, conversation.id, created.id);
+            const submittedAt = new Date().toISOString();
+            await sb.from("whatsapp_conversations").update({
+              ...adminHandoffPatch(submittedAt),
+              service_request_id: created.id,
+              submission_state: "submitted",
+              intake_ready: true,
+            }).eq("id", conversation.id);
+            await recordAdminReviewTrail(sb, leadSb, conversation.id, created.id, p);
+            await notifyRequest(leadSb, created.id, p, { notifyPractitioners: false });
+            await storeOutbound(sb, conversation.id, event.waId, await localize("Your Acapolite request has been created and sent to the admin team for review. Any documents you sent here are attached to the request. Nothing has been submitted to SARS yet.", event.text, history), "system");
             continue;
           }
           if (ai.submission_decision === "no") {

@@ -37,6 +37,10 @@ import {
   getLifecycleStageRequiredTier,
   getTierRank,
 } from "@/lib/serviceRequestLifecycle";
+import {
+  getWhatsAppLeadGate,
+  getWhatsAppLeadQualityFromIntakePayload,
+} from "@/lib/whatsappLeadQuality";
 
 type ServiceRequest = Tables<"service_requests">;
 type ServiceRequestDocument = Tables<"service_request_documents">;
@@ -226,12 +230,16 @@ export default function PractitionerLeads() {
         .from("service_requests")
         .select("*")
         .eq("is_archived", false)
-        .not("status", "in", "(closed,converted_to_client,expired,pending_client_confirmation)")
+        .not("status", "in", "(closed,converted_to_client,expired,pending_client_confirmation,dead_lead)")
+        .not("lifecycle_stage", "in", "(pending_client_confirmation,expired)")
         .is("assigned_practitioner_id", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data ?? []) as ServiceRequest[];
+      return ((data ?? []) as ServiceRequest[]).filter((request) => {
+        const whatsappLeadQuality = getWhatsAppLeadQualityFromIntakePayload(request.intake_payload);
+        return !whatsappLeadQuality || getWhatsAppLeadGate(whatsappLeadQuality).marketplaceVisible;
+      });
     },
     enabled: !!user && !isRefreshingLifecycle,
   });
