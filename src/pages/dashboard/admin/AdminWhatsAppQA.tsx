@@ -1792,7 +1792,7 @@ export default function AdminWhatsAppQA() {
             })}
           </div>
 
-      {platformTab === "reports" ? (
+      {platformTab === "inbox" ? (
       <div className="hidden grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid xl:grid-cols-7">
         <button type="button" className="text-left" onClick={() => setConversationQueueFilter("all")} aria-pressed={queueFilter === "all"}>
           <Card className={filterCardClass("all")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
