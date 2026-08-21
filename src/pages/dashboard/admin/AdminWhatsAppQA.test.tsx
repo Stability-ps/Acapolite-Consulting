@@ -191,42 +191,57 @@ describe("AdminWhatsAppQA", () => {
     expect(leadCard).not.toBeNull();
   });
 
-  it("defaults the Inbox right panel to Actions & AI, switches to Review, and preserves the selected conversation", async () => {
+  it("navigates to the Actions & AI and Review sections and preserves the selected conversation", async () => {
     renderPage();
     const [conversationCard] = await screen.findAllByText("Naledi Dlamini");
     fireEvent.click(conversationCard);
 
-    // the mobile <details> accordion duplicates these controls off-screen; scope to the
-    // persistent desktop panel (not nested inside a <details>) to avoid ambiguous matches.
-    const notInDetails = (el: HTMLElement) => !el.closest("details");
-    const findDesktopTab = async (name: RegExp) => {
-      const matches = await screen.findAllByRole("tab", { name });
-      const match = matches.find((el) => notInDetails(el));
-      expect(match).toBeDefined();
-      return match as HTMLElement;
-    };
-
-    const actionsTab = await findDesktopTab(/Actions & AI/);
-    const reviewTab = await findDesktopTab(/^Review$/);
-    expect(actionsTab).toHaveAttribute("data-state", "active");
-    expect(reviewTab).toHaveAttribute("data-state", "inactive");
+    // Actions & AI and Review are now top-level WhatsApp QA navigation destinations,
+    // not tabs inside the Inbox right panel - there is no Inbox right panel any more.
+    fireEvent.click(screen.getByRole("button", { name: "Actions & AI" }));
+    expect(await screen.findAllByText("Actions & AI")).not.toHaveLength(0);
     expect(screen.getAllByText(/AI replies are locked/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Naledi Dlamini/).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Review/ }));
+    expect(await screen.findAllByText(/Naledi Dlamini/)).not.toHaveLength(0);
 
     // Radix Tabs activates on mousedown (not click) - see @radix-ui/react-tabs TabsTrigger.
-    fireEvent.mouseDown(reviewTab, { button: 0 });
-    await waitFor(() => expect(reviewTab).toHaveAttribute("data-state", "active"));
-    expect(actionsTab).toHaveAttribute("data-state", "inactive");
-
-    const clientSubTab = await findDesktopTab(/^Client$/);
+    const clientSubTab = await screen.findByRole("tab", { name: /^Client$/ });
     fireEvent.mouseDown(clientSubTab, { button: 0 });
     await waitFor(() => expect(screen.getAllByText("WhatsApp name").length).toBeGreaterThan(0));
 
-    // switching the right-panel tabs must not lose the selected conversation
+    // switching sections must not lose the selected conversation
     expect(screen.getAllByText("Naledi Dlamini").length).toBeGreaterThan(0);
 
-    fireEvent.mouseDown(actionsTab, { button: 0 });
-    await waitFor(() => expect(actionsTab).toHaveAttribute("data-state", "active"));
-    expect(screen.getAllByText(/AI replies are locked/i).length).toBeGreaterThan(0);
+    // Inbox no longer shows any Actions & AI / Review controls in its own panel.
+    fireEvent.click(screen.getByRole("button", { name: /^Inbox/ }));
+    await waitFor(() => expect(screen.queryByText(/AI replies are locked/i)).not.toBeInTheDocument());
     expect(screen.getAllByText("Naledi Dlamini").length).toBeGreaterThan(0);
+  });
+
+  it("shows an empty state for Actions & AI and Review when there is no conversation to select", async () => {
+    const emptyQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/api/whatsapp-qa-feed")) {
+        return new Response(JSON.stringify({ ...feedPayload, conversations: [], messages: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    }));
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard/staff/whatsapp-qa"]}>
+        <QueryClientProvider client={emptyQueryClient}>
+          <AdminWhatsAppQA />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Actions & AI" }));
+    expect(await screen.findByText(/Select a WhatsApp conversation from Inbox or AI Control to manage its actions here\./i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Review/ }));
+    expect(await screen.findByText(/Select a WhatsApp conversation from Inbox or AI Control to review it here\./i)).toBeInTheDocument();
   });
 });

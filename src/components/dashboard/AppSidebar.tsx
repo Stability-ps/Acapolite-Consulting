@@ -20,6 +20,7 @@ import {
   Sparkles,
   ExternalLink,
   ShieldCheck,
+  UserRoundCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -41,7 +42,7 @@ import { getWhatsAppLeadQuality } from "@/lib/whatsappLeadQuality";
 
 const QA_FEED_URL = import.meta.env.VITE_WHATSAPP_QA_FEED_URL || "/api/whatsapp-qa-feed";
 
-type WhatsAppSidebarSection = "inbox" | "leads" | "ai" | "reports" | "settings";
+type WhatsAppSidebarSection = "inbox" | "leads" | "ai" | "actions" | "review" | "reports" | "settings";
 
 type WhatsAppSidebarConversation = {
   id: string;
@@ -72,6 +73,8 @@ const whatsappSidebarSections: Array<{
   { key: "inbox", title: "Inbox", detail: "Live chats", icon: MessageSquare, url: "/dashboard/staff/whatsapp-qa?section=inbox" },
   { key: "leads", title: "Leads", detail: "Intake quality", icon: ClipboardList, url: "/dashboard/staff/whatsapp-qa?section=leads" },
   { key: "ai", title: "AI Control", detail: "Handoff and replies", icon: Bot, url: "/dashboard/staff/whatsapp-qa?section=ai" },
+  { key: "actions", title: "Actions & AI", detail: "Conversation controls", icon: UserRoundCheck, url: "/dashboard/staff/whatsapp-qa?section=actions" },
+  { key: "review", title: "Review", detail: "QA and CRM detail", icon: ShieldCheck, url: "/dashboard/staff/whatsapp-qa?section=review" },
   { key: "reports", title: "Reports", detail: "Performance", icon: BarChart3, url: "/dashboard/staff/whatsapp-qa?section=reports" },
   { key: "settings", title: "Settings", detail: "Templates and rules", icon: Settings, url: "/dashboard/staff/whatsapp-qa?section=settings" },
 ];

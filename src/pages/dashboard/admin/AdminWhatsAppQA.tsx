@@ -185,9 +185,8 @@ type QueueFilter = "all" | "needs_response" | "needs_info" | "ready_leads" | "hu
 type ConversationSort = "priority" | "newest" | "oldest" | "name" | "messages";
 type LeadSort = "newest" | "oldest" | "name" | "debt";
 type ReviewTab = "overview" | "client" | "analysis" | "crm" | "team";
-type RightPanelTab = "actions" | "review";
-type WhatsAppPlatformTab = "inbox" | "leads" | "ai" | "reports" | "settings";
-const WHATSAPP_PLATFORM_TAB_KEYS: WhatsAppPlatformTab[] = ["inbox", "leads", "ai", "reports", "settings"];
+type WhatsAppPlatformTab = "inbox" | "leads" | "ai" | "actions" | "review" | "reports" | "settings";
+const WHATSAPP_PLATFORM_TAB_KEYS: WhatsAppPlatformTab[] = ["inbox", "leads", "ai", "actions", "review", "reports", "settings"];
 type SavedQueueViewKey = "my_inbox" | "urgent_sars" | "needs_info" | "marketplace_ready" | "overdue" | "created_leads";
 type ReplyTemplateMeta = {
   value: ReplyTemplateKey;
@@ -836,7 +835,6 @@ export default function AdminWhatsAppQA() {
   const [leadSearch, setLeadSearch] = useState("");
   const [leadSort, setLeadSort] = useState<LeadSort>("newest");
   const [reviewTab, setReviewTab] = useState<ReviewTab>("overview");
-  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("actions");
   const [platformTab, setPlatformTab] = useState<WhatsAppPlatformTab>("inbox");
   const [internalNote, setInternalNote] = useState("");
   const [mobileWorkspaceView, setMobileWorkspaceView] = useState<"conversations" | "chat">("conversations");
@@ -935,7 +933,6 @@ export default function AdminWhatsAppQA() {
       setSelectedId(conversationIdFromQuery);
       setQueueFilter("all");
       setReviewTab("overview");
-      setRightPanelTab("actions");
       setPlatformTab("inbox");
       setMobileWorkspaceView("chat");
     }
@@ -1122,7 +1119,6 @@ export default function AdminWhatsAppQA() {
     setQueueFilter(filter);
     setSelectedId(null);
     setReviewTab("overview");
-    setRightPanelTab("actions");
     setPlatformTab("inbox");
     setMobileWorkspaceView("conversations");
   };
@@ -1137,17 +1133,17 @@ export default function AdminWhatsAppQA() {
     }
     setSelectedId(conversationId);
     setReviewTab(tab);
-    setRightPanelTab(tab === "overview" ? "actions" : "review");
+    if (tab !== "overview") selectPlatformTab("review");
   };
 
   const goToReviewTab = (tab: ReviewTab) => {
     setReviewTab(tab);
-    setRightPanelTab("review");
+    selectPlatformTab("review");
   };
 
   const openConversation = (conversationId: string, tab: ReviewTab = "overview") => {
     inspectConversation(conversationId, tab);
-    setPlatformTab("inbox");
+    if (tab === "overview") setPlatformTab("inbox");
     setMobileWorkspaceView("chat");
   };
 
@@ -1209,7 +1205,6 @@ export default function AdminWhatsAppQA() {
     setConversationSearch(view.search || "");
     setSelectedId(null);
     setReviewTab("overview");
-    setRightPanelTab("actions");
     setPlatformTab("inbox");
     setMobileWorkspaceView("conversations");
   };
@@ -2042,6 +2037,8 @@ export default function AdminWhatsAppQA() {
     { key: "inbox", label: "Inbox", detail: "Live chats", icon: MessageCircle, count: totals.conversations },
     { key: "leads", label: "Leads", detail: "Intake quality", icon: ClipboardList, count: totals.qualityLeads },
     { key: "ai", label: "AI Control", detail: "Handoff and replies", icon: Bot, count: totals.human },
+    { key: "actions", label: "Actions & AI", detail: "Conversation controls", icon: UserRoundCheck },
+    { key: "review", label: "Review", detail: "QA and CRM detail", icon: ShieldCheck, count: totals.failed },
     { key: "reports", label: "Reports", detail: "Performance", icon: BarChart3, count: reports.converted },
     { key: "settings", label: "Settings", detail: "Templates and rules", icon: Settings },
   ];
@@ -2122,7 +2119,7 @@ export default function AdminWhatsAppQA() {
       ) : null}
 
       {platformTab === "inbox" ? (
-      <div className="min-h-0 space-y-4 md:grid md:flex-1 md:grid-cols-[minmax(220px,32%)_minmax(0,1fr)] md:items-stretch md:gap-4 md:space-y-0 lg:grid-cols-[minmax(210px,22%)_minmax(0,1fr)_minmax(220px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
+      <div className="min-h-0 space-y-4 md:grid md:flex-1 md:grid-cols-[minmax(230px,28%)_minmax(0,1fr)] md:items-stretch md:gap-4 md:space-y-0">
         <div className={`${mobileWorkspaceView === "chat" ? "hidden md:flex" : "flex"} min-w-0 flex-col md:min-h-0`}>
         <Card className="flex min-h-[520px] flex-1 flex-col md:min-h-0">
           <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
@@ -2261,20 +2258,6 @@ export default function AdminWhatsAppQA() {
             )}
 	            {selected ? (
 	              <div className="shrink-0 space-y-3 border-t bg-background p-4">
-	                <details className="rounded-lg border bg-muted/20 p-3 lg:hidden">
-	                  <summary className="cursor-pointer text-sm font-semibold">Actions & AI / Review</summary>
-	                  <div className="mt-3">
-	                    <Tabs value={rightPanelTab} onValueChange={(value) => setRightPanelTab(value as RightPanelTab)}>
-	                      <TabsList className="grid w-full grid-cols-2">
-	                        <TabsTrigger value="actions" className="gap-2"><Bot className="h-4 w-4" />Actions & AI</TabsTrigger>
-	                        <TabsTrigger value="review" className="gap-2"><ShieldCheck className="h-4 w-4" />Review</TabsTrigger>
-	                      </TabsList>
-	                      <TabsContent value="actions" className="mt-3 data-[state=inactive]:hidden">{renderConversationActions()}</TabsContent>
-	                      <TabsContent value="review" className="mt-3 max-h-[70vh] overflow-y-auto data-[state=inactive]:hidden">{renderReviewPanel()}</TabsContent>
-	                    </Tabs>
-	                  </div>
-	                </details>
-
 	                <Textarea
 	                  value={reply}
 	                  onChange={(event) => setReply(event.target.value)}
@@ -2299,29 +2282,63 @@ export default function AdminWhatsAppQA() {
           </CardContent>
         </Card>
 
-        <div className="hidden min-w-0 flex-col lg:flex lg:min-h-0">
-        <Card className="flex min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
-          <Tabs value={rightPanelTab} onValueChange={(value) => setRightPanelTab(value as RightPanelTab)} className="flex min-h-0 flex-1 flex-col">
-            <CardHeader className="shrink-0 border-b pb-3">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="actions" className="gap-2"><Bot className="h-4 w-4" />Actions & AI</TabsTrigger>
-                <TabsTrigger value="review" className="gap-2"><ShieldCheck className="h-4 w-4" />Review</TabsTrigger>
-              </TabsList>
-            </CardHeader>
-            <TabsContent value="actions" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
-              <CardContent className="h-full space-y-3 overflow-y-auto pt-3">
-                {renderConversationActions()}
-              </CardContent>
-            </TabsContent>
-            <TabsContent value="review" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
-              <CardContent className="h-full overflow-y-auto pt-3">
-                {renderReviewPanel()}
-              </CardContent>
-            </TabsContent>
-          </Tabs>
-        </Card>
-        </div>
       </div>
+      ) : null}
+
+      {platformTab === "actions" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-2xl">
+            {!selected ? (
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                  <UserRoundCheck className="h-8 w-8 text-muted-foreground/60" />
+                  <p className="text-sm text-muted-foreground">Select a WhatsApp conversation from Inbox or AI Control to manage its actions here.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="min-w-0">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between gap-3 text-base">
+                    <span className="flex min-w-0 items-center gap-2"><UserRoundCheck className="h-4 w-4 shrink-0" /><span className="truncate">Actions & AI</span></span>
+                    <span className="shrink-0">{statusBadge(selected.status)}</span>
+                  </CardTitle>
+                  <p className="truncate text-xs text-muted-foreground">{selected.conversation.display_name || selected.conversation.wa_id} · +{selected.conversation.wa_id}</p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {renderConversationActions()}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {platformTab === "review" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-3xl">
+            {!selected ? (
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                  <ShieldCheck className="h-8 w-8 text-muted-foreground/60" />
+                  <p className="text-sm text-muted-foreground">Select a WhatsApp conversation from Inbox or AI Control to review it here.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="min-w-0">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between gap-3 text-base">
+                    <span className="flex min-w-0 items-center gap-2"><ShieldCheck className="h-4 w-4 shrink-0" /><span className="truncate">Review</span></span>
+                    <span className="shrink-0">{statusBadge(selected.status)}</span>
+                  </CardTitle>
+                  <p className="truncate text-xs text-muted-foreground">{selected.conversation.display_name || selected.conversation.wa_id} · +{selected.conversation.wa_id}</p>
+                </CardHeader>
+                <CardContent>
+                  {renderReviewPanel()}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
       ) : null}
 
       {platformTab === "leads" ? (
@@ -2710,9 +2727,7 @@ export default function AdminWhatsAppQA() {
                         selectPlatformTab("leads");
                         return;
                       }
-                      selectPlatformTab("inbox");
                       goToReviewTab("analysis");
-                      setMobileWorkspaceView("chat");
                     }}
                     className="flex w-full items-center gap-2 rounded-lg border bg-muted/20 p-3 text-left text-sm transition-colors hover:border-primary/50 hover:bg-background"
                   >
