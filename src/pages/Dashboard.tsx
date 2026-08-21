@@ -24,12 +24,13 @@ export default function Dashboard() {
 
   const title = role ? dashboardTitleByRole[role] : "Acapolite Portal";
   const description = role ? dashboardDescriptionByRole[role] : "Secure access to your dashboard.";
+  const isWhatsAppQAWorkspace = location.pathname === "/dashboard/staff/whatsapp-qa";
 
   return (
     <SidebarProvider>
       <div className="app-shell min-h-screen flex w-full">
         <AppSidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className={`flex min-w-0 flex-1 flex-col ${isWhatsAppQAWorkspace ? "h-screen overflow-hidden" : ""}`}>
           <header className="sticky top-0 z-20 border-b border-border/70 bg-white/78 px-4 py-3 backdrop-blur-xl sm:px-6">
             <div className="dashboard-page flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
@@ -45,7 +46,7 @@ export default function Dashboard() {
               <NotificationBell />
             </div>
           </header>
-          <main className="flex-1 overflow-auto px-4 py-5 sm:px-6 sm:py-6">
+          <main className={`flex-1 ${isWhatsAppQAWorkspace ? "min-h-0 overflow-hidden px-0 py-0" : "overflow-auto px-4 py-5 sm:px-6 sm:py-6"}`}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={location.pathname}
@@ -53,7 +54,7 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 exit={{ opacity: 0, y: -8, filter: "blur(3px)" }}
                 transition={{ duration: 0.24, ease: "easeOut" }}
-                className="dashboard-page dashboard-surface min-h-full rounded-[1.75rem]   md:p-4  sm:p-6 lg:p-7"
+                className={isWhatsAppQAWorkspace ? "h-full min-h-0" : "dashboard-page dashboard-surface min-h-full rounded-[1.75rem] md:p-4 sm:p-6 lg:p-7"}
               >
                 <Outlet />
               </motion.div>

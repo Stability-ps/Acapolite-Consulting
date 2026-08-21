@@ -201,10 +201,10 @@ export function getWhatsAppLeadGate(quality: WhatsAppLeadQuality): WhatsAppLeadG
       marketplaceVisible: false,
       label: "Hold for missing info",
       description: "This lead is saved for staff follow-up, but hidden from practitioners until the missing details are collected.",
-      actionLabel: "Save as needs info",
+      actionLabel: "Hold lead",
       confirmTitle: "Save this incomplete lead?",
       confirmBody: "It will go to Service Requests as Pending Client Confirmation and stay hidden from practitioners until staff returns it to the marketplace.",
-      savedMessage: "Lead saved as needs info.",
+      savedMessage: "Lead held for staff follow-up.",
     };
   }
 

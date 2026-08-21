@@ -110,6 +110,11 @@ type LeadSyncResult = {
   payload: JsonRecord;
 };
 
+type WhatsAppSendResult = {
+  metaMessageId: string | null;
+  deliveryMethod: "text" | "template";
+};
+
 type MainProfile = {
   full_name: string | null;
   email: string | null;
@@ -798,13 +803,14 @@ async function loadStaff(token: string, current: StaffProfile) {
   return rows.length ? rows : [current];
 }
 
-async function sendWhatsAppText(to: string, body: string) {
+async function sendWhatsAppText(to: string, body: string): Promise<WhatsAppSendResult> {
   const version = Deno.env.get("WHATSAPP_GRAPH_API_VERSION")?.trim();
   const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID")?.trim();
   const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN")?.trim();
   if (!version || !phoneNumberId || !accessToken) throw new Error("WhatsApp delivery is not configured");
 
-  const response = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
+  const endpoint = `https://graph.facebook.com/${version}/${phoneNumberId}/messages`;
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -816,14 +822,79 @@ async function sendWhatsAppText(to: string, body: string) {
     }),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`WhatsApp rejected the reply (${response.status})`);
-  return String(payload?.messages?.[0]?.id || "") || null;
+  if (!response.ok) {
+    console.error("WhatsApp text send failed", response.status, payload);
+    if (isFollowUpTemplateRequired(response.status, payload)) {
+      const templateResult = await sendWhatsAppFollowUpTemplate(endpoint, accessToken, to, body);
+      if (templateResult) return templateResult;
+    }
+    throw new Error(formatWhatsAppSendError(response.status, payload));
+  }
+  return { metaMessageId: String(payload?.messages?.[0]?.id || "") || null, deliveryMethod: "text" };
 }
 
-function withinCustomerCareWindow(lastInboundAt: string | null) {
-  if (!lastInboundAt) return false;
-  const elapsed = Date.now() - new Date(lastInboundAt).getTime();
-  return Number.isFinite(elapsed) && elapsed >= 0 && elapsed < 24 * 60 * 60 * 1000;
+async function sendWhatsAppFollowUpTemplate(endpoint: string, accessToken: string, to: string, body: string): Promise<WhatsAppSendResult | null> {
+  const templateName = Deno.env.get("WHATSAPP_FOLLOW_UP_TEMPLATE_NAME")?.trim();
+  if (!templateName) return null;
+
+  const languageCode = Deno.env.get("WHATSAPP_FOLLOW_UP_TEMPLATE_LANGUAGE")?.trim() || "en_US";
+  const includeBodyParameter = Deno.env.get("WHATSAPP_FOLLOW_UP_TEMPLATE_BODY_PARAMETER")?.trim().toLowerCase() !== "false";
+  const template: JsonRecord = {
+    name: templateName,
+    language: { code: languageCode },
+  };
+
+  if (includeBodyParameter) {
+    template.components = [{
+      type: "body",
+      parameters: [{ type: "text", text: body }],
+    }];
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "template",
+      template,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error("WhatsApp follow-up template send failed", response.status, payload);
+    throw new Error(formatWhatsAppTemplateSendError(response.status, payload));
+  }
+  return { metaMessageId: String(payload?.messages?.[0]?.id || "") || null, deliveryMethod: "template" };
+}
+
+function isFollowUpTemplateRequired(status: number, payload: unknown) {
+  const error = asRecord(asRecord(payload).error);
+  const message = stringValue(error, "message");
+  const details = stringValue(asRecord(error.error_data), "details");
+  const codeValue = error.code;
+  const code = typeof codeValue === "number" ? codeValue : Number(codeValue);
+  const combined = `${message} ${details}`.toLowerCase();
+  return status === 400 && (code === 131047 || /customer care|customer service|re-engagement|outside.*window|24[-\s]?hour|template/.test(combined));
+}
+
+function formatWhatsAppSendError(status: number, payload: unknown) {
+  const error = asRecord(asRecord(payload).error);
+  const message = stringValue(error, "message");
+  if (isFollowUpTemplateRequired(status, payload)) {
+    return "Reply saved in Acapolite for staff follow-up. It is recorded on this chat even if WhatsApp delivery is unavailable.";
+  }
+  return `WhatsApp delivery failed (${status})${message ? `: ${message}` : ""}`;
+}
+
+function formatWhatsAppTemplateSendError(status: number, payload: unknown) {
+  const error = asRecord(asRecord(payload).error);
+  const message = stringValue(error, "message");
+  const details = stringValue(asRecord(error.error_data), "details");
+  const reason = [message, details].filter(Boolean).join(": ");
+  return `Follow-up template delivery failed (${status})${reason ? `: ${reason}` : ""}`;
 }
 
 async function recordAction(sb: PreviewClient, token: string, conversationId: string, actor: StaffProfile, action: string, details: Record<string, unknown> = {}) {
@@ -1103,9 +1174,6 @@ Deno.serve(async (req: Request) => {
       const message = String(body?.message || "").replace(/\s+/g, " ").trim();
       if (!message) return json(req, { error: "Write a reply first" }, 400);
       if (message.length > MAX_REPLY_LENGTH) return json(req, { error: `Keep replies under ${MAX_REPLY_LENGTH} characters` }, 400);
-      if (!withinCustomerCareWindow(conversation.last_inbound_at)) {
-        return json(req, { error: "The 24-hour WhatsApp reply window has closed. Use an approved template before sending another free-form message." }, 409);
-      }
 
       const sentAt = new Date().toISOString();
       const staffName = displayName(actor);
@@ -1124,16 +1192,38 @@ Deno.serve(async (req: Request) => {
         return json(req, { error: "The reply was not sent because the transcript could not be created" }, 500);
       }
 
-      let metaMessageId: string | null = null;
+      let sendResult: WhatsAppSendResult | null = null;
       try {
-        metaMessageId = await sendWhatsAppText(conversation.wa_id, message);
+        sendResult = await sendWhatsAppText(conversation.wa_id, message);
       } catch (error) {
-        await sb.from("whatsapp_messages").update({ delivery_status: "failed" }).eq("id", pendingMessage.id);
-        return json(req, { error: error instanceof Error ? error.message : "WhatsApp delivery failed" }, 502);
+        const deliveryError = error instanceof Error ? error.message : "WhatsApp delivery failed";
+        const deliveryStatus = /follow-up template|reply saved in acapolite|customer[-\s]?care|customer service|outside.*window|24[-\s]?hour|131047/i.test(deliveryError)
+          ? "saved_local"
+          : "failed";
+        await sb.from("whatsapp_messages").update({ delivery_status: deliveryStatus }).eq("id", pendingMessage.id);
+        await sb.from("whatsapp_conversations").update({
+          status: "human_handoff",
+          inbox_status: conversation.assigned_staff_id ? "assigned" : "unassigned",
+          ai_enabled: false,
+          last_staff_reply_at: sentAt,
+          updated_at: sentAt,
+        }).eq("id", conversationId);
+        await recordAction(sb, token, conversationId, actor, "staff_reply", {
+          conversation_name: selectedConversation.display_name,
+          wa_id: selectedConversation.wa_id,
+          delivery_status: deliveryStatus,
+          delivery_error: deliveryError,
+        });
+        return json(req, {
+          ok: true,
+          delivery_status: deliveryStatus,
+          delivery_error: deliveryError,
+          warning: "Reply saved in Acapolite for staff follow-up. It is recorded on this chat even if WhatsApp delivery is unavailable.",
+        }, 202);
       }
 
       const { error: messageError } = await sb.from("whatsapp_messages").update({
-        meta_message_id: metaMessageId,
+        meta_message_id: sendResult.metaMessageId,
         delivery_status: "submitted",
       }).eq("id", pendingMessage.id);
       if (messageError) console.error("WhatsApp reply delivered; transcript status update failed", messageError);
@@ -1154,8 +1244,8 @@ Deno.serve(async (req: Request) => {
         last_staff_reply_at: sentAt,
         updated_at: sentAt,
       }).eq("id", conversationId);
-      await recordAction(sb, token, conversationId, actor, "staff_reply", { conversation_name: selectedConversation.display_name, wa_id: selectedConversation.wa_id, meta_message_id: metaMessageId });
-      return json(req, { ok: true });
+      await recordAction(sb, token, conversationId, actor, "staff_reply", { conversation_name: selectedConversation.display_name, wa_id: selectedConversation.wa_id, meta_message_id: sendResult.metaMessageId, delivery_method: sendResult.deliveryMethod });
+      return json(req, { ok: true, delivery_method: sendResult.deliveryMethod });
     }
 
     if (action === "return_to_ai") {
