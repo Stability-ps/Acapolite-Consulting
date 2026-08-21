@@ -339,7 +339,12 @@ function statusBadge(status: Evaluation["status"]) {
 }
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return <div className="flex items-start justify-between gap-4 border-b py-3 last:border-0"><span className="text-xs text-muted-foreground">{label}</span><span className="max-w-[65%] break-words text-right text-sm font-medium">{value || "—"}</span></div>;
+  return (
+    <div className="grid gap-1 border-b py-3 last:border-0 sm:grid-cols-[minmax(110px,0.85fr)_minmax(0,1.15fr)] sm:items-start sm:gap-4">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="min-w-0 break-words text-sm font-medium sm:text-right">{value || "—"}</span>
+    </div>
+  );
 }
 
 function intakeValue(value: unknown) {
@@ -1368,11 +1373,11 @@ export default function AdminWhatsAppQA() {
         </Card>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.4fr]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(280px,0.9fr)_minmax(420px,1.4fr)]">
         <Card>
           <CardHeader className="pb-3"><CardTitle className="flex items-center justify-between gap-3 text-base"><span className="flex items-center gap-2"><Bell className="h-4 w-4" />Operational alerts</span><Badge variant={alerts.some((alert) => alert.severity === "critical") ? "destructive" : "secondary"}>{alerts.length} open</Badge></CardTitle></CardHeader>
-          <CardContent className="max-h-60 space-y-2 overflow-y-auto">
-            {alerts.length === 0 ? <p className="py-6 text-center text-xs text-muted-foreground">No open WhatsApp alerts.</p> : alerts.map((alert) => (
+          <CardContent className={alerts.length === 0 ? "px-5 pb-5" : "max-h-60 space-y-2 overflow-y-auto"}>
+            {alerts.length === 0 ? <p className="rounded-lg border border-dashed bg-muted/20 px-4 py-5 text-center text-xs text-muted-foreground">No open WhatsApp alerts.</p> : alerts.map((alert) => (
               <button key={alert.id} type="button" onClick={() => openConversation(alert.conversation_id, "overview")} className={`w-full rounded-lg border p-3 text-left ${alert.severity === "critical" ? "border-red-200 bg-red-50/60" : alert.severity === "warning" ? "border-amber-200 bg-amber-50/60" : "bg-muted/20"}`}>
                 <div className="flex items-start justify-between gap-2"><p className="text-sm font-medium">{alert.title}</p><span className="shrink-0 text-[10px] text-muted-foreground">{new Date(alert.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>
                 {alert.body ? <p className="mt-1 text-xs text-muted-foreground">{alert.body}</p> : null}
@@ -1421,7 +1426,7 @@ export default function AdminWhatsAppQA() {
         </Card>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(215px,0.56fr)_minmax(430px,1.22fr)_minmax(320px,0.9fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(260px,0.62fr)_minmax(460px,1.18fr)_minmax(340px,0.9fr)]">
         <Card>
           <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
             <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Name or WhatsApp number" className="h-9 pl-8 text-xs" /></div>
@@ -1579,13 +1584,13 @@ export default function AdminWhatsAppQA() {
                 ) : null}
 
                 {selectedLeadQuality && selectedSla && selectedDelivery ? (
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                  <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(145px,1fr))]">
                     {(() => {
                       const requiredChecks = selectedLeadQuality.checks.filter((check) => check.required);
                       const passedRequired = requiredChecks.filter((check) => check.passed).length;
                       return (
-                        <button type="button" onClick={() => setReviewTab("client")} className="rounded-lg border bg-muted/20 p-3 text-left transition-colors hover:border-primary/50">
-                          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <button type="button" onClick={() => setReviewTab("client")} className="min-h-[122px] rounded-lg border bg-muted/20 p-3 text-left transition-colors hover:border-primary/50">
+                          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                             <ClipboardList className="h-3.5 w-3.5" />
                             Structured intake
                           </div>
@@ -1594,32 +1599,32 @@ export default function AdminWhatsAppQA() {
                         </button>
                       );
                     })()}
-                    <button type="button" onClick={() => setReviewTab("analysis")} className={`rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${slaTone(selectedSla.status)}`}>
-                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                    <button type="button" onClick={() => setReviewTab("analysis")} className={`min-h-[122px] rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${slaTone(selectedSla.status)}`}>
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
                         <Timer className="h-3.5 w-3.5" />
                         SLA
                       </div>
                       <p className="mt-1 text-sm font-semibold">{selectedSla.label}</p>
                       <p className="mt-1 text-xs">{selectedSla.detail}</p>
                     </button>
-                    <button type="button" onClick={() => setReviewTab("analysis")} className={`rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${selectedDelivery.failed ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                    <button type="button" onClick={() => setReviewTab("analysis")} className={`min-h-[122px] rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${selectedDelivery.failed ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Delivery
                       </div>
                       <p className="mt-1 text-sm font-semibold">{selectedDelivery.failed ? `${selectedDelivery.failed} failed` : `${selectedDelivery.delivered}/${selectedDelivery.outbound} delivered`}</p>
                       <p className="mt-1 text-xs">{selectedDelivery.read} read · {selectedDelivery.pending} pending</p>
                     </button>
-                    <button type="button" onClick={() => setReviewTab("crm")} className={`rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${bestClientMatch ? "border-sky-200 bg-sky-50 text-sky-800" : "bg-muted/20"}`}>
-                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                    <button type="button" onClick={() => setReviewTab("crm")} className={`min-h-[122px] rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${bestClientMatch ? "border-sky-200 bg-sky-50 text-sky-800" : "bg-muted/20"}`}>
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
                         <Link2 className="h-3.5 w-3.5" />
                         CRM link
                       </div>
                       <p className="mt-1 text-sm font-semibold">{linkedClientMatch ? "Linked" : bestClientMatch ? "Match found" : "No match"}</p>
                       <p className="mt-1 text-xs">{bestClientMatch ? bestClientMatch.label : "Send request first."}</p>
                     </button>
-                    <button type="button" onClick={() => setReviewTab("team")} className="rounded-lg border bg-muted/20 p-3 text-left transition-colors hover:border-primary/50">
-                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <button type="button" onClick={() => setReviewTab("team")} className="min-h-[122px] rounded-lg border bg-muted/20 p-3 text-left transition-colors hover:border-primary/50">
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                         <StickyNote className="h-3.5 w-3.5" />
                         Team notes
                       </div>
@@ -1757,33 +1762,33 @@ export default function AdminWhatsAppQA() {
                   <TabsTrigger value="team" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Team</TabsTrigger>
                 </TabsList>
               </CardHeader>
-              <CardContent className="max-h-[720px] overflow-y-auto pt-5">
+              <CardContent className="max-h-[720px] overflow-y-auto pt-4">
                 <TabsContent value="overview" className="mt-0 space-y-5">
-                  <div className="flex items-center justify-between rounded-xl bg-muted/60 p-4"><div><p className="font-medium">{selected.conversation.display_name || selected.conversation.wa_id}</p><p className="text-xs text-muted-foreground">{selected.messages.length} messages</p></div>{statusBadge(selected.status)}</div>
+                  <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"><div className="min-w-0"><p className="truncate font-medium">{selected.conversation.display_name || selected.conversation.wa_id}</p><p className="text-xs text-muted-foreground">{selected.messages.length} messages</p></div>{statusBadge(selected.status)}</div>
                   {selectedLeadQuality ? (
-                    <div className={`rounded-xl border p-4 ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
+                    <div className={`rounded-lg border p-4 ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lead quality</p>
                           <p className="mt-1 text-base font-semibold">{selectedLeadQuality.label}</p>
-	                        <p className="mt-1 text-sm text-muted-foreground">{selectedLeadQuality.description}</p>
-                            {selectedLeadGate ? <p className="mt-1 text-sm">{selectedLeadGate.description}</p> : null}
+                          <p className="mt-1 text-sm text-muted-foreground">{selectedLeadQuality.description}</p>
+                          {selectedLeadGate ? <p className="mt-1 text-sm">{selectedLeadGate.description}</p> : null}
 	                      </div>
-	                      <span className="text-2xl font-semibold">{selectedLeadQuality.score}%</span>
+	                      <span className="shrink-0 text-xl font-semibold">{selectedLeadQuality.score}%</span>
 	                    </div>
                       <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Why this score?</p>
-	                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+	                      <div className="mt-3 grid max-h-56 gap-2 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
 	                        {selectedLeadQuality.checks.map((check) => (
-	                          <div key={check.key} className="flex items-center gap-2 rounded-lg border bg-background/70 px-3 py-2 text-xs">
+	                          <div key={check.key} className="flex min-h-10 items-center gap-2 rounded-lg border bg-background/70 px-3 py-2 text-xs">
 	                            {check.passed ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />}
-	                            <span className="min-w-0 flex-1 truncate">{check.label}</span>
+	                            <span className="min-w-0 flex-1 leading-snug">{check.label}</span>
                               <span className="shrink-0 text-[10px] text-muted-foreground">{check.passed ? `+${check.weight}` : "missing"}</span>
 	                          </div>
 	                        ))}
 	                      </div>
                     </div>
                   ) : null}
-                  <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p><p className="rounded-xl border bg-muted/20 p-4 text-sm leading-relaxed">{selected.conversation.ai_summary || intakeValue(selected.conversation.intake_payload?.description)}</p></div>
+                  <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p><p className="max-h-44 overflow-y-auto rounded-lg border bg-muted/20 p-4 text-sm leading-relaxed">{selected.conversation.ai_summary || intakeValue(selected.conversation.intake_payload?.description)}</p></div>
                   <div>
                     <DetailRow label="Conversation status" value={selected.conversation.status.replace(/_/g, " ")} />
                     <DetailRow label="Inbox status" value={selected.conversation.inbox_status.replace(/_/g, " ")} />
