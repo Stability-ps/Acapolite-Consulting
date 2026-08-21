@@ -1793,7 +1793,7 @@ export default function AdminWhatsAppQA() {
           </div>
 
       {platformTab === "inbox" ? (
-      <div className="hidden grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid xl:grid-cols-7">
+      <div className="hidden grid-cols-2 gap-3 sm:grid-cols-3 lg:grid lg:grid-cols-4 xl:grid-cols-7">
         <button type="button" className="text-left" onClick={() => setConversationQueueFilter("all")} aria-pressed={queueFilter === "all"}>
           <Card className={filterCardClass("all")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
         </button>
@@ -1823,12 +1823,12 @@ export default function AdminWhatsAppQA() {
       ) : null}
 
       {platformTab === "inbox" ? (
-      <div className="min-h-0 space-y-4 lg:grid lg:flex-1 lg:grid-cols-[minmax(260px,0.38fr)_minmax(0,0.62fr)] lg:items-stretch lg:gap-4 lg:space-y-0 xl:grid-cols-[minmax(260px,22%)_minmax(0,1fr)_minmax(300px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
-        <div className={`${mobileWorkspaceView === "chat" ? "hidden lg:flex" : "flex"} min-w-0 flex-col lg:min-h-0`}>
-        <Card className="flex min-h-[520px] flex-1 flex-col lg:min-h-0">
+      <div className="min-h-0 space-y-4 md:grid md:flex-1 md:grid-cols-[minmax(220px,32%)_minmax(0,1fr)] md:items-stretch md:gap-4 md:space-y-0 lg:grid-cols-[minmax(250px,22%)_minmax(0,1fr)_minmax(260px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
+        <div className={`${mobileWorkspaceView === "chat" ? "hidden md:flex" : "flex"} min-w-0 flex-col md:min-h-0`}>
+        <Card className="flex min-h-[520px] flex-1 flex-col md:min-h-0">
           <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
             <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Name or WhatsApp number" className="h-9 pl-8 text-xs" /></div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-1 2xl:grid-cols-2">
               <Select value={queueFilter} onValueChange={(value) => setConversationQueueFilter(value as QueueFilter)}><SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All chats</SelectItem><SelectItem value="needs_response">Needs response</SelectItem><SelectItem value="needs_info">Needs info</SelectItem><SelectItem value="ready_leads">Quality leads</SelectItem><SelectItem value="human">Human chats</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="unassigned">Unassigned</SelectItem><SelectItem value="assigned">Assigned</SelectItem><SelectItem value="waiting">Waiting for client</SelectItem><SelectItem value="resolved">Resolved</SelectItem><SelectItem value="unread">Unread</SelectItem><SelectItem value="mine">Assigned to me</SelectItem><SelectItem value="passed">Passed QA</SelectItem><SelectItem value="failed">Critical failures</SelectItem><SelectItem value="failed_delivery">Failed sends</SelectItem><SelectItem value="converted">Lead created</SelectItem></SelectContent></Select>
               <Select value={conversationSort} onValueChange={(value) => setConversationSort(value as ConversationSort)}><SelectTrigger className="h-9 text-xs"><ArrowUpDown className="mr-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">Urgent first</SelectItem><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest waiting</SelectItem><SelectItem value="name">Name</SelectItem><SelectItem value="messages">Most messages</SelectItem></SelectContent></Select>
             </div>
@@ -1894,9 +1894,9 @@ export default function AdminWhatsAppQA() {
         </Card>
         </div>
 
-        <Card className={`${mobileWorkspaceView === "chat" ? "flex" : "hidden lg:flex"} min-w-0 flex-col lg:min-h-0`}>
+        <Card className={`${mobileWorkspaceView === "chat" ? "flex" : "hidden md:flex"} min-w-0 flex-col md:min-h-0`}>
           <CardHeader className="shrink-0 border-b">
-            <Button type="button" variant="ghost" size="sm" className="w-fit px-0 lg:hidden" onClick={() => setMobileWorkspaceView("conversations")}>
+            <Button type="button" variant="ghost" size="sm" className="w-fit px-0 md:hidden" onClick={() => setMobileWorkspaceView("conversations")}>
               <ArrowLeft className="mr-2 h-4 w-4" />Back to conversations
             </Button>
             <CardTitle className="flex items-center justify-between gap-3">
@@ -1962,7 +1962,7 @@ export default function AdminWhatsAppQA() {
             )}
 	            {selected ? (
 	              <div className="shrink-0 space-y-3 border-t bg-background p-4">
-	                <details className="rounded-lg border bg-muted/20 p-3 xl:hidden">
+	                <details className="rounded-lg border bg-muted/20 p-3 lg:hidden">
 	                  <summary className="cursor-pointer text-sm font-semibold">Actions / AI controls</summary>
 	                  <div className="mt-3">{renderConversationActions()}</div>
 	                </details>
@@ -1975,7 +1975,7 @@ export default function AdminWhatsAppQA() {
 	                  rows={3}
 	                  disabled={selected.conversation.ai_enabled || actionPending}
 	                />
-	                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(280px,auto)] sm:items-center">
+	                <div className="grid gap-2">
 	                  <p className="text-xs text-muted-foreground">{reply.length}/1000 · Staff reply</p>
 	                  <div className="grid min-w-0 gap-2 md:grid-cols-2">
 	                    <Button type="button" className={QA_INLINE_ACTION_BUTTON_CLASS} variant="outline" onClick={draftReengagementReply} disabled={actionPending || !selectedLeadQuality}>
@@ -1991,7 +1991,7 @@ export default function AdminWhatsAppQA() {
           </CardContent>
         </Card>
 
-        <div className="hidden min-w-0 flex-col gap-4 overflow-y-auto xl:flex xl:min-h-0">
+        <div className="hidden min-w-0 flex-col gap-4 overflow-y-auto lg:flex lg:min-h-0">
         <Card className="min-w-0 shrink-0">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base"><Bot className="h-4 w-4" />Actions / AI controls</CardTitle>
@@ -2437,7 +2437,7 @@ export default function AdminWhatsAppQA() {
 
       {platformTab === "ai" ? (
         <div className="min-h-0 flex-1 overflow-hidden">
-      <div className="grid h-full min-h-[640px] gap-4 lg:grid-cols-[minmax(260px,0.36fr)_minmax(0,0.64fr)] xl:grid-cols-[minmax(260px,22%)_minmax(0,1fr)_minmax(300px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
+      <div className="grid h-full min-h-[640px] gap-4 md:grid-cols-[minmax(220px,32%)_minmax(0,1fr)] lg:grid-cols-[minmax(250px,22%)_minmax(0,1fr)_minmax(260px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
             <Card className="flex min-w-0 flex-col overflow-hidden">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center justify-between gap-3 text-base">
@@ -2575,7 +2575,7 @@ export default function AdminWhatsAppQA() {
               </CardContent>
             </Card>
 
-            <div className="min-h-0 min-w-0 space-y-4 overflow-y-auto lg:col-span-2 xl:col-span-1">
+            <div className="min-h-0 min-w-0 space-y-4 overflow-y-auto md:col-span-2 lg:col-span-1">
               <Card className="min-w-0">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-base"><Copy className="h-4 w-4" />Reply studio</CardTitle>
@@ -2595,7 +2595,7 @@ export default function AdminWhatsAppQA() {
                     ))}
                   </div>
 	                  <Textarea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write or edit a WhatsApp reply..." maxLength={1000} rows={4} disabled={!selected || selected.conversation.ai_enabled || actionPending} />
-	                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(280px,auto)] sm:items-center">
+	                  <div className="grid gap-2">
 	                    <p className="text-xs text-muted-foreground">
 	                      {!selected ? "Select a conversation to reply." : `${reply.length}/1000 · Staff reply`}
 	                    </p>
