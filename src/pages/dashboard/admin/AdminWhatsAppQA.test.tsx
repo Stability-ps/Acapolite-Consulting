@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -189,5 +189,44 @@ describe("AdminWhatsAppQA", () => {
     expect(await screen.findByRole("button", { name: /Export/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Select leads to delete|Delete selected/i })).toBeInTheDocument();
     expect(leadCard).not.toBeNull();
+  });
+
+  it("defaults the Inbox right panel to Actions & AI, switches to Review, and preserves the selected conversation", async () => {
+    renderPage();
+    const [conversationCard] = await screen.findAllByText("Naledi Dlamini");
+    fireEvent.click(conversationCard);
+
+    // the mobile <details> accordion duplicates these controls off-screen; scope to the
+    // persistent desktop panel (not nested inside a <details>) to avoid ambiguous matches.
+    const notInDetails = (el: HTMLElement) => !el.closest("details");
+    const findDesktopTab = async (name: RegExp) => {
+      const matches = await screen.findAllByRole("tab", { name });
+      const match = matches.find((el) => notInDetails(el));
+      expect(match).toBeDefined();
+      return match as HTMLElement;
+    };
+
+    const actionsTab = await findDesktopTab(/Actions & AI/);
+    const reviewTab = await findDesktopTab(/^Review$/);
+    expect(actionsTab).toHaveAttribute("data-state", "active");
+    expect(reviewTab).toHaveAttribute("data-state", "inactive");
+    expect(screen.getAllByText(/AI replies are locked/i).length).toBeGreaterThan(0);
+
+    // Radix Tabs activates on mousedown (not click) - see @radix-ui/react-tabs TabsTrigger.
+    fireEvent.mouseDown(reviewTab, { button: 0 });
+    await waitFor(() => expect(reviewTab).toHaveAttribute("data-state", "active"));
+    expect(actionsTab).toHaveAttribute("data-state", "inactive");
+
+    const clientSubTab = await findDesktopTab(/^Client$/);
+    fireEvent.mouseDown(clientSubTab, { button: 0 });
+    await waitFor(() => expect(screen.getAllByText("WhatsApp name").length).toBeGreaterThan(0));
+
+    // switching the right-panel tabs must not lose the selected conversation
+    expect(screen.getAllByText("Naledi Dlamini").length).toBeGreaterThan(0);
+
+    fireEvent.mouseDown(actionsTab, { button: 0 });
+    await waitFor(() => expect(actionsTab).toHaveAttribute("data-state", "active"));
+    expect(screen.getAllByText(/AI replies are locked/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Naledi Dlamini").length).toBeGreaterThan(0);
   });
 });

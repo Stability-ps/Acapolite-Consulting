@@ -185,6 +185,7 @@ type QueueFilter = "all" | "needs_response" | "needs_info" | "ready_leads" | "hu
 type ConversationSort = "priority" | "newest" | "oldest" | "name" | "messages";
 type LeadSort = "newest" | "oldest" | "name" | "debt";
 type ReviewTab = "overview" | "client" | "analysis" | "crm" | "team";
+type RightPanelTab = "actions" | "review";
 type WhatsAppPlatformTab = "inbox" | "leads" | "ai" | "reports" | "settings";
 const WHATSAPP_PLATFORM_TAB_KEYS: WhatsAppPlatformTab[] = ["inbox", "leads", "ai", "reports", "settings"];
 type SavedQueueViewKey = "my_inbox" | "urgent_sars" | "needs_info" | "marketplace_ready" | "overdue" | "created_leads";
@@ -835,6 +836,7 @@ export default function AdminWhatsAppQA() {
   const [leadSearch, setLeadSearch] = useState("");
   const [leadSort, setLeadSort] = useState<LeadSort>("newest");
   const [reviewTab, setReviewTab] = useState<ReviewTab>("overview");
+  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("actions");
   const [platformTab, setPlatformTab] = useState<WhatsAppPlatformTab>("inbox");
   const [internalNote, setInternalNote] = useState("");
   const [mobileWorkspaceView, setMobileWorkspaceView] = useState<"conversations" | "chat">("conversations");
@@ -933,6 +935,7 @@ export default function AdminWhatsAppQA() {
       setSelectedId(conversationIdFromQuery);
       setQueueFilter("all");
       setReviewTab("overview");
+      setRightPanelTab("actions");
       setPlatformTab("inbox");
       setMobileWorkspaceView("chat");
     }
@@ -1119,6 +1122,7 @@ export default function AdminWhatsAppQA() {
     setQueueFilter(filter);
     setSelectedId(null);
     setReviewTab("overview");
+    setRightPanelTab("actions");
     setPlatformTab("inbox");
     setMobileWorkspaceView("conversations");
   };
@@ -1133,6 +1137,12 @@ export default function AdminWhatsAppQA() {
     }
     setSelectedId(conversationId);
     setReviewTab(tab);
+    setRightPanelTab(tab === "overview" ? "actions" : "review");
+  };
+
+  const goToReviewTab = (tab: ReviewTab) => {
+    setReviewTab(tab);
+    setRightPanelTab("review");
   };
 
   const openConversation = (conversationId: string, tab: ReviewTab = "overview") => {
@@ -1199,6 +1209,7 @@ export default function AdminWhatsAppQA() {
     setConversationSearch(view.search || "");
     setSelectedId(null);
     setReviewTab("overview");
+    setRightPanelTab("actions");
     setPlatformTab("inbox");
     setMobileWorkspaceView("conversations");
   };
@@ -1563,7 +1574,7 @@ export default function AdminWhatsAppQA() {
     return (
       <div className="space-y-3">
         {selectedLeadQuality ? (
-          <button type="button" onClick={() => setReviewTab("overview")} className={`w-full rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
+          <button type="button" onClick={() => goToReviewTab("overview")} className={`w-full rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Lead quality</p>
@@ -1602,27 +1613,27 @@ export default function AdminWhatsAppQA() {
           <div className="rounded-lg border bg-muted/20 p-3 text-sm">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Quick status</p>
             <div className="divide-y rounded-md border bg-background">
-              <button type="button" onClick={() => setReviewTab("client")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
-                <span className="flex min-w-0 items-center gap-2 text-muted-foreground"><ClipboardList className="h-3.5 w-3.5" />Intake</span>
-                <span className="shrink-0 font-semibold">{passedRequired}/{requiredChecks.length} required</span>
+              <button type="button" onClick={() => goToReviewTab("client")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
+                <span className="flex shrink-0 items-center gap-2 text-muted-foreground"><ClipboardList className="h-3.5 w-3.5" />Intake</span>
+                <span className="min-w-0 text-right font-semibold">{passedRequired}/{requiredChecks.length} required</span>
               </button>
-              <button type="button" onClick={() => setReviewTab("analysis")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
-                <span className="flex min-w-0 items-center gap-2 text-muted-foreground"><Timer className="h-3.5 w-3.5" />SLA</span>
-                <span className={`shrink-0 font-semibold ${selectedSla.status === "overdue" ? "text-red-700" : selectedSla.status === "due_soon" ? "text-amber-700" : "text-emerald-700"}`}>{selectedSla.label}</span>
+              <button type="button" onClick={() => goToReviewTab("analysis")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
+                <span className="flex shrink-0 items-center gap-2 text-muted-foreground"><Timer className="h-3.5 w-3.5" />SLA</span>
+                <span className={`min-w-0 text-right font-semibold ${selectedSla.status === "overdue" ? "text-red-700" : selectedSla.status === "due_soon" ? "text-amber-700" : "text-emerald-700"}`}>{selectedSla.label}</span>
               </button>
-              <button type="button" onClick={() => setReviewTab("analysis")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
-                <span className="flex min-w-0 items-center gap-2 text-muted-foreground"><CheckCircle2 className="h-3.5 w-3.5" />Delivery</span>
-                <span className={`shrink-0 font-semibold ${selectedDelivery.failed ? "text-red-700" : "text-emerald-700"}`}>
+              <button type="button" onClick={() => goToReviewTab("analysis")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
+                <span className="flex shrink-0 items-center gap-2 text-muted-foreground"><CheckCircle2 className="h-3.5 w-3.5" />Delivery</span>
+                <span className={`min-w-0 text-right font-semibold ${selectedDelivery.failed ? "text-red-700" : "text-emerald-700"}`}>
                   {selectedDelivery.failed ? `${selectedDelivery.failed} failed` : `${selectedDelivery.delivered}/${selectedDelivery.outbound} delivered`}
                 </span>
               </button>
-              <button type="button" onClick={() => setReviewTab("crm")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
-                <span className="flex min-w-0 items-center gap-2 text-muted-foreground"><Link2 className="h-3.5 w-3.5" />CRM</span>
-                <span className={`shrink-0 font-semibold ${linkedClientMatch || bestClientMatch ? "text-sky-800" : ""}`}>{linkedClientMatch ? "Linked" : bestClientMatch ? "Match found" : "No match"}</span>
+              <button type="button" onClick={() => goToReviewTab("crm")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
+                <span className="flex shrink-0 items-center gap-2 text-muted-foreground"><Link2 className="h-3.5 w-3.5" />CRM</span>
+                <span className={`min-w-0 text-right font-semibold ${linkedClientMatch || bestClientMatch ? "text-sky-800" : ""}`}>{linkedClientMatch ? "Linked" : bestClientMatch ? "Match found" : "No match"}</span>
               </button>
-              <button type="button" onClick={() => setReviewTab("team")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
-                <span className="flex min-w-0 items-center gap-2 text-muted-foreground"><StickyNote className="h-3.5 w-3.5" />Team notes</span>
-                <span className="shrink-0 font-semibold">{selectedNotes.length}</span>
+              <button type="button" onClick={() => goToReviewTab("team")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
+                <span className="flex shrink-0 items-center gap-2 text-muted-foreground"><StickyNote className="h-3.5 w-3.5" />Team notes</span>
+                <span className="min-w-0 text-right font-semibold">{selectedNotes.length}</span>
               </button>
             </div>
           </div>
@@ -1738,284 +1749,21 @@ export default function AdminWhatsAppQA() {
       </div>
     );
   };
+  const renderReviewPanel = () => {
+    if (!selected) {
+      return <p className="rounded-lg border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">Select a conversation to inspect its details.</p>;
+    }
 
-  const platformTabs: Array<{ key: WhatsAppPlatformTab; label: string; detail: string; icon: typeof MessageCircle; count?: number }> = [
-    { key: "inbox", label: "Inbox", detail: "Live chats", icon: MessageCircle, count: totals.conversations },
-    { key: "leads", label: "Leads", detail: "Intake quality", icon: ClipboardList, count: totals.qualityLeads },
-    { key: "ai", label: "AI Control", detail: "Handoff and replies", icon: Bot, count: totals.human },
-    { key: "reports", label: "Reports", detail: "Performance", icon: BarChart3, count: reports.converted },
-    { key: "settings", label: "Settings", detail: "Templates and rules", icon: Settings },
-  ];
-
-  const selectPlatformTab = (tab: WhatsAppPlatformTab) => {
-    setPlatformTab(tab);
-    if (tab === "ai") setConversationSearch("");
-    if (tab === "leads") setLeadSearch("");
-    if (tab === "inbox") setMobileWorkspaceView("conversations");
-
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set("section", tab);
-    setSearchParams(nextParams, { replace: true });
-  };
-
-  return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col gap-4 px-4 py-5 md:px-5 md:py-6 lg:overflow-hidden">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">WhatsApp QA</h1>
-          <p className="text-sm text-muted-foreground">WhatsApp inbox, lead intake, AI handoff, reporting, and operating controls.</p>
-        </div>
-        <Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />
-          Refresh WhatsApp data
-        </Button>
-      </div>
-
-        <main className="min-h-0 flex flex-1 flex-col gap-4 overflow-hidden">
-          <div className="flex shrink-0 gap-2 overflow-x-auto pb-1 lg:hidden">
-            {platformTabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = platformTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => selectPlatformTab(tab.key)}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${active ? "border-primary bg-primary text-primary-foreground" : "bg-background"}`}
-                  aria-pressed={active}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                  {typeof tab.count === "number" ? <span className="text-xs opacity-80">{tab.count}</span> : null}
-                </button>
-              );
-            })}
-          </div>
-
-      {platformTab === "inbox" ? (
-      <div className="hidden grid-cols-2 gap-3 sm:grid-cols-3 lg:grid lg:grid-cols-4 xl:grid-cols-7">
-        <button type="button" className="text-left" onClick={() => setConversationQueueFilter("all")} aria-pressed={queueFilter === "all"}>
-          <Card className={filterCardClass("all")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("human")} aria-pressed={queueFilter === "human"}>
-          <Card className={filterCardClass("human")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Human chats</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-primary"><Headphones className="h-6 w-6" />{totals.human}<span className="ml-auto text-xs font-normal text-muted-foreground">{totals.unassigned} unassigned</span></CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("unread")} aria-pressed={queueFilter === "unread"}>
-          <Card className={filterCardClass("unread")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Unread messages</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold"><Bell className="h-6 w-6 text-amber-600" />{totals.unread}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("needs_info")} aria-pressed={queueFilter === "needs_info"}>
-          <Card className={filterCardClass("needs_info")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Needs info</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-amber-700"><Clock3 className="h-6 w-6" />{totals.needsInfo}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("ready_leads")} aria-pressed={queueFilter === "ready_leads"}>
-          <Card className={filterCardClass("ready_leads")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Quality leads</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.qualityLeads}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("passed")} aria-pressed={queueFilter === "passed"}>
-          <Card className={filterCardClass("passed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Passed QA</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.passed}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("failed")} aria-pressed={queueFilter === "failed"}>
-          <Card className={filterCardClass("failed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Critical failures</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-destructive"><XCircle className="h-6 w-6" />{totals.failed}</CardContent></Card>
-        </button>
-      </div>
-      ) : null}
-
-      {query.error ? (
-        <Card className="border-destructive/40"><CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertTriangle className="h-5 w-5 shrink-0" /><span>Unable to load WhatsApp QA data. {query.error instanceof Error ? query.error.message : "Please try again."}</span></CardContent></Card>
-      ) : null}
-
-      {platformTab === "inbox" ? (
-      <div className="min-h-0 space-y-4 md:grid md:flex-1 md:grid-cols-[minmax(220px,32%)_minmax(0,1fr)] md:items-stretch md:gap-4 md:space-y-0 lg:grid-cols-[minmax(210px,22%)_minmax(0,1fr)_minmax(220px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
-        <div className={`${mobileWorkspaceView === "chat" ? "hidden md:flex" : "flex"} min-w-0 flex-col md:min-h-0`}>
-        <Card className="flex min-h-[520px] flex-1 flex-col md:min-h-0">
-          <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
-            <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Name or WhatsApp number" className="h-9 pl-8 text-xs" /></div>
-            <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-1 2xl:grid-cols-2">
-              <Select value={queueFilter} onValueChange={(value) => setConversationQueueFilter(value as QueueFilter)}><SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All chats</SelectItem><SelectItem value="needs_response">Needs response</SelectItem><SelectItem value="needs_info">Needs info</SelectItem><SelectItem value="ready_leads">Quality leads</SelectItem><SelectItem value="human">Human chats</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="unassigned">Unassigned</SelectItem><SelectItem value="assigned">Assigned</SelectItem><SelectItem value="waiting">Waiting for client</SelectItem><SelectItem value="resolved">Resolved</SelectItem><SelectItem value="unread">Unread</SelectItem><SelectItem value="mine">Assigned to me</SelectItem><SelectItem value="passed">Passed QA</SelectItem><SelectItem value="failed">Critical failures</SelectItem><SelectItem value="failed_delivery">Failed sends</SelectItem><SelectItem value="converted">Lead created</SelectItem></SelectContent></Select>
-              <Select value={conversationSort} onValueChange={(value) => setConversationSort(value as ConversationSort)}><SelectTrigger className="h-9 text-xs"><ArrowUpDown className="mr-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">Urgent first</SelectItem><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest waiting</SelectItem><SelectItem value="name">Name</SelectItem><SelectItem value="messages">Most messages</SelectItem></SelectContent></Select>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {SAVED_QUEUE_VIEWS.map((view) => (
-                <Button key={view.key} type="button" size="sm" variant={queueFilter === view.filter && conversationSort === view.sort && conversationSearch === (view.search || "") ? "default" : "outline"} className="h-7 rounded-full px-2 text-[10px]" onClick={() => applySavedQueueView(view.key)}>
-                  {view.label}
-                </Button>
-              ))}
-            </div>
-          </CardHeader>
-          <CardContent className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
-            {queueFilter !== "all" ? (
-              <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
-                <span>Showing {QUEUE_FILTER_LABELS[queueFilter]}</span>
-                <button type="button" className="font-medium text-primary hover:underline" onClick={() => setConversationQueueFilter("all")}>Clear</button>
-              </div>
-            ) : null}
-            {authLoading || query.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Evaluating conversations…</p> : null}
-            {!authLoading && !query.isLoading && visibleEvaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No matching WhatsApp conversations.</p> : null}
-	            {visibleEvaluations.map((evaluation) => {
-	              const leadQuality = getConversationLeadQuality(evaluation.conversation, evaluation.messages);
-	              const leadGate = getWhatsAppLeadGate(leadQuality);
-	              const sla = getConversationSla(evaluation.conversation, evaluation.messages);
-	              const latestMessage = evaluation.messages[evaluation.messages.length - 1];
-	              const preview = latestMessage?.content?.replace(/\s+/g, " ").trim()
-	                || (latestMessage?.attachment_url ? "Attachment received" : "No message preview");
-	              return (
-	                <button key={evaluation.conversation.id} type="button" onClick={() => openConversation(evaluation.conversation.id, "overview")} className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${selected?.conversation.id === evaluation.conversation.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}>
-	                  <div className="flex items-start justify-between gap-2">
-	                    <div className="min-w-0">
-	                      <p className="truncate text-sm font-medium">{evaluation.conversation.display_name || `+${evaluation.conversation.wa_id}`}</p>
-	                      <p className="truncate text-[11px] font-medium text-primary">+{evaluation.conversation.wa_id}</p>
-	                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{preview}</p>
-	                    </div>
-	                    <div className="flex shrink-0 flex-col items-end gap-1">
-	                      <div className="flex items-center gap-1">
-	                        {evaluation.conversation.unread_count > 0 ? <Badge className="h-5 min-w-5 justify-center rounded-full bg-primary px-1.5 text-[10px]">{evaluation.conversation.unread_count}</Badge> : null}
-	                        <Badge variant="outline" className={`h-6 px-2 text-[10px] font-semibold ${getWhatsAppLeadQualityBadgeClass(leadQuality.status)}`}>
-	                          {leadQuality.score}%
-	                        </Badge>
-	                      </div>
-	                    </div>
-	                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    <Badge variant="outline" className={`h-5 px-1.5 text-[9px] ${getWhatsAppLeadQualityBadgeClass(leadQuality.status)}`}>
-                      {leadQuality.label}
-                    </Badge>
-                    <Badge variant="outline" className="h-5 bg-background/80 px-1.5 text-[9px]">
-                      {leadGate.label}
-                    </Badge>
-                    {["overdue", "due_soon"].includes(sla.status) ? (
-                      <Badge variant="outline" className={`h-5 px-1.5 text-[9px] ${slaTone(sla.status)}`}>
-                        {sla.label}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"><span>{evaluation.messages.length} messages · {new Date(evaluation.conversation.updated_at).toLocaleDateString()}</span><div className="flex gap-1">{evaluation.conversation.priority_level !== "normal" ? <Badge variant="destructive" className="h-5 px-1.5 text-[9px]">{evaluation.conversation.priority_level}</Badge> : null}<Badge variant="outline" className="h-5 px-1.5 text-[9px] capitalize">{evaluation.conversation.inbox_status.replace(/_/g, " ")}</Badge></div></div>
-                </button>
-              );
-            })}
-          </CardContent>
-        </Card>
-        </div>
-
-        <Card className={`${mobileWorkspaceView === "chat" ? "flex" : "hidden md:flex"} min-w-0 flex-col md:min-h-0`}>
-          <CardHeader className="shrink-0 border-b">
-            <Button type="button" variant="ghost" size="sm" className="w-fit px-0 md:hidden" onClick={() => setMobileWorkspaceView("conversations")}>
-              <ArrowLeft className="mr-2 h-4 w-4" />Back to conversations
-            </Button>
-            <CardTitle className="flex items-center justify-between gap-3">
-              <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-5 w-5 shrink-0" /><span className="truncate">Conversation</span></span>
-              {selected ? <span className="shrink-0">{statusBadge(selected.status)}</span> : null}
-            </CardTitle>
-            {selected ? (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span>{selected.conversation.display_name || selected.conversation.wa_id}</span>
-                <span>{selected.messages.length} messages</span>
-                <span>{new Date(selected.conversation.updated_at).toLocaleString()}</span>
-              </div>
-            ) : null}
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-            {!selected ? (
-              <p className="px-6 py-12 text-center text-sm text-muted-foreground">Select a conversation to read its transcript.</p>
-            ) : selected.messages.length === 0 ? (
-              <p className="px-6 py-12 text-center text-sm text-muted-foreground">No messages were recorded for this conversation.</p>
-            ) : (
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-muted/20 p-4 md:p-5">
-                {selected.messages.map((message) => {
-                  const customer = message.direction === "inbound";
-                  const sender = customer
-                    ? "Customer"
-                    : message.sender_type === "staff"
-                      ? message.staff_sender_name || "Acapolite staff"
-                      : message.sender_type === "system"
-                        ? "Acapolite system"
-                        : "Acapolite assistant";
-                  return (
-                    <div key={message.id} className={`flex ${customer ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[88%] ${customer ? "text-right" : "text-left"}`}>
-                        <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground" style={{ justifyContent: customer ? "flex-end" : "flex-start" }}>
-                          <span className="font-medium">{sender}</span>
-                          <span>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                        </div>
-                        <div className={`space-y-3 whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-sm leading-relaxed shadow-sm ${customer ? "rounded-br-md bg-emerald-700 text-white" : "rounded-bl-md border bg-background text-foreground"}`}>
-                          {message.attachment_url ? (
-                            <div className="overflow-hidden rounded-xl border border-white/20 bg-background/95 text-foreground">
-                              {message.media_mime_type?.startsWith("image/") ? (
-                                <a href={message.attachment_url} target="_blank" rel="noreferrer" className="block">
-                                  <img src={message.attachment_url} alt={message.media_filename || "WhatsApp attachment"} className="max-h-72 w-full object-contain" />
-                                </a>
-                              ) : (
-                                <div className="flex items-center gap-3 p-4"><FileText className="h-8 w-8 text-primary" /><div className="min-w-0"><p className="truncate font-medium">{message.media_filename || "Attached document"}</p><p className="text-xs text-muted-foreground">{message.media_mime_type || "Document"} {fileSize(message.media_size_bytes)}</p></div></div>
-                              )}
-                              <a href={message.attachment_url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 border-t px-3 py-2 text-xs font-medium text-primary hover:bg-muted/50">
-                                {message.media_mime_type?.startsWith("image/") ? <ImageIcon className="h-4 w-4" /> : <Download className="h-4 w-4" />} Open attachment
-                              </a>
-                            </div>
-                          ) : message.message_type === "image" || message.message_type === "document" ? (
-                            <div className="flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs"><Paperclip className="h-4 w-4" />Attachment link expired. Refresh the conversation.</div>
-                          ) : null}
-                          {message.content && !/^\[(?:Image|Document) attached\]$/i.test(message.content) ? <div>{message.content}</div> : null}
-                          {!customer ? <p className={`text-[10px] ${deliveryTone(message.delivery_status)}`}>{deliveryLabel(message.delivery_status)}</p> : null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-	            {selected ? (
-	              <div className="shrink-0 space-y-3 border-t bg-background p-4">
-	                <details className="rounded-lg border bg-muted/20 p-3 lg:hidden">
-	                  <summary className="cursor-pointer text-sm font-semibold">Actions / AI controls</summary>
-	                  <div className="mt-3">{renderConversationActions()}</div>
-	                </details>
-
-	                <Textarea
-	                  value={reply}
-	                  onChange={(event) => setReply(event.target.value)}
-	                  placeholder="Write a WhatsApp reply..."
-	                  maxLength={1000}
-	                  rows={3}
-	                  disabled={selected.conversation.ai_enabled || actionPending}
-	                />
-	                <div className="grid gap-2">
-	                  <p className="text-xs text-muted-foreground">{reply.length}/1000 · Staff reply</p>
-	                  <div className="grid min-w-0 gap-2 min-[420px]:grid-cols-2 md:grid-cols-1 2xl:grid-cols-2">
-	                    <Button type="button" className={QA_INLINE_ACTION_BUTTON_CLASS} variant="outline" onClick={draftReengagementReply} disabled={actionPending || !selectedLeadQuality}>
-	                      <FileText className="h-4 w-4" /><span>Draft follow-up</span>
-	                    </Button>
-	                    <Button className={QA_INLINE_ACTION_BUTTON_CLASS} onClick={() => runAction("reply", { message: reply })} disabled={selected.conversation.ai_enabled || actionPending || !reply.trim()}>
-	                      <Send className="h-4 w-4" /><span>{selected.conversation.ai_enabled ? "Take over first" : "Send reply"}</span>
-	                    </Button>
-	                  </div>
-	                </div>
-	              </div>
-	            ) : null}
-          </CardContent>
-        </Card>
-
-        <div className="hidden min-w-0 flex-col gap-4 overflow-y-auto lg:flex lg:min-h-0">
-        <Card className="min-w-0 shrink-0">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base"><Bot className="h-4 w-4" />Actions / AI controls</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {renderConversationActions()}
-          </CardContent>
-        </Card>
-        <Card className="min-w-0">
-          {!selected ? (
-            <CardContent><p className="py-8 text-center text-sm text-muted-foreground">Select a conversation to inspect its details.</p></CardContent>
-          ) : (
-            <Tabs value={reviewTab} onValueChange={(value) => setReviewTab(value as ReviewTab)}>
-              <CardHeader className="border-b pb-0">
-                <CardTitle className="flex items-center gap-2 pb-4"><ShieldCheck className="h-5 w-5" />Review</CardTitle>
-                <TabsList className="grid h-auto w-full grid-cols-5 rounded-b-none bg-transparent p-0">
-                  <TabsTrigger value="overview" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Overview</TabsTrigger>
-                  <TabsTrigger value="client" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Client</TabsTrigger>
-                  <TabsTrigger value="analysis" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Quality</TabsTrigger>
-                  <TabsTrigger value="crm" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">CRM</TabsTrigger>
-                  <TabsTrigger value="team" className="rounded-b-none border-b-2 border-transparent px-1 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Team</TabsTrigger>
-                </TabsList>
-              </CardHeader>
-              <CardContent className="max-h-[720px] overflow-y-auto pt-4">
+    return (
+      <Tabs value={reviewTab} onValueChange={(value) => setReviewTab(value as ReviewTab)}>
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-b-none border-b bg-transparent p-0">
+          <TabsTrigger value="overview" className="shrink-0 whitespace-nowrap rounded-b-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Overview</TabsTrigger>
+          <TabsTrigger value="client" className="shrink-0 whitespace-nowrap rounded-b-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Client</TabsTrigger>
+          <TabsTrigger value="analysis" className="shrink-0 whitespace-nowrap rounded-b-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Quality</TabsTrigger>
+          <TabsTrigger value="crm" className="shrink-0 whitespace-nowrap rounded-b-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">CRM</TabsTrigger>
+          <TabsTrigger value="team" className="shrink-0 whitespace-nowrap rounded-b-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Team</TabsTrigger>
+        </TabsList>
+        <div className="pt-4">
                 <TabsContent value="overview" className="mt-0 space-y-5">
                   <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"><div className="min-w-0"><p className="truncate font-medium">{selected.conversation.display_name || selected.conversation.wa_id}</p><p className="text-xs text-muted-foreground">{selected.messages.length} messages</p></div><span className="shrink-0">{statusBadge(selected.status)}</span></div>
                   {selectedLeadQuality ? (
@@ -2284,11 +2032,295 @@ export default function AdminWhatsAppQA() {
                     )}
                   </div>
                 </TabsContent>
+        </div>
+      </Tabs>
+    );
+  };
+
+
+  const platformTabs: Array<{ key: WhatsAppPlatformTab; label: string; detail: string; icon: typeof MessageCircle; count?: number }> = [
+    { key: "inbox", label: "Inbox", detail: "Live chats", icon: MessageCircle, count: totals.conversations },
+    { key: "leads", label: "Leads", detail: "Intake quality", icon: ClipboardList, count: totals.qualityLeads },
+    { key: "ai", label: "AI Control", detail: "Handoff and replies", icon: Bot, count: totals.human },
+    { key: "reports", label: "Reports", detail: "Performance", icon: BarChart3, count: reports.converted },
+    { key: "settings", label: "Settings", detail: "Templates and rules", icon: Settings },
+  ];
+
+  const selectPlatformTab = (tab: WhatsAppPlatformTab) => {
+    setPlatformTab(tab);
+    if (tab === "ai") setConversationSearch("");
+    if (tab === "leads") setLeadSearch("");
+    if (tab === "inbox") setMobileWorkspaceView("conversations");
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("section", tab);
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-4 px-4 py-5 md:px-5 md:py-6 lg:overflow-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">WhatsApp QA</h1>
+          <p className="text-sm text-muted-foreground">WhatsApp inbox, lead intake, AI handoff, reporting, and operating controls.</p>
+        </div>
+        <Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />
+          Refresh WhatsApp data
+        </Button>
+      </div>
+
+        <main className="min-h-0 flex flex-1 flex-col gap-4 overflow-hidden">
+          <div className="flex shrink-0 gap-2 overflow-x-auto pb-1 lg:hidden">
+            {platformTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = platformTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => selectPlatformTab(tab.key)}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${active ? "border-primary bg-primary text-primary-foreground" : "bg-background"}`}
+                  aria-pressed={active}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                  {typeof tab.count === "number" ? <span className="text-xs opacity-80">{tab.count}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+
+      {platformTab === "inbox" ? (
+      <div className="hidden grid-cols-2 gap-3 sm:grid-cols-3 lg:grid lg:grid-cols-4 xl:grid-cols-7">
+        <button type="button" className="text-left" onClick={() => setConversationQueueFilter("all")} aria-pressed={queueFilter === "all"}>
+          <Card className={filterCardClass("all")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("human")} aria-pressed={queueFilter === "human"}>
+          <Card className={filterCardClass("human")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Human chats</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-primary"><Headphones className="h-6 w-6" />{totals.human}<span className="ml-auto text-xs font-normal text-muted-foreground">{totals.unassigned} unassigned</span></CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("unread")} aria-pressed={queueFilter === "unread"}>
+          <Card className={filterCardClass("unread")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Unread messages</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold"><Bell className="h-6 w-6 text-amber-600" />{totals.unread}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("needs_info")} aria-pressed={queueFilter === "needs_info"}>
+          <Card className={filterCardClass("needs_info")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Needs info</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-amber-700"><Clock3 className="h-6 w-6" />{totals.needsInfo}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("ready_leads")} aria-pressed={queueFilter === "ready_leads"}>
+          <Card className={filterCardClass("ready_leads")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Quality leads</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.qualityLeads}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("passed")} aria-pressed={queueFilter === "passed"}>
+          <Card className={filterCardClass("passed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Passed QA</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.passed}</CardContent></Card>
+        </button>
+        <button type="button" className="text-left" onClick={() => toggleQueueFilter("failed")} aria-pressed={queueFilter === "failed"}>
+          <Card className={filterCardClass("failed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Critical failures</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-destructive"><XCircle className="h-6 w-6" />{totals.failed}</CardContent></Card>
+        </button>
+      </div>
+      ) : null}
+
+      {query.error ? (
+        <Card className="border-destructive/40"><CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertTriangle className="h-5 w-5 shrink-0" /><span>Unable to load WhatsApp QA data. {query.error instanceof Error ? query.error.message : "Please try again."}</span></CardContent></Card>
+      ) : null}
+
+      {platformTab === "inbox" ? (
+      <div className="min-h-0 space-y-4 md:grid md:flex-1 md:grid-cols-[minmax(220px,32%)_minmax(0,1fr)] md:items-stretch md:gap-4 md:space-y-0 lg:grid-cols-[minmax(210px,22%)_minmax(0,1fr)_minmax(220px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
+        <div className={`${mobileWorkspaceView === "chat" ? "hidden md:flex" : "flex"} min-w-0 flex-col md:min-h-0`}>
+        <Card className="flex min-h-[520px] flex-1 flex-col md:min-h-0">
+          <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
+            <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Name or WhatsApp number" className="h-9 pl-8 text-xs" /></div>
+            <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-1 2xl:grid-cols-2">
+              <Select value={queueFilter} onValueChange={(value) => setConversationQueueFilter(value as QueueFilter)}><SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All chats</SelectItem><SelectItem value="needs_response">Needs response</SelectItem><SelectItem value="needs_info">Needs info</SelectItem><SelectItem value="ready_leads">Quality leads</SelectItem><SelectItem value="human">Human chats</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="unassigned">Unassigned</SelectItem><SelectItem value="assigned">Assigned</SelectItem><SelectItem value="waiting">Waiting for client</SelectItem><SelectItem value="resolved">Resolved</SelectItem><SelectItem value="unread">Unread</SelectItem><SelectItem value="mine">Assigned to me</SelectItem><SelectItem value="passed">Passed QA</SelectItem><SelectItem value="failed">Critical failures</SelectItem><SelectItem value="failed_delivery">Failed sends</SelectItem><SelectItem value="converted">Lead created</SelectItem></SelectContent></Select>
+              <Select value={conversationSort} onValueChange={(value) => setConversationSort(value as ConversationSort)}><SelectTrigger className="h-9 text-xs"><ArrowUpDown className="mr-1 h-3.5 w-3.5" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">Urgent first</SelectItem><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest waiting</SelectItem><SelectItem value="name">Name</SelectItem><SelectItem value="messages">Most messages</SelectItem></SelectContent></Select>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {SAVED_QUEUE_VIEWS.map((view) => (
+                <Button key={view.key} type="button" size="sm" variant={queueFilter === view.filter && conversationSort === view.sort && conversationSearch === (view.search || "") ? "default" : "outline"} className="h-7 rounded-full px-2 text-[10px]" onClick={() => applySavedQueueView(view.key)}>
+                  {view.label}
+                </Button>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
+            {queueFilter !== "all" ? (
+              <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+                <span>Showing {QUEUE_FILTER_LABELS[queueFilter]}</span>
+                <button type="button" className="font-medium text-primary hover:underline" onClick={() => setConversationQueueFilter("all")}>Clear</button>
+              </div>
+            ) : null}
+            {authLoading || query.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Evaluating conversations…</p> : null}
+            {!authLoading && !query.isLoading && visibleEvaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No matching WhatsApp conversations.</p> : null}
+	            {visibleEvaluations.map((evaluation) => {
+	              const leadQuality = getConversationLeadQuality(evaluation.conversation, evaluation.messages);
+	              const leadGate = getWhatsAppLeadGate(leadQuality);
+	              const sla = getConversationSla(evaluation.conversation, evaluation.messages);
+	              const latestMessage = evaluation.messages[evaluation.messages.length - 1];
+	              const preview = latestMessage?.content?.replace(/\s+/g, " ").trim()
+	                || (latestMessage?.attachment_url ? "Attachment received" : "No message preview");
+	              return (
+	                <button key={evaluation.conversation.id} type="button" onClick={() => openConversation(evaluation.conversation.id, "overview")} className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${selected?.conversation.id === evaluation.conversation.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}>
+	                  <div className="flex items-start justify-between gap-2">
+	                    <div className="min-w-0">
+	                      <p className="truncate text-sm font-medium">{evaluation.conversation.display_name || `+${evaluation.conversation.wa_id}`}</p>
+	                      <p className="truncate text-[11px] font-medium text-primary">+{evaluation.conversation.wa_id}</p>
+	                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{preview}</p>
+	                    </div>
+	                    <div className="flex shrink-0 flex-col items-end gap-1">
+	                      <div className="flex items-center gap-1">
+	                        {evaluation.conversation.unread_count > 0 ? <Badge className="h-5 min-w-5 justify-center rounded-full bg-primary px-1.5 text-[10px]">{evaluation.conversation.unread_count}</Badge> : null}
+	                        <Badge variant="outline" className={`h-6 px-2 text-[10px] font-semibold ${getWhatsAppLeadQualityBadgeClass(leadQuality.status)}`}>
+	                          {leadQuality.score}%
+	                        </Badge>
+	                      </div>
+	                    </div>
+	                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <Badge variant="outline" className={`h-5 px-1.5 text-[9px] ${getWhatsAppLeadQualityBadgeClass(leadQuality.status)}`}>
+                      {leadQuality.label}
+                    </Badge>
+                    <Badge variant="outline" className="h-5 bg-background/80 px-1.5 text-[9px]">
+                      {leadGate.label}
+                    </Badge>
+                    {["overdue", "due_soon"].includes(sla.status) ? (
+                      <Badge variant="outline" className={`h-5 px-1.5 text-[9px] ${slaTone(sla.status)}`}>
+                        {sla.label}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"><span>{evaluation.messages.length} messages · {new Date(evaluation.conversation.updated_at).toLocaleDateString()}</span><div className="flex gap-1">{evaluation.conversation.priority_level !== "normal" ? <Badge variant="destructive" className="h-5 px-1.5 text-[9px]">{evaluation.conversation.priority_level}</Badge> : null}<Badge variant="outline" className="h-5 px-1.5 text-[9px] capitalize">{evaluation.conversation.inbox_status.replace(/_/g, " ")}</Badge></div></div>
+                </button>
+              );
+            })}
+          </CardContent>
+        </Card>
+        </div>
+
+        <Card className={`${mobileWorkspaceView === "chat" ? "flex" : "hidden md:flex"} min-w-0 flex-col md:min-h-0`}>
+          <CardHeader className="shrink-0 border-b">
+            <Button type="button" variant="ghost" size="sm" className="w-fit px-0 md:hidden" onClick={() => setMobileWorkspaceView("conversations")}>
+              <ArrowLeft className="mr-2 h-4 w-4" />Back to conversations
+            </Button>
+            <CardTitle className="flex items-center justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-5 w-5 shrink-0" /><span className="truncate">Conversation</span></span>
+              {selected ? <span className="shrink-0">{statusBadge(selected.status)}</span> : null}
+            </CardTitle>
+            {selected ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span>{selected.conversation.display_name || selected.conversation.wa_id}</span>
+                <span>{selected.messages.length} messages</span>
+                <span>{new Date(selected.conversation.updated_at).toLocaleString()}</span>
+              </div>
+            ) : null}
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+            {!selected ? (
+              <p className="px-6 py-12 text-center text-sm text-muted-foreground">Select a conversation to read its transcript.</p>
+            ) : selected.messages.length === 0 ? (
+              <p className="px-6 py-12 text-center text-sm text-muted-foreground">No messages were recorded for this conversation.</p>
+            ) : (
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-muted/20 p-4 md:p-5">
+                {selected.messages.map((message) => {
+                  const customer = message.direction === "inbound";
+                  const sender = customer
+                    ? "Customer"
+                    : message.sender_type === "staff"
+                      ? message.staff_sender_name || "Acapolite staff"
+                      : message.sender_type === "system"
+                        ? "Acapolite system"
+                        : "Acapolite assistant";
+                  return (
+                    <div key={message.id} className={`flex ${customer ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[88%] ${customer ? "text-right" : "text-left"}`}>
+                        <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground" style={{ justifyContent: customer ? "flex-end" : "flex-start" }}>
+                          <span className="font-medium">{sender}</span>
+                          <span>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        </div>
+                        <div className={`space-y-3 whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-sm leading-relaxed shadow-sm ${customer ? "rounded-br-md bg-emerald-700 text-white" : "rounded-bl-md border bg-background text-foreground"}`}>
+                          {message.attachment_url ? (
+                            <div className="overflow-hidden rounded-xl border border-white/20 bg-background/95 text-foreground">
+                              {message.media_mime_type?.startsWith("image/") ? (
+                                <a href={message.attachment_url} target="_blank" rel="noreferrer" className="block">
+                                  <img src={message.attachment_url} alt={message.media_filename || "WhatsApp attachment"} className="max-h-72 w-full object-contain" />
+                                </a>
+                              ) : (
+                                <div className="flex items-center gap-3 p-4"><FileText className="h-8 w-8 text-primary" /><div className="min-w-0"><p className="truncate font-medium">{message.media_filename || "Attached document"}</p><p className="text-xs text-muted-foreground">{message.media_mime_type || "Document"} {fileSize(message.media_size_bytes)}</p></div></div>
+                              )}
+                              <a href={message.attachment_url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 border-t px-3 py-2 text-xs font-medium text-primary hover:bg-muted/50">
+                                {message.media_mime_type?.startsWith("image/") ? <ImageIcon className="h-4 w-4" /> : <Download className="h-4 w-4" />} Open attachment
+                              </a>
+                            </div>
+                          ) : message.message_type === "image" || message.message_type === "document" ? (
+                            <div className="flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs"><Paperclip className="h-4 w-4" />Attachment link expired. Refresh the conversation.</div>
+                          ) : null}
+                          {message.content && !/^\[(?:Image|Document) attached\]$/i.test(message.content) ? <div>{message.content}</div> : null}
+                          {!customer ? <p className={`text-[10px] ${deliveryTone(message.delivery_status)}`}>{deliveryLabel(message.delivery_status)}</p> : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+	            {selected ? (
+	              <div className="shrink-0 space-y-3 border-t bg-background p-4">
+	                <details className="rounded-lg border bg-muted/20 p-3 lg:hidden">
+	                  <summary className="cursor-pointer text-sm font-semibold">Actions & AI / Review</summary>
+	                  <div className="mt-3">
+	                    <Tabs value={rightPanelTab} onValueChange={(value) => setRightPanelTab(value as RightPanelTab)}>
+	                      <TabsList className="grid w-full grid-cols-2">
+	                        <TabsTrigger value="actions" className="gap-2"><Bot className="h-4 w-4" />Actions & AI</TabsTrigger>
+	                        <TabsTrigger value="review" className="gap-2"><ShieldCheck className="h-4 w-4" />Review</TabsTrigger>
+	                      </TabsList>
+	                      <TabsContent value="actions" className="mt-3 data-[state=inactive]:hidden">{renderConversationActions()}</TabsContent>
+	                      <TabsContent value="review" className="mt-3 max-h-[70vh] overflow-y-auto data-[state=inactive]:hidden">{renderReviewPanel()}</TabsContent>
+	                    </Tabs>
+	                  </div>
+	                </details>
+
+	                <Textarea
+	                  value={reply}
+	                  onChange={(event) => setReply(event.target.value)}
+	                  placeholder="Write a WhatsApp reply..."
+	                  maxLength={1000}
+	                  rows={3}
+	                  disabled={selected.conversation.ai_enabled || actionPending}
+	                />
+	                <div className="grid gap-2">
+	                  <p className="text-xs text-muted-foreground">{reply.length}/1000 · Staff reply</p>
+	                  <div className="grid min-w-0 gap-2 min-[420px]:grid-cols-2 md:grid-cols-1 2xl:grid-cols-2">
+	                    <Button type="button" className={QA_INLINE_ACTION_BUTTON_CLASS} variant="outline" onClick={draftReengagementReply} disabled={actionPending || !selectedLeadQuality}>
+	                      <FileText className="h-4 w-4" /><span>Draft follow-up</span>
+	                    </Button>
+	                    <Button className={QA_INLINE_ACTION_BUTTON_CLASS} onClick={() => runAction("reply", { message: reply })} disabled={selected.conversation.ai_enabled || actionPending || !reply.trim()}>
+	                      <Send className="h-4 w-4" /><span>{selected.conversation.ai_enabled ? "Take over first" : "Send reply"}</span>
+	                    </Button>
+	                  </div>
+	                </div>
+	              </div>
+	            ) : null}
+          </CardContent>
+        </Card>
+
+        <div className="hidden min-w-0 flex-col lg:flex lg:min-h-0">
+        <Card className="flex min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
+          <Tabs value={rightPanelTab} onValueChange={(value) => setRightPanelTab(value as RightPanelTab)} className="flex min-h-0 flex-1 flex-col">
+            <CardHeader className="shrink-0 border-b pb-3">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="actions" className="gap-2"><Bot className="h-4 w-4" />Actions & AI</TabsTrigger>
+                <TabsTrigger value="review" className="gap-2"><ShieldCheck className="h-4 w-4" />Review</TabsTrigger>
+              </TabsList>
+            </CardHeader>
+            <TabsContent value="actions" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
+              <CardContent className="h-full space-y-3 overflow-y-auto pt-3">
+                {renderConversationActions()}
               </CardContent>
-            </Tabs>
-          )}
-	        </Card>
-	        </div>
+            </TabsContent>
+            <TabsContent value="review" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
+              <CardContent className="h-full overflow-y-auto pt-3">
+                {renderReviewPanel()}
+              </CardContent>
+            </TabsContent>
+          </Tabs>
+        </Card>
+        </div>
       </div>
       ) : null}
 
@@ -2679,7 +2711,7 @@ export default function AdminWhatsAppQA() {
                         return;
                       }
                       selectPlatformTab("inbox");
-                      setReviewTab("analysis");
+                      goToReviewTab("analysis");
                       setMobileWorkspaceView("chat");
                     }}
                     className="flex w-full items-center gap-2 rounded-lg border bg-muted/20 p-3 text-left text-sm transition-colors hover:border-primary/50 hover:bg-background"
