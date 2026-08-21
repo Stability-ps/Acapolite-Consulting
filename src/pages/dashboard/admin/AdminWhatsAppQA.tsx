@@ -1581,9 +1581,9 @@ export default function AdminWhatsAppQA() {
                   </p>
                 ) : null}
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-1">
-                <Badge variant="outline" className={getWhatsAppLeadQualityBadgeClass(selectedLeadQuality.status)}>{selectedLeadQuality.score}%</Badge>
-                {selectedLeadGate ? <Badge variant="outline" className="bg-background/80 text-[10px]">{selectedLeadGate.label}</Badge> : null}
+              <div className="flex max-w-[45%] flex-col items-end gap-1">
+                <Badge variant="outline" className={`whitespace-nowrap ${getWhatsAppLeadQualityBadgeClass(selectedLeadQuality.status)}`}>{selectedLeadQuality.score}%</Badge>
+                {selectedLeadGate ? <Badge variant="outline" className="w-full justify-center whitespace-normal break-words bg-background/80 text-center text-[10px] leading-snug">{selectedLeadGate.label}</Badge> : null}
               </div>
             </div>
             {selectedLeadQuality.followUpFields.length ? (
@@ -1823,7 +1823,7 @@ export default function AdminWhatsAppQA() {
       ) : null}
 
       {platformTab === "inbox" ? (
-      <div className="min-h-0 space-y-4 md:grid md:flex-1 md:grid-cols-[minmax(220px,32%)_minmax(0,1fr)] md:items-stretch md:gap-4 md:space-y-0 lg:grid-cols-[minmax(250px,22%)_minmax(0,1fr)_minmax(260px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
+      <div className="min-h-0 space-y-4 md:grid md:flex-1 md:grid-cols-[minmax(220px,32%)_minmax(0,1fr)] md:items-stretch md:gap-4 md:space-y-0 lg:grid-cols-[minmax(210px,22%)_minmax(0,1fr)_minmax(220px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
         <div className={`${mobileWorkspaceView === "chat" ? "hidden md:flex" : "flex"} min-w-0 flex-col md:min-h-0`}>
         <Card className="flex min-h-[520px] flex-1 flex-col md:min-h-0">
           <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
@@ -1900,8 +1900,8 @@ export default function AdminWhatsAppQA() {
               <ArrowLeft className="mr-2 h-4 w-4" />Back to conversations
             </Button>
             <CardTitle className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-2"><MessageCircle className="h-5 w-5" />Conversation</span>
-              {selected ? statusBadge(selected.status) : null}
+              <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-5 w-5 shrink-0" /><span className="truncate">Conversation</span></span>
+              {selected ? <span className="shrink-0">{statusBadge(selected.status)}</span> : null}
             </CardTitle>
             {selected ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -1977,7 +1977,7 @@ export default function AdminWhatsAppQA() {
 	                />
 	                <div className="grid gap-2">
 	                  <p className="text-xs text-muted-foreground">{reply.length}/1000 · Staff reply</p>
-	                  <div className="grid min-w-0 gap-2 md:grid-cols-2">
+	                  <div className="grid min-w-0 gap-2 min-[420px]:grid-cols-2 md:grid-cols-1 2xl:grid-cols-2">
 	                    <Button type="button" className={QA_INLINE_ACTION_BUTTON_CLASS} variant="outline" onClick={draftReengagementReply} disabled={actionPending || !selectedLeadQuality}>
 	                      <FileText className="h-4 w-4" /><span>Draft follow-up</span>
 	                    </Button>
@@ -2017,7 +2017,7 @@ export default function AdminWhatsAppQA() {
               </CardHeader>
               <CardContent className="max-h-[720px] overflow-y-auto pt-4">
                 <TabsContent value="overview" className="mt-0 space-y-5">
-                  <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"><div className="min-w-0"><p className="truncate font-medium">{selected.conversation.display_name || selected.conversation.wa_id}</p><p className="text-xs text-muted-foreground">{selected.messages.length} messages</p></div>{statusBadge(selected.status)}</div>
+                  <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"><div className="min-w-0"><p className="truncate font-medium">{selected.conversation.display_name || selected.conversation.wa_id}</p><p className="text-xs text-muted-foreground">{selected.messages.length} messages</p></div><span className="shrink-0">{statusBadge(selected.status)}</span></div>
                   {selectedLeadQuality ? (
                     <div className={`rounded-lg border p-4 ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
                       <div className="flex items-start justify-between gap-3">
@@ -2437,7 +2437,7 @@ export default function AdminWhatsAppQA() {
 
       {platformTab === "ai" ? (
         <div className="min-h-0 flex-1 overflow-hidden">
-      <div className="grid h-full min-h-[640px] gap-4 md:grid-cols-[minmax(220px,32%)_minmax(0,1fr)] lg:grid-cols-[minmax(250px,22%)_minmax(0,1fr)_minmax(260px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
+      <div className="grid h-full min-h-[640px] gap-4 md:grid-cols-[minmax(220px,32%)_minmax(0,1fr)] lg:grid-cols-[minmax(210px,22%)_minmax(0,1fr)_minmax(220px,23%)] 2xl:grid-cols-[minmax(300px,22%)_minmax(0,1fr)_minmax(340px,22%)]">
             <Card className="flex min-w-0 flex-col overflow-hidden">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center justify-between gap-3 text-base">
@@ -2512,8 +2512,8 @@ export default function AdminWhatsAppQA() {
             <Card className="flex min-w-0 flex-col overflow-hidden">
               <CardHeader className="shrink-0 border-b">
                 <CardTitle className="flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-5 w-5" />Selected WhatsApp chat</span>
-                  {selected ? statusBadge(selected.status) : null}
+                  <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-5 w-5 shrink-0" /><span className="truncate">Selected WhatsApp chat</span></span>
+                  {selected ? <span className="shrink-0">{statusBadge(selected.status)}</span> : null}
                 </CardTitle>
                 {selected ? (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
