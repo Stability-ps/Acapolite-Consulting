@@ -24,6 +24,9 @@ import type { Enums, Tables } from "@/integrations/supabase/types";
 import {
   SOCIAL_PLATFORM_RULES, type SocialPlatformKey, validateAssetForPlatform,
 } from "@/lib/socialPlatformRules";
+import {
+  chooseInstagramFeedTarget, computeContainLayout, FACEBOOK_FALLBACK_TARGET, needsManualAdjustment,
+} from "@/lib/socialImageTransform";
 import { formatInBusinessTimezone, parseLocalDateTimeInZone, toLocalDateTimeInputValue, BUSINESS_TIMEZONE } from "@/lib/socialTimezone";
 import { getSocialAssetPreviewUrl, uploadSocialMediaAsset } from "@/lib/socialMediaAssets";
 
@@ -32,10 +35,12 @@ type SocialCampaign = Tables<"social_campaigns">;
 type SocialCampaignItem = Tables<"social_campaign_items">;
 type SocialScheduledPost = Tables<"social_scheduled_posts">;
 type SocialAccount = Tables<"social_accounts">;
+type SocialPlatformVariant = Tables<"social_platform_variants">;
 type SocialPlatform = Enums<"social_platform">;
 
 const SOCIAL_CAMPAIGN_ACTIVATE_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/social-campaign-activate";
 const SOCIAL_CONNECTION_HEALTH_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/social-connection-health";
+const SOCIAL_GENERATE_VARIANTS_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/social-generate-variants";
 
 const PLATFORM_LABELS: Record<SocialPlatform, string> = { facebook: "Facebook", instagram: "Instagram", linkedin: "LinkedIn" };
 const PLATFORM_TO_RULE_KEY: Record<SocialPlatform, SocialPlatformKey> = {
@@ -148,6 +153,16 @@ export default function AdminSocialMedia() {
     enabled: !!session,
   });
 
+  const variantsQuery = useQuery({
+    queryKey: ["social-platform-variants"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("social_platform_variants").select("*");
+      if (error) throw new Error(error.message);
+      return (data || []) as SocialPlatformVariant[];
+    },
+    enabled: !!session,
+  });
+
   const postsQuery = useQuery({
     queryKey: ["social-scheduled-posts"],
     queryFn: async () => {
@@ -164,6 +179,7 @@ export default function AdminSocialMedia() {
   const assets = assetsQuery.data || [];
   const campaigns = campaignsQuery.data || [];
   const accounts = accountsQuery.data || [];
+  const variants = variantsQuery.data || [];
   const posts = postsQuery.data || [];
 
   const scheduledPosts = useMemo(() => posts.filter((p) => p.status === "scheduled" || p.status === "publishing"), [posts]);
@@ -174,6 +190,7 @@ export default function AdminSocialMedia() {
     queryClient.invalidateQueries({ queryKey: ["social-media-assets"] });
     queryClient.invalidateQueries({ queryKey: ["social-campaigns"] });
     queryClient.invalidateQueries({ queryKey: ["social-accounts"] });
+    queryClient.invalidateQueries({ queryKey: ["social-platform-variants"] });
     queryClient.invalidateQueries({ queryKey: ["social-scheduled-posts"] });
   };
 
@@ -232,7 +249,7 @@ export default function AdminSocialMedia() {
         </TabsContent>
 
         <TabsContent value="media">
-          <MediaLibraryPanel assets={assets} userId={session?.user.id || ""} onChanged={refetchAll} />
+          <MediaLibraryPanel assets={assets} variants={variants} userId={session?.user.id || ""} accessToken={session?.access_token || ""} onChanged={refetchAll} />
         </TabsContent>
 
         <TabsContent value="scheduled">
@@ -338,12 +355,60 @@ function StatCard({ label, value, icon: Icon, tone }: { label: string; value: nu
 // Media Library
 // ---------------------------------------------------------------------------
 
-function MediaLibraryPanel({ assets, userId, onChanged }: { assets: SocialAsset[]; userId: string; onChanged: () => void }) {
+type VariantBadgeStatus = "ready_original" | "ready_variant" | "needs_variant" | "needs_manual_adjustment";
+type VariantBadge = { platform: SocialPlatform; status: VariantBadgeStatus; variant: SocialPlatformVariant | null };
+
+const VARIANT_BADGE_LABEL: Record<VariantBadgeStatus, string> = {
+  ready_original: "Ready (original)",
+  ready_variant: "Ready (variant)",
+  needs_variant: "Needs variant",
+  needs_manual_adjustment: "Needs manual adjustment",
+};
+
+function variantBadgeClass(status: VariantBadgeStatus) {
+  if (status === "ready_original" || status === "ready_variant") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "needs_variant") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-red-200 bg-red-50 text-red-700"; // needs_manual_adjustment
+}
+
+// Predicts, before generation runs, what the Media Library badge should say
+// for one asset/platform pair. The original is preferred whenever it
+// already passes; a saved variant is used next; otherwise this predicts
+// (via the same contain-layout math the generator uses) whether an
+// automatic variant would be safe, so "needs manual adjustment" shows up
+// even before anyone clicks "Generate platform versions".
+function variantBadgeForAsset(asset: SocialAsset, platform: SocialPlatform, variants: SocialPlatformVariant[]): VariantBadge {
+  const platformKey = PLATFORM_TO_RULE_KEY[platform];
+  const originalValidation = validateAssetForPlatform(assetForValidation(asset), platformKey);
+  if (originalValidation.valid) return { platform, status: "ready_original", variant: null };
+
+  const variant = variants.find((v) => v.media_asset_id === asset.id && v.platform === platform) || null;
+  if (variant) {
+    const variantValidation = validateAssetForPlatform(
+      { mimeType: variant.mime_type, width: variant.width_px, height: variant.height_px, fileSizeBytes: variant.file_size_bytes },
+      platformKey,
+    );
+    return { platform, status: variantValidation.valid ? "ready_variant" : "needs_manual_adjustment", variant };
+  }
+
+  const target = platform === "instagram" ? chooseInstagramFeedTarget(asset.width_px, asset.height_px) : FACEBOOK_FALLBACK_TARGET;
+  const layout = computeContainLayout(asset.width_px, asset.height_px, target);
+  return { platform, status: needsManualAdjustment(layout) ? "needs_manual_adjustment" : "needs_variant", variant: null };
+}
+
+function MediaLibraryPanel({ assets, variants, userId, accessToken, onChanged }: {
+  assets: SocialAsset[];
+  variants: SocialPlatformVariant[];
+  userId: string;
+  accessToken: string;
+  onChanged: () => void;
+}) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [showArchived, setShowArchived] = useState(false);
+  const [generatingAssetId, setGeneratingAssetId] = useState<string | null>(null);
 
   const visibleAssets = assets.filter((asset) => (showArchived ? asset.status === "archived" : asset.status === "active"));
 
@@ -388,6 +453,35 @@ function MediaLibraryPanel({ assets, userId, onChanged }: { assets: SocialAsset[
     if (error) toast.error(error.message);
   };
 
+  const generatePlatformVersions = async (asset: SocialAsset) => {
+    setGeneratingAssetId(asset.id);
+    try {
+      const response = await fetch(SOCIAL_GENERATE_VARIANTS_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ media_asset_ids: [asset.id] }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        toast.error(payload.error || "Failed to generate platform versions");
+        return;
+      }
+      const results = (payload.results || []) as { platform: string; status: string; message?: string }[];
+      const generated = results.filter((r) => r.status === "generated").length;
+      const manual = results.filter((r) => r.status === "needs_manual_adjustment");
+      const errored = results.filter((r) => r.status === "error");
+      if (generated) toast.success(`Generated ${generated} platform version${generated === 1 ? "" : "s"} for "${asset.title}"`);
+      manual.forEach((r) => toast.warning(`${r.platform}: ${r.message || "needs manual adjustment"}`));
+      errored.forEach((r) => toast.error(`${r.platform}: ${r.message || "generation failed"}`));
+      if (!generated && !manual.length && !errored.length) toast.info("Already valid for every platform - no variant needed.");
+      onChanged();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to generate platform versions");
+    } finally {
+      setGeneratingAssetId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -418,10 +512,8 @@ function MediaLibraryPanel({ assets, userId, onChanged }: { assets: SocialAsset[
           <p className="text-sm text-muted-foreground">{showArchived ? "No archived assets." : "No posters uploaded yet."}</p>
         ) : (
           visibleAssets.map((asset) => {
-            const feedbackByPlatform = (["facebook", "instagram"] as SocialPlatform[]).map((platform) => ({
-              platform,
-              result: validateAssetForPlatform(assetForValidation(asset), PLATFORM_TO_RULE_KEY[platform]),
-            }));
+            const badges = (["facebook", "instagram"] as SocialPlatform[]).map((platform) => variantBadgeForAsset(asset, platform, variants));
+            const anyNeedsGeneration = badges.some((b) => b.status === "needs_variant");
             return (
               <Card key={asset.id} className="overflow-hidden">
                 <button type="button" className="block aspect-video w-full bg-muted" onClick={() => loadPreview(asset)}>
@@ -438,7 +530,7 @@ function MediaLibraryPanel({ assets, userId, onChanged }: { assets: SocialAsset[
                     onBlur={(e) => e.target.value !== asset.title && updateAssetField(asset, "title", e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    {asset.width_px}x{asset.height_px}px - {fileSizeLabel(asset.file_size_bytes)} - {asset.mime_type.replace("image/", "").toUpperCase()}
+                    Original: {asset.width_px}x{asset.height_px}px - {fileSizeLabel(asset.file_size_bytes)} - {asset.mime_type.replace("image/", "").toUpperCase()}
                   </p>
                   <Textarea
                     defaultValue={asset.default_caption || ""}
@@ -447,12 +539,23 @@ function MediaLibraryPanel({ assets, userId, onChanged }: { assets: SocialAsset[
                     onBlur={(e) => e.target.value !== (asset.default_caption || "") && updateAssetField(asset, "default_caption", e.target.value)}
                   />
                   <div className="flex flex-wrap gap-1.5">
-                    {feedbackByPlatform.map(({ platform, result }) => (
-                      <Badge key={platform} variant="outline" className={result.valid ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}>
-                        {PLATFORM_LABELS[platform]}: {result.valid ? "OK" : result.failures[0]?.code.replace(/_/g, " ")}
+                    {badges.map((badge) => (
+                      <Badge key={badge.platform} variant="outline" className={variantBadgeClass(badge.status)}>
+                        {PLATFORM_LABELS[badge.platform]}: {VARIANT_BADGE_LABEL[badge.status]}
+                        {badge.variant ? ` (${badge.variant.width_px}x${badge.variant.height_px})` : ""}
                       </Badge>
                     ))}
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    disabled={!anyNeedsGeneration || generatingAssetId === asset.id}
+                    onClick={() => generatePlatformVersions(asset)}
+                  >
+                    {generatingAssetId === asset.id ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-2 h-3.5 w-3.5" />}
+                    Generate platform versions
+                  </Button>
                   <Button variant="outline" size="sm" className="w-full" onClick={() => archiveAsset(asset, asset.status === "active")}>
                     <Trash2 className="mr-2 h-3.5 w-3.5" />{asset.status === "active" ? "Archive" : "Restore"}
                   </Button>

@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.social-connection-health]
 verify_jwt = false
+
+[functions.social-generate-variants]
+verify_jwt = false

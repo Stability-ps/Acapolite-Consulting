@@ -45,6 +45,7 @@ type DueScheduledPost = {
   id: string;
   campaign_id: string;
   media_asset_id: string;
+  platform_variant_id: string | null;
   target_platform: string;
   social_account_id: string;
   caption: string;
@@ -63,7 +64,7 @@ async function dispatchToProvider(platform: string, request: { imageUrl: string;
 async function claimDuePosts(sb: SupabaseClient, nowIso: string, staleCutoffIso: string, workerId: string): Promise<DueScheduledPost[]> {
   const { data: candidates, error } = await sb
     .from("social_scheduled_posts")
-    .select("id, campaign_id, media_asset_id, target_platform, social_account_id, caption, hashtags, attempt_count, status, campaign:social_campaigns!inner(status)")
+    .select("id, campaign_id, media_asset_id, platform_variant_id, target_platform, social_account_id, caption, hashtags, attempt_count, status, campaign:social_campaigns!inner(status)")
     .eq("status", "scheduled")
     .eq("campaign.status", "active")
     .lte("scheduled_at", nowIso)
@@ -87,7 +88,7 @@ async function claimDuePosts(sb: SupabaseClient, nowIso: string, staleCutoffIso:
   // recording a result, once the stale window has passed.
   const { data: staleCandidates } = await sb
     .from("social_scheduled_posts")
-    .select("id, campaign_id, media_asset_id, target_platform, social_account_id, caption, hashtags, attempt_count, status, campaign:social_campaigns!inner(status)")
+    .select("id, campaign_id, media_asset_id, platform_variant_id, target_platform, social_account_id, caption, hashtags, attempt_count, status, campaign:social_campaigns!inner(status)")
     .eq("status", "publishing")
     .eq("campaign.status", "active")
     .lt("claimed_at", staleCutoffIso)
@@ -138,10 +139,12 @@ Deno.serve(async (req: Request) => {
       let outcome: PublishOutcome;
       try {
         const [{ data: asset }, { data: account }] = await Promise.all([
-          sb.from("social_media_assets").select("storage_path").eq("id", post.media_asset_id).single(),
+          post.platform_variant_id
+            ? sb.from("social_platform_variants").select("storage_path").eq("id", post.platform_variant_id).single()
+            : sb.from("social_media_assets").select("storage_path").eq("id", post.media_asset_id).single(),
           sb.from("social_accounts").select("provider_account_id").eq("id", post.social_account_id).single(),
         ]);
-        if (!asset || !account) throw new PermanentPublishError("missing_reference", "Media asset or social account no longer exists");
+        if (!asset || !account) throw new PermanentPublishError("missing_reference", "Media asset, platform variant, or social account no longer exists");
 
         const { data: signed, error: signError } = await sb.storage.from("social-media-assets").createSignedUrl(asset.storage_path, SIGNED_URL_SECONDS);
         if (signError || !signed?.signedUrl) throw new TemporaryPublishError("signed_url_failed", "Unable to create a signed URL for the asset");

@@ -2059,33 +2059,42 @@ export type Database = {
       }
       social_platform_variants: {
         Row: {
+          aspect_ratio: number
           created_at: string
           file_size_bytes: number
           height_px: number
           id: string
           media_asset_id: string
+          mime_type: string
           platform: Database["public"]["Enums"]["social_platform"]
           storage_path: string
+          transformation_metadata: Json
           width_px: number
         }
         Insert: {
+          aspect_ratio: number
           created_at?: string
           file_size_bytes: number
           height_px: number
           id?: string
           media_asset_id: string
+          mime_type: string
           platform: Database["public"]["Enums"]["social_platform"]
           storage_path: string
+          transformation_metadata?: Json
           width_px: number
         }
         Update: {
+          aspect_ratio?: number
           created_at?: string
           file_size_bytes?: number
           height_px?: number
           id?: string
           media_asset_id?: string
+          mime_type?: string
           platform?: Database["public"]["Enums"]["social_platform"]
           storage_path?: string
+          transformation_metadata?: Json
           width_px?: number
         }
         Relationships: [
@@ -2162,6 +2171,7 @@ export type Database = {
           last_attempt_at: string | null
           media_asset_id: string
           next_retry_at: string | null
+          platform_variant_id: string | null
           provider_permalink: string | null
           provider_post_id: string | null
           published_at: string | null
@@ -2187,6 +2197,7 @@ export type Database = {
           last_attempt_at?: string | null
           media_asset_id: string
           next_retry_at?: string | null
+          platform_variant_id?: string | null
           provider_permalink?: string | null
           provider_post_id?: string | null
           published_at?: string | null
@@ -2212,6 +2223,7 @@ export type Database = {
           last_attempt_at?: string | null
           media_asset_id?: string
           next_retry_at?: string | null
+          platform_variant_id?: string | null
           provider_permalink?: string | null
           provider_post_id?: string | null
           published_at?: string | null
@@ -2241,6 +2253,13 @@ export type Database = {
             columns: ["media_asset_id"]
             isOneToOne: false
             referencedRelation: "social_media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_scheduled_posts_platform_variant_id_fkey"
+            columns: ["platform_variant_id"]
+            isOneToOne: false
+            referencedRelation: "social_platform_variants"
             referencedColumns: ["id"]
           },
           {

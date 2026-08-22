@@ -7,6 +7,8 @@ import { computeScheduleDates } from "../_shared/socialSchedule.ts";
 import { buildIdempotencyKey } from "../_shared/socialIdempotency.ts";
 import { platformKeyForAccountPlatform, validateAssetForPlatform } from "../_shared/socialPlatformRules.ts";
 
+type PlatformVariantRow = { id: string; platform: string; storage_path: string; width_px: number; height_px: number; mime_type: string; file_size_bytes: number };
+
 const MAIN_URL = "https://frormnagythfpiuzgfkz.supabase.co";
 const MAIN_PUBLISHABLE_KEY = "sb_publishable_MxFecwRlAUn7Z1Pa7-it6A_QDYO9rW8";
 const JSON_HEADERS = { "Content-Type": "application/json" };
@@ -117,6 +119,16 @@ Deno.serve(async (req: Request) => {
     excludedDates,
   });
 
+  const mediaAssetIds = items.map((item) => (item as unknown as { media_asset: { id: string } }).media_asset.id);
+  const { data: variantRows } = await sb
+    .from("social_platform_variants")
+    .select("id, media_asset_id, platform, storage_path, width_px, height_px, mime_type, file_size_bytes")
+    .in("media_asset_id", mediaAssetIds);
+  const variantsByAssetPlatform = new Map<string, PlatformVariantRow>();
+  for (const variant of (variantRows || []) as (PlatformVariantRow & { media_asset_id: string })[]) {
+    variantsByAssetPlatform.set(`${variant.media_asset_id}:${variant.platform}`, variant);
+  }
+
   const rows: Record<string, unknown>[] = [];
   const validationIssues: ValidationIssue[] = [];
 
@@ -132,10 +144,32 @@ Deno.serve(async (req: Request) => {
 
     for (const platform of platforms) {
       const account = accountsByPlatform.get(platform)!;
-      const validation = validateAssetForPlatform(
+      const platformKey = platformKeyForAccountPlatform(platform);
+      const originalValidation = validateAssetForPlatform(
         { mimeType: asset.mime_type, width: asset.width_px, height: asset.height_px, fileSizeBytes: asset.file_size_bytes },
-        platformKeyForAccountPlatform(platform),
+        platformKey,
       );
+
+      // The original asset is preferred whenever it already passes on its
+      // own. Only fall back to a generated platform variant when it
+      // doesn't - and only if that variant itself actually passes; a
+      // variant existing is not itself proof it's valid (rules can change).
+      let platformVariantId: string | null = null;
+      let validation = originalValidation;
+      if (!originalValidation.valid) {
+        const variant = variantsByAssetPlatform.get(`${asset.id}:${platform}`);
+        if (variant) {
+          const variantValidation = validateAssetForPlatform(
+            { mimeType: variant.mime_type, width: variant.width_px, height: variant.height_px, fileSizeBytes: variant.file_size_bytes },
+            platformKey,
+          );
+          if (variantValidation.valid) {
+            validation = variantValidation;
+            platformVariantId = variant.id;
+          }
+        }
+      }
+
       if (!validation.valid) {
         validationIssues.push({ campaign_item_id: item.id, platform, failures: validation.failures });
         continue;
@@ -155,6 +189,7 @@ Deno.serve(async (req: Request) => {
         campaign_id: campaignId,
         campaign_item_id: item.id,
         media_asset_id: asset.id,
+        platform_variant_id: platformVariantId,
         target_platform: platform,
         social_account_id: account.id,
         scheduled_at: slot.scheduledAt.toISOString(),
