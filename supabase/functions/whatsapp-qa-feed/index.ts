@@ -1294,7 +1294,14 @@ Deno.serve(async (req: Request) => {
     sb.from("whatsapp_alerts").select("id,conversation_id,alert_type,severity,title,body,assigned_staff_id,is_resolved,created_at").eq("is_resolved", false).order("created_at", { ascending: false }).limit(100),
     loadStaff(token, actor),
   ]);
-  if (conversationsError || messagesError) return json(req, { error: "Unable to load WhatsApp data" }, 500);
+  if (conversationsError || messagesError) {
+    // Structured, secret-free diagnostics: which query failed and the
+    // Postgres error code/message only (e.g. 42703 undefined_column after a
+    // schema/code drift) - never the row data or request headers.
+    if (conversationsError) console.error(JSON.stringify({ event: "whatsapp_qa_feed_query_failed", operation: "whatsapp_conversations.select", code: conversationsError.code, message: conversationsError.message }));
+    if (messagesError) console.error(JSON.stringify({ event: "whatsapp_qa_feed_query_failed", operation: "whatsapp_messages.select", code: messagesError.code, message: messagesError.message }));
+    return json(req, { error: "Unable to load WhatsApp data" }, 500);
+  }
   const conversationRows = (conversations || []) as WhatsAppConversationForLead[];
   const conversationIds = conversationRows.map((conversation) => conversation.id);
 
