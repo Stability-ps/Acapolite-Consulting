@@ -92,7 +92,16 @@ export function classifyAssetProbeError(httpStatus: number, body: GraphErrorBody
 
   if (httpStatus >= 500) return { status: "api_request_failed", message };
   if (code === 190) return { status: "invalid_or_expired_token", message };
-  if (code === 100 || code === 803) return { status: "wrong_account_id", message };
+  if (code === 100 || code === 803) {
+    // Meta overloads this code for both "the ID is genuinely malformed/
+    // doesn't exist" AND "it exists but this token lacks the read
+    // permission for it" - the message is the only way to tell them apart
+    // ("...requires the 'X' permission..." / "...due to missing
+    // permission..." means the latter, not a wrong ID).
+    const lower = message.toLowerCase();
+    if (lower.includes("permission")) return { status: "missing_scope", message };
+    return { status: "wrong_account_id", message };
+  }
   if (code === 10 || code === 200) {
     const lower = message.toLowerCase();
     if (lower.includes("permission") && !lower.includes("role") && !lower.includes("assigned")) {

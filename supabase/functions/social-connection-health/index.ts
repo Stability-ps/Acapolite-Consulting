@@ -131,8 +131,15 @@ Deno.serve(async (req: Request) => {
       if (discoveredPages.length === 1) {
         match = discoveredPages[0];
       } else if (discoveredPages.length > 1) {
+        // Bidirectional substring match: the stored display name and the
+        // real Page name are not always the same length in either
+        // direction ("Acapolite Consulting" as the stored label vs a Page
+        // actually named just "Acapolite", or the reverse).
         const needle = (account.display_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        match = discoveredPages.find((page) => page.name.toLowerCase().replace(/[^a-z0-9]/g, "").includes(needle) && needle.length > 0);
+        match = discoveredPages.find((page) => {
+          const pageName = page.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+          return needle.length > 0 && pageName.length > 0 && (pageName.includes(needle) || needle.includes(pageName));
+        });
       }
 
       if (match) {

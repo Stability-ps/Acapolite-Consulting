@@ -51,6 +51,25 @@ Deno.test("a live Graph probe failing with code 100 (object does not exist) is w
   assertEquals(result.status, "wrong_account_id");
 });
 
+Deno.test("REGRESSION (production case): a code-100 error whose message actually names a missing permission is missing_scope, not wrong_account_id", () => {
+  // Meta overloads error code 100 for both "malformed/nonexistent ID" and
+  // "this ID exists but the token lacks the read permission for it" - the
+  // real-world message this System User token returned when probing a
+  // correct, freshly-discovered numeric Page ID.
+  const probe = {
+    ok: false as const,
+    httpStatus: 400,
+    body: {
+      error: {
+        message: "(#100) Object does not exist, cannot be loaded due to missing permission or reviewable feature, or does not support this operation. This endpoint requires the 'pages_read_engagement' permission or the 'Page Public Content Access' feature.",
+        code: 100,
+      },
+    },
+  };
+  const result = evaluateAccountHealth("facebook", "1077357338795210", validToken, probe, now);
+  assertEquals(result.status, "missing_scope");
+});
+
 Deno.test("a live Graph probe failing with code 190 is invalid_or_expired_token, even if debug_token said valid", () => {
   const probe = { ok: false as const, httpStatus: 401, body: { error: { message: "Error validating access token", code: 190 } } };
   const result = evaluateAccountHealth("facebook", "111222333444555", validToken, probe, now);

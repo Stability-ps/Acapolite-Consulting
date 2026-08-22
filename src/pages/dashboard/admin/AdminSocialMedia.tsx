@@ -2,11 +2,15 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, Bot, Calendar, CheckCircle2, Clock3, ExternalLink, ImageIcon,
-  Link2, Loader2, Megaphone, Pause, Play, Plus, RefreshCw, Settings, ShieldCheck, Trash2, Upload, XCircle,
+  AlertTriangle, ArrowDown, ArrowUp, Ban, Bot, Calendar, CheckCircle2, Clock3, ExternalLink, ImageIcon,
+  Link2, Loader2, Megaphone, Pause, Play, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Trash2, Upload, XCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +46,19 @@ const PLATFORM_TO_RULE_KEY: Record<SocialPlatform, SocialPlatformKey> = {
 
 function assetForValidation(asset: SocialAsset) {
   return { mimeType: asset.mime_type, width: asset.width_px, height: asset.height_px, fileSizeBytes: asset.file_size_bytes };
+}
+
+async function logSocialActivity(action: string, targetId: string, metadata: Record<string, unknown>) {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return;
+  await supabase.from("system_activity_log").insert({
+    actor_profile_id: userData.user.id,
+    actor_role: "admin",
+    action,
+    target_type: "social_account",
+    target_id: targetId,
+    metadata,
+  });
 }
 
 function fileSizeLabel(bytes: number) {
@@ -1034,18 +1051,7 @@ function ConnectionsPanel({ accounts, accessToken, onChanged }: { accounts: Soci
           {accounts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No accounts connected yet. Facebook Page and Instagram Business account IDs must be added here before a campaign can target them.</p>
           ) : (
-            accounts.map((account) => (
-              <div key={account.id} className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-sm font-semibold">{account.display_name} <span className="text-xs text-muted-foreground">({PLATFORM_LABELS[account.platform]})</span></p>
-                  <p className="text-xs text-muted-foreground">Account ID: {account.provider_account_id}</p>
-                  {account.last_health_check_message ? <p className="text-xs text-muted-foreground">{account.last_health_check_message}</p> : null}
-                </div>
-                <Badge variant="outline" className={healthBadgeClass(account.last_health_check_status)}>
-                  {account.last_health_check_status ? account.last_health_check_status.replace(/_/g, " ") : "never checked"}
-                </Badge>
-              </div>
-            ))
+            accounts.map((account) => <AccountRow key={account.id} account={account} onChanged={onChanged} />)
           )}
         </CardContent>
       </Card>
@@ -1116,6 +1122,129 @@ function ConnectionsPanel({ accounts, accessToken, onChanged }: { accounts: Soci
           LinkedIn Company Page publishing is architecturally supported (provider interface + validation rules exist) but not yet implemented. No LinkedIn credentials are requested until it is built.
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+type AccountDependencySummary = { total: number; byStatus: Record<string, number> };
+
+async function loadAccountDependencies(accountId: string): Promise<AccountDependencySummary> {
+  const { data, error } = await supabase.from("social_scheduled_posts").select("status").eq("social_account_id", accountId);
+  if (error || !data) return { total: 0, byStatus: {} };
+  const byStatus: Record<string, number> = {};
+  for (const row of data) byStatus[row.status] = (byStatus[row.status] || 0) + 1;
+  return { total: data.length, byStatus };
+}
+
+function AccountRow({ account, onChanged }: { account: SocialAccount; onChanged: () => void }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [dependencies, setDependencies] = useState<AccountDependencySummary | null>(null);
+  const [checkingDeps, setCheckingDeps] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const disconnect = async () => {
+    setBusy(true);
+    const { error } = await supabase.from("social_accounts").update({ is_active: false, updated_at: new Date().toISOString() }).eq("id", account.id);
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    await logSocialActivity("social_account_disconnected", account.id, { platform: account.platform, provider_account_id: account.provider_account_id, display_name: account.display_name });
+    toast.success(`${account.display_name} disconnected. It will no longer be used for new campaign activations.`);
+    onChanged();
+  };
+
+  const reconnect = async () => {
+    setBusy(true);
+    const { error } = await supabase.from("social_accounts").update({ is_active: true, updated_at: new Date().toISOString() }).eq("id", account.id);
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    await logSocialActivity("social_account_reconnected", account.id, { platform: account.platform, provider_account_id: account.provider_account_id, display_name: account.display_name });
+    toast.success(`${account.display_name} reconnected.`);
+    onChanged();
+  };
+
+  const openDeleteConfirm = async () => {
+    setCheckingDeps(true);
+    setConfirmOpen(true);
+    setDependencies(await loadAccountDependencies(account.id));
+    setCheckingDeps(false);
+  };
+
+  const confirmDelete = async () => {
+    setBusy(true);
+    const { error } = await supabase.from("social_accounts").delete().eq("id", account.id);
+    setBusy(false);
+    setConfirmOpen(false);
+    if (error) {
+      // Defense in depth: even if the pre-check above raced with a new
+      // scheduled post, the FK (social_scheduled_posts.social_account_id
+      // references social_accounts ON DELETE RESTRICT) blocks the delete
+      // at the database level and this surfaces that as a clear message.
+      return toast.error(`Unable to delete this account: ${error.message}`);
+    }
+    await logSocialActivity("social_account_deleted", account.id, { platform: account.platform, provider_account_id: account.provider_account_id, display_name: account.display_name });
+    toast.success(`${account.display_name} removed. This only deleted Acapolite's connection record - the Meta Page/Instagram account and system-user token are untouched.`);
+    onChanged();
+  };
+
+  const blocked = (dependencies?.total || 0) > 0;
+
+  return (
+    <div className={`flex items-center justify-between rounded-lg border p-3 ${account.is_active ? "" : "opacity-60"}`}>
+      <div>
+        <p className="text-sm font-semibold">
+          {account.display_name} <span className="text-xs text-muted-foreground">({PLATFORM_LABELS[account.platform]})</span>
+          {!account.is_active ? <Badge variant="outline" className="ml-2 border-slate-200 bg-slate-50 text-slate-600">disconnected</Badge> : null}
+        </p>
+        <p className="text-xs text-muted-foreground">Account ID: {account.provider_account_id}</p>
+        {account.last_health_check_message ? <p className="text-xs text-muted-foreground">{account.last_health_check_message}</p> : null}
+      </div>
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className={healthBadgeClass(account.last_health_check_status)}>
+          {account.last_health_check_status ? account.last_health_check_status.replace(/_/g, " ") : "never checked"}
+        </Badge>
+        {account.is_active ? (
+          <Button variant="outline" size="sm" onClick={disconnect} disabled={busy} title="Disconnect (soft) - keeps the record, stops it being used for new campaigns">
+            <Ban className="h-3.5 w-3.5" />
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" onClick={reconnect} disabled={busy} title="Reconnect">
+            <RotateCcw className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={openDeleteConfirm} disabled={busy} title="Delete connection record">
+          <Trash2 className="h-3.5 w-3.5 text-red-600" />
+        </Button>
+      </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {PLATFORM_LABELS[account.platform]} account "{account.display_name}"?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>This only deletes Acapolite's connection record (account ID {account.provider_account_id}). It never deletes the actual Facebook Page or Instagram account, never revokes the Meta system-user token, and never touches WhatsApp.</p>
+                {checkingDeps ? (
+                  <p className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Checking for dependent posts...</p>
+                ) : blocked ? (
+                  <p className="font-semibold text-red-700">
+                    Blocked: {dependencies?.total} post(s) still reference this account
+                    ({Object.entries(dependencies?.byStatus || {}).map(([status, count]) => `${count} ${status}`).join(", ")}).
+                    Disconnect it instead, or wait until those posts are resolved.
+                  </p>
+                ) : (
+                  <p>No scheduled or published posts reference this account - safe to delete.</p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={checkingDeps || blocked || busy} className="bg-red-600 hover:bg-red-700">
+              Delete connection record
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
