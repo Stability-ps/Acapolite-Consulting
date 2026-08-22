@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { applyStatusUpdate, incomingStatuses } from "../_shared/whatsappStatus.ts";
+import { isValidServiceNeeded, normalizeServiceNeeded } from "../_shared/serviceNormalization.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const TEXT_HEADERS = { "Content-Type": "text/plain" };
@@ -374,7 +375,26 @@ function sameSupabaseProject(leftUrl: string, rightUrl: string) {
 
 function requestPayload(intake: Intake, options: RequestPayloadOptions = {}): ServiceRequestNotificationPayload {
   const company = intake.client_type === "company";
-  const service = String(intake.service_needed || (company ? "business_tax_other" : "individual_other"));
+  const rawServiceWording = typeof intake.service_needed === "string" ? intake.service_needed : null;
+  const normalization = normalizeServiceNeeded(rawServiceWording, {
+    clientType: typeof intake.client_type === "string" ? intake.client_type : null,
+    hasDebtFlag: intake.has_debt_flag === true,
+    description: typeof intake.description === "string" ? intake.description : null,
+  });
+  // Defense in depth: normalizeServiceNeeded already guarantees a value from
+  // SERVICE_NEEDED_VALUES, but a raw string can never reach the enum column
+  // unchecked even if that guarantee were ever broken by a future edit.
+  const service = isValidServiceNeeded(normalization.value) ? normalization.value : "other";
+  if (!normalization.matched) {
+    console.warn(JSON.stringify({
+      event: "whatsapp_service_needed_unmapped",
+      originalWording: normalization.original || null,
+      resolvedValue: service,
+      clientType: intake.client_type || null,
+      conversationId: options.conversationId || null,
+      waId: options.waId || null,
+    }));
+  }
   const category = inferCategory(intake);
   const returnsFiled = typeof intake.returns_filed === "boolean" ? intake.returns_filed : true;
   const missingFields = coreMissing(intake);
@@ -407,7 +427,10 @@ function requestPayload(intake: Intake, options: RequestPayloadOptions = {}): Se
     },
     allCapturedDetails: intake,
     createdFrom: options.includeAdminReviewGate ? "whatsapp_client_confirmation" : "whatsapp_agent_update",
+    serviceWordingOriginal: normalization.original || null,
+    serviceNormalization: { matched: normalization.matched, method: normalization.method, rule: normalization.ruleLabel, resolvedValue: service },
   };
+  const originalWordingDiffers = normalization.original.trim() && normalization.original.trim() !== service;
 
   const payload: ServiceRequestNotificationPayload = {
     full_name: String(intake.full_name || "").trim(),
@@ -443,7 +466,14 @@ function requestPayload(intake: Intake, options: RequestPayloadOptions = {}): Se
     intake_payload: {
       who: { entityType: intake.client_type, province: intake.province, city: intake.city || "" },
       what: { selectedServices: [{ value: service, label: service.replace(/_/g, " "), category }], otherDetails: {} },
-      details: { answers: { efilingAccess: intake.efiling_access || null, taxTypes: intake.tax_types || null, enforcementStage: intake.enforcement_stage || null, desiredOutcome: intake.desired_outcome || null }, additionalNotes: String(intake.description || ""), questions: [] },
+      details: {
+        answers: { efilingAccess: intake.efiling_access || null, taxTypes: intake.tax_types || null, enforcementStage: intake.enforcement_stage || null, desiredOutcome: intake.desired_outcome || null },
+        additionalNotes: [
+          String(intake.description || "").trim(),
+          originalWordingDiffers ? `Customer's own words for the service needed: "${normalization.original.trim()}"` : "",
+        ].filter(Boolean).join("\n\n"),
+        questions: [],
+      },
       contact: { fullName: intake.full_name, email: intake.email, phone: intake.phone, province: intake.province, city: intake.city || "", contactPreference: "WhatsApp", marketingConsent: false },
       whatsapp: whatsappDetails
     }
