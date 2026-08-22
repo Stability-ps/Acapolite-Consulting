@@ -1787,6 +1787,471 @@ export type Database = {
         };
         Relationships: [];
       };
+      social_accounts: {
+        Row: {
+          connected_at: string
+          connected_by: string | null
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          last_health_check_at: string | null
+          last_health_check_message: string | null
+          last_health_check_status: string | null
+          platform: Database["public"]["Enums"]["social_platform"]
+          provider_account_id: string
+          updated_at: string
+        }
+        Insert: {
+          connected_at?: string
+          connected_by?: string | null
+          created_at?: string
+          display_name: string
+          id?: string
+          is_active?: boolean
+          last_health_check_at?: string | null
+          last_health_check_message?: string | null
+          last_health_check_status?: string | null
+          platform: Database["public"]["Enums"]["social_platform"]
+          provider_account_id: string
+          updated_at?: string
+        }
+        Update: {
+          connected_at?: string
+          connected_by?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          last_health_check_at?: string | null
+          last_health_check_message?: string | null
+          last_health_check_status?: string | null
+          platform?: Database["public"]["Enums"]["social_platform"]
+          provider_account_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_accounts_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_campaign_excluded_dates: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          excluded_date: string
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          excluded_date: string
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          excluded_date?: string
+          id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_campaign_excluded_dates_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "social_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_campaign_items: {
+        Row: {
+          campaign_id: string
+          caption_override: string | null
+          created_at: string
+          hashtags_override: string[] | null
+          id: string
+          media_asset_id: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          caption_override?: string | null
+          created_at?: string
+          hashtags_override?: string[] | null
+          id?: string
+          media_asset_id: string
+          position: number
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          caption_override?: string | null
+          created_at?: string
+          hashtags_override?: string[] | null
+          id?: string
+          media_asset_id?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_campaign_items_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "social_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_campaign_items_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "social_media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_campaigns: {
+        Row: {
+          activated_at: string | null
+          approved_at: string | null
+          approved_by: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          default_caption_template: string | null
+          default_hashtags: string[]
+          description: string | null
+          id: string
+          interval_days: number
+          name: string
+          paused_at: string | null
+          start_at: string
+          status: Database["public"]["Enums"]["social_campaign_status"]
+          target_platforms: Database["public"]["Enums"]["social_platform"][]
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_caption_template?: string | null
+          default_hashtags?: string[]
+          description?: string | null
+          id?: string
+          interval_days?: number
+          name: string
+          paused_at?: string | null
+          start_at: string
+          status?: Database["public"]["Enums"]["social_campaign_status"]
+          target_platforms?: Database["public"]["Enums"]["social_platform"][]
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_caption_template?: string | null
+          default_hashtags?: string[]
+          description?: string | null
+          id?: string
+          interval_days?: number
+          name?: string
+          paused_at?: string | null
+          start_at?: string
+          status?: Database["public"]["Enums"]["social_campaign_status"]
+          target_platforms?: Database["public"]["Enums"]["social_platform"][]
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_campaigns_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_media_assets: {
+        Row: {
+          aspect_ratio: number
+          checksum_sha256: string
+          created_at: string
+          created_by: string | null
+          default_caption: string | null
+          file_size_bytes: number
+          height_px: number
+          id: string
+          mime_type: string
+          status: Database["public"]["Enums"]["social_asset_status"]
+          storage_path: string
+          title: string
+          updated_at: string
+          width_px: number
+        }
+        Insert: {
+          aspect_ratio: number
+          checksum_sha256: string
+          created_at?: string
+          created_by?: string | null
+          default_caption?: string | null
+          file_size_bytes: number
+          height_px: number
+          id?: string
+          mime_type: string
+          status?: Database["public"]["Enums"]["social_asset_status"]
+          storage_path: string
+          title: string
+          updated_at?: string
+          width_px: number
+        }
+        Update: {
+          aspect_ratio?: number
+          checksum_sha256?: string
+          created_at?: string
+          created_by?: string | null
+          default_caption?: string | null
+          file_size_bytes?: number
+          height_px?: number
+          id?: string
+          mime_type?: string
+          status?: Database["public"]["Enums"]["social_asset_status"]
+          storage_path?: string
+          title?: string
+          updated_at?: string
+          width_px?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_media_assets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_platform_variants: {
+        Row: {
+          created_at: string
+          file_size_bytes: number
+          height_px: number
+          id: string
+          media_asset_id: string
+          platform: Database["public"]["Enums"]["social_platform"]
+          storage_path: string
+          width_px: number
+        }
+        Insert: {
+          created_at?: string
+          file_size_bytes: number
+          height_px: number
+          id?: string
+          media_asset_id: string
+          platform: Database["public"]["Enums"]["social_platform"]
+          storage_path: string
+          width_px: number
+        }
+        Update: {
+          created_at?: string
+          file_size_bytes?: number
+          height_px?: number
+          id?: string
+          media_asset_id?: string
+          platform?: Database["public"]["Enums"]["social_platform"]
+          storage_path?: string
+          width_px?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_platform_variants_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "social_media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_publish_attempts: {
+        Row: {
+          attempt_number: number
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          finished_at: string
+          id: string
+          provider_response: Json | null
+          scheduled_post_id: string
+          started_at: string
+          status: Database["public"]["Enums"]["social_publish_attempt_status"]
+        }
+        Insert: {
+          attempt_number: number
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at: string
+          id?: string
+          provider_response?: Json | null
+          scheduled_post_id: string
+          started_at: string
+          status: Database["public"]["Enums"]["social_publish_attempt_status"]
+        }
+        Update: {
+          attempt_number?: number
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string
+          id?: string
+          provider_response?: Json | null
+          scheduled_post_id?: string
+          started_at?: string
+          status?: Database["public"]["Enums"]["social_publish_attempt_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_publish_attempts_scheduled_post_id_fkey"
+            columns: ["scheduled_post_id"]
+            isOneToOne: false
+            referencedRelation: "social_scheduled_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_scheduled_posts: {
+        Row: {
+          attempt_count: number
+          campaign_id: string
+          campaign_item_id: string | null
+          caption: string
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          failure_code: string | null
+          failure_message: string | null
+          hashtags: string[]
+          id: string
+          idempotency_key: string
+          last_attempt_at: string | null
+          media_asset_id: string
+          next_retry_at: string | null
+          provider_permalink: string | null
+          provider_post_id: string | null
+          published_at: string | null
+          scheduled_at: string
+          social_account_id: string
+          status: Database["public"]["Enums"]["social_post_status"]
+          target_platform: Database["public"]["Enums"]["social_platform"]
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          campaign_id: string
+          campaign_item_id?: string | null
+          caption: string
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          failure_code?: string | null
+          failure_message?: string | null
+          hashtags?: string[]
+          id?: string
+          idempotency_key: string
+          last_attempt_at?: string | null
+          media_asset_id: string
+          next_retry_at?: string | null
+          provider_permalink?: string | null
+          provider_post_id?: string | null
+          published_at?: string | null
+          scheduled_at: string
+          social_account_id: string
+          status?: Database["public"]["Enums"]["social_post_status"]
+          target_platform: Database["public"]["Enums"]["social_platform"]
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          campaign_id?: string
+          campaign_item_id?: string | null
+          caption?: string
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          failure_code?: string | null
+          failure_message?: string | null
+          hashtags?: string[]
+          id?: string
+          idempotency_key?: string
+          last_attempt_at?: string | null
+          media_asset_id?: string
+          next_retry_at?: string | null
+          provider_permalink?: string | null
+          provider_post_id?: string | null
+          published_at?: string | null
+          scheduled_at?: string
+          social_account_id?: string
+          status?: Database["public"]["Enums"]["social_post_status"]
+          target_platform?: Database["public"]["Enums"]["social_platform"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_scheduled_posts_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "social_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_scheduled_posts_campaign_item_id_fkey"
+            columns: ["campaign_item_id"]
+            isOneToOne: false
+            referencedRelation: "social_campaign_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_scheduled_posts_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "social_media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_scheduled_posts_social_account_id_fkey"
+            columns: ["social_account_id"]
+            isOneToOne: false
+            referencedRelation: "social_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     };
     Views: {
       admin_dashboard_summary: {
@@ -1972,6 +2437,27 @@ export type Database = {
     };
     Enums: {
       app_role: "admin" | "consultant" | "client";
+      social_platform: "facebook" | "instagram" | "linkedin"
+      social_asset_status: "active" | "archived"
+      social_campaign_status:
+        | "draft"
+        | "approved"
+        | "active"
+        | "paused"
+        | "completed"
+        | "archived"
+      social_post_status:
+        | "draft"
+        | "scheduled"
+        | "publishing"
+        | "published"
+        | "failed"
+        | "cancelled"
+        | "skipped"
+      social_publish_attempt_status:
+        | "success"
+        | "temporary_failure"
+        | "permanent_failure"
       case_type:
         | "individual_tax_return"
         | "corporate_tax_return"
@@ -2196,6 +2682,30 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "consultant", "client"],
+      social_platform: ["facebook", "instagram", "linkedin"],
+      social_asset_status: ["active", "archived"],
+      social_campaign_status: [
+        "draft",
+        "approved",
+        "active",
+        "paused",
+        "completed",
+        "archived",
+      ],
+      social_post_status: [
+        "draft",
+        "scheduled",
+        "publishing",
+        "published",
+        "failed",
+        "cancelled",
+        "skipped",
+      ],
+      social_publish_attempt_status: [
+        "success",
+        "temporary_failure",
+        "permanent_failure",
+      ],
       case_type: [
         "individual_tax_return",
         "corporate_tax_return",

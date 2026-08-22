@@ -14,3 +14,12 @@ verify_jwt = true
 
 [functions.tax-coach-ai]
 verify_jwt = false
+
+[functions.social-campaign-activate]
+verify_jwt = false
+
+[functions.social-publish-worker]
+verify_jwt = false
+
+[functions.social-connection-health]
+verify_jwt = false

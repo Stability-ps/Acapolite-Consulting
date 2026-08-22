@@ -56,6 +56,7 @@ import PractitionerDocumentsUploadPage from "./pages/dashboard/admin/Practitione
 import AdminActivityLog from "./pages/dashboard/admin/AdminActivityLog";
 import TaxCoachAIStaff from "./pages/dashboard/admin/TaxCoachAIStaff";
 import AdminWhatsAppQA from "./pages/dashboard/admin/AdminWhatsAppQA";
+import AdminSocialMedia from "./pages/dashboard/admin/AdminSocialMedia";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -232,6 +233,7 @@ function AppRoutes() {
               <Route element={<RequireRole allowedRoles={["admin"]} />}>
                 <Route path="staff/users" element={<AdminUsers />} />
                 <Route path="staff/whatsapp-qa" element={<AdminWhatsAppQA />} />
+                <Route path="staff/social-media" element={<AdminSocialMedia />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />

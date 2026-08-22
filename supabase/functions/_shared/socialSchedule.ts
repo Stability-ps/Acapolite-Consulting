@@ -1,0 +1,131 @@
+// Durable, DST-safe schedule generation for the Social Media Scheduler.
+// "Poster N posts `interval_days * (N-1)` local calendar days after the
+// campaign's start, at the same local wall-clock time" - computed per
+// IANA timezone via Intl, never a hardcoded UTC offset, so it stays correct
+// even for zones that do observe DST (Africa/Johannesburg does not, but the
+// algorithm itself must not assume that).
+
+export type ZonedDateParts = {
+  year: number;
+  month: number; // 1-12
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+};
+
+function partsFromInstant(instant: Date, timeZone: string): ZonedDateParts {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = formatter.formatToParts(instant);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value || 0);
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+    second: get("second"),
+  };
+}
+
+// Standard "guess, measure the error against the target zone, correct"
+// algorithm for turning local wall-clock components into the UTC instant
+// that produces them in an arbitrary IANA timezone. This is DST-safe: the
+// correction is recomputed independently for every date, so a transition
+// between the guess and the target changes nothing about correctness.
+export function zonedPartsToUtc(parts: ZonedDateParts, timeZone: string): Date {
+  const guessUtcMs = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const guess = new Date(guessUtcMs);
+  const interpretedAsZoneParts = partsFromInstant(guess, timeZone);
+  const interpretedAsZoneMs = Date.UTC(
+    interpretedAsZoneParts.year,
+    interpretedAsZoneParts.month - 1,
+    interpretedAsZoneParts.day,
+    interpretedAsZoneParts.hour,
+    interpretedAsZoneParts.minute,
+    interpretedAsZoneParts.second,
+  );
+  const driftMs = interpretedAsZoneMs - guessUtcMs;
+  return new Date(guessUtcMs - driftMs);
+}
+
+function addCalendarDays(parts: ZonedDateParts, days: number): ZonedDateParts {
+  // Deliberately do the day-count arithmetic in a timezone-naive UTC scratch
+  // instant. Only the calendar date changes here; the local hour/minute/
+  // second is carried through unchanged and re-anchored to the real zone by
+  // zonedPartsToUtc afterwards, so this step can never encode a DST bug.
+  const scratch = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  scratch.setUTCDate(scratch.getUTCDate() + days);
+  return {
+    year: scratch.getUTCFullYear(),
+    month: scratch.getUTCMonth() + 1,
+    day: scratch.getUTCDate(),
+    hour: parts.hour,
+    minute: parts.minute,
+    second: parts.second,
+  };
+}
+
+function dateKey(parts: ZonedDateParts) {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+export type ScheduleInput = {
+  startAt: Date;
+  timezone: string;
+  intervalDays: number;
+  count: number;
+  excludedDates?: string[]; // "YYYY-MM-DD", in the campaign's local timezone
+};
+
+export type ScheduledSlot = {
+  index: number; // 0-based poster index
+  scheduledAt: Date;
+  localDate: string; // "YYYY-MM-DD" for display/debugging
+  shiftedForExclusion: boolean;
+};
+
+// Computes N posting instants, `intervalDays` local calendar days apart,
+// starting from startAt's local wall-clock date/time. If a slot's naive
+// target date is excluded, it advances day-by-day (still at the same local
+// time) until it lands on a non-excluded date. Each slot's naive target is
+// independent (index * intervalDays from the campaign start), so a shift
+// caused by one exclusion never cascades into the spacing of later posts.
+export function computeScheduleDates(input: ScheduleInput): ScheduledSlot[] {
+  if (!Number.isFinite(input.intervalDays) || input.intervalDays <= 0) {
+    throw new Error("intervalDays must be a positive number");
+  }
+  if (!Number.isFinite(input.count) || input.count < 0) {
+    throw new Error("count must be a non-negative number");
+  }
+  const excluded = new Set(input.excludedDates || []);
+  const startParts = partsFromInstant(input.startAt, input.timezone);
+
+  const slots: ScheduledSlot[] = [];
+  for (let index = 0; index < input.count; index++) {
+    let targetParts = addCalendarDays(startParts, index * input.intervalDays);
+    let shifted = false;
+    let guard = 0;
+    while (excluded.has(dateKey(targetParts)) && guard < 3660) {
+      targetParts = addCalendarDays(targetParts, 1);
+      shifted = true;
+      guard++;
+    }
+    slots.push({
+      index,
+      scheduledAt: zonedPartsToUtc(targetParts, input.timezone),
+      localDate: dateKey(targetParts),
+      shiftedForExclusion: shifted,
+    });
+  }
+  return slots;
+}
