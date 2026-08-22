@@ -48,6 +48,28 @@ function assetForValidation(asset: SocialAsset) {
   return { mimeType: asset.mime_type, width: asset.width_px, height: asset.height_px, fileSizeBytes: asset.file_size_bytes };
 }
 
+// Meta's debug_token can list the same scope more than once - once flat
+// (app-wide) and again granularly per asset, or as separate granular
+// entries from different grant batches - which rendered as visible
+// duplicate badges. This merges everything into one entry per scope name,
+// combining all the target_ids it's granted for across every entry.
+function dedupeScopeDisplay(scopes: string[], granularScopes: { scope: string; target_ids?: string[] }[]) {
+  const targetIdsByScope = new Map<string, Set<string>>();
+  const ungatedScopes = new Set(scopes);
+  for (const g of granularScopes) {
+    const existing = targetIdsByScope.get(g.scope) || new Set<string>();
+    (g.target_ids || []).forEach((id) => existing.add(id));
+    if (!g.target_ids || g.target_ids.length === 0) ungatedScopes.add(g.scope);
+    targetIdsByScope.set(g.scope, existing);
+  }
+  const allScopeNames = new Set([...ungatedScopes, ...targetIdsByScope.keys()]);
+  return Array.from(allScopeNames).map((scope) => ({
+    scope,
+    targetCount: targetIdsByScope.get(scope)?.size || 0,
+    ungated: ungatedScopes.has(scope),
+  }));
+}
+
 async function logSocialActivity(action: string, targetId: string, metadata: Record<string, unknown>) {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return;
@@ -86,7 +108,7 @@ function postStatusBadgeClass(status: string) {
 function healthBadgeClass(status: string | null) {
   if (status === "connected") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "expiring_soon") return "border-amber-200 bg-amber-50 text-amber-800";
-  if (status === "invalid_or_expired_token" || status === "missing_scope" || status === "asset_not_assigned" || status === "wrong_account_id") return "border-red-200 bg-red-50 text-red-700";
+  if (status === "invalid_or_expired_token" || status === "missing_scope" || status === "asset_not_assigned" || status === "wrong_account_id" || status === "platform_mismatch") return "border-red-200 bg-red-50 text-red-700";
   return "border-slate-200 bg-slate-50 text-slate-600"; // api_request_failed / never checked
 }
 
@@ -1071,14 +1093,11 @@ function ConnectionsPanel({ accounts, accessToken, onChanged }: { accounts: Soci
                 {lastCheck.token_scopes.length === 0 && lastCheck.token_granular_scopes.length === 0 ? (
                   <span className="text-xs text-muted-foreground">None returned - check META_ACCESS_TOKEN.</span>
                 ) : (
-                  <>
-                    {lastCheck.token_scopes.map((scope) => <Badge key={scope} variant="outline">{scope}</Badge>)}
-                    {lastCheck.token_granular_scopes.map((g, i) => (
-                      <Badge key={`${g.scope}-${i}`} variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
-                        {g.scope}{g.target_ids?.length ? ` (${g.target_ids.length} asset${g.target_ids.length === 1 ? "" : "s"})` : ""}
-                      </Badge>
-                    ))}
-                  </>
+                  dedupeScopeDisplay(lastCheck.token_scopes, lastCheck.token_granular_scopes).map(({ scope, targetCount }) => (
+                    <Badge key={scope} variant="outline" className={targetCount > 0 ? "border-sky-200 bg-sky-50 text-sky-700" : undefined}>
+                      {scope}{targetCount > 0 ? ` (${targetCount} asset${targetCount === 1 ? "" : "s"})` : ""}
+                    </Badge>
+                  ))
                 )}
               </div>
             </div>

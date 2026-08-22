@@ -21,6 +21,7 @@ export type HealthStatus =
   | "missing_scope"
   | "asset_not_assigned"
   | "wrong_account_id"
+  | "platform_mismatch"
   | "api_request_failed";
 
 export type DebugTokenData = {
@@ -112,7 +113,18 @@ export function classifyAssetProbeError(httpStatus: number, body: GraphErrorBody
   return { status: "api_request_failed", message };
 }
 
-export type AssetProbeSuccess = { ok: true; id: string };
+export type AssetProbeSuccess = {
+  ok: true;
+  id: string;
+  // Whether the response actually contained the field unique to the
+  // expected object type (e.g. `category` for a Facebook Page, `username`
+  // for an Instagram Business Account). A successful fetch that's missing
+  // this field means the ID resolved to a real Graph object, but not one
+  // of the type this platform expects - almost always an admin picking the
+  // wrong platform in the Connect Account dialog for an otherwise-correct
+  // numeric ID, not a token/permission problem.
+  matchesExpectedType: boolean;
+};
 export type AssetProbeFailure = { ok: false; httpStatus: number; body: GraphErrorBody };
 export type AssetProbeResult = AssetProbeSuccess | AssetProbeFailure;
 
@@ -139,6 +151,13 @@ export function evaluateAccountHealth(
   if (validity && validity.status === "api_request_failed") return validity;
 
   if (!probe.ok) return classifyAssetProbeError(probe.httpStatus, probe.body);
+
+  if (!probe.matchesExpectedType) {
+    return {
+      status: "platform_mismatch",
+      message: `This ID resolves on Meta, but not as ${platform === "facebook" ? "a Facebook Page" : "an Instagram Business Account"}. Check the platform selected when this account was connected - it looks like a different object type's ID was used here.`,
+    };
+  }
 
   const required = REQUIRED_SCOPES[platform];
   const missing = required.filter((scope) => !hasGrantedScope(debugToken, scope, providerAccountId));

@@ -3,7 +3,7 @@ import { evaluateAccountHealth, hasGrantedScope, isNumericGraphId } from "./soci
 
 const now = Math.floor(new Date("2026-09-01T00:00:00Z").getTime() / 1000);
 const validToken = { is_valid: true, expires_at: 0 };
-const okProbe = { ok: true as const, id: "111222333444555" };
+const okProbe = { ok: true as const, id: "111222333444555", matchesExpectedType: true };
 
 Deno.test("isNumericGraphId rejects profile URLs (the actual production bug)", () => {
   assertEquals(isNumericGraphId("https://www.facebook.com/acapolite"), false);
@@ -102,7 +102,7 @@ Deno.test("the probe succeeding but the token lacking the required granular scop
 
 Deno.test("Instagram uses its own required-scope set independently of Facebook's", () => {
   const debugToken = { is_valid: true, expires_at: 0, granular_scopes: [{ scope: "instagram_content_publish", target_ids: ["222333444555666"] }, { scope: "instagram_basic", target_ids: ["222333444555666"] }] };
-  const igProbe = { ok: true as const, id: "222333444555666" };
+  const igProbe = { ok: true as const, id: "222333444555666", matchesExpectedType: true };
   const result = evaluateAccountHealth("instagram", "222333444555666", debugToken, igProbe, now);
   assertEquals(result.status, "connected");
 });
@@ -123,4 +123,22 @@ Deno.test("an expiring-soon token with otherwise full access still reports expir
 Deno.test("a network/error response from debug_token itself is api_request_failed", () => {
   const result = evaluateAccountHealth("facebook", "111222333444555", { error: { message: "Network error" } }, okProbe, now);
   assertEquals(result.status, "api_request_failed");
+});
+
+Deno.test("REGRESSION (production case): a Facebook Page ID connected as Instagram (or vice versa) is platform_mismatch, not silently connected", () => {
+  // The Graph API happily returns 200 for a Facebook Page ID even when
+  // queried with Instagram-shaped fields (both are base Graph objects with
+  // id/name) - only the platform-specific field (category for a Page,
+  // username for an IG Business Account) tells them apart. This is exactly
+  // what happened in production: the Facebook Page ID was connected with
+  // platform="instagram" and still reported "connected".
+  const mismatchedProbe = { ok: true as const, id: "1077357338795210", matchesExpectedType: false };
+  const debugToken = { is_valid: true, expires_at: 0, granular_scopes: [{ scope: "instagram_basic" }, { scope: "instagram_content_publish" }] };
+  const result = evaluateAccountHealth("instagram", "1077357338795210", debugToken, mismatchedProbe, now);
+  assertEquals(result.status, "platform_mismatch");
+});
+
+Deno.test("a matching object type with full permissions is still reported connected (no false positive from the type check)", () => {
+  const result = evaluateAccountHealth("instagram", "17841420423370318", { is_valid: true, expires_at: 0, granular_scopes: [{ scope: "instagram_basic" }, { scope: "instagram_content_publish" }] }, { ok: true, id: "17841420423370318", matchesExpectedType: true }, now);
+  assertEquals(result.status, "connected");
 });

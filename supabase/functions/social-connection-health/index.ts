@@ -66,12 +66,22 @@ async function discoverPages(version: string, token: string): Promise<{ pages: M
   return { pages: (body?.data || []) as MetaPage[] };
 }
 
-async function probeAsset(version: string, token: string, id: string, fields: string): Promise<AssetProbeResult> {
+// `category` only exists on Facebook Page objects; `media_count` only
+// exists on Instagram Business Account objects. Both object types share
+// `id`/`name`/`username`-shaped fields, so those alone can't tell a
+// misconnected Page-as-Instagram (or vice versa) apart from a real match -
+// this is exactly the production case where a Facebook Page ID, connected
+// with platform="instagram", still returned 200 and looked "connected".
+const DISCRIMINATOR_FIELD: Record<"facebook" | "instagram", string> = { facebook: "category", instagram: "media_count" };
+
+async function probeAsset(version: string, token: string, id: string, platform: "facebook" | "instagram"): Promise<AssetProbeResult> {
+  const discriminator = DISCRIMINATOR_FIELD[platform];
+  const fields = platform === "facebook" ? `id,name,${discriminator}` : `id,username,${discriminator}`;
   try {
     const response = await fetch(`https://graph.facebook.com/${version}/${id}?fields=${fields}&access_token=${encodeURIComponent(token)}`);
     const body = await response.json().catch(() => ({}));
     if (!response.ok) return { ok: false, httpStatus: response.status, body };
-    return { ok: true, id: String(body.id || id) };
+    return { ok: true, id: String(body.id || id), matchesExpectedType: discriminator in body };
   } catch (error) {
     return { ok: false, httpStatus: 0, body: { error: { message: error instanceof Error ? error.message : "Network error" } } };
   }
@@ -157,9 +167,9 @@ Deno.serve(async (req: Request) => {
     if (!/^[0-9]+$/.test(providerAccountId)) {
       health = { status: "wrong_account_id", message: discoveryError ? `Could not resolve a numeric ID automatically: ${discoveryError}` : "Could not resolve a numeric Meta ID automatically - multiple pages found and none matched by name. Connect using the numeric ID directly." };
     } else {
-      const fields = account.platform === "instagram" ? "id,username" : "id,name";
-      const probe = await probeAsset(version, metaToken, providerAccountId, fields);
-      health = evaluateAccountHealth(account.platform === "linkedin" ? "facebook" : (account.platform as "facebook" | "instagram"), providerAccountId, debugToken, probe, Math.floor(Date.now() / 1000));
+      const effectivePlatform = account.platform === "linkedin" ? "facebook" : (account.platform as "facebook" | "instagram");
+      const probe = await probeAsset(version, metaToken, providerAccountId, effectivePlatform);
+      health = evaluateAccountHealth(effectivePlatform, providerAccountId, debugToken, probe, Math.floor(Date.now() / 1000));
     }
 
     await sb.from("social_accounts").update({
