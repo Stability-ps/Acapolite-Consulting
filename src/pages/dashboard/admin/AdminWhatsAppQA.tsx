@@ -1824,6 +1824,7 @@ export default function AdminWhatsAppQA() {
                 <TabsContent value="client" className="mt-0 space-y-6">
                   <div>
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Selected client</p>
+                    <div className="md:grid md:grid-cols-2 md:gap-x-8">
                     <DetailRow label="Full name" value={intakeValue(selected.conversation.intake_payload?.full_name)} />
                     <DetailRow label="WhatsApp name" value={selected.conversation.display_name || "—"} />
                     <DetailRow label="Phone" value={`+${selected.conversation.wa_id}`} />
@@ -1839,6 +1840,7 @@ export default function AdminWhatsAppQA() {
                     <DetailRow label="Urgency" value={intakeValue(selected.conversation.intake_payload?.urgency)} />
                     <DetailRow label="eFiling access" value={intakeValue(selected.conversation.intake_payload?.efiling_access)} />
                     <DetailRow label="Desired outcome" value={intakeValue(selected.conversation.intake_payload?.desired_outcome)} />
+                    </div>
                   </div>
 
                 </TabsContent>
@@ -2129,7 +2131,7 @@ export default function AdminWhatsAppQA() {
               </div>
             ) : null}
             {authLoading || query.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Evaluating conversations…</p> : null}
-            {!authLoading && !query.isLoading && visibleEvaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No matching WhatsApp conversations.</p> : null}
+            {!authLoading && !query.isLoading && !query.error && visibleEvaluations.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No matching WhatsApp conversations.</p> : null}
 	            {visibleEvaluations.map((evaluation) => {
 	              const leadQuality = getConversationLeadQuality(evaluation.conversation, evaluation.messages);
 	              const leadGate = getWhatsAppLeadGate(leadQuality);
@@ -2180,8 +2182,8 @@ export default function AdminWhatsAppQA() {
             <Button type="button" variant="ghost" size="sm" className="w-fit px-0 md:hidden" onClick={() => setMobileWorkspaceView("conversations")}>
               <ArrowLeft className="mr-2 h-4 w-4" />Back to conversations
             </Button>
-            <CardTitle className="flex items-center justify-between gap-3">
-              <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-5 w-5 shrink-0" /><span className="truncate">Conversation</span></span>
+            <CardTitle className="flex items-center justify-between gap-3 text-base">
+              <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-4 w-4 shrink-0" /><span className="truncate">Conversation</span></span>
               {selected ? <span className="shrink-0">{statusBadge(selected.status)}</span> : null}
             </CardTitle>
             {selected ? (
@@ -2193,7 +2195,9 @@ export default function AdminWhatsAppQA() {
             ) : null}
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-            {!selected ? (
+            {authLoading || query.isLoading ? (
+              <p className="px-6 py-12 text-center text-sm text-muted-foreground">Loading WhatsApp conversations…</p>
+            ) : !selected ? (
               <p className="px-6 py-12 text-center text-sm text-muted-foreground">Select a conversation to read its transcript.</p>
             ) : selected.messages.length === 0 ? (
               <p className="px-6 py-12 text-center text-sm text-muted-foreground">No messages were recorded for this conversation.</p>
@@ -2363,7 +2367,8 @@ export default function AdminWhatsAppQA() {
                 <p className="text-[11px] leading-snug text-muted-foreground">Tick boxes for export/delete. Click a card to review the lead details.</p>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
-                {filteredLeadEvaluations.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">No WhatsApp leads match this search.</p> : null}
+                {authLoading || query.isLoading ? <p className="py-10 text-center text-sm text-muted-foreground">Evaluating leads…</p> : null}
+                {!authLoading && !query.isLoading && !query.error && filteredLeadEvaluations.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">No WhatsApp leads match this search.</p> : null}
                 {filteredLeadEvaluations.map((evaluation) => {
                   const conversation = evaluation.conversation;
                   const leadQuality = getConversationLeadQuality(conversation, evaluation.messages);
@@ -2481,9 +2486,11 @@ export default function AdminWhatsAppQA() {
                 </div>
               </CardHeader>
               <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
-                {visibleAiControlEvaluations.length === 0 ? (
+                {authLoading || query.isLoading ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">Evaluating WhatsApp chats…</p>
+                ) : !query.error && visibleAiControlEvaluations.length === 0 ? (
                   <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
-                    <p>{conversationSearch ? "No WhatsApp chats match this search." : "No WhatsApp chats loaded yet."}</p>
+                    <p>{conversationSearch ? "No WhatsApp chats match this search." : "No WhatsApp chats yet."}</p>
                     {conversationSearch ? (
                       <Button type="button" size="sm" variant="outline" className="mt-3" onClick={() => setConversationSearch("")}>
                         Clear search
@@ -2542,8 +2549,8 @@ export default function AdminWhatsAppQA() {
 
             <Card className="flex min-w-0 flex-col overflow-hidden">
               <CardHeader className="shrink-0 border-b">
-                <CardTitle className="flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-5 w-5 shrink-0" /><span className="truncate">Selected WhatsApp chat</span></span>
+                <CardTitle className="flex items-center justify-between gap-3 text-base">
+                  <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-4 w-4 shrink-0" /><span className="truncate">Selected chat</span></span>
                   {selected ? <span className="shrink-0">{statusBadge(selected.status)}</span> : null}
                 </CardTitle>
                 {selected ? (
@@ -2683,7 +2690,7 @@ export default function AdminWhatsAppQA() {
               </button>
             </div>
           </div>
-          <div className="grid gap-4 xl:grid-cols-[minmax(320px,0.38fr)_minmax(0,0.62fr)]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(320px,0.38fr)_minmax(0,0.62fr)] xl:items-start">
             {operationalAlertsCard}
             {humanChatReportingCard}
           </div>
@@ -2692,7 +2699,7 @@ export default function AdminWhatsAppQA() {
 
       {platformTab === "settings" ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid gap-4 xl:grid-cols-3 xl:items-start">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base"><Copy className="h-4 w-4" />Reply templates</CardTitle>
