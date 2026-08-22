@@ -216,10 +216,50 @@ describe("AdminWhatsAppQA", () => {
     // switching sections must not lose the selected conversation
     expect(screen.getAllByText("Naledi Dlamini").length).toBeGreaterThan(0);
 
-    // Inbox no longer shows any Actions & AI / Review controls in its own panel.
+    // Inbox no longer shows the full Actions & AI panel (lead quality / quick status),
+    // but its own compact control bar still reflects the same live AI/human status.
     fireEvent.click(screen.getByRole("button", { name: /^Inbox/ }));
-    await waitFor(() => expect(screen.queryByText(/AI replies are locked/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("Quick status")).not.toBeInTheDocument());
+    expect(screen.getAllByText(/AI replies are locked/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Naledi Dlamini").length).toBeGreaterThan(0);
+  });
+
+  it("shows the Inbox control bar and lets staff pick a recommended reply without auto-sending", async () => {
+    renderPage();
+    const [conversationCard] = await screen.findAllByText("Naledi Dlamini");
+    fireEvent.click(conversationCard);
+
+    // dynamic human-control status, reflecting the assigned staff member from the feed (not hardcoded)
+    expect(await screen.findByText("Human control is active, assigned to Test Staff. AI replies are locked.")).toBeInTheDocument();
+
+    // control bar exposes the existing handlers, reusing them rather than duplicating backend logic
+    expect(screen.getByRole("button", { name: /Return to AI/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ask missing info/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Resolve/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Open request/i })).not.toBeInTheDocument();
+
+    // recommended replies panel is collapsed by default
+    expect(screen.queryByText("Recommended replies")).not.toBeInTheDocument();
+
+    const draftFollowUpButton = screen.getByRole("button", { name: /Draft follow-up/i });
+    fireEvent.click(draftFollowUpButton);
+
+    expect(await screen.findByText("Recommended replies")).toBeInTheDocument();
+    const recommendation = screen.getByRole("button", { name: /Human takeover/i });
+    fireEvent.click(recommendation);
+
+    // inserted into the composer, not auto-sent - staff can still edit and send manually
+    const textarea = await screen.findByPlaceholderText("Write a WhatsApp reply...");
+    await waitFor(() => expect((textarea as HTMLTextAreaElement).value.length).toBeGreaterThan(0));
+    expect(screen.queryByText("Recommended replies")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Send reply/i })).toBeInTheDocument();
+
+    // switching conversations clears any open panel and does not leak the previous recommendation
+    fireEvent.click(draftFollowUpButton);
+    expect(await screen.findByText("Recommended replies")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText("Thabo Nkosi")[0]);
+    await waitFor(() => expect(screen.queryByText("Recommended replies")).not.toBeInTheDocument());
+    expect(await screen.findByText("AI is active. Take over or assign the chat before replying.")).toBeInTheDocument();
   });
 
   it("shows an empty state for Actions & AI and Review when there is no conversation to select", async () => {

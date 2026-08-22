@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, AlertTriangle, ArrowLeft, ArrowUpDown, BarChart3, Bell, Bot, CheckCircle2, ClipboardList, Clock3, Copy, Download, ExternalLink, FileSpreadsheet, FileText, Headphones, ImageIcon, Link2, MessageCircle, Paperclip, RefreshCw, Search, Send, Settings, ShieldCheck, StickyNote, Timer, Trash2, UserCheck, UserRoundCheck, Users, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, ArrowUpDown, BarChart3, Bell, Bot, CheckCircle2, ClipboardList, Clock3, Copy, Download, ExternalLink, FileSpreadsheet, FileText, Headphones, ImageIcon, Link2, MessageCircle, Paperclip, RefreshCw, Search, Send, Settings, ShieldCheck, StickyNote, Timer, Trash2, UserCheck, UserRoundCheck, Users, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
@@ -206,6 +206,7 @@ const RISK_VALUES = new Set(["low", "medium", "high"]);
 const QA_ACTION_BUTTON_CLASS = "w-full min-w-0 justify-center gap-2 !h-auto min-h-10 !whitespace-normal break-words px-3 py-2 text-center text-sm leading-snug [&_svg]:shrink-0 [&>span]:min-w-0 [&>span]:break-words";
 const QA_INLINE_ACTION_BUTTON_CLASS = "w-full min-w-0 justify-center gap-2 !h-auto min-h-10 !whitespace-normal break-words px-3 py-2 text-center text-sm leading-snug [&_svg]:shrink-0 [&>span]:min-w-0 [&>span]:break-words";
 const QA_NARROW_ACTION_GRID_CLASS = "grid grid-cols-1 gap-2";
+const QA_CONTROL_BAR_BUTTON_CLASS = "h-auto min-h-8 min-w-0 justify-center gap-1.5 whitespace-normal break-words bg-background px-2 py-1.5 text-center text-[11px] leading-snug [&_svg]:shrink-0 [&>span]:min-w-0 [&>span]:break-words";
 const REPLY_TEMPLATE_DETAILS: Record<ReplyTemplateKey, Omit<ReplyTemplateMeta, "value">> = {
   missing_info: { label: "Missing info", detail: "Collect the fields blocking lead quality." },
   document_request: { label: "Request documents", detail: "Ask for SARS letters, notices, and account statements." },
@@ -644,6 +645,12 @@ function deliveryTone(status: string | null) {
   return "text-muted-foreground";
 }
 
+function aiHumanStatusText(conversation: Conversation) {
+  return conversation.ai_enabled
+    ? "AI is active. Take over or assign the chat before replying."
+    : `Human control is active${conversation.assigned_staff_name ? `, assigned to ${conversation.assigned_staff_name}` : ""}. AI replies are locked.`;
+}
+
 function latestInboundAt(conversation: Conversation, messages: Message[]) {
   const inboundTimes = messages
     .filter((message) => message.direction === "inbound")
@@ -829,6 +836,9 @@ export default function AdminWhatsAppQA() {
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [draftRequestedFor, setDraftRequestedFor] = useState<string | null>(null);
   const [replyTemplate, setReplyTemplate] = useState<ReplyTemplateKey>("missing_info");
+  const [showRecommendedReplies, setShowRecommendedReplies] = useState(false);
+  const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const draftFollowUpButtonRef = useRef<HTMLButtonElement | null>(null);
   const [queueFilter, setQueueFilter] = useState<QueueFilter>("all");
   const [conversationSearch, setConversationSearch] = useState("");
   const [conversationSort, setConversationSort] = useState<ConversationSort>("newest");
@@ -1047,6 +1057,9 @@ export default function AdminWhatsAppQA() {
   }, [conversationIdFromQuery, draftIntent, draftRequestedFor, selected, selectedLeadQuality]);
   useEffect(() => {
     setInternalNote("");
+  }, [selected?.conversation.id]);
+  useEffect(() => {
+    setShowRecommendedReplies(false);
   }, [selected?.conversation.id]);
   useEffect(() => {
     setSelectedLeadIds((current) => {
@@ -1413,6 +1426,12 @@ export default function AdminWhatsAppQA() {
     toast.message("Reply template drafted.");
   };
 
+  const selectRecommendedReply = (templateKey: ReplyTemplateKey) => {
+    applyReplyTemplate(templateKey);
+    setShowRecommendedReplies(false);
+    replyTextareaRef.current?.focus();
+  };
+
   const draftReengagementReply = () => {
     if (!selected || !selectedLeadQuality) {
       toast.error("Select a WhatsApp conversation before drafting a follow-up.");
@@ -1696,9 +1715,7 @@ export default function AdminWhatsAppQA() {
         ) : null}
 
         <div className={`rounded-lg border px-3 py-2 text-xs ${selected.conversation.ai_enabled ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
-          {selected.conversation.ai_enabled
-            ? "AI is active. Take over or assign the chat before replying."
-            : `Human control is active${selected.conversation.assigned_staff_name ? `, assigned to ${selected.conversation.assigned_staff_name}` : ""}. AI replies are locked.`}
+          {aiHumanStatusText(selected.conversation)}
         </div>
       </div>
 
@@ -2182,8 +2199,8 @@ export default function AdminWhatsAppQA() {
             <Button type="button" variant="ghost" size="sm" className="w-fit px-0 md:hidden" onClick={() => setMobileWorkspaceView("conversations")}>
               <ArrowLeft className="mr-2 h-4 w-4" />Back to conversations
             </Button>
-            <CardTitle className="flex items-center justify-between gap-3 text-base">
-              <span className="flex min-w-0 items-center gap-2"><MessageCircle className="h-4 w-4 shrink-0" /><span className="truncate">Conversation</span></span>
+            <CardTitle className="flex items-center justify-between gap-2 text-base">
+              <span className="min-w-0 truncate">Conversation</span>
               {selected ? <span className="shrink-0">{statusBadge(selected.status)}</span> : null}
             </CardTitle>
             {selected ? (
@@ -2247,7 +2264,76 @@ export default function AdminWhatsAppQA() {
             )}
 	            {selected ? (
 	              <div className="shrink-0 space-y-2 border-t bg-background p-3">
+	                <div className={`rounded-lg border px-3 py-2 text-xs ${selected.conversation.ai_enabled ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
+	                  <p>{aiHumanStatusText(selected.conversation)}</p>
+	                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+	                    {selected.conversation.ai_enabled ? (
+	                      <Button type="button" size="sm" variant="outline" className={QA_CONTROL_BAR_BUTTON_CLASS} onClick={() => query.data?.currentStaff && runAction("assign", { staff_id: query.data.currentStaff.id })} disabled={actionPending || !query.data?.currentStaff}>
+	                        <UserRoundCheck className="h-3.5 w-3.5 shrink-0" /><span>Take over</span>
+	                      </Button>
+	                    ) : (
+	                      <Button type="button" size="sm" variant="outline" className={QA_CONTROL_BAR_BUTTON_CLASS} onClick={() => window.confirm("Return this chat to AI? Staff replies will stop controlling the conversation.") && runAction("return_to_ai")} disabled={actionPending}>
+	                        <Bot className="h-3.5 w-3.5 shrink-0" /><span>Return to AI</span>
+	                      </Button>
+	                    )}
+	                    <Button type="button" size="sm" variant="outline" className={QA_CONTROL_BAR_BUTTON_CLASS} onClick={draftMissingInfoReply} disabled={actionPending || !selectedLeadQuality?.followUpFields.length}>
+	                      <MessageCircle className="h-3.5 w-3.5 shrink-0" /><span>Ask missing info</span>
+	                    </Button>
+	                    {selected.conversation.service_request_id ? (
+	                      <Button type="button" size="sm" variant="outline" className={QA_CONTROL_BAR_BUTTON_CLASS} onClick={() => selected.conversation.service_request_id && openLead(selected.conversation.service_request_id)}>
+	                        <ExternalLink className="h-3.5 w-3.5 shrink-0" /><span>Open request</span>
+	                      </Button>
+	                    ) : null}
+	                    {selected.conversation.inbox_status === "resolved" ? (
+	                      <Button type="button" size="sm" variant="outline" className={QA_CONTROL_BAR_BUTTON_CLASS} onClick={() => runAction("reopen")} disabled={actionPending || !query.data?.inboxReady}>
+	                        <RefreshCw className="h-3.5 w-3.5 shrink-0" /><span>Reopen chat</span>
+	                      </Button>
+	                    ) : (
+	                      <Button type="button" size="sm" variant="outline" className={QA_CONTROL_BAR_BUTTON_CLASS} onClick={() => window.confirm("Mark this human chat as resolved? AI will remain silent.") && runAction("resolve")} disabled={actionPending || selected.conversation.ai_enabled || !query.data?.inboxReady}>
+	                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /><span>Resolve</span>
+	                      </Button>
+	                    )}
+	                  </div>
+	                </div>
+
+	                {showRecommendedReplies ? (
+	                  <div id="inbox-recommended-replies" role="group" aria-label="Recommended replies" className="rounded-lg border bg-muted/20 p-2.5">
+	                    <div className="mb-1.5 flex items-center justify-between gap-2">
+	                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Recommended replies</p>
+	                      <button
+	                        type="button"
+	                        aria-label="Close recommended replies"
+	                        className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+	                        onClick={() => {
+	                          setShowRecommendedReplies(false);
+	                          draftFollowUpButtonRef.current?.focus();
+	                        }}
+	                      >
+	                        <X className="h-3.5 w-3.5" />
+	                      </button>
+	                    </div>
+	                    {selectedReplyTemplates.length ? (
+	                      <div className="grid gap-1.5 sm:grid-cols-2">
+	                        {selectedReplyTemplates.map((template) => (
+	                          <button
+	                            key={template.value}
+	                            type="button"
+	                            onClick={() => selectRecommendedReply(template.value)}
+	                            className="rounded-lg border bg-background p-2 text-left text-xs transition-colors hover:border-primary/50"
+	                          >
+	                            <p className="font-semibold">{template.label}</p>
+	                            <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{template.detail}</p>
+	                          </button>
+	                        ))}
+	                      </div>
+	                    ) : (
+	                      <p className="px-1 py-2 text-xs text-muted-foreground">No suggestions available for this conversation yet.</p>
+	                    )}
+	                  </div>
+	                ) : null}
+
 	                <Textarea
+	                  ref={replyTextareaRef}
 	                  value={reply}
 	                  onChange={(event) => setReply(event.target.value)}
 	                  placeholder="Write a WhatsApp reply..."
@@ -2260,8 +2346,18 @@ export default function AdminWhatsAppQA() {
 	                />
 	                <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
 	                  <p className="text-xs text-muted-foreground">{reply.length}/1000 · Staff reply</p>
-	                  <Button type="button" size="sm" className={QA_INLINE_ACTION_BUTTON_CLASS} variant="outline" onClick={draftReengagementReply} disabled={actionPending || !selectedLeadQuality}>
-	                    <FileText className="h-4 w-4" /><span>Draft follow-up</span>
+	                  <Button
+	                    ref={draftFollowUpButtonRef}
+	                    type="button"
+	                    size="sm"
+	                    className={QA_INLINE_ACTION_BUTTON_CLASS}
+	                    variant="outline"
+	                    onClick={() => setShowRecommendedReplies((open) => !open)}
+	                    disabled={actionPending || !selectedReplyTemplates.length}
+	                    aria-expanded={showRecommendedReplies}
+	                    aria-controls="inbox-recommended-replies"
+	                  >
+	                    <FileText className="h-4 w-4" /><span>{showRecommendedReplies ? "Hide suggestions" : "Draft follow-up"}</span>
 	                  </Button>
 	                  <Button size="sm" className={QA_INLINE_ACTION_BUTTON_CLASS} onClick={() => runAction("reply", { message: reply })} disabled={selected.conversation.ai_enabled || actionPending || !reply.trim()}>
 	                    <Send className="h-4 w-4" /><span>{selected.conversation.ai_enabled ? "Take over first" : "Send reply"}</span>
