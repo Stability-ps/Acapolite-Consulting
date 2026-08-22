@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { applyStatusUpdate, incomingStatuses } from "../_shared/whatsappStatus.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const TEXT_HEADERS = { "Content-Type": "text/plain" };
@@ -749,11 +750,25 @@ Deno.serve(async (req: Request) => {
 
     const rawBody = await req.text();
     if (!(await validSignature(req, rawBody))) return new Response("Invalid signature", { status: 401, headers: TEXT_HEADERS });
-    const events = incomingEvents(JSON.parse(rawBody));
-    if (!events.length) return new Response(JSON.stringify({ ok: true, ignored: true }), { status: 200, headers: JSON_HEADERS });
+    const payload = JSON.parse(rawBody);
+    const events = incomingEvents(payload);
+    const statusEvents = incomingStatuses(payload);
+    if (!events.length && !statusEvents.length) return new Response(JSON.stringify({ ok: true, ignored: true }), { status: 200, headers: JSON_HEADERS });
 
     const whatsappUrl = env("SUPABASE_URL");
     const whatsappServiceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+    const sb = createClient(whatsappUrl, whatsappServiceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+    for (const status of statusEvents) {
+      try {
+        await applyStatusUpdate(sb, status);
+      } catch (statusError) {
+        console.error("WhatsApp status processing error", statusError instanceof Error ? statusError.message : statusError);
+      }
+    }
+
+    if (!events.length) return new Response(JSON.stringify({ ok: true }), { status: 200, headers: JSON_HEADERS });
+
     const leadUrl = optionalEnv("MAIN_SUPABASE_URL") || DEFAULT_MAIN_SUPABASE_URL;
     const configuredLeadServiceKey = optionalEnv("MAIN_SUPABASE_SERVICE_ROLE_KEY");
     const leadServiceKey = configuredLeadServiceKey || whatsappServiceKey;
@@ -761,7 +776,6 @@ Deno.serve(async (req: Request) => {
     if (!leadsShareProject && !configuredLeadServiceKey) {
       throw new Error("Missing MAIN_SUPABASE_SERVICE_ROLE_KEY for cross-project WhatsApp lead creation");
     }
-    const sb = createClient(whatsappUrl, whatsappServiceKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const leadSb = leadsShareProject && leadServiceKey === whatsappServiceKey
       ? sb
       : createClient(leadUrl, leadServiceKey, { auth: { persistSession: false, autoRefreshToken: false } });
