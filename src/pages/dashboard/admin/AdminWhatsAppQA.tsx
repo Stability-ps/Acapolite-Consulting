@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, AlertTriangle, ArrowLeft, ArrowUpDown, BarChart3, Bell, Bot, CheckCircle2, ClipboardList, Clock3, Copy, Download, ExternalLink, FileSpreadsheet, FileText, Headphones, ImageIcon, Link2, MessageCircle, Paperclip, RefreshCw, Search, Send, Settings, ShieldCheck, StickyNote, Timer, Trash2, UserCheck, UserRoundCheck, Users, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -631,6 +632,23 @@ function getDeliverySummary(messages: Message[]) {
   return { outbound: outbound.length, sent, delivered, read, failed, pending };
 }
 
+// getDeliverySummary aggregates every outbound message a conversation has
+// EVER sent, so it is correct for lifetime QA metrics (the "Failed sends"
+// queue filter, the dashboard scorecard) but must never drive a "current
+// status" indicator: a single old failed send would then permanently mark
+// an otherwise healthy conversation as failed. Use this instead for anything
+// presented as the conversation's current delivery health.
+function getCurrentDeliveryStatus(messages: Message[]) {
+  const outbound = messages.filter((message) => message.direction === "outbound");
+  const latest = outbound.length ? outbound[outbound.length - 1] : null;
+  const failed = latest ? /fail|error|undeliver|rejected/.test((latest.delivery_status || "").toLowerCase()) : false;
+  return {
+    hasOutbound: outbound.length > 0,
+    failed,
+    label: latest ? deliveryLabel(latest.delivery_status) : "No replies sent yet",
+  };
+}
+
 function deliveryLabel(status: string | null) {
   if (!status) return "Status pending";
   if (status === "saved_local") return "Saved in Acapolite";
@@ -852,8 +870,10 @@ export default function AdminWhatsAppQA() {
   const conversationIdFromQuery = searchParams.get("conversationId");
   const draftIntent = searchParams.get("draft");
   const platformSectionFromQuery = searchParams.get("section");
+  const queryClient = useQueryClient();
+  const qaScorecardQueryKey = ["whatsapp-qa-scorecard", session?.user.id] as const;
   const query = useQuery({
-    queryKey: ["whatsapp-qa-scorecard", session?.user.id],
+    queryKey: qaScorecardQueryKey,
     queryFn: async () => {
       const token = session?.access_token;
       if (!token) throw new Error("Admin session is unavailable");
@@ -895,6 +915,37 @@ export default function AdminWhatsAppQA() {
     enabled: !authLoading && Boolean(session?.access_token),
     refetchInterval: 30_000,
   });
+
+  // Server-side WhatsApp activity (an inbound customer message, an AI reply,
+  // a service request created after Meta webhook processing) never touches
+  // this browser tab directly, so without a live push the dashboard would
+  // only catch up on the next 30s poll or a manual refresh. Subscribe to the
+  // underlying tables and invalidate the feed query as soon as anything
+  // changes, so Needs info / Lead created / message counts reflect the
+  // current row immediately. A single WhatsApp exchange can touch both
+  // tables several times in quick succession (inbound insert, conversation
+  // upsert, AI reply insert, intake update, request creation update), so the
+  // invalidation is debounced to collapse a burst into one refetch.
+  useEffect(() => {
+    if (!session?.access_token) return;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["whatsapp-qa-scorecard"] });
+      }, 600);
+    };
+    const channel = supabase
+      .channel("whatsapp-qa-feed-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_conversations" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_messages" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_alerts" }, scheduleRefresh)
+      .subscribe();
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, session?.access_token]);
 
   const evaluations = useMemo(() => query.data?.evaluations || [], [query.data?.evaluations]);
   const staff = query.data?.staff || [];
@@ -1028,7 +1079,7 @@ export default function AdminWhatsAppQA() {
   const displayedLeadQualityChecks = selectedLeadQuality?.checks || getWhatsAppLeadQuality({}).checks;
   const selectedLeadGate = selectedLeadQuality ? getWhatsAppLeadGate(selectedLeadQuality) : null;
   const selectedSla = selected ? getConversationSla(selected.conversation, selected.messages) : null;
-  const selectedDelivery = selected ? getDeliverySummary(selected.messages) : null;
+  const selectedDelivery = selected ? getCurrentDeliveryStatus(selected.messages) : null;
   const notes = query.data?.notes || [];
   const staffActions = query.data?.staffActions || [];
   const clientMatches = query.data?.clientMatches || [];
@@ -1637,8 +1688,8 @@ export default function AdminWhatsAppQA() {
               </button>
               <button type="button" onClick={() => goToReviewTab("analysis")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">
                 <span className="flex shrink-0 items-center gap-2 text-muted-foreground"><CheckCircle2 className="h-3.5 w-3.5" />Delivery</span>
-                <span className={`min-w-0 text-right font-semibold ${selectedDelivery.failed ? "text-red-700" : "text-emerald-700"}`}>
-                  {selectedDelivery.failed ? `${selectedDelivery.failed} failed` : `${selectedDelivery.delivered}/${selectedDelivery.outbound} delivered`}
+                <span className={`min-w-0 text-right font-semibold ${selectedDelivery.failed ? "text-red-700" : selectedDelivery.hasOutbound ? "text-emerald-700" : "text-muted-foreground"}`}>
+                  {selectedDelivery.label}
                 </span>
               </button>
               <button type="button" onClick={() => goToReviewTab("crm")} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40">

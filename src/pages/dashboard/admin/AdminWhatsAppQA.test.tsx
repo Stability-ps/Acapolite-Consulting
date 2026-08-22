@@ -11,6 +11,33 @@ vi.mock("@/hooks/useAuth", () => ({
   }),
 }));
 
+// Stand-in for the Supabase realtime channel used to invalidate the WhatsApp
+// QA feed as soon as whatsapp_conversations/whatsapp_messages change on the
+// server (an inbound message, an AI reply, a request being created). Records
+// every `.on("postgres_changes", ...)` registration per table so a test can
+// simulate a live DB change firing by calling triggerRealtimeChange(table).
+const { supabaseClientMock, triggerRealtimeChange } = vi.hoisted(() => {
+  const listeners: Array<{ table: string; callback: () => void }> = [];
+  const channel = {
+    on: (_event: string, config: { table: string }, callback: () => void) => {
+      listeners.push({ table: config.table, callback });
+      return channel;
+    },
+    subscribe: () => channel,
+  };
+  return {
+    supabaseClientMock: {
+      channel: () => channel,
+      removeChannel: () => {},
+    },
+    triggerRealtimeChange: (table: string) => {
+      listeners.filter((listener) => listener.table === table).forEach((listener) => listener.callback());
+    },
+  };
+});
+
+vi.mock("@/integrations/supabase/client", () => ({ supabase: supabaseClientMock }));
+
 const now = new Date().toISOString();
 
 const conversations = [
@@ -285,5 +312,166 @@ describe("AdminWhatsAppQA", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Review/ }));
     expect(await screen.findByText(/Select a WhatsApp conversation from Inbox or AI Control to review it here\./i)).toBeInTheDocument();
+  });
+});
+
+describe("WhatsApp QA stale-state regressions", () => {
+  let currentPayload: typeof feedPayload;
+  let fetchCallCount = 0;
+
+  beforeEach(() => {
+    currentPayload = JSON.parse(JSON.stringify(feedPayload));
+    fetchCallCount = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/api/whatsapp-qa-feed")) {
+        fetchCallCount += 1;
+        return new Response(JSON.stringify(currentPayload), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("clears the Needs info badge as soon as the AI collects the remaining details, without a manual refresh", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /^Leads/ }));
+
+    const initialCard = (await screen.findAllByText("Thabo Nkosi"))[0].closest("button") as HTMLElement;
+    expect(within(initialCard).getByText("Needs info")).toBeInTheDocument();
+
+    // Simulate the AI collecting the remaining core fields server-side (province, urgency, email)
+    currentPayload.conversations = currentPayload.conversations.map((conversation) =>
+      conversation.id === "conv-ai"
+        ? {
+            ...conversation,
+            intake_ready: true,
+            intake_missing_fields: [],
+            updated_at: new Date().toISOString(),
+            intake_payload: {
+              ...conversation.intake_payload,
+              province: "Gauteng",
+              city: "Pretoria",
+              urgency: "Within a few days",
+              email: "thabo@example.com",
+              description: "SARS is demanding payment on an outstanding debt and Thabo needs an arrangement.",
+            },
+          }
+        : conversation,
+    );
+    triggerRealtimeChange("whatsapp_conversations");
+
+    await waitFor(() => {
+      const card = screen.getAllByText("Thabo Nkosi")[0].closest("button") as HTMLElement;
+      expect(within(card).queryByText("Needs info")).not.toBeInTheDocument();
+      expect(within(card).getByText("Quality lead")).toBeInTheDocument();
+    }, { timeout: 3000 });
+  });
+
+  it("shows Request created immediately once a service request is created, without a manual refresh", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /^Leads/ }));
+
+    const initialCard = (await screen.findAllByText("Thabo Nkosi"))[0].closest("button") as HTMLElement;
+    expect(within(initialCard).queryByText("Request created")).not.toBeInTheDocument();
+
+    currentPayload.conversations = currentPayload.conversations.map((conversation) =>
+      conversation.id === "conv-ai"
+        ? {
+            ...conversation,
+            service_request_id: "sr-123",
+            intake_ready: true,
+            intake_missing_fields: [],
+            submission_state: "submitted",
+            status: "human_handoff",
+            ai_enabled: false,
+            updated_at: new Date().toISOString(),
+          }
+        : conversation,
+    );
+    triggerRealtimeChange("whatsapp_conversations");
+
+    await waitFor(() => {
+      const card = screen.getAllByText("Thabo Nkosi")[0].closest("button") as HTMLElement;
+      expect(within(card).getByText("Request created")).toBeInTheDocument();
+    }, { timeout: 3000 });
+  });
+
+  it("does not let an old failed staff send make an otherwise-healthy conversation look failed", async () => {
+    currentPayload.messages = [
+      ...currentPayload.messages,
+      {
+        id: "msg-human-old-fail",
+        conversation_id: "conv-human",
+        direction: "outbound",
+        sender_type: "staff",
+        message_type: "text",
+        content: "Old failed attempt",
+        delivery_status: "failed",
+        media_mime_type: null,
+        media_filename: null,
+        media_size_bytes: null,
+        media_storage_path: null,
+        attachment_url: null,
+        staff_sender_id: "staff-1",
+        staff_sender_name: "Test Staff",
+        created_at: new Date(Date.now() - 60_000).toISOString(),
+      },
+      {
+        id: "msg-human-recent-ok",
+        conversation_id: "conv-human",
+        direction: "outbound",
+        sender_type: "staff",
+        message_type: "text",
+        content: "Follow-up that delivered fine",
+        delivery_status: "delivered",
+        media_mime_type: null,
+        media_filename: null,
+        media_size_bytes: null,
+        media_storage_path: null,
+        attachment_url: null,
+        staff_sender_id: "staff-1",
+        staff_sender_name: "Test Staff",
+        created_at: new Date().toISOString(),
+      },
+    ];
+    renderPage();
+
+    const [conversationCard] = await screen.findAllByText("Naledi Dlamini");
+    fireEvent.click(conversationCard);
+    fireEvent.click(screen.getByRole("button", { name: "Actions & AI" }));
+
+    const deliveryRow = (await screen.findByText("Delivery")).closest("button") as HTMLElement;
+    expect(within(deliveryRow).getByText("Delivered")).toBeInTheDocument();
+    expect(within(deliveryRow).queryByText(/failed/i)).not.toBeInTheDocument();
+  });
+
+  it("refetches the feed as soon as the underlying tables change, without waiting for the poll interval or a manual click", async () => {
+    renderPage();
+    await screen.findAllByText("Thabo Nkosi");
+    const initialCallCount = fetchCallCount;
+
+    triggerRealtimeChange("whatsapp_messages");
+
+    await waitFor(() => expect(fetchCallCount).toBeGreaterThan(initialCallCount), { timeout: 3000 });
+  });
+
+  it("reflects a human takeover that happened server-side, not the previously-loaded AI-active state", async () => {
+    renderPage();
+    const [conversationCard] = await screen.findAllByText("Thabo Nkosi");
+    fireEvent.click(conversationCard);
+    expect(await screen.findByText("AI is active. Take over or assign the chat before replying.")).toBeInTheDocument();
+
+    currentPayload.conversations = currentPayload.conversations.map((conversation) =>
+      conversation.id === "conv-ai"
+        ? { ...conversation, status: "human_handoff", ai_enabled: false, assigned_staff_id: "staff-1", assigned_staff_name: "Test Staff", updated_at: new Date().toISOString() }
+        : conversation,
+    );
+    triggerRealtimeChange("whatsapp_conversations");
+
+    await waitFor(() => expect(screen.getByText("Human control is active, assigned to Test Staff. AI replies are locked.")).toBeInTheDocument(), { timeout: 3000 });
   });
 });
