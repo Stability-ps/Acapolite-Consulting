@@ -23,7 +23,10 @@ const { supabaseClientMock, triggerRealtimeChange } = vi.hoisted(() => {
       listeners.push({ table: config.table, callback });
       return channel;
     },
-    subscribe: () => channel,
+    subscribe: (statusCallback?: (status: string) => void) => {
+      statusCallback?.("SUBSCRIBED");
+      return channel;
+    },
   };
   return {
     supabaseClientMock: {

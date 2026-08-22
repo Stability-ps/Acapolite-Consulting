@@ -59,17 +59,17 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         "/api/whatsapp-qa-feed": {
-          target: "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1",
+          target: "https://frormnagythfpiuzgfkz.supabase.co/functions/v1",
           changeOrigin: true,
           rewrite: () => "/whatsapp-qa-feed",
         },
         "/api/whatsapp-lead-link": {
-          target: "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1",
+          target: "https://frormnagythfpiuzgfkz.supabase.co/functions/v1",
           changeOrigin: true,
           rewrite: () => "/whatsapp-lead-link",
         },
         "/whatsapp-qa-feed": {
-          target: "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1",
+          target: "https://frormnagythfpiuzgfkz.supabase.co/functions/v1",
           changeOrigin: true,
         },
       },

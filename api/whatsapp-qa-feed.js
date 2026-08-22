@@ -1,4 +1,4 @@
-const WHATSAPP_QA_FEED_URL = "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1/whatsapp-qa-feed";
+const WHATSAPP_QA_FEED_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/whatsapp-qa-feed";
 
 export default async function handler(request, response) {
   if (request.method !== "GET" && request.method !== "POST") {

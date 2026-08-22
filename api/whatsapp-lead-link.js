@@ -1,4 +1,4 @@
-const WHATSAPP_LEAD_LINK_URL = "https://ktmzabtbhrbfmwjqsfce.supabase.co/functions/v1/whatsapp-lead-link";
+const WHATSAPP_LEAD_LINK_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/whatsapp-lead-link";
 
 export default async function handler(request, response) {
   if (request.method !== "POST") {
