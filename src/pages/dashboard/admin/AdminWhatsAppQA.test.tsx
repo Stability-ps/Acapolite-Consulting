@@ -155,12 +155,14 @@ describe("AdminWhatsAppQA", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows the live overview counts on the Inbox tab", async () => {
+  it("shows the live overview KPI counts on the Reports tab", async () => {
     renderPage();
 
     expect((await screen.findAllByText("Thabo Nkosi")).length).toBeGreaterThan(0);
 
-    const conversationsCard = screen.getByText("Conversations").closest("button");
+    fireEvent.click(screen.getByRole("button", { name: /^Reports/ }));
+
+    const conversationsCard = (await screen.findByText("Conversations")).closest("button");
     expect(conversationsCard).not.toBeNull();
     expect(within(conversationsCard as HTMLElement).getByText("2")).toBeInTheDocument();
   });

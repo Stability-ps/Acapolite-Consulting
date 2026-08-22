@@ -1119,8 +1119,7 @@ export default function AdminWhatsAppQA() {
     setQueueFilter(filter);
     setSelectedId(null);
     setReviewTab("overview");
-    setPlatformTab("inbox");
-    setMobileWorkspaceView("conversations");
+    selectPlatformTab("inbox");
   };
 
   const toggleQueueFilter = (filter: QueueFilter) => {
@@ -1567,6 +1566,7 @@ export default function AdminWhatsAppQA() {
     const passedRequired = requiredChecks.filter((check) => check.passed).length;
 
     return (
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:items-start">
       <div className="space-y-3">
         {selectedLeadQuality ? (
           <button type="button" onClick={() => goToReviewTab("overview")} className={`w-full rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
@@ -1633,7 +1633,9 @@ export default function AdminWhatsAppQA() {
             </div>
           </div>
         ) : null}
+      </div>
 
+      <div className="space-y-3">
         <div className="grid gap-2">
           <Select
             value={selected.conversation.assigned_staff_id || "unassigned"}
@@ -1698,7 +1700,9 @@ export default function AdminWhatsAppQA() {
             ? "AI is active. Take over or assign the chat before replying."
             : `Human control is active${selected.conversation.assigned_staff_name ? `, assigned to ${selected.conversation.assigned_staff_name}` : ""}. AI replies are locked.`}
         </div>
+      </div>
 
+      <div className="space-y-3">
         {selectedReplyTemplates.length ? (
           <div className="rounded-lg border bg-muted/20 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -1742,6 +1746,7 @@ export default function AdminWhatsAppQA() {
           </Button>
         </div>
       </div>
+      </div>
     );
   };
   const renderReviewPanel = () => {
@@ -1759,7 +1764,9 @@ export default function AdminWhatsAppQA() {
           <TabsTrigger value="team" className="shrink-0 whitespace-nowrap rounded-b-none border-b-2 border-transparent px-2 py-3 text-xs data-[state=active]:border-primary data-[state=active]:shadow-none">Team</TabsTrigger>
         </TabsList>
         <div className="pt-4">
-                <TabsContent value="overview" className="mt-0 space-y-5">
+                <TabsContent value="overview" className="mt-0">
+                <div className="grid gap-5 xl:grid-cols-2 xl:items-start">
+                <div className="space-y-5">
                   <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 p-3"><div className="min-w-0"><p className="truncate font-medium">{selected.conversation.display_name || selected.conversation.wa_id}</p><p className="text-xs text-muted-foreground">{selected.messages.length} messages</p></div><span className="shrink-0">{statusBadge(selected.status)}</span></div>
                   {selectedLeadQuality ? (
                     <div className={`rounded-lg border p-4 ${getWhatsAppLeadQualityCardClass(selectedLeadQuality.status)}`}>
@@ -1785,6 +1792,7 @@ export default function AdminWhatsAppQA() {
                     </div>
                   ) : null}
                   <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p><p className="max-h-44 overflow-y-auto rounded-lg border bg-muted/20 p-4 text-sm leading-relaxed">{selected.conversation.ai_summary || intakeValue(selected.conversation.intake_payload?.description)}</p></div>
+                </div>
                   <div>
                     <DetailRow label="Conversation status" value={selected.conversation.status.replace(/_/g, " ")} />
                     <DetailRow label="Inbox status" value={selected.conversation.inbox_status.replace(/_/g, " ")} />
@@ -1811,6 +1819,7 @@ export default function AdminWhatsAppQA() {
 	                    <DetailRow label="Started" value={new Date(selected.conversation.created_at).toLocaleString()} />
 	                    <DetailRow label="Last activity" value={new Date(selected.conversation.updated_at).toLocaleString()} />
 	                  </div>
+                </div>
                 </TabsContent>
                 <TabsContent value="client" className="mt-0 space-y-6">
                   <div>
@@ -1942,16 +1951,18 @@ export default function AdminWhatsAppQA() {
                     )}
                   </div>
                 </TabsContent>
-                <TabsContent value="analysis" className="mt-0 space-y-3">
+                <TabsContent value="analysis" className="mt-0">
                   <div className="mb-5 flex items-center justify-between rounded-xl bg-muted/60 p-4"><div><p className="font-medium">Quality score</p><p className="text-xs text-muted-foreground">{selected.passed} of {selected.rules.length} checks passed</p></div><span className="text-3xl font-semibold">{selected.score}%</span></div>
-                  {selected.rules.map((rule) => (
-                    <div key={rule.key} className={`rounded-xl border p-4 ${rule.passed ? "border-emerald-200 bg-emerald-50/50" : "border-red-200 bg-red-50/60"}`}>
-                      <div className="flex items-start gap-3">
-                        {rule.passed ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />}
-                        <div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{rule.label}</p>{rule.critical ? <Badge variant="outline" className="text-[10px]">Critical</Badge> : null}</div><p className="mt-1 text-xs text-muted-foreground">{rule.detail}</p></div>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {selected.rules.map((rule) => (
+                      <div key={rule.key} className={`rounded-xl border p-4 ${rule.passed ? "border-emerald-200 bg-emerald-50/50" : "border-red-200 bg-red-50/60"}`}>
+                        <div className="flex items-start gap-3">
+                          {rule.passed ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />}
+                          <div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{rule.label}</p>{rule.critical ? <Badge variant="outline" className="text-[10px]">Critical</Badge> : null}</div><p className="mt-1 text-xs text-muted-foreground">{rule.detail}</p></div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </TabsContent>
                 <TabsContent value="team" className="mt-0 space-y-5">
                   <div className="rounded-xl border bg-muted/20 p-4">
@@ -2088,38 +2099,12 @@ export default function AdminWhatsAppQA() {
             })}
           </div>
 
-      {platformTab === "inbox" ? (
-      <div className="hidden grid-cols-2 gap-3 sm:grid-cols-3 lg:grid lg:grid-cols-4 xl:grid-cols-7">
-        <button type="button" className="text-left" onClick={() => setConversationQueueFilter("all")} aria-pressed={queueFilter === "all"}>
-          <Card className={filterCardClass("all")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("human")} aria-pressed={queueFilter === "human"}>
-          <Card className={filterCardClass("human")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Human chats</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-primary"><Headphones className="h-6 w-6" />{totals.human}<span className="ml-auto text-xs font-normal text-muted-foreground">{totals.unassigned} unassigned</span></CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("unread")} aria-pressed={queueFilter === "unread"}>
-          <Card className={filterCardClass("unread")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Unread messages</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold"><Bell className="h-6 w-6 text-amber-600" />{totals.unread}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("needs_info")} aria-pressed={queueFilter === "needs_info"}>
-          <Card className={filterCardClass("needs_info")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Needs info</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-amber-700"><Clock3 className="h-6 w-6" />{totals.needsInfo}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("ready_leads")} aria-pressed={queueFilter === "ready_leads"}>
-          <Card className={filterCardClass("ready_leads")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Quality leads</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.qualityLeads}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("passed")} aria-pressed={queueFilter === "passed"}>
-          <Card className={filterCardClass("passed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Passed QA</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.passed}</CardContent></Card>
-        </button>
-        <button type="button" className="text-left" onClick={() => toggleQueueFilter("failed")} aria-pressed={queueFilter === "failed"}>
-          <Card className={filterCardClass("failed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Critical failures</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-destructive"><XCircle className="h-6 w-6" />{totals.failed}</CardContent></Card>
-        </button>
-      </div>
-      ) : null}
-
       {query.error ? (
         <Card className="border-destructive/40"><CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertTriangle className="h-5 w-5 shrink-0" /><span>Unable to load WhatsApp QA data. {query.error instanceof Error ? query.error.message : "Please try again."}</span></CardContent></Card>
       ) : null}
 
       {platformTab === "inbox" ? (
-      <div className="min-h-0 space-y-4 md:grid md:flex-1 md:grid-cols-[minmax(230px,28%)_minmax(0,1fr)] md:items-stretch md:gap-4 md:space-y-0">
+      <div className="min-h-0 space-y-4 md:grid md:flex-1 md:grid-cols-[minmax(250px,23%)_minmax(0,1fr)] md:items-stretch md:gap-4 md:space-y-0">
         <div className={`${mobileWorkspaceView === "chat" ? "hidden md:flex" : "flex"} min-w-0 flex-col md:min-h-0`}>
         <Card className="flex min-h-[520px] flex-1 flex-col md:min-h-0">
           <CardHeader className="space-y-3 pb-3"><CardTitle className="flex items-center gap-2 text-base"><MessageCircle className="h-4 w-4" />Conversation results</CardTitle>
@@ -2257,25 +2242,26 @@ export default function AdminWhatsAppQA() {
               </div>
             )}
 	            {selected ? (
-	              <div className="shrink-0 space-y-3 border-t bg-background p-4">
+	              <div className="shrink-0 space-y-2 border-t bg-background p-3">
 	                <Textarea
 	                  value={reply}
 	                  onChange={(event) => setReply(event.target.value)}
 	                  placeholder="Write a WhatsApp reply..."
 	                  maxLength={1000}
-	                  rows={3}
+	                  rows={1}
+	                  autoResize
+	                  maxAutoResizeHeight={140}
+	                  className="!min-h-[40px]"
 	                  disabled={selected.conversation.ai_enabled || actionPending}
 	                />
-	                <div className="grid gap-2">
+	                <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
 	                  <p className="text-xs text-muted-foreground">{reply.length}/1000 · Staff reply</p>
-	                  <div className="grid min-w-0 gap-2 min-[420px]:grid-cols-2 md:grid-cols-1 2xl:grid-cols-2">
-	                    <Button type="button" className={QA_INLINE_ACTION_BUTTON_CLASS} variant="outline" onClick={draftReengagementReply} disabled={actionPending || !selectedLeadQuality}>
-	                      <FileText className="h-4 w-4" /><span>Draft follow-up</span>
-	                    </Button>
-	                    <Button className={QA_INLINE_ACTION_BUTTON_CLASS} onClick={() => runAction("reply", { message: reply })} disabled={selected.conversation.ai_enabled || actionPending || !reply.trim()}>
-	                      <Send className="h-4 w-4" /><span>{selected.conversation.ai_enabled ? "Take over first" : "Send reply"}</span>
-	                    </Button>
-	                  </div>
+	                  <Button type="button" size="sm" className={QA_INLINE_ACTION_BUTTON_CLASS} variant="outline" onClick={draftReengagementReply} disabled={actionPending || !selectedLeadQuality}>
+	                    <FileText className="h-4 w-4" /><span>Draft follow-up</span>
+	                  </Button>
+	                  <Button size="sm" className={QA_INLINE_ACTION_BUTTON_CLASS} onClick={() => runAction("reply", { message: reply })} disabled={selected.conversation.ai_enabled || actionPending || !reply.trim()}>
+	                    <Send className="h-4 w-4" /><span>{selected.conversation.ai_enabled ? "Take over first" : "Send reply"}</span>
+	                  </Button>
 	                </div>
 	              </div>
 	            ) : null}
@@ -2287,57 +2273,53 @@ export default function AdminWhatsAppQA() {
 
       {platformTab === "actions" ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-2xl">
-            {!selected ? (
-              <Card>
-                <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-                  <UserRoundCheck className="h-8 w-8 text-muted-foreground/60" />
-                  <p className="text-sm text-muted-foreground">Select a WhatsApp conversation from Inbox or AI Control to manage its actions here.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="min-w-0">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between gap-3 text-base">
-                    <span className="flex min-w-0 items-center gap-2"><UserRoundCheck className="h-4 w-4 shrink-0" /><span className="truncate">Actions & AI</span></span>
-                    <span className="shrink-0">{statusBadge(selected.status)}</span>
-                  </CardTitle>
-                  <p className="truncate text-xs text-muted-foreground">{selected.conversation.display_name || selected.conversation.wa_id} · +{selected.conversation.wa_id}</p>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {renderConversationActions()}
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          {!selected ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                <UserRoundCheck className="h-8 w-8 text-muted-foreground/60" />
+                <p className="text-sm text-muted-foreground">Select a WhatsApp conversation from Inbox or AI Control to manage its actions here.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="min-w-0">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center justify-between gap-3 text-base">
+                  <span className="flex min-w-0 items-center gap-2"><UserRoundCheck className="h-4 w-4 shrink-0" /><span className="truncate">Actions & AI</span></span>
+                  <span className="shrink-0">{statusBadge(selected.status)}</span>
+                </CardTitle>
+                <p className="truncate text-xs text-muted-foreground">{selected.conversation.display_name || selected.conversation.wa_id} · +{selected.conversation.wa_id}</p>
+              </CardHeader>
+              <CardContent>
+                {renderConversationActions()}
+              </CardContent>
+            </Card>
+          )}
         </div>
       ) : null}
 
       {platformTab === "review" ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl">
-            {!selected ? (
-              <Card>
-                <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-                  <ShieldCheck className="h-8 w-8 text-muted-foreground/60" />
-                  <p className="text-sm text-muted-foreground">Select a WhatsApp conversation from Inbox or AI Control to review it here.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="min-w-0">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between gap-3 text-base">
-                    <span className="flex min-w-0 items-center gap-2"><ShieldCheck className="h-4 w-4 shrink-0" /><span className="truncate">Review</span></span>
-                    <span className="shrink-0">{statusBadge(selected.status)}</span>
-                  </CardTitle>
-                  <p className="truncate text-xs text-muted-foreground">{selected.conversation.display_name || selected.conversation.wa_id} · +{selected.conversation.wa_id}</p>
-                </CardHeader>
-                <CardContent>
-                  {renderReviewPanel()}
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          {!selected ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                <ShieldCheck className="h-8 w-8 text-muted-foreground/60" />
+                <p className="text-sm text-muted-foreground">Select a WhatsApp conversation from Inbox or AI Control to review it here.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="min-w-0">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center justify-between gap-3 text-base">
+                  <span className="flex min-w-0 items-center gap-2"><ShieldCheck className="h-4 w-4 shrink-0" /><span className="truncate">Review</span></span>
+                  <span className="shrink-0">{statusBadge(selected.status)}</span>
+                </CardTitle>
+                <p className="truncate text-xs text-muted-foreground">{selected.conversation.display_name || selected.conversation.wa_id} · +{selected.conversation.wa_id}</p>
+              </CardHeader>
+              <CardContent>
+                {renderReviewPanel()}
+              </CardContent>
+            </Card>
+          )}
         </div>
       ) : null}
 
@@ -2675,6 +2657,32 @@ export default function AdminWhatsAppQA() {
 
       {platformTab === "reports" ? (
         <div className="min-h-0 flex-1 overflow-y-auto space-y-4">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Overview metrics</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">
+              <button type="button" className="text-left" onClick={() => setConversationQueueFilter("all")} aria-pressed={queueFilter === "all"}>
+                <Card className={filterCardClass("all")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Conversations</CardTitle></CardHeader><CardContent className="text-3xl font-semibold">{totals.conversations}</CardContent></Card>
+              </button>
+              <button type="button" className="text-left" onClick={() => toggleQueueFilter("human")} aria-pressed={queueFilter === "human"}>
+                <Card className={filterCardClass("human")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Human chats</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-primary"><Headphones className="h-6 w-6" />{totals.human}<span className="ml-auto text-xs font-normal text-muted-foreground">{totals.unassigned} unassigned</span></CardContent></Card>
+              </button>
+              <button type="button" className="text-left" onClick={() => toggleQueueFilter("unread")} aria-pressed={queueFilter === "unread"}>
+                <Card className={filterCardClass("unread")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Unread messages</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold"><Bell className="h-6 w-6 text-amber-600" />{totals.unread}</CardContent></Card>
+              </button>
+              <button type="button" className="text-left" onClick={() => toggleQueueFilter("needs_info")} aria-pressed={queueFilter === "needs_info"}>
+                <Card className={filterCardClass("needs_info")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Needs info</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-amber-700"><Clock3 className="h-6 w-6" />{totals.needsInfo}</CardContent></Card>
+              </button>
+              <button type="button" className="text-left" onClick={() => toggleQueueFilter("ready_leads")} aria-pressed={queueFilter === "ready_leads"}>
+                <Card className={filterCardClass("ready_leads")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Quality leads</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.qualityLeads}</CardContent></Card>
+              </button>
+              <button type="button" className="text-left" onClick={() => toggleQueueFilter("passed")} aria-pressed={queueFilter === "passed"}>
+                <Card className={filterCardClass("passed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Passed QA</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-emerald-700"><CheckCircle2 className="h-6 w-6" />{totals.passed}</CardContent></Card>
+              </button>
+              <button type="button" className="text-left" onClick={() => toggleQueueFilter("failed")} aria-pressed={queueFilter === "failed"}>
+                <Card className={filterCardClass("failed")}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Critical failures</CardTitle></CardHeader><CardContent className="flex items-center gap-2 text-3xl font-semibold text-destructive"><XCircle className="h-6 w-6" />{totals.failed}</CardContent></Card>
+              </button>
+            </div>
+          </div>
           <div className="grid gap-4 xl:grid-cols-[minmax(320px,0.38fr)_minmax(0,0.62fr)]">
             {operationalAlertsCard}
             {humanChatReportingCard}
