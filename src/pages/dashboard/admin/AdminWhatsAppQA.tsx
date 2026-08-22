@@ -2264,9 +2264,22 @@ export default function AdminWhatsAppQA() {
             )}
 	            {selected ? (
 	              <div className="shrink-0 space-y-2 border-t bg-background p-3">
+	                <Textarea
+	                  ref={replyTextareaRef}
+	                  value={reply}
+	                  onChange={(event) => setReply(event.target.value)}
+	                  placeholder="Write a WhatsApp reply..."
+	                  maxLength={1000}
+	                  rows={1}
+	                  autoResize
+	                  maxAutoResizeHeight={140}
+	                  className="!min-h-[40px]"
+	                  disabled={selected.conversation.ai_enabled || actionPending}
+	                />
+
 	                <div className={`rounded-lg border px-3 py-2 text-xs ${selected.conversation.ai_enabled ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
 	                  <p>{aiHumanStatusText(selected.conversation)}</p>
-	                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+	                  <div className="mt-2 grid grid-cols-2 gap-1.5 xl:grid-cols-4">
 	                    {selected.conversation.ai_enabled ? (
 	                      <Button type="button" size="sm" variant="outline" className={QA_CONTROL_BAR_BUTTON_CLASS} onClick={() => query.data?.currentStaff && runAction("assign", { staff_id: query.data.currentStaff.id })} disabled={actionPending || !query.data?.currentStaff}>
 	                        <UserRoundCheck className="h-3.5 w-3.5 shrink-0" /><span>Take over</span>
@@ -2332,20 +2345,7 @@ export default function AdminWhatsAppQA() {
 	                  </div>
 	                ) : null}
 
-	                <Textarea
-	                  ref={replyTextareaRef}
-	                  value={reply}
-	                  onChange={(event) => setReply(event.target.value)}
-	                  placeholder="Write a WhatsApp reply..."
-	                  maxLength={1000}
-	                  rows={1}
-	                  autoResize
-	                  maxAutoResizeHeight={140}
-	                  className="!min-h-[40px]"
-	                  disabled={selected.conversation.ai_enabled || actionPending}
-	                />
-	                <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
-	                  <p className="text-xs text-muted-foreground">{reply.length}/1000 · Staff reply</p>
+	                <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
 	                  <Button
 	                    ref={draftFollowUpButtonRef}
 	                    type="button"
