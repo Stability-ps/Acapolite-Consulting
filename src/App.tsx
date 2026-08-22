@@ -15,6 +15,7 @@ import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
 import RequestTaxAssistance from "./pages/RequestTaxAssistance";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import DataDeletion from "./pages/DataDeletion";
 import RefundPolicy from "./pages/RefundPolicy";
 import Disclaimer from "./pages/Disclaimer";
 import PractitionerGuidelines from "./pages/PractitionerGuidelines";
@@ -76,6 +77,7 @@ function AppRoutes() {
             <Route path="/register" element={<Register />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/data-deletion" element={<DataDeletion />} />
             <Route path="/refund-policy" element={<RefundPolicy />} />
             <Route path="/disclaimer" element={<Disclaimer />} />
             <Route

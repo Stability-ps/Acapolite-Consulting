@@ -93,6 +93,7 @@ export function Footer() {
             <div className="grid gap-2 text-sm text-background/70 font-body">
               <Link to="/terms-and-conditions" className="hover:text-background">Terms &amp; Conditions</Link>
               <Link to="/privacy-policy" className="hover:text-background">Privacy Policy</Link>
+              <Link to="/data-deletion" className="hover:text-background">Data Deletion</Link>
               <Link to="/cookie-policy" className="hover:text-background">Cookie Policy</Link>
               <Link to="/refund-policy" className="hover:text-background">Refund Policy</Link>
               <Link to="/disclaimer" className="hover:text-background">Disclaimer</Link>

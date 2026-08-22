@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
 export default function TermsAndConditions() {
@@ -116,6 +117,36 @@ export default function TermsAndConditions() {
               <h2 className="text-lg font-semibold">10. Contact Information</h2>
               <p className="mt-2 text-muted-foreground">
                 For questions regarding these Terms and Conditions, please contact support@acapoliteconsulting.co.za.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold">11. WhatsApp and AI-Assisted Communications</h2>
+              <p className="mt-2 text-muted-foreground">
+                Acapolite Consulting may use WhatsApp as an official communication and support channel.
+              </p>
+              <ul className="mt-3 list-disc pl-5 text-muted-foreground">
+                <li>Some interactions on WhatsApp may initially be automated or AI-assisted</li>
+                <li>AI may assist with gathering information, routing enquiries, sending follow-ups and suggesting replies</li>
+                <li>You may be transferred to an authorised human staff member at any point in the conversation</li>
+                <li>Authorised staff may take over an AI-assisted conversation at any time</li>
+              </ul>
+              <p className="mt-3 text-muted-foreground">
+                AI-assisted responses are informational and supportive in nature and should not automatically be
+                treated as final tax, accounting, financial or legal advice. Where professional advice or a
+                submission requiring practitioner review is involved, it should be reviewed and confirmed by an
+                authorised practitioner where appropriate.
+              </p>
+              <ul className="mt-3 list-disc pl-5 text-muted-foreground">
+                <li>Clients remain responsible for providing accurate and complete information and documents</li>
+                <li>Acapolite may retain WhatsApp communications as part of the service and client record where permitted or required by law</li>
+              </ul>
+              <p className="mt-3 text-muted-foreground">
+                See our{" "}
+                <Link to="/privacy-policy" className="text-primary underline underline-offset-2">
+                  Privacy Policy
+                </Link>{" "}
+                for more detail on how information shared through WhatsApp is processed.
               </p>
             </section>
           </div>
