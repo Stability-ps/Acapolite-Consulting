@@ -1,37 +1,107 @@
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { evaluateTokenHealth } from "./socialConnectionHealth.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { evaluateAccountHealth, hasGrantedScope, isNumericGraphId } from "./socialConnectionHealth.ts";
 
 const now = Math.floor(new Date("2026-09-01T00:00:00Z").getTime() / 1000);
+const validToken = { is_valid: true, expires_at: 0 };
+const okProbe = { ok: true as const, id: "111222333444555" };
 
-Deno.test("a valid, non-expiring token with all required scopes is connected", () => {
-  const result = evaluateTokenHealth("facebook", { is_valid: true, expires_at: 0, scopes: ["pages_manage_posts", "pages_read_engagement"] }, now);
+Deno.test("isNumericGraphId rejects profile URLs (the actual production bug)", () => {
+  assertEquals(isNumericGraphId("https://www.facebook.com/acapolite"), false);
+  assertEquals(isNumericGraphId("https://www.instagram.com/acapolite/"), false);
+  assertEquals(isNumericGraphId("111222333444555"), true);
+});
+
+Deno.test("hasGrantedScope recognises a granular (System User asset-scoped) grant, not just flat scopes", () => {
+  const data = { scopes: [], granular_scopes: [{ scope: "pages_manage_posts", target_ids: ["111222333444555"] }] };
+  assertEquals(hasGrantedScope(data, "pages_manage_posts", "111222333444555"), true);
+  assertEquals(hasGrantedScope(data, "pages_manage_posts", "999999999999999"), false); // granted for a DIFFERENT asset only
+});
+
+Deno.test("hasGrantedScope still recognises a flat, ungated scope grant", () => {
+  const data = { scopes: ["pages_manage_posts"] };
+  assertEquals(hasGrantedScope(data, "pages_manage_posts", "anything"), true);
+});
+
+Deno.test("REGRESSION: a System User token with correct granular access to the exact Page ID is reported connected, not permission-missing", () => {
+  const debugToken = {
+    is_valid: true,
+    expires_at: 0,
+    granular_scopes: [
+      { scope: "pages_manage_posts", target_ids: ["111222333444555"] },
+      { scope: "pages_read_engagement", target_ids: ["111222333444555"] },
+    ],
+  };
+  const result = evaluateAccountHealth("facebook", "111222333444555", debugToken, okProbe, now);
   assertEquals(result.status, "connected");
 });
 
-Deno.test("an invalid token is expired", () => {
-  const result = evaluateTokenHealth("facebook", { is_valid: false }, now);
-  assertEquals(result.status, "expired");
+Deno.test("a stored profile URL is reported as wrong_account_id, distinctly, before ever calling Meta for permissions", () => {
+  const result = evaluateAccountHealth("facebook", "https://www.facebook.com/acapolite", validToken, okProbe, now);
+  assertEquals(result.status, "wrong_account_id");
 });
 
-Deno.test("a token expiring within 7 days is flagged expiring_soon, not connected", () => {
-  const expiresAt = now + 3 * 24 * 60 * 60;
-  const result = evaluateTokenHealth("facebook", { is_valid: true, expires_at: expiresAt, scopes: ["pages_manage_posts", "pages_read_engagement"] }, now);
+Deno.test("an invalid token is invalid_or_expired_token, distinct from a permission problem", () => {
+  const result = evaluateAccountHealth("facebook", "111222333444555", { is_valid: false }, okProbe, now);
+  assertEquals(result.status, "invalid_or_expired_token");
+});
+
+Deno.test("a live Graph probe failing with code 100 (object does not exist) is wrong_account_id, not permission_missing", () => {
+  const probe = { ok: false as const, httpStatus: 400, body: { error: { message: "Unsupported get request. Object does not exist", code: 100 } } };
+  const result = evaluateAccountHealth("facebook", "111222333444555", validToken, probe, now);
+  assertEquals(result.status, "wrong_account_id");
+});
+
+Deno.test("a live Graph probe failing with code 190 is invalid_or_expired_token, even if debug_token said valid", () => {
+  const probe = { ok: false as const, httpStatus: 401, body: { error: { message: "Error validating access token", code: 190 } } };
+  const result = evaluateAccountHealth("facebook", "111222333444555", validToken, probe, now);
+  assertEquals(result.status, "invalid_or_expired_token");
+});
+
+Deno.test("a live Graph probe failing with a role/assignment message is asset_not_assigned, distinct from missing_scope", () => {
+  const probe = { ok: false as const, httpStatus: 403, body: { error: { message: "User is not assigned to this asset", code: 10 } } };
+  const result = evaluateAccountHealth("facebook", "111222333444555", validToken, probe, now);
+  assertEquals(result.status, "asset_not_assigned");
+});
+
+Deno.test("a live Graph probe failing with a plain permission message is missing_scope", () => {
+  const probe = { ok: false as const, httpStatus: 403, body: { error: { message: "(#200) Permissions error", code: 200 } } };
+  const result = evaluateAccountHealth("facebook", "111222333444555", validToken, probe, now);
+  assertEquals(result.status, "missing_scope");
+});
+
+Deno.test("a 5xx from Meta during the probe is api_request_failed, not treated as a real permission verdict", () => {
+  const probe = { ok: false as const, httpStatus: 503, body: {} };
+  const result = evaluateAccountHealth("facebook", "111222333444555", validToken, probe, now);
+  assertEquals(result.status, "api_request_failed");
+});
+
+Deno.test("the probe succeeding but the token lacking the required granular scope for THIS id is missing_scope", () => {
+  const debugToken = { is_valid: true, expires_at: 0, granular_scopes: [{ scope: "pages_manage_posts", target_ids: ["999999999999999"] }] }; // wrong target id
+  const result = evaluateAccountHealth("facebook", "111222333444555", debugToken, okProbe, now);
+  assertEquals(result.status, "missing_scope");
+});
+
+Deno.test("Instagram uses its own required-scope set independently of Facebook's", () => {
+  const debugToken = { is_valid: true, expires_at: 0, granular_scopes: [{ scope: "instagram_content_publish", target_ids: ["222333444555666"] }, { scope: "instagram_basic", target_ids: ["222333444555666"] }] };
+  const igProbe = { ok: true as const, id: "222333444555666" };
+  const result = evaluateAccountHealth("instagram", "222333444555666", debugToken, igProbe, now);
+  assertEquals(result.status, "connected");
+});
+
+Deno.test("an expiring-soon token with otherwise full access still reports expiring_soon, not connected", () => {
+  const debugToken = {
+    is_valid: true,
+    expires_at: now + 2 * 24 * 60 * 60,
+    granular_scopes: [
+      { scope: "pages_manage_posts", target_ids: ["111222333444555"] },
+      { scope: "pages_read_engagement", target_ids: ["111222333444555"] },
+    ],
+  };
+  const result = evaluateAccountHealth("facebook", "111222333444555", debugToken, okProbe, now);
   assertEquals(result.status, "expiring_soon");
 });
 
-Deno.test("a token already past its expiry is expired even if is_valid was stale-true", () => {
-  const expiresAt = now - 60;
-  const result = evaluateTokenHealth("facebook", { is_valid: true, expires_at: expiresAt, scopes: ["pages_manage_posts", "pages_read_engagement"] }, now);
-  assertEquals(result.status, "expired");
-});
-
-Deno.test("missing a required Instagram scope is permission_missing, not silently connected", () => {
-  const result = evaluateTokenHealth("instagram", { is_valid: true, expires_at: 0, scopes: ["instagram_basic"] }, now);
-  assertEquals(result.status, "permission_missing");
-  assertEquals(result.message.includes("instagram_content_publish"), true);
-});
-
-Deno.test("a Meta API error (network failure, bad request) is reported as unavailable, not connected", () => {
-  const result = evaluateTokenHealth("facebook", { error: { message: "Invalid OAuth access token" } }, now);
-  assertEquals(result.status, "unavailable");
+Deno.test("a network/error response from debug_token itself is api_request_failed", () => {
+  const result = evaluateAccountHealth("facebook", "111222333444555", { error: { message: "Network error" } }, okProbe, now);
+  assertEquals(result.status, "api_request_failed");
 });

@@ -69,8 +69,8 @@ function postStatusBadgeClass(status: string) {
 function healthBadgeClass(status: string | null) {
   if (status === "connected") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "expiring_soon") return "border-amber-200 bg-amber-50 text-amber-800";
-  if (status === "expired" || status === "permission_missing") return "border-red-200 bg-red-50 text-red-700";
-  return "border-slate-200 bg-slate-50 text-slate-600"; // unavailable / never checked
+  if (status === "invalid_or_expired_token" || status === "missing_scope" || status === "asset_not_assigned" || status === "wrong_account_id") return "border-red-200 bg-red-50 text-red-700";
+  return "border-slate-200 bg-slate-50 text-slate-600"; // api_request_failed / never checked
 }
 
 export default function AdminSocialMedia() {
@@ -984,9 +984,19 @@ function ReschedulePostDialog({ post, onClose, onSaved }: { post: PostRow; onClo
 // Connections / Settings
 // ---------------------------------------------------------------------------
 
+type DiscoveredPage = { id: string; name: string; instagram_business_account: { id: string; username?: string } | null };
+type HealthCheckSummary = {
+  results: { account_id: string; provider_account_id: string; corrected: { from: string; to: string } | null; status: string; message: string }[];
+  token_scopes: string[];
+  token_granular_scopes: { scope: string; target_ids?: string[] }[];
+  discovered_pages: DiscoveredPage[];
+  discovery_error: string | null;
+};
+
 function ConnectionsPanel({ accounts, accessToken, onChanged }: { accounts: SocialAccount[]; accessToken: string; onChanged: () => void }) {
   const [checking, setChecking] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [lastCheck, setLastCheck] = useState<HealthCheckSummary | null>(null);
 
   const checkHealth = async () => {
     setChecking(true);
@@ -996,7 +1006,9 @@ function ConnectionsPanel({ accounts, accessToken, onChanged }: { accounts: Soci
       if (!response.ok) {
         toast.error(payload.error || "Health check failed");
       } else {
-        toast.success(`Checked ${payload.results?.length || 0} account(s)`);
+        setLastCheck(payload);
+        const corrections = (payload.results || []).filter((r: { corrected: unknown }) => r.corrected).length;
+        toast.success(`Checked ${payload.results?.length || 0} account(s)${corrections ? ` - corrected ${corrections} account ID(s)` : ""}`);
         onChanged();
       }
     } catch {
@@ -1038,6 +1050,49 @@ function ConnectionsPanel({ accounts, accessToken, onChanged }: { accounts: Soci
         </CardContent>
       </Card>
 
+      {lastCheck ? (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Last check details</CardTitle></CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {lastCheck.results.filter((r) => r.corrected).map((r) => (
+              <p key={r.account_id} className="text-emerald-700">
+                Corrected account ID: <code className="rounded bg-emerald-50 px-1">{r.corrected!.from}</code> -&gt; <code className="rounded bg-emerald-50 px-1">{r.corrected!.to}</code>
+              </p>
+            ))}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Token scopes returned by Meta</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {lastCheck.token_scopes.length === 0 && lastCheck.token_granular_scopes.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">None returned - check META_ACCESS_TOKEN.</span>
+                ) : (
+                  <>
+                    {lastCheck.token_scopes.map((scope) => <Badge key={scope} variant="outline">{scope}</Badge>)}
+                    {lastCheck.token_granular_scopes.map((g, i) => (
+                      <Badge key={`${g.scope}-${i}`} variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
+                        {g.scope}{g.target_ids?.length ? ` (${g.target_ids.length} asset${g.target_ids.length === 1 ? "" : "s"})` : ""}
+                      </Badge>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+            {lastCheck.discovered_pages.length > 0 ? (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pages discovered from META_ACCESS_TOKEN</p>
+                {lastCheck.discovered_pages.map((page) => (
+                  <p key={page.id} className="mt-1 text-xs">
+                    <span className="font-semibold">{page.name}</span> - Page ID: <code className="rounded bg-muted px-1">{page.id}</code>
+                    {page.instagram_business_account ? <> - IG Business Account ID: <code className="rounded bg-muted px-1">{page.instagram_business_account.id}</code></> : " - no linked Instagram Business account"}
+                  </p>
+                ))}
+              </div>
+            ) : lastCheck.discovery_error ? (
+              <p className="text-xs text-red-700">Discovery error: {lastCheck.discovery_error}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="border-sky-200 bg-sky-50/60">
         <CardContent className="flex items-start gap-3 p-4 text-sm">
           <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
@@ -1072,7 +1127,11 @@ function AddAccountDialog({ open, onOpenChange, onAdded }: { open: boolean; onOp
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
-    if (!providerAccountId.trim() || !displayName.trim()) return toast.error("Account ID and display name are required");
+    const trimmedId = providerAccountId.trim();
+    if (!trimmedId || !displayName.trim()) return toast.error("Account ID and display name are required");
+    if (!/^[0-9]+$/.test(trimmedId)) {
+      return toast.error("Account ID must be the numeric Meta Graph API ID (e.g. 111222333444555), not a facebook.com/instagram.com profile URL. Use \"Check token health\" to discover it automatically.");
+    }
     setSaving(true);
     const { data: userData } = await supabase.auth.getUser();
     const { error } = await supabase.from("social_accounts").insert({
@@ -1102,7 +1161,10 @@ function AddAccountDialog({ open, onOpenChange, onAdded }: { open: boolean; onOp
               <SelectItem value="instagram">Instagram Business account</SelectItem>
             </SelectContent>
           </Select>
-          <Input placeholder="Provider account ID (Facebook Page ID / IG Business Account ID)" value={providerAccountId} onChange={(e) => setProviderAccountId(e.target.value)} />
+          <Input placeholder="Numeric account ID (e.g. 111222333444555) - NOT a facebook.com/instagram.com URL" value={providerAccountId} onChange={(e) => setProviderAccountId(e.target.value)} />
+          {providerAccountId.trim() && !/^[0-9]+$/.test(providerAccountId.trim()) ? (
+            <p className="text-xs text-red-700">This must be the numeric Graph API ID, not a profile URL. Run "Check token health" first - it lists the discovered numeric IDs for your connected Pages.</p>
+          ) : null}
           <Input placeholder="Display name (e.g. Acapolite Consulting)" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           <p className="text-xs text-muted-foreground">This stores the account ID only. The access token comes from the META_ACCESS_TOKEN secret, never entered here.</p>
         </div>
