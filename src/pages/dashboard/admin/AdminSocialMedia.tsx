@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Archive, ArchiveRestore, ArrowDown, ArrowUp, Ban, Bot, Calendar, CheckCircle2, Clock3, Copy, Download, ExternalLink,
-  Eye, FolderOpen, ImageIcon, Link2, ListChecks, Loader2, Megaphone, MoreVertical, Pause, Pencil, Play, Plus, RefreshCw,
-  RotateCcw, Search, Settings, ShieldCheck, SkipForward, Trash2, Upload, XCircle,
+  AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, Ban, Bot, Calendar, CheckCircle2, Clock3, Copy, Download,
+  ExternalLink, Eye, FolderOpen, ImageIcon, Link2, ListChecks, Loader2, Megaphone, MoreVertical, Pause, Pencil, Play,
+  Plus, RefreshCw, RotateCcw, Search, Settings, ShieldCheck, SkipForward, Trash2, Upload, XCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
