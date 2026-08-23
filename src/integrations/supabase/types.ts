@@ -2154,6 +2154,41 @@ export type Database = {
           },
         ]
       }
+      social_scheduler_settings: {
+        Row: {
+          auto_publish_enabled: boolean
+          created_at: string
+          id: string
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          auto_publish_enabled?: boolean
+          created_at?: string
+          id?: string
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          auto_publish_enabled?: boolean
+          created_at?: string
+          id?: string
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_scheduler_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_scheduled_posts: {
         Row: {
           attempt_count: number

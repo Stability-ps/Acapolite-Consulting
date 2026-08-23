@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.social-generate-variants]
 verify_jwt = false
+
+[functions.social-publish-now]
+verify_jwt = false
+
+[functions.social-scheduler-settings]
+verify_jwt = false

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, Ban, Bot, Calendar, CheckCircle2, Clock3, Copy, Download,
+  Archive, ArchiveRestore, ArrowDown, ArrowUp, Ban, Bot, Calendar, CheckCircle2, Clock3, Copy, Download,
   ExternalLink, Eye, FolderOpen, ImageIcon, Link2, ListChecks, Loader2, Megaphone, MoreVertical, Pause, Pencil, Play,
-  Plus, RefreshCw, RotateCcw, Search, Settings, ShieldCheck, SkipForward, Trash2, Upload, XCircle,
+  Plus, RefreshCw, RotateCcw, Search, Send, Settings, ShieldCheck, SkipForward, Trash2, Upload, XCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,6 +50,10 @@ type CampaignItemWithCampaign = { media_asset_id: string; campaign: { id: string
 const SOCIAL_CAMPAIGN_ACTIVATE_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/social-campaign-activate";
 const SOCIAL_CONNECTION_HEALTH_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/social-connection-health";
 const SOCIAL_GENERATE_VARIANTS_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/social-generate-variants";
+const SOCIAL_SCHEDULER_SETTINGS_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/social-scheduler-settings";
+const SOCIAL_PUBLISH_NOW_URL = "https://frormnagythfpiuzgfkz.supabase.co/functions/v1/social-publish-now";
+
+type SchedulerSettings = { id: string; auto_publish_enabled: boolean; timezone: string; updated_by: string | null; updated_at: string; env_kill_switch_allows: boolean };
 
 const PLATFORM_LABELS: Record<SocialPlatform, string> = { facebook: "Facebook", instagram: "Instagram", linkedin: "LinkedIn" };
 const PLATFORM_TO_RULE_KEY: Record<SocialPlatform, SocialPlatformKey> = {
@@ -197,12 +201,28 @@ export default function AdminSocialMedia() {
     enabled: !!session,
   });
 
+  const schedulerSettingsQuery = useQuery({
+    queryKey: ["social-scheduler-settings"],
+    queryFn: async () => {
+      const response = await fetch(SOCIAL_SCHEDULER_SETTINGS_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Unable to load scheduler settings");
+      return payload as SchedulerSettings;
+    },
+    enabled: !!session,
+  });
+
   const assets = assetsQuery.data || [];
   const campaigns = campaignsQuery.data || [];
   const accounts = accountsQuery.data || [];
   const variants = variantsQuery.data || [];
   const posts = postsQuery.data || [];
   const campaignItems = campaignItemsQuery.data || [];
+  const schedulerSettings = schedulerSettingsQuery.data || null;
 
   const scheduledPosts = useMemo(() => posts.filter((p) => p.status === "scheduled" || p.status === "publishing"), [posts]);
   const publishedPosts = useMemo(() => posts.filter((p) => p.status === "published"), [posts]);
@@ -215,6 +235,7 @@ export default function AdminSocialMedia() {
     queryClient.invalidateQueries({ queryKey: ["social-platform-variants"] });
     queryClient.invalidateQueries({ queryKey: ["social-scheduled-posts"] });
     queryClient.invalidateQueries({ queryKey: ["social-campaign-items-all"] });
+    queryClient.invalidateQueries({ queryKey: ["social-scheduler-settings"] });
   };
 
   const overdueDueSoonCount = useMemo(
@@ -252,10 +273,14 @@ export default function AdminSocialMedia() {
           <OverviewPanel
             campaigns={campaigns}
             accounts={accounts}
-            scheduledCount={scheduledPosts.length}
+            scheduledPosts={scheduledPosts}
             publishedCount={publishedPosts.length}
             failedCount={failedPosts.length}
             dueSoonCount={overdueDueSoonCount}
+            settings={schedulerSettings}
+            settingsLoading={schedulerSettingsQuery.isLoading}
+            accessToken={session?.access_token || ""}
+            onChanged={refetchAll}
           />
         </TabsContent>
 
@@ -284,15 +309,15 @@ export default function AdminSocialMedia() {
         </TabsContent>
 
         <TabsContent value="scheduled">
-          <PostsTable title="Scheduled Posts" emptyMessage="No posts are currently scheduled." posts={scheduledPosts} onChanged={refetchAll} />
+          <PostsTable title="Scheduled Posts" emptyMessage="No posts are currently scheduled." posts={scheduledPosts} accounts={accounts} accessToken={session?.access_token || ""} onChanged={refetchAll} />
         </TabsContent>
 
         <TabsContent value="published">
-          <PostsTable title="Published Posts" emptyMessage="Nothing has published yet." posts={publishedPosts} onChanged={refetchAll} />
+          <PostsTable title="Published Posts" emptyMessage="Nothing has published yet." posts={publishedPosts} accounts={accounts} accessToken={session?.access_token || ""} onChanged={refetchAll} />
         </TabsContent>
 
         <TabsContent value="failed">
-          <PostsTable title="Failed Posts" emptyMessage="No failed posts - nice." posts={failedPosts} onChanged={refetchAll} />
+          <PostsTable title="Failed Posts" emptyMessage="No failed posts - nice." posts={failedPosts} accounts={accounts} accessToken={session?.access_token || ""} onChanged={refetchAll} />
         </TabsContent>
 
         <TabsContent value="connections">
@@ -307,30 +332,118 @@ export default function AdminSocialMedia() {
 // Overview
 // ---------------------------------------------------------------------------
 
-function OverviewPanel({ campaigns, accounts, scheduledCount, publishedCount, failedCount, dueSoonCount }: {
+function OverviewPanel({ campaigns, accounts, scheduledPosts, publishedCount, failedCount, dueSoonCount, settings, settingsLoading, accessToken, onChanged }: {
   campaigns: SocialCampaign[];
   accounts: SocialAccount[];
-  scheduledCount: number;
+  scheduledPosts: PostRow[];
   publishedCount: number;
   failedCount: number;
   dueSoonCount: number;
+  settings: SchedulerSettings | null;
+  settingsLoading: boolean;
+  accessToken: string;
+  onChanged: () => void;
 }) {
+  const [confirmEnable, setConfirmEnable] = useState(false);
+  const [confirmDisable, setConfirmDisable] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   const activeCampaigns = campaigns.filter((c) => c.status === "active").length;
   const unhealthyAccounts = accounts.filter((a) => a.last_health_check_status && a.last_health_check_status !== "connected").length;
 
+  const now = Date.now();
+  const dueNow = scheduledPosts.filter((p) => p.status === "scheduled" && new Date(p.scheduled_at).getTime() <= now);
+  const nextPost = scheduledPosts
+    .filter((p) => p.status === "scheduled")
+    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())[0] || null;
+
+  const fbAccount = accounts.find((a) => a.platform === "facebook" && a.is_active);
+  const igAccount = accounts.find((a) => a.platform === "instagram" && a.is_active);
+
+  const setAutoPublish = async (enabled: boolean) => {
+    setSaving(true);
+    try {
+      const response = await fetch(SOCIAL_SCHEDULER_SETTINGS_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set", auto_publish_enabled: enabled }),
+      });
+      const payload = await response.json();
+      if (!response.ok) { toast.error(payload.error || "Unable to update automatic publishing"); return; }
+      toast.success(enabled ? "Automatic publishing enabled" : "Automatic publishing disabled");
+      onChanged();
+    } catch {
+      toast.error("Unable to reach the scheduler settings service");
+    } finally {
+      setSaving(false);
+      setConfirmEnable(false);
+      setConfirmDisable(false);
+    }
+  };
+
+  const isEnabled = settings?.auto_publish_enabled === true;
+  const envBlocked = settings ? !settings.env_kill_switch_allows : false;
+
   return (
     <div className="space-y-4">
-      <Card className="border-amber-200 bg-amber-50/60">
-        <CardContent className="flex items-start gap-3 p-4 text-sm">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="font-semibold text-amber-900">Production safety switch</p>
-            <p className="text-amber-800">
-              Automatic publishing is controlled by the <code className="rounded bg-amber-100 px-1">SOCIAL_AUTO_PUBLISH_ENABLED</code> secret on the edge
-              function. While it is <code className="rounded bg-amber-100 px-1">false</code>, the scheduler will identify due posts every 5 minutes but
-              will never publish anything.
-            </p>
+            <CardTitle className="text-base">Automatic Publishing</CardTitle>
+            <p className="text-xs text-muted-foreground">Controls whether the scheduler actually publishes due posts.</p>
           </div>
+          <Badge variant="outline" className={isEnabled ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}>
+            {isEnabled ? "ON" : "OFF"}
+          </Badge>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {settingsLoading ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading scheduler settings...</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="sm"
+                  variant={isEnabled ? "outline" : "default"}
+                  onClick={() => (isEnabled ? setConfirmDisable(true) : setConfirmEnable(true))}
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {isEnabled ? "Turn OFF" : "Turn ON"}
+                </Button>
+                <p className="text-sm text-muted-foreground">
+                  {isEnabled
+                    ? "Automatic publishing is active. Due posts will be processed by the scheduler."
+                    : "Scheduled posts are not being published automatically."}
+                </p>
+              </div>
+
+              <div className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+                <ShieldCheck className={`mt-0.5 h-4 w-4 shrink-0 ${envBlocked ? "text-red-600" : "text-emerald-600"}`} />
+                <div>
+                  <p className="font-medium">Production safety switch: {envBlocked ? "BLOCKED" : "AVAILABLE"}</p>
+                  {envBlocked ? (
+                    <p className="text-red-700">Automatic publishing is blocked by the production safety switch.</p>
+                  ) : (
+                    <p className="text-muted-foreground">The environment kill switch is available - the switch above decides whether publishing actually runs.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-1.5 text-xs text-muted-foreground sm:grid-cols-2">
+                <p>Currently due: <span className="font-semibold text-foreground">{dueNow.length}</span></p>
+                <p>
+                  Next scheduled post:{" "}
+                  <span className="font-semibold text-foreground">
+                    {nextPost ? `${nextPost.asset?.title || "Poster"} (${PLATFORM_LABELS[nextPost.target_platform]}) - ${formatInBusinessTimezone(nextPost.scheduled_at)}` : "None"}
+                  </span>
+                </p>
+                <p>Facebook account: <span className="font-semibold text-foreground">{fbAccount ? fbAccount.display_name : "Not connected"}</span></p>
+                <p>Instagram account: <span className="font-semibold text-foreground">{igAccount ? igAccount.display_name : "Not connected"}</span></p>
+                <p className="sm:col-span-2">Scheduler checks for due posts every 5 minutes (pg_cron -&gt; social-publish-worker).</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -362,7 +475,44 @@ function OverviewPanel({ campaigns, accounts, scheduledCount, publishedCount, fa
           )}
         </CardContent>
       </Card>
-      <p className="text-xs text-muted-foreground">Scheduled posts: {scheduledCount}. Business timezone: {BUSINESS_TIMEZONE}.</p>
+      <p className="text-xs text-muted-foreground">Scheduled posts: {scheduledPosts.length}. Business timezone: {BUSINESS_TIMEZONE}.</p>
+
+      <AlertDialog open={confirmEnable} onOpenChange={setConfirmEnable}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enable automatic publishing?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  {dueNow.length} scheduled post{dueNow.length === 1 ? " is" : "s are"} currently due and may publish on the next scheduler run (every 5
+                  minutes).
+                </p>
+                <p>Target accounts: Facebook - {fbAccount ? fbAccount.display_name : "not connected"}; Instagram - {igAccount ? igAccount.display_name : "not connected"}.</p>
+                {envBlocked ? (
+                  <p className="font-semibold text-red-700">The production safety switch is currently BLOCKED - nothing will publish until it is also enabled.</p>
+                ) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setAutoPublish(true)} disabled={saving}>Enable</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmDisable} onOpenChange={setConfirmDisable}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable automatic publishing?</AlertDialogTitle>
+            <AlertDialogDescription>Scheduled posts will remain queued but will not publish automatically.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setAutoPublish(false)} disabled={saving}>Disable</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -461,6 +611,8 @@ function MediaLibraryPanel({ assets, variants, campaignItems, userId, accessToke
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const [previewErrors, setPreviewErrors] = useState<Record<string, boolean>>({});
+  const previewRetryCounts = useRef<Record<string, number>>({});
   const [filter, setFilter] = useState<AssetFilter>("all");
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -518,10 +670,44 @@ function MediaLibraryPanel({ assets, variants, campaignItems, userId, accessToke
     });
   }, [assets, filter, search, badgesByAsset]);
 
-  const loadPreview = async (asset: SocialAsset) => {
-    if (previewUrls[asset.id]) return;
+  const loadPreview = async (asset: SocialAsset, force = false) => {
+    if (!force && previewUrls[asset.id]) return;
     const url = await getSocialAssetPreviewUrl(asset.storage_path);
-    if (url) setPreviewUrls((current) => ({ ...current, [asset.id]: url }));
+    if (url) {
+      setPreviewUrls((current) => ({ ...current, [asset.id]: url }));
+      setPreviewErrors((current) => {
+        if (!current[asset.id]) return current;
+        const next = { ...current };
+        delete next[asset.id];
+        return next;
+      });
+    } else {
+      setPreviewErrors((current) => ({ ...current, [asset.id]: true }));
+    }
+  };
+
+  // Thumbnails must load by default (not only on click) - the bucket is
+  // private, so every thumbnail needs its own short-lived signed URL.
+  // Loads one per visible asset as soon as it's in the filtered list.
+  useEffect(() => {
+    filteredAssets.forEach((asset) => {
+      if (!previewUrls[asset.id] && !previewErrors[asset.id]) loadPreview(asset);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredAssets]);
+
+  // A signed URL is only valid for a few minutes. If the browser reports a
+  // load failure (expired token, or a transient network error), retry once
+  // with a freshly generated signed URL before giving up and showing the
+  // "preview unavailable" state.
+  const handleImageError = (asset: SocialAsset) => {
+    const retries = previewRetryCounts.current[asset.id] || 0;
+    if (retries >= 1) {
+      setPreviewErrors((current) => ({ ...current, [asset.id]: true }));
+      return;
+    }
+    previewRetryCounts.current[asset.id] = retries + 1;
+    loadPreview(asset, true);
   };
 
   const openPreview = (asset: SocialAsset) => {
@@ -818,10 +1004,20 @@ function MediaLibraryPanel({ assets, variants, campaignItems, userId, accessToke
               <Card key={asset.id} className={`overflow-hidden ${selectedIds.has(asset.id) ? "ring-2 ring-primary" : ""}`}>
                 <div className="relative">
                   <button type="button" className="block aspect-video w-full bg-muted" onClick={() => openPreview(asset)}>
-                    {previewUrls[asset.id] ? (
-                      <img src={previewUrls[asset.id]} alt={asset.title} className="h-full w-full object-cover" />
+                    {previewUrls[asset.id] && !previewErrors[asset.id] ? (
+                      <img
+                        src={previewUrls[asset.id]}
+                        alt={asset.title}
+                        className="h-full w-full object-cover"
+                        onError={() => handleImageError(asset)}
+                      />
+                    ) : previewErrors[asset.id] ? (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
+                        <ImageIcon className="h-8 w-8" />
+                        <span className="text-[10px]">Preview unavailable</span>
+                      </div>
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-muted-foreground"><ImageIcon className="h-8 w-8" /></div>
+                      <div className="flex h-full w-full items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
                     )}
                   </button>
                   <div className="absolute left-2 top-2 rounded bg-background/80 p-0.5">
@@ -890,15 +1086,46 @@ function MediaLibraryPanel({ assets, variants, campaignItems, userId, accessToke
         )}
       </div>
 
-      {/* Preview dialog */}
+      {/* Preview dialog - original plus each generated platform version */}
       <Dialog open={!!previewAsset} onOpenChange={(open) => !open && setPreviewAsset(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader><DialogTitle>{previewAsset?.title}</DialogTitle></DialogHeader>
-          {previewAsset && previewUrls[previewAsset.id] ? (
-            <img src={previewUrls[previewAsset.id]} alt={previewAsset.title} className="max-h-[70vh] w-full rounded-md object-contain" />
-          ) : (
-            <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          )}
+          {previewAsset ? (
+            <div className="space-y-4">
+              <div>
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Original ({previewAsset.width_px}x{previewAsset.height_px})</p>
+                {previewUrls[previewAsset.id] && !previewErrors[previewAsset.id] ? (
+                  <img
+                    src={previewUrls[previewAsset.id]}
+                    alt={previewAsset.title}
+                    className="max-h-[50vh] w-full rounded-md bg-muted object-contain"
+                    onError={() => handleImageError(previewAsset)}
+                  />
+                ) : previewErrors[previewAsset.id] ? (
+                  <div className="flex h-48 items-center justify-center rounded-md bg-muted text-sm text-muted-foreground">Preview unavailable</div>
+                ) : (
+                  <div className="flex h-48 items-center justify-center rounded-md bg-muted"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                )}
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(["facebook", "instagram"] as SocialPlatform[]).map((platform) => {
+                  const variant = variants.find((v) => v.media_asset_id === previewAsset.id && v.platform === platform);
+                  return (
+                    <div key={platform}>
+                      <p className="mb-1 text-xs font-medium text-muted-foreground">
+                        {PLATFORM_LABELS[platform]} version{variant ? ` (${variant.width_px}x${variant.height_px})` : ""}
+                      </p>
+                      {variant ? (
+                        <VariantPreviewImage variant={variant} />
+                      ) : (
+                        <div className="flex h-32 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">Not generated yet</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
 
@@ -1024,6 +1251,31 @@ function MediaLibraryPanel({ assets, variants, campaignItems, userId, accessToke
       </AlertDialog>
     </div>
   );
+}
+
+// Loads its own signed URL on mount - platform variants aren't part of the
+// Media Library's eager previewUrls map (only shown inside the Preview
+// dialog, on demand), so this stays a small self-contained loader/error
+// state instead of threading variant state through the parent panel.
+function VariantPreviewImage({ variant }: { variant: SocialPlatformVariant }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUrl(null);
+    setError(false);
+    getSocialAssetPreviewUrl(variant.storage_path).then((signedUrl) => {
+      if (cancelled) return;
+      if (signedUrl) setUrl(signedUrl);
+      else setError(true);
+    });
+    return () => { cancelled = true; };
+  }, [variant.storage_path]);
+
+  if (error) return <div className="flex h-32 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground">Preview unavailable</div>;
+  if (!url) return <div className="flex h-32 items-center justify-center rounded-md bg-muted"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+  return <img src={url} alt="Platform version" className="h-32 w-full rounded-md bg-muted object-contain" onError={() => setError(true)} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -1776,16 +2028,57 @@ function CampaignDetail({ campaign, assets, accounts, posts, accessToken, onChan
 // Scheduled / Published / Failed posts (shared table)
 // ---------------------------------------------------------------------------
 
-function PostsTable({ title, emptyMessage, posts, onChanged }: {
+function PostsTable({ title, emptyMessage, posts, accounts, accessToken, onChanged }: {
   title: string;
   emptyMessage: string;
   posts: PostRow[];
+  accounts: SocialAccount[];
+  accessToken: string;
   onChanged: () => void;
 }) {
   const [rescheduling, setRescheduling] = useState<PostRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<PostRow | null>(null);
   const [skipTarget, setSkipTarget] = useState<PostRow | null>(null);
+  const [publishNowTarget, setPublishNowTarget] = useState<PostRow | null>(null);
+  const [publishNowPreviewUrl, setPublishNowPreviewUrl] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const openPublishNow = (post: PostRow) => {
+    setPublishNowTarget(post);
+    setPublishNowPreviewUrl(null);
+    if (post.asset?.storage_path) {
+      getSocialAssetPreviewUrl(post.asset.storage_path).then((url) => setPublishNowPreviewUrl(url));
+    }
+  };
+
+  const confirmPublishNow = async () => {
+    if (!publishNowTarget) return;
+    setPublishing(true);
+    try {
+      const response = await fetch(SOCIAL_PUBLISH_NOW_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduled_post_id: publishNowTarget.id }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        toast.error(payload.error || "Unable to publish this post");
+        return;
+      }
+      if (payload.ok) {
+        toast.success(`Published to ${PLATFORM_LABELS[publishNowTarget.target_platform]}${payload.post?.provider_permalink ? " - view it on the platform" : ""}`);
+      } else {
+        toast.error(`Publish failed: ${payload.post?.failure_message || payload.outcome || "Unknown error"}. The post is recoverable - retry when ready.`);
+      }
+      setPublishNowTarget(null);
+      onChanged();
+    } catch {
+      toast.error("Unable to reach the publish service");
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const retryPost = async (post: PostRow) => {
     const { error } = await supabase.from("social_scheduled_posts").update({
@@ -1861,6 +2154,7 @@ function PostsTable({ title, emptyMessage, posts, onChanged }: {
               ) : null}
               {post.status === "scheduled" ? (
                 <>
+                  <Button size="sm" onClick={() => openPublishNow(post)}><Send className="mr-1.5 h-3.5 w-3.5" />Publish now</Button>
                   <Button variant="outline" size="sm" onClick={() => setRescheduling(post)}>Reschedule</Button>
                   <Button variant="ghost" size="sm" onClick={() => setSkipTarget(post)}><SkipForward className="mr-1 h-3.5 w-3.5" />Skip</Button>
                   <Button variant="ghost" size="sm" onClick={() => setCancelTarget(post)}>Cancel</Button>
@@ -1904,6 +2198,45 @@ function PostsTable({ title, emptyMessage, posts, onChanged }: {
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it</AlertDialogCancel>
             <AlertDialogAction onClick={confirmSkip} disabled={busy}>Skip post</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!publishNowTarget} onOpenChange={(open) => !open && !publishing && setPublishNowTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Publish this post to {publishNowTarget ? PLATFORM_LABELS[publishNowTarget.target_platform] : ""} now?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p className="text-xs text-muted-foreground">
+                  This publishes ONLY this one post, right now - no other due post is affected, and it works even while automatic publishing is off.
+                </p>
+                {publishNowPreviewUrl ? (
+                  <img src={publishNowPreviewUrl} alt={publishNowTarget?.asset?.title || "Poster"} className="max-h-48 w-full rounded-md bg-muted object-contain" />
+                ) : (
+                  <div className="flex h-24 items-center justify-center rounded-md bg-muted"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                )}
+                <div className="space-y-1 rounded-md border p-2.5 text-xs">
+                  <p><span className="font-medium text-foreground">Platform:</span> {publishNowTarget ? PLATFORM_LABELS[publishNowTarget.target_platform] : ""}</p>
+                  <p>
+                    <span className="font-medium text-foreground">Account:</span>{" "}
+                    {accounts.find((a) => a.id === publishNowTarget?.social_account_id)?.display_name || "Unknown account"}
+                  </p>
+                  <p><span className="font-medium text-foreground">Poster:</span> {publishNowTarget?.asset?.title || "Unknown poster"}</p>
+                  <p><span className="font-medium text-foreground">Scheduled time:</span> {publishNowTarget ? formatInBusinessTimezone(publishNowTarget.scheduled_at) : ""}</p>
+                  <p className="whitespace-pre-wrap"><span className="font-medium text-foreground">Caption:</span> {publishNowTarget?.caption}</p>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={publishing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPublishNow} disabled={publishing}>
+              {publishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+              Publish now
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
