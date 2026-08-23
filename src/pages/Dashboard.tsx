@@ -2,6 +2,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/AppSidebar";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Outlet, useLocation } from "react-router-dom";
 import { dashboardDescriptionByRole, dashboardTitleByRole } from "@/lib/portal";
 import { AnimatePresence, motion } from "framer-motion";
@@ -56,7 +57,9 @@ export default function Dashboard() {
                 transition={{ duration: 0.24, ease: "easeOut" }}
                 className={isWhatsAppQAWorkspace ? "h-full min-h-0" : "dashboard-page dashboard-surface min-h-full rounded-[1.75rem] md:p-4 sm:p-6 lg:p-7"}
               >
-                <Outlet />
+                <ErrorBoundary key={location.pathname} label={location.pathname}>
+                  <Outlet />
+                </ErrorBoundary>
               </motion.div>
             </AnimatePresence>
           </main>
