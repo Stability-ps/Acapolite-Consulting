@@ -3,7 +3,7 @@
 // row-level security (admin-only on every social_* table) is the actual
 // authorization boundary - this function does not use the service role key.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { computeScheduleDates } from "../_shared/socialSchedule.ts";
+import { computeScheduleDates, nextOccurrenceAtOrAfter } from "../_shared/socialSchedule.ts";
 import { buildIdempotencyKey } from "../_shared/socialIdempotency.ts";
 import { platformKeyForAccountPlatform, validateAssetForPlatform } from "../_shared/socialPlatformRules.ts";
 
@@ -68,7 +68,9 @@ Deno.serve(async (req: Request) => {
 
   const action = body.action;
   const campaignId = body.campaign_id;
-  if (action !== "preview" && action !== "activate") return json(req, { error: "action must be 'preview' or 'activate'" }, 400);
+  if (action !== "preview" && action !== "activate" && action !== "recalculate") {
+    return json(req, { error: "action must be 'preview', 'activate', or 'recalculate'" }, 400);
+  }
   if (!campaignId) return json(req, { error: "campaign_id is required" }, 400);
 
   const sb = createClient(MAIN_URL, MAIN_PUBLISHABLE_KEY, {
@@ -82,6 +84,86 @@ Deno.serve(async (req: Request) => {
 
   if (action === "activate" && campaign.status !== "approved") {
     return json(req, { error: `Campaign must be approved before activation (current status: ${campaign.status})` }, 400);
+  }
+
+  // "Recalculate schedule" is a distinct, explicitly-opt-in action: it
+  // re-spaces every not-yet-published post starting from the next occurrence
+  // of the campaign's usual posting time. Ordinary per-post reschedule
+  // (done directly against social_scheduled_posts from the UI) never
+  // cascades into other posts - only this action does, and only when an
+  // admin explicitly chooses it.
+  if (action === "recalculate") {
+    if (campaign.status !== "active" && campaign.status !== "paused") {
+      return json(req, { error: `Only active or paused campaigns can be recalculated (current status: ${campaign.status})` }, 400);
+    }
+
+    const { data: pendingRows, error: pendingError } = await sb
+      .from("social_scheduled_posts")
+      .select("id, media_asset_id, target_platform, social_account_id, scheduled_at")
+      .eq("campaign_id", campaignId)
+      .eq("status", "scheduled")
+      .order("scheduled_at", { ascending: true });
+    if (pendingError) return json(req, { error: "Unable to load scheduled posts" }, 500);
+    if (!pendingRows?.length) return json(req, { ok: true, recalculated: 0, poster_slots: 0 });
+
+    // Rows sharing the same scheduled_at are the same "poster slot" (one
+    // poster published to several platforms at once) - group them so the
+    // whole slot moves together instead of splitting across platforms.
+    const groups: (typeof pendingRows)[] = [];
+    const groupIndexByInstant = new Map<string, number>();
+    for (const row of pendingRows) {
+      const key = new Date(row.scheduled_at).toISOString();
+      let index = groupIndexByInstant.get(key);
+      if (index === undefined) {
+        index = groups.length;
+        groupIndexByInstant.set(key, index);
+        groups.push([]);
+      }
+      groups[index].push(row);
+    }
+
+    const { data: excludedRows } = await sb.from("social_campaign_excluded_dates").select("excluded_date").eq("campaign_id", campaignId);
+    const excludedDates = (excludedRows || []).map((row) => String(row.excluded_date));
+
+    const effectiveStartAt = nextOccurrenceAtOrAfter(new Date(), new Date(campaign.start_at), campaign.timezone);
+    const slots = computeScheduleDates({
+      startAt: effectiveStartAt,
+      timezone: campaign.timezone,
+      intervalDays: campaign.interval_days,
+      count: groups.length,
+      excludedDates,
+    });
+
+    let updatedCount = 0;
+    const nowIso = new Date().toISOString();
+    for (let i = 0; i < groups.length; i++) {
+      const newScheduledAt = slots[i].scheduledAt;
+      for (const row of groups[i]) {
+        const newKey = await buildIdempotencyKey({
+          campaignId,
+          mediaAssetId: row.media_asset_id,
+          targetPlatform: row.target_platform,
+          socialAccountId: row.social_account_id,
+          scheduledAt: newScheduledAt,
+        });
+        const { error: updateError } = await sb
+          .from("social_scheduled_posts")
+          .update({ scheduled_at: newScheduledAt.toISOString(), idempotency_key: newKey, next_retry_at: null, updated_at: nowIso })
+          .eq("id", row.id);
+        if (!updateError) updatedCount++;
+      }
+    }
+
+    await sb.from("system_activity_log").insert({
+      actor_profile_id: actor.id,
+      actor_role: "admin",
+      action: "social_campaign_schedule_recalculated",
+      target_type: "social_campaign",
+      target_id: campaignId,
+      metadata: { poster_slots: groups.length, posts_updated: updatedCount },
+    });
+
+    return json(req, { ok: true, recalculated: updatedCount, poster_slots: groups.length });
   }
 
   const { data: items, error: itemsError } = await sb

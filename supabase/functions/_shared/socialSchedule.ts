@@ -129,3 +129,25 @@ export function computeScheduleDates(input: ScheduleInput): ScheduledSlot[] {
   }
   return slots;
 }
+
+// Used by "recalculate schedule": finds the next instant at or after
+// referenceInstant that shares timeOfDayFrom's local wall-clock
+// hour/minute/second in timeZone - i.e. "the next occurrence of the
+// campaign's usual posting time, today if it hasn't passed yet, otherwise
+// tomorrow". Feeding this result into computeScheduleDates as startAt
+// re-spaces the remaining posts from the right moment without silently
+// adopting whatever time-of-day the admin happened to click the button at.
+export function nextOccurrenceAtOrAfter(referenceInstant: Date, timeOfDayFrom: Date, timeZone: string): Date {
+  const timeParts = partsFromInstant(timeOfDayFrom, timeZone);
+  const refParts = partsFromInstant(referenceInstant, timeZone);
+  let candidateParts: ZonedDateParts = {
+    year: refParts.year, month: refParts.month, day: refParts.day,
+    hour: timeParts.hour, minute: timeParts.minute, second: timeParts.second,
+  };
+  let candidate = zonedPartsToUtc(candidateParts, timeZone);
+  if (candidate.getTime() < referenceInstant.getTime()) {
+    candidateParts = addCalendarDays(candidateParts, 1);
+    candidate = zonedPartsToUtc(candidateParts, timeZone);
+  }
+  return candidate;
+}

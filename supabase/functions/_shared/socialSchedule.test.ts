@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { computeScheduleDates, zonedPartsToUtc } from "./socialSchedule.ts";
+import { computeScheduleDates, nextOccurrenceAtOrAfter, zonedPartsToUtc } from "./socialSchedule.ts";
 
 const JHB = "Africa/Johannesburg";
 
@@ -88,6 +88,38 @@ Deno.test("DST safety: a US Eastern-time campaign stays at the same local hour a
   assertEquals(hourMinute(slots[0].scheduledAt), "09:00");
   assertEquals(hourMinute(slots[1].scheduledAt), "09:00"); // still 09:00 local, even though the UTC offset changed
   assertEquals(slots[0].scheduledAt.getTime() !== slots[1].scheduledAt.getTime() - 3 * 24 * 60 * 60 * 1000, true); // proves it did NOT just add 3*86400s in UTC
+});
+
+Deno.test("nextOccurrenceAtOrAfter: reference time before today's posting time returns today at that time", () => {
+  const timeOfDayFrom = zonedPartsToUtc({ year: 2000, month: 1, day: 1, hour: 9, minute: 30, second: 0 }, JHB);
+  const reference = zonedPartsToUtc({ year: 2026, month: 9, day: 10, hour: 7, minute: 0, second: 0 }, JHB);
+  const result = nextOccurrenceAtOrAfter(reference, timeOfDayFrom, JHB);
+  assertEquals(result.getTime(), zonedPartsToUtc({ year: 2026, month: 9, day: 10, hour: 9, minute: 30, second: 0 }, JHB).getTime());
+});
+
+Deno.test("nextOccurrenceAtOrAfter: reference time after today's posting time rolls over to tomorrow", () => {
+  const timeOfDayFrom = zonedPartsToUtc({ year: 2000, month: 1, day: 1, hour: 9, minute: 30, second: 0 }, JHB);
+  const reference = zonedPartsToUtc({ year: 2026, month: 9, day: 10, hour: 15, minute: 0, second: 0 }, JHB);
+  const result = nextOccurrenceAtOrAfter(reference, timeOfDayFrom, JHB);
+  assertEquals(result.getTime(), zonedPartsToUtc({ year: 2026, month: 9, day: 11, hour: 9, minute: 30, second: 0 }, JHB).getTime());
+});
+
+Deno.test("nextOccurrenceAtOrAfter: reference time exactly at the posting time returns that same instant, not the next day", () => {
+  const timeOfDayFrom = zonedPartsToUtc({ year: 2000, month: 1, day: 1, hour: 9, minute: 30, second: 0 }, JHB);
+  const reference = zonedPartsToUtc({ year: 2026, month: 9, day: 10, hour: 9, minute: 30, second: 0 }, JHB);
+  const result = nextOccurrenceAtOrAfter(reference, timeOfDayFrom, JHB);
+  assertEquals(result.getTime(), reference.getTime());
+});
+
+Deno.test("nextOccurrenceAtOrAfter: stays at the correct local hour across a DST spring-forward transition", () => {
+  const NY = "America/New_York";
+  const timeOfDayFrom = zonedPartsToUtc({ year: 2000, month: 1, day: 1, hour: 9, minute: 0, second: 0 }, NY);
+  // Reference is the morning of the spring-forward day itself, before 09:00 local.
+  const reference = zonedPartsToUtc({ year: 2026, month: 3, day: 8, hour: 7, minute: 0, second: 0 }, NY);
+  const result = nextOccurrenceAtOrAfter(reference, timeOfDayFrom, NY);
+  const formatter = new Intl.DateTimeFormat("en-US", { timeZone: NY, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const parts = formatter.formatToParts(result);
+  assertEquals(`${parts.find((p) => p.type === "hour")?.value}:${parts.find((p) => p.type === "minute")?.value}`, "09:00");
 });
 
 Deno.test("count of 0 returns an empty schedule, count validation rejects invalid input", () => {
