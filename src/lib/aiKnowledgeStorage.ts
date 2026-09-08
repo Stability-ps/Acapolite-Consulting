@@ -72,6 +72,17 @@ export async function getAiKnowledgeSignedUrl(path: string, expiresInSeconds = 6
   return data.signedUrl;
 }
 
+export async function downloadAiKnowledgeFile(path: string, fileName?: string) {
+  const { data, error } = await supabase.storage.from("documents").download(path);
+  if (error || !data) throw new Error(error?.message ?? "Unable to download this private file.");
+  const url = URL.createObjectURL(data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName || path.split("/").pop() || "download";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function findTaxKnowledgeDuplicateByChecksum(checksum: string) {
   const { data, error } = await supabase
     .from("tax_knowledge_library")

@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { computeFileChecksumSha256, sanitizeAiKnowledgeFileName, uploadToDocumentsBucket } from "@/lib/aiKnowledgeStorage";
+import { computeFileChecksumSha256, downloadAiKnowledgeFile, getAiKnowledgeSignedUrl, sanitizeAiKnowledgeFileName, uploadToDocumentsBucket } from "@/lib/aiKnowledgeStorage";
 import { metadataFields, normalizeMetadata, type IngestionKind } from "../../../../supabase/functions/_shared/ingestionMetadata";
 
 type SourceFile = {file_name: string; file_path: string; file_size: number; mime_type: string; checksum_sha256: string};
@@ -101,7 +101,7 @@ export function DocumentIngestionDialog({kind}: {kind: IngestionKind}) {
       <div className="space-y-4">
         {kind === "past_case" && <p className="text-sm">These files belong to one historical matter. Redact taxpayer information before upload. AI suggestions do not replace anonymisation review.</p>}
         <label className="block">Source document{kind === "past_case" ? "s (up to five)" : ""}<Input type="file" accept=".pdf,.docx,.txt" multiple={kind === "past_case"} disabled={busy || files.length > 0} onChange={e => void upload(e.target.files)} /></label>
-        {files.map(file => <p key={file.file_path} className="text-sm">{file.file_name} — stored privately</p>)}
+        {files.map((file, index) => <div key={file.file_path} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3"><p className="text-sm truncate">{index + 1}. {file.file_name} — stored privately</p><div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={busy} onClick={async () => { try { window.open(await getAiKnowledgeSignedUrl(file.file_path), "_blank", "noopener,noreferrer"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to open file."); } }}>View</Button><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void downloadAiKnowledgeFile(file.file_path, file.file_name)}>Download</Button><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => { setFiles(previous => previous.filter((_, fileIndex) => fileIndex !== index)); setReviewed(false); window.setTimeout(() => document.querySelector<HTMLInputElement>("input[type=file]")?.click(), 0); }}>Change</Button><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { setFiles(previous => previous.filter((_, fileIndex) => fileIndex !== index)); setReviewed(false); }}>Remove</Button></div></div>)}
         {notice && <p role="status" className="text-sm">{notice}</p>}
         {busy && <p role="status">Processing this document…</p>}
         {files.length > 0 && <>

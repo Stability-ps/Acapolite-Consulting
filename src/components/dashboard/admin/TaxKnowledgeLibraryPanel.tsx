@@ -22,6 +22,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { logSystemActivity } from "@/lib/systemActivityLog";
 import {
   runKnowledgeIndex,
+  downloadAiKnowledgeFile,
   AI_INDEX_STATUS_LABELS,
   KNOWLEDGE_STATUS_LABELS,
   buildTaxKnowledgeStoragePath,
@@ -552,6 +553,7 @@ export function TaxKnowledgeLibraryPanel() {
                 <ExternalLink className="h-4 w-4 mr-2" />
                 {openingId === editingId ? "Opening..." : "Open Current File"}
               </Button>
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => { const file = entries?.find((e) => e.id === editingId); if (file?.file_path) void downloadAiKnowledgeFile(file.file_path, file.file_name ?? undefined); }} disabled={!entries?.find((e) => e.id === editingId)?.file_path}>Download</Button>
               {entries?.find((e) => e.id === editingId)?.file_path ? (
                 <>
                   <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border font-body ${getAiIndexStatusBadgeClass(entries.find((e) => e.id === editingId)!.ai_index_status)}`}>
