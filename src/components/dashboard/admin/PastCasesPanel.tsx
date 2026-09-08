@@ -429,7 +429,7 @@ export function PastCasesPanel() {
   const handleCaseLifecycle = async (action: "archive" | "restore" | "delete") => {
     const row = entries?.find((entry) => entry.id === editingId);
     if (!row || !user) return;
-    if (action === "delete" && !window.confirm(`Permanently delete \"${row.title}\", all documents, and private files?`)) return;
+    if (action === "delete" && !window.confirm(`Permanently delete "${row.title}", all documents, and private files?`)) return;
     setCaseLifecycleBusy(true);
     try {
       const docs = activeDocuments ?? [];

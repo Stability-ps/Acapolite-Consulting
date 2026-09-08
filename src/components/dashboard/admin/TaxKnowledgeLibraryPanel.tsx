@@ -331,7 +331,7 @@ export function TaxKnowledgeLibraryPanel() {
   const handleLifecycle = async (action: "archive" | "restore" | "delete") => {
     const row = entries?.find((entry) => entry.id === editingId);
     if (!row || !user) return;
-    if (action === "delete" && !window.confirm(`Permanently delete \"${row.title}\" and its private source file?`)) return;
+    if (action === "delete" && !window.confirm(`Permanently delete "${row.title}" and its private source file?`)) return;
     setLifecycleBusy(true);
     try {
       if (action === "delete") {

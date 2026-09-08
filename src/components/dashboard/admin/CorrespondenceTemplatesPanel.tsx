@@ -170,7 +170,7 @@ export function CorrespondenceTemplatesPanel() {
   const handleTemplateLifecycle = async (action: "archive" | "restore" | "delete" | "remove-source", file?: File) => {
     const row = templates?.find((t) => t.id === editingId);
     if (!row || !user) return;
-    if ((action === "delete" || action === "remove-source") && !window.confirm(action === "delete" ? `Permanently delete \"${row.name}\"?` : "Remove this private source file?")) return;
+    if ((action === "delete" || action === "remove-source") && !window.confirm(action === "delete" ? `Permanently delete "${row.name}"?` : "Remove this private source file?")) return;
     setSourceBusy(true);
     let newPath: string | null = null;
     try {
@@ -197,7 +197,7 @@ export function CorrespondenceTemplatesPanel() {
         toast.success("Source file replaced. Reviewed fields were preserved.");
       }
       await queryClient.invalidateQueries({ queryKey: ["correspondence-templates"] });
-    } catch (error) { if (newPath) { try { await removeFromDocumentsBucket(newPath); } catch {} } toast.error(error instanceof Error ? error.message : "Template lifecycle action failed; existing record preserved."); }
+    } catch (error) { if (newPath) { try { await removeFromDocumentsBucket(newPath); } catch (cleanupError) { console.error("Replacement cleanup failed", cleanupError); } } toast.error(error instanceof Error ? error.message : "Template lifecycle action failed; existing record preserved."); }
     finally { setSourceBusy(false); }
   };
 
