@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { logSystemActivity } from "@/lib/systemActivityLog";
 import {
+  downloadAiKnowledgeFile,
   runKnowledgeIndex,
   AI_INDEX_STATUS_LABELS,
   ANONYMISATION_STATUS_LABELS,
@@ -550,6 +551,7 @@ export function PastCasesPanel() {
                       <ExternalLink className="h-4 w-4 mr-1" />
                       {openingDocId === doc.id ? "Opening..." : "Open"}
                     </Button>
+                    <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => void downloadAiKnowledgeFile(doc.file_path, doc.file_name)}>Download</Button>
                     <Button
                       type="button"
                       variant="outline"

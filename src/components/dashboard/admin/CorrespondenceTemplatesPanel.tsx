@@ -1,4 +1,4 @@
-import { getAiKnowledgeSignedUrl } from "@/lib/aiKnowledgeStorage";
+import { downloadAiKnowledgeFile, getAiKnowledgeSignedUrl } from "@/lib/aiKnowledgeStorage";
 import { DocumentIngestionDialog } from "./DocumentIngestionDialog";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -221,7 +221,7 @@ export function CorrespondenceTemplatesPanel() {
         description="Global structure only. Not linked to any client or case."
       >
         <div className="space-y-5">
-          {editingId && templates?.find(t => t.id === editingId)?.source_file_path && <Button variant="outline" onClick={async () => {try {const source = templates.find(t => t.id === editingId)!; window.open(await getAiKnowledgeSignedUrl(source.source_file_path!), "_blank", "noopener,noreferrer");} catch {toast.error("Unable to open the private source.");}}}>Open original template</Button>}
+          {editingId && templates?.find(t => t.id === editingId)?.source_file_path && <div className="flex gap-2"><Button variant="outline" onClick={async () => {try {const source = templates.find(t => t.id === editingId)!; window.open(await getAiKnowledgeSignedUrl(source.source_file_path!), "_blank", "noopener,noreferrer");} catch {toast.error("Unable to open the private source.");}}}>Open original template</Button><Button variant="outline" onClick={() => {const source = templates.find(t => t.id === editingId)!; if (source.source_file_path) void downloadAiKnowledgeFile(source.source_file_path, source.source_file_name ?? undefined);}}>Download source</Button></div>}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Name *</label>
