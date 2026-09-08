@@ -31,6 +31,7 @@ import {
   getAiKnowledgeSignedUrl,
   getAnonymisationStatusBadgeClass,
   uploadToDocumentsBucket,
+  removeFromDocumentsBucket,
   validateAiKnowledgeFile,
 } from "@/lib/aiKnowledgeStorage";
 
@@ -92,6 +93,8 @@ export function PastCasesPanel() {
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [openingDocId, setOpeningDocId] = useState<string | null>(null);
   const [retryingDocId, setRetryingDocId] = useState<string | null>(null);
+  const [replacingDocId, setReplacingDocId] = useState<string | null>(null);
+  const [removingDocId, setRemovingDocId] = useState<string | null>(null);
 
   const { data: entries, isLoading } = useQuery({
     queryKey: ["ai-knowledge-past-cases"],
@@ -381,6 +384,46 @@ export function PastCasesPanel() {
     }
   };
 
+  const replaceDocument = async (doc: PastCaseDocumentRow, file: File | null) => {
+    if (!editingId || !user || !file) return;
+    const validationError = validateAiKnowledgeFile(file);
+    if (validationError) { toast.error(validationError); return; }
+    setReplacingDocId(doc.id);
+    let replacementPath: string | null = null;
+    try {
+      const checksum = await computeFileChecksumSha256(file);
+      const duplicate = await findPastCaseDocumentDuplicateByChecksum(checksum);
+      if (duplicate && duplicate.id !== doc.id && !window.confirm(`This exact file is already attached as ${duplicate.file_name}. Replace anyway?`)) return;
+      replacementPath = buildPastCaseDocumentStoragePath(editingId, file.name);
+      await uploadToDocumentsBucket(replacementPath, file);
+      if (doc.openai_file_id) await triggerIndexing(doc.id, "remove");
+      const { error } = await supabase.from("past_case_documents").update({ file_name: file.name, file_path: replacementPath, file_size: file.size, mime_type: file.type, checksum_sha256: checksum, ai_index_status: "pending", ai_index_error: null, openai_file_id: null, ai_indexed_at: null }).eq("id", doc.id);
+      if (error) throw new Error(error.message);
+      if (form.approved_for_ai_use) await triggerIndexing(doc.id, "index");
+      if (doc.file_path) await removeFromDocumentsBucket(doc.file_path);
+      await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_document_uploaded", targetType: "past_case_document", targetId: doc.id, metadata: { event: "past_case_document_replaced", pastCaseId: editingId, fileName: file.name } });
+      toast.success("Past Case document replaced.");
+      await refetchDocuments();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Replacement failed. The new private source was preserved for retry.");
+    } finally { setReplacingDocId(null); }
+  };
+
+  const removeDocument = async (doc: PastCaseDocumentRow) => {
+    if (!user || !window.confirm(`Remove ${doc.file_name} from this Past Case?`)) return;
+    setRemovingDocId(doc.id);
+    try {
+      if (doc.openai_file_id) await triggerIndexing(doc.id, "remove");
+      await removeFromDocumentsBucket(doc.file_path);
+      const { error } = await supabase.from("past_case_documents").delete().eq("id", doc.id);
+      if (error) throw new Error(error.message);
+      await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_document_deleted", targetType: "past_case_document", targetId: doc.id, metadata: { event: "past_case_document_removed", pastCaseId: editingId } });
+      toast.success("Past Case document removed.");
+      await refetchDocuments();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Document removal failed; no database row was deleted."); }
+    finally { setRemovingDocId(null); }
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
@@ -552,6 +595,8 @@ export function PastCasesPanel() {
                       {openingDocId === doc.id ? "Opening..." : "Open"}
                     </Button>
                     <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => void downloadAiKnowledgeFile(doc.file_path, doc.file_name)}>Download</Button>
+                    <label className="inline-flex items-center"><input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" disabled={replacingDocId === doc.id} onChange={(event) => void replaceDocument(doc, event.target.files?.[0] ?? null)} /><span className="inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm cursor-pointer hover:bg-accent">{replacingDocId === doc.id ? "Replacing..." : "Replace"}</span></label>
+                    <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => void removeDocument(doc)} disabled={removingDocId === doc.id}>{removingDocId === doc.id ? "Removing..." : "Remove"}</Button>
                     <Button
                       type="button"
                       variant="outline"
