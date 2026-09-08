@@ -37,6 +37,7 @@ import {
 
 type PastCaseRow = Tables<"past_cases">;
 type PastCaseDocumentRow = Tables<"past_case_documents">;
+const rowIsArchived = (row?: PastCaseRow) => Boolean(row?.is_archived);
 
 type FormState = {
   title: string;
@@ -95,6 +96,7 @@ export function PastCasesPanel() {
   const [retryingDocId, setRetryingDocId] = useState<string | null>(null);
   const [replacingDocId, setReplacingDocId] = useState<string | null>(null);
   const [removingDocId, setRemovingDocId] = useState<string | null>(null);
+  const [caseLifecycleBusy, setCaseLifecycleBusy] = useState(false);
 
   const { data: entries, isLoading } = useQuery({
     queryKey: ["ai-knowledge-past-cases"],
@@ -424,6 +426,37 @@ export function PastCasesPanel() {
     finally { setRemovingDocId(null); }
   };
 
+  const handleCaseLifecycle = async (action: "archive" | "restore" | "delete") => {
+    const row = entries?.find((entry) => entry.id === editingId);
+    if (!row || !user) return;
+    if (action === "delete" && !window.confirm(`Permanently delete \"${row.title}\", all documents, and private files?`)) return;
+    setCaseLifecycleBusy(true);
+    try {
+      const docs = activeDocuments ?? [];
+      if (action === "delete") {
+        for (const doc of docs) { if (doc.openai_file_id) await triggerIndexing(doc.id, "remove"); }
+        for (const doc of docs) await removeFromDocumentsBucket(doc.file_path);
+        const { error: childError } = await supabase.from("past_case_documents").delete().eq("past_case_id", row.id);
+        if (childError) throw new Error(childError.message);
+        const { error } = await supabase.from("past_cases").delete().eq("id", row.id);
+        if (error) throw new Error(error.message);
+        toast.success("Past Case deleted."); setDialogOpen(false); resetForm();
+      } else if (action === "archive") {
+        for (const doc of docs) { if (doc.openai_file_id) await triggerIndexing(doc.id, "remove"); }
+        const { error } = await supabase.from("past_cases").update({ is_archived: true, archived_at: new Date().toISOString(), archived_by: user.id }).eq("id", row.id);
+        if (error) throw new Error(error.message);
+        toast.success("Past Case archived.");
+      } else {
+        const { error } = await supabase.from("past_cases").update({ is_archived: false, archived_at: null, archived_by: null }).eq("id", row.id);
+        if (error) throw new Error(error.message);
+        if (row.approved_for_ai_use && row.anonymisation_status === "anonymised") for (const doc of docs) await triggerIndexing(doc.id, "index");
+        toast.success("Past Case restored.");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["ai-knowledge-past-cases"] }); await refetchDocuments();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Past Case lifecycle action failed; records were preserved."); }
+    finally { setCaseLifecycleBusy(false); }
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
@@ -579,6 +612,7 @@ export function PastCasesPanel() {
 
           {editingId ? (
             <div className="pt-4 border-t border-border space-y-3">
+              <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" className="rounded-xl" onClick={() => void handleCaseLifecycle(rowIsArchived(entries?.find((entry) => entry.id === editingId)) ? "restore" : "archive")} disabled={caseLifecycleBusy}>{caseLifecycleBusy ? "Working..." : rowIsArchived(entries?.find((entry) => entry.id === editingId)) ? "Restore" : "Archive Past Case"}</Button><Button type="button" variant="destructive" className="rounded-xl" onClick={() => void handleCaseLifecycle("delete")} disabled={caseLifecycleBusy}>Delete Past Case</Button></div>
               <p className="text-sm font-semibold text-foreground font-body">Supporting Documents</p>
 
               {(activeDocuments ?? []).map((doc) => (
