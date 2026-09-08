@@ -87,6 +87,7 @@ export function TaxKnowledgeLibraryPanel() {
   const [confirmDuplicateUpload, setConfirmDuplicateUpload] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [retryingIndex, setRetryingIndex] = useState(false);
 
   const { data: entries, isLoading } = useQuery({
     queryKey: ["ai-knowledge-tax-library"],
@@ -175,6 +176,17 @@ export function TaxKnowledgeLibraryPanel() {
     }
   };
 
+  const triggerIndexing = async (id: string, action: "index" | "remove") => {
+    const { error } = await supabase.functions.invoke("ai-knowledge-index", {
+      body: { table: "tax_knowledge_library", id, action },
+    });
+    if (error) {
+      console.error("AI indexing trigger failed", error);
+      toast.error("Saved, but triggering AI indexing failed. Use Retry Indexing below.");
+    }
+    await queryClient.invalidateQueries({ queryKey: ["ai-knowledge-tax-library"] });
+  };
+
   const handleSave = async () => {
     if (!form.title.trim()) {
       toast.error("Title is required.");
@@ -239,6 +251,10 @@ export function TaxKnowledgeLibraryPanel() {
         ...fileFields,
       };
 
+      const previousEntry = editingId ? entries?.find((entry) => entry.id === editingId) : undefined;
+
+      let savedId = editingId;
+
       if (editingId) {
         const { error } = await supabase.from("tax_knowledge_library").update(payload).eq("id", editingId);
         if (error) throw new Error(error.message);
@@ -258,6 +274,7 @@ export function TaxKnowledgeLibraryPanel() {
           .select("id")
           .single();
         if (error || !inserted) throw new Error(error?.message ?? "Unable to save entry.");
+        savedId = inserted.id;
 
         await logSystemActivity({
           actorProfileId: user.id,
@@ -267,6 +284,26 @@ export function TaxKnowledgeLibraryPanel() {
           targetId: inserted.id,
           metadata: { title: payload.title, hasFile: Boolean(selectedFile) },
         });
+      }
+
+      if (savedId) {
+        const revokingApproval = Boolean(previousEntry?.approved_for_ai_use) && !payload.approved_for_ai_use;
+        const nowArchived = previousEntry?.status !== "archived" && payload.status === "archived";
+
+        if (selectedFile) {
+          await triggerIndexing(savedId, "index");
+        } else if (revokingApproval || nowArchived) {
+          await triggerIndexing(savedId, "remove");
+
+          await logSystemActivity({
+            actorProfileId: user.id,
+            actorRole: "admin",
+            action: "tax_knowledge_ai_revoked",
+            targetType: "tax_knowledge_library",
+            targetId: savedId,
+            metadata: { reason: nowArchived ? "archived" : "approval_revoked" },
+          });
+        }
       }
 
       toast.success(editingId ? "Entry updated." : "Entry added to the Tax Knowledge Library.");
@@ -280,6 +317,16 @@ export function TaxKnowledgeLibraryPanel() {
       toast.error(error instanceof Error ? error.message : "Unable to save this entry.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRetryIndexing = async () => {
+    if (!editingId) return;
+    setRetryingIndex(true);
+    try {
+      await triggerIndexing(editingId, "index");
+    } finally {
+      setRetryingIndex(false);
     }
   };
 
@@ -492,11 +539,21 @@ export function TaxKnowledgeLibraryPanel() {
           </div>
 
           {editingId ? (
-            <div className="pt-2 border-t border-border">
+            <div className="pt-2 border-t border-border flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" className="rounded-xl" onClick={() => openFile(entries!.find((e) => e.id === editingId)!)} disabled={openingId === editingId || !entries?.find((e) => e.id === editingId)?.file_path}>
                 <ExternalLink className="h-4 w-4 mr-2" />
                 {openingId === editingId ? "Opening..." : "Open Current File"}
               </Button>
+              {entries?.find((e) => e.id === editingId)?.file_path ? (
+                <>
+                  <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border font-body ${getAiIndexStatusBadgeClass(entries.find((e) => e.id === editingId)!.ai_index_status)}`}>
+                    {AI_INDEX_STATUS_LABELS[entries.find((e) => e.id === editingId)!.ai_index_status]}
+                  </span>
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => void handleRetryIndexing()} disabled={retryingIndex}>
+                    {retryingIndex ? "Checking..." : "Retry Indexing"}
+                  </Button>
+                </>
+              ) : null}
             </div>
           ) : null}
         </div>

@@ -79,6 +79,30 @@ export type Database = {
           },
         ]
       }
+      ai_vector_stores: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          openai_vector_store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          openai_vector_store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          openai_vector_store_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       alerts: {
         Row: {
           acknowledged_at: string | null
@@ -240,6 +264,7 @@ export type Database = {
           id: string
           is_archived: boolean
           last_activity_at: string
+          openai_vector_store_id: string | null
           opened_at: string
           priority: number
           sars_case_reference: string | null
@@ -264,6 +289,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           last_activity_at?: string
+          openai_vector_store_id?: string | null
           opened_at?: string
           priority?: number
           sars_case_reference?: string | null
@@ -288,6 +314,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           last_activity_at?: string
+          openai_vector_store_id?: string | null
           opened_at?: string
           priority?: number
           sars_case_reference?: string | null
@@ -616,6 +643,7 @@ export type Database = {
         Row: {
           ai_index_error: string | null
           ai_index_status: Database["public"]["Enums"]["ai_index_status"]
+          ai_indexed_at: string | null
           assessment_reference: string | null
           case_id: string | null
           category: string | null
@@ -630,6 +658,7 @@ export type Database = {
           id: string
           mime_type: string | null
           notes: string | null
+          openai_file_id: string | null
           recipient_profile_id: string | null
           rejection_reason: string | null
           reviewed_at: string | null
@@ -649,6 +678,7 @@ export type Database = {
         Insert: {
           ai_index_error?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
+          ai_indexed_at?: string | null
           assessment_reference?: string | null
           case_id?: string | null
           category?: string | null
@@ -663,6 +693,7 @@ export type Database = {
           id?: string
           mime_type?: string | null
           notes?: string | null
+          openai_file_id?: string | null
           recipient_profile_id?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
@@ -682,6 +713,7 @@ export type Database = {
         Update: {
           ai_index_error?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
+          ai_indexed_at?: string | null
           assessment_reference?: string | null
           case_id?: string | null
           category?: string | null
@@ -696,6 +728,7 @@ export type Database = {
           id?: string
           mime_type?: string | null
           notes?: string | null
+          openai_file_id?: string | null
           recipient_profile_id?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
@@ -1191,6 +1224,7 @@ export type Database = {
         Row: {
           ai_index_error: string | null
           ai_index_status: Database["public"]["Enums"]["ai_index_status"]
+          ai_indexed_at: string | null
           category: string | null
           checksum_sha256: string | null
           created_at: string
@@ -1200,11 +1234,13 @@ export type Database = {
           file_size: number | null
           id: string
           mime_type: string | null
+          openai_file_id: string | null
           past_case_id: string
         }
         Insert: {
           ai_index_error?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
+          ai_indexed_at?: string | null
           category?: string | null
           checksum_sha256?: string | null
           created_at?: string
@@ -1214,11 +1250,13 @@ export type Database = {
           file_size?: number | null
           id?: string
           mime_type?: string | null
+          openai_file_id?: string | null
           past_case_id: string
         }
         Update: {
           ai_index_error?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
+          ai_indexed_at?: string | null
           category?: string | null
           checksum_sha256?: string | null
           created_at?: string
@@ -1228,6 +1266,7 @@ export type Database = {
           file_size?: number | null
           id?: string
           mime_type?: string | null
+          openai_file_id?: string | null
           past_case_id?: string
         }
         Relationships: [
@@ -3508,6 +3547,7 @@ export type Database = {
         Row: {
           ai_index_error: string | null
           ai_index_status: Database["public"]["Enums"]["ai_index_status"]
+          ai_indexed_at: string | null
           approved_for_ai_use: boolean
           category: string | null
           checksum_sha256: string | null
@@ -3523,6 +3563,7 @@ export type Database = {
           jurisdiction: string
           legislation: string | null
           mime_type: string | null
+          openai_file_id: string | null
           publication_date: string | null
           section_reference: string | null
           source: string | null
@@ -3538,6 +3579,7 @@ export type Database = {
         Insert: {
           ai_index_error?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
+          ai_indexed_at?: string | null
           approved_for_ai_use?: boolean
           category?: string | null
           checksum_sha256?: string | null
@@ -3553,6 +3595,7 @@ export type Database = {
           jurisdiction?: string
           legislation?: string | null
           mime_type?: string | null
+          openai_file_id?: string | null
           publication_date?: string | null
           section_reference?: string | null
           source?: string | null
@@ -3568,6 +3611,7 @@ export type Database = {
         Update: {
           ai_index_error?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
+          ai_indexed_at?: string | null
           approved_for_ai_use?: boolean
           category?: string | null
           checksum_sha256?: string | null
@@ -3583,6 +3627,7 @@ export type Database = {
           jurisdiction?: string
           legislation?: string | null
           mime_type?: string | null
+          openai_file_id?: string | null
           publication_date?: string | null
           section_reference?: string | null
           source?: string | null

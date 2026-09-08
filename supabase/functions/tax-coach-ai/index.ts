@@ -13,6 +13,7 @@ import {
   retrieveTaxKnowledge,
   type RetrievedSource,
 } from "../_shared/taxCoachRetrieval.ts";
+import { extractFileCitationIds, resolveFileCitations } from "../_shared/taxCoachFileCitations.ts";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -110,6 +111,30 @@ Deno.serve(async (request) => {
     ]);
 
     const allSources = [...caseDocumentSources, ...knowledgeSources, ...pastCaseSources];
+
+    // Resolve which OpenAI vector stores (real file-content search, not just
+    // structured metadata) are in scope for this request. General mode only
+    // ever sees the two global domain stores; case documents are added only
+    // when scope === "case" and only that case's own store - never another
+    // client's or case's store.
+    const [knowledgeStoreRow, pastCasesStoreRow, caseRow] = await Promise.all([
+      includeKnowledge
+        ? callerClient.from("ai_vector_stores").select("openai_vector_store_id").eq("domain", "tax_knowledge").maybeSingle()
+        : Promise.resolve({ data: null }),
+      includePastCases
+        ? callerClient.from("ai_vector_stores").select("openai_vector_store_id").eq("domain", "past_cases").maybeSingle()
+        : Promise.resolve({ data: null }),
+      requestedScope === "case" && caseId
+        ? callerClient.from("cases").select("openai_vector_store_id").eq("id", caseId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const vectorStoreIds = [
+      knowledgeStoreRow.data?.openai_vector_store_id,
+      pastCasesStoreRow.data?.openai_vector_store_id,
+      caseRow.data?.openai_vector_store_id,
+    ].filter((id): id is string => Boolean(id));
+
     const instructions = buildGroundedInstructions(requestedScope, allSources);
 
     const attachments = (payload.attachments ?? []) as TaxCoachAttachment[];
@@ -135,6 +160,12 @@ Deno.serve(async (request) => {
               ],
         })),
         text: { verbosity: "medium" },
+        ...(vectorStoreIds.length > 0
+          ? {
+              tools: [{ type: "file_search", vector_store_ids: vectorStoreIds }],
+              include: ["file_search_call.results"],
+            }
+          : {}),
       }),
     });
 
@@ -150,9 +181,15 @@ Deno.serve(async (request) => {
 
     if (!answer) return json(request, { error: "Tax Coach AI returned no answer." }, 502);
 
+    const fileCitationIds = extractFileCitationIds(result.output);
+    const fileCitations = await resolveFileCitations(callerClient, fileCitationIds);
+
     return json(request, {
       answer,
-      sources: allSources.map((source) => ({ citationLabel: source.citationLabel, classification: source.classification })),
+      sources: [
+        ...allSources.map((source) => ({ citationLabel: source.citationLabel, classification: source.classification })),
+        ...fileCitations,
+      ],
       scope: requestedScope,
     });
   } catch (error) {

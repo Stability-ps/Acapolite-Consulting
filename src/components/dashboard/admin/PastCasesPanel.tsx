@@ -89,6 +89,7 @@ export function PastCasesPanel() {
   const [confirmDuplicateUpload, setConfirmDuplicateUpload] = useState(false);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [openingDocId, setOpeningDocId] = useState<string | null>(null);
+  const [retryingDocId, setRetryingDocId] = useState<string | null>(null);
 
   const { data: entries, isLoading } = useQuery({
     queryKey: ["ai-knowledge-past-cases"],
@@ -163,6 +164,15 @@ export function PastCasesPanel() {
     resetForm();
   };
 
+  const triggerIndexing = async (docId: string, action: "index" | "remove") => {
+    const { error } = await supabase.functions.invoke("ai-knowledge-index", {
+      body: { table: "past_case_documents", id: docId, action },
+    });
+    if (error) {
+      console.error("AI indexing trigger failed", error);
+    }
+  };
+
   const handleSaveMetadata = async () => {
     if (!form.title.trim()) {
       toast.error("Title is required.");
@@ -203,6 +213,8 @@ export function PastCasesPanel() {
       };
 
       if (editingId) {
+        const previousEntry = entries?.find((entry) => entry.id === editingId);
+
         const { error } = await supabase.from("past_cases").update(payload).eq("id", editingId);
         if (error) throw new Error(error.message);
 
@@ -214,6 +226,23 @@ export function PastCasesPanel() {
           targetId: editingId,
           metadata: { title: payload.title, anonymisation_status: payload.anonymisation_status, approved_for_ai_use: payload.approved_for_ai_use },
         });
+
+        if (previousEntry?.approved_for_ai_use && !payload.approved_for_ai_use && activeDocuments) {
+          await Promise.all(
+            activeDocuments
+              .filter((doc) => doc.openai_file_id)
+              .map((doc) => triggerIndexing(doc.id, "remove")),
+          );
+          await logSystemActivity({
+            actorProfileId: user.id,
+            actorRole: "admin",
+            action: "past_case_ai_revoked",
+            targetType: "past_case",
+            targetId: editingId,
+            metadata: { documentsRemoved: activeDocuments.filter((doc) => doc.openai_file_id).length },
+          });
+          await refetchDocuments();
+        }
 
         toast.success("Past case updated.");
       } else {
@@ -315,7 +344,13 @@ export function PastCasesPanel() {
         metadata: { pastCaseId: editingId, fileName: selectedFile.name },
       });
 
-      toast.success("Document attached.");
+      if (form.approved_for_ai_use) {
+        await triggerIndexing(inserted.id, "index");
+        toast.success("Document attached and queued for AI indexing.");
+      } else {
+        toast.success("Document attached. It will be indexed once this past case is approved for AI use.");
+      }
+
       setSelectedFile(null);
       setDuplicateWarning(null);
       setConfirmDuplicateUpload(false);
@@ -504,10 +539,31 @@ export function PastCasesPanel() {
                       {AI_INDEX_STATUS_LABELS[doc.ai_index_status]}
                     </span>
                   </div>
-                  <Button type="button" variant="outline" size="sm" className="rounded-xl shrink-0" onClick={() => openDocument(doc)} disabled={openingDocId === doc.id}>
-                    <ExternalLink className="h-4 w-4 mr-1" />
-                    {openingDocId === doc.id ? "Opening..." : "Open"}
-                  </Button>
+                  <div className="flex gap-2 shrink-0">
+                    <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => openDocument(doc)} disabled={openingDocId === doc.id}>
+                      <ExternalLink className="h-4 w-4 mr-1" />
+                      {openingDocId === doc.id ? "Opening..." : "Open"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl"
+                      disabled={retryingDocId === doc.id || !form.approved_for_ai_use}
+                      title={form.approved_for_ai_use ? undefined : "Approve this past case for AI use first."}
+                      onClick={async () => {
+                        setRetryingDocId(doc.id);
+                        try {
+                          await triggerIndexing(doc.id, "index");
+                          await refetchDocuments();
+                        } finally {
+                          setRetryingDocId(null);
+                        }
+                      }}
+                    >
+                      {retryingDocId === doc.id ? "Checking..." : "Retry Indexing"}
+                    </Button>
+                  </div>
                 </div>
               ))}
 
