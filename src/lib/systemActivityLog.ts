@@ -23,7 +23,15 @@ type ActivityAction =
   | "past_case_ai_approved"
   | "past_case_ai_revoked"
   | "past_case_document_uploaded"
-  | "past_case_document_deleted";
+  | "past_case_document_deleted"
+  | "correspondence_generated"
+  | "correspondence_saved"
+  | "correspondence_edited"
+  | "correspondence_regenerated"
+  | "correspondence_approved"
+  | "correspondence_exported"
+  | "correspondence_superseded"
+  | "correspondence_archived";
 
 type ActivityTarget = "case" | "document" | "invoice" | "practitioner_profile" | "tax_knowledge_library" | "past_case" | "past_case_document";
 

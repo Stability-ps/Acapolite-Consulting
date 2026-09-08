@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { TaxAIChat } from "@/components/dashboard/TaxAIChat";
+import { CaseCorrespondenceSection } from "@/components/dashboard/admin/CaseCorrespondenceSection";
 import { getClientWarningSummary } from "@/lib/clientRisk";
 import { sendPractitionerAssignmentNotification } from "@/lib/practitionerAssignments";
 import { sendCaseStatusChangedNotification } from "@/lib/caseStatusNotifications";
@@ -1390,6 +1391,20 @@ export default function AdminCases() {
                     || "Client",
                   caseLabel: selectedCase.case_title,
                 }}
+              />
+            ) : null}
+
+            {role === "admin" || isConsultant ? (
+              <CaseCorrespondenceSection
+                caseId={selectedCase.id}
+                clientId={selectedCase.client_id}
+                clientLabel={
+                  selectedCase.clients?.company_name
+                  || [selectedCase.clients?.first_name, selectedCase.clients?.last_name].filter(Boolean).join(" ")
+                  || selectedCase.clients?.client_code
+                  || "Client"
+                }
+                caseLabel={selectedCase.case_title}
               />
             ) : null}
           </div>

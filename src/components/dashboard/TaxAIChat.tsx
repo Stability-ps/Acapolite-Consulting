@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Paperclip, Send, Sparkles, X } from "lucide-react";
+import { FileText, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { CorrespondenceDrafterDialog } from "@/components/dashboard/admin/CaseCorrespondenceSection";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type SourceCitation = { citationLabel: string; classification: string };
@@ -48,6 +51,11 @@ const CLASSIFICATION_LABELS: Record<string, string> = {
 };
 
 export function TaxAIChat({ scope, caseContext }: TaxAIChatProps) {
+  const { user, role, hasStaffPermission } = useAuth();
+  const queryClient = useQueryClient();
+  const canGenerateCorrespondence = role === "admin" || hasStaffPermission("can_generate_sars_correspondence");
+  const canApproveCorrespondence = role === "admin" || hasStaffPermission("can_approve_sars_correspondence");
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -55,6 +63,7 @@ export function TaxAIChat({ scope, caseContext }: TaxAIChatProps) {
   const [includeKnowledge, setIncludeKnowledge] = useState(true);
   const [includePastCases, setIncludePastCases] = useState(true);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [convertingAnalysis, setConvertingAnalysis] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -192,15 +201,26 @@ export function TaxAIChat({ scope, caseContext }: TaxAIChatProps) {
         ) : null}
 
         {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`rounded-2xl px-4 py-3 text-sm font-body whitespace-pre-wrap ${
-              message.role === "user"
-                ? "bg-primary text-primary-foreground ml-auto max-w-[85%]"
-                : "bg-accent text-foreground mr-auto max-w-[85%]"
-            }`}
-          >
-            {message.content}
+          <div key={index} className={message.role === "user" ? "ml-auto max-w-[85%]" : "mr-auto max-w-[85%]"}>
+            <div
+              className={`rounded-2xl px-4 py-3 text-sm font-body whitespace-pre-wrap ${
+                message.role === "user" ? "bg-primary text-primary-foreground" : "bg-accent text-foreground"
+              }`}
+            >
+              {message.content}
+            </div>
+            {message.role === "assistant" && scope === "case" && caseContext && canGenerateCorrespondence ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl mt-2"
+                onClick={() => setConvertingAnalysis(message.content)}
+              >
+                <FileText className="h-3.5 w-3.5 mr-1.5" />
+                Convert to SARS Letter
+              </Button>
+            ) : null}
           </div>
         ))}
 
@@ -265,6 +285,22 @@ export function TaxAIChat({ scope, caseContext }: TaxAIChatProps) {
           </Button>
         </div>
       </div>
+
+      {convertingAnalysis !== null && scope === "case" && caseContext ? (
+        <CorrespondenceDrafterDialog
+          open={convertingAnalysis !== null}
+          onOpenChange={(open) => { if (!open) setConvertingAnalysis(null); }}
+          caseId={caseContext.caseId}
+          clientId={caseContext.clientId}
+          clientLabel={caseContext.clientLabel}
+          caseLabel={caseContext.caseLabel}
+          existing={null}
+          canApprove={canApproveCorrespondence}
+          userId={user?.id ?? null}
+          initialPriorAnalysis={convertingAnalysis}
+          onSaved={() => queryClient.invalidateQueries({ queryKey: ["case-correspondence", caseContext.caseId] })}
+        />
+      ) : null}
     </div>
   );
 }

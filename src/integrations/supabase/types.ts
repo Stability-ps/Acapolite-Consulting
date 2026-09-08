@@ -200,6 +200,152 @@ export type Database = {
           },
         ]
       }
+      case_correspondence: {
+        Row: {
+          annexure_manifest: Json | null
+          approved_at: string | null
+          approved_by: string | null
+          body: string
+          case_id: string
+          client_id: string
+          correspondence_type: string
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          generated_by_ai: boolean
+          id: string
+          missing_information: string[] | null
+          model_used: string | null
+          purpose: string | null
+          recipient: string | null
+          reviewed_by: string | null
+          sars_reference: string | null
+          sent_at: string | null
+          source_snapshot: Json | null
+          status: Database["public"]["Enums"]["correspondence_status"]
+          subject: string | null
+          supersedes_id: string | null
+          tax_period: string | null
+          tax_type: string | null
+          tone: string | null
+          updated_at: string
+          version: number
+          warnings: string[] | null
+        }
+        Insert: {
+          annexure_manifest?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
+          body: string
+          case_id: string
+          client_id: string
+          correspondence_type: string
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          generated_by_ai?: boolean
+          id?: string
+          missing_information?: string[] | null
+          model_used?: string | null
+          purpose?: string | null
+          recipient?: string | null
+          reviewed_by?: string | null
+          sars_reference?: string | null
+          sent_at?: string | null
+          source_snapshot?: Json | null
+          status?: Database["public"]["Enums"]["correspondence_status"]
+          subject?: string | null
+          supersedes_id?: string | null
+          tax_period?: string | null
+          tax_type?: string | null
+          tone?: string | null
+          updated_at?: string
+          version?: number
+          warnings?: string[] | null
+        }
+        Update: {
+          annexure_manifest?: Json | null
+          approved_at?: string | null
+          approved_by?: string | null
+          body?: string
+          case_id?: string
+          client_id?: string
+          correspondence_type?: string
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          generated_by_ai?: boolean
+          id?: string
+          missing_information?: string[] | null
+          model_used?: string | null
+          purpose?: string | null
+          recipient?: string | null
+          reviewed_by?: string | null
+          sars_reference?: string | null
+          sent_at?: string | null
+          source_snapshot?: Json | null
+          status?: Database["public"]["Enums"]["correspondence_status"]
+          subject?: string | null
+          supersedes_id?: string | null
+          tax_period?: string | null
+          tax_type?: string | null
+          tone?: string | null
+          updated_at?: string
+          version?: number
+          warnings?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_correspondence_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_correspondence_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_correspondence_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "client_dashboard_summary"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "case_correspondence_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_correspondence_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_correspondence_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_correspondence_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "case_correspondence"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_status_history: {
         Row: {
           case_id: string
@@ -556,6 +702,72 @@ export type Database = {
           {
             foreignKeyName: "conversations_practitioner_profile_id_fkey"
             columns: ["practitioner_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      correspondence_templates: {
+        Row: {
+          approved: boolean
+          body_structure: string | null
+          case_type: string | null
+          correspondence_type: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          purpose: string | null
+          status: Database["public"]["Enums"]["correspondence_template_status"]
+          tax_type: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          approved?: boolean
+          body_structure?: string | null
+          case_type?: string | null
+          correspondence_type: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          purpose?: string | null
+          status?: Database["public"]["Enums"]["correspondence_template_status"]
+          tax_type?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          approved?: boolean
+          body_structure?: string | null
+          case_type?: string | null
+          correspondence_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          purpose?: string | null
+          status?: Database["public"]["Enums"]["correspondence_template_status"]
+          tax_type?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "correspondence_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "correspondence_templates_updated_by_fkey"
+            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -3437,6 +3649,8 @@ export type Database = {
       staff_permissions: {
         Row: {
           assigned_clients_only: boolean
+          can_approve_sars_correspondence: boolean
+          can_generate_sars_correspondence: boolean
           can_manage_cases: boolean
           can_manage_clients: boolean
           can_manage_invoices: boolean
@@ -3456,6 +3670,8 @@ export type Database = {
         }
         Insert: {
           assigned_clients_only?: boolean
+          can_approve_sars_correspondence?: boolean
+          can_generate_sars_correspondence?: boolean
           can_manage_cases?: boolean
           can_manage_clients?: boolean
           can_manage_invoices?: boolean
@@ -3475,6 +3691,8 @@ export type Database = {
         }
         Update: {
           assigned_clients_only?: boolean
+          can_approve_sars_correspondence?: boolean
+          can_generate_sars_correspondence?: boolean
           can_manage_cases?: boolean
           can_manage_clients?: boolean
           can_manage_invoices?: boolean
@@ -4555,6 +4773,14 @@ export type Database = {
         | "tax_clearance_certificate"
         | "sars_dispute_objection"
         | "other"
+      correspondence_status:
+        | "draft"
+        | "under_review"
+        | "approved"
+        | "sent"
+        | "superseded"
+        | "archived"
+      correspondence_template_status: "draft" | "active" | "archived"
       document_status:
         | "uploaded"
         | "pending_review"
@@ -4898,6 +5124,15 @@ export const Constants = {
         "sars_dispute_objection",
         "other",
       ],
+      correspondence_status: [
+        "draft",
+        "under_review",
+        "approved",
+        "sent",
+        "superseded",
+        "archived",
+      ],
+      correspondence_template_status: ["draft", "active", "archived"],
       document_status: [
         "uploaded",
         "pending_review",

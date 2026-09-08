@@ -1,6 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaxKnowledgeLibraryPanel } from "@/components/dashboard/admin/TaxKnowledgeLibraryPanel";
 import { PastCasesPanel } from "@/components/dashboard/admin/PastCasesPanel";
+import { CorrespondenceTemplatesPanel } from "@/components/dashboard/admin/CorrespondenceTemplatesPanel";
 
 export default function AdminAiKnowledge() {
   return (
@@ -17,12 +18,16 @@ export default function AdminAiKnowledge() {
         <TabsList className="rounded-xl">
           <TabsTrigger value="tax-library" className="rounded-lg">Tax Library</TabsTrigger>
           <TabsTrigger value="past-cases" className="rounded-lg">Past Cases</TabsTrigger>
+          <TabsTrigger value="correspondence-templates" className="rounded-lg">Correspondence Templates</TabsTrigger>
         </TabsList>
         <TabsContent value="tax-library" className="mt-6">
           <TaxKnowledgeLibraryPanel />
         </TabsContent>
         <TabsContent value="past-cases" className="mt-6">
           <PastCasesPanel />
+        </TabsContent>
+        <TabsContent value="correspondence-templates" className="mt-6">
+          <CorrespondenceTemplatesPanel />
         </TabsContent>
       </Tabs>
     </div>

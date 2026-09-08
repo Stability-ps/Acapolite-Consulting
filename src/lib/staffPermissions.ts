@@ -19,6 +19,8 @@ export type StaffPermissionValues = Pick<
   | "can_view_messages"
   | "can_reply_messages"
   | "can_use_tax_coach_ai"
+  | "can_generate_sars_correspondence"
+  | "can_approve_sars_correspondence"
 >;
 
 export type StaffPermissionKey = Exclude<keyof StaffPermissionValues, "assigned_clients_only">;
@@ -38,6 +40,8 @@ export const fullStaffPermissions: StaffPermissionValues = {
   can_view_messages: true,
   can_reply_messages: true,
   can_use_tax_coach_ai: true,
+  can_generate_sars_correspondence: true,
+  can_approve_sars_correspondence: true,
 };
 
 export const defaultConsultantPermissions: StaffPermissionValues = {
@@ -55,6 +59,8 @@ export const defaultConsultantPermissions: StaffPermissionValues = {
   can_view_messages: true,
   can_reply_messages: true,
   can_use_tax_coach_ai: false,
+  can_generate_sars_correspondence: false,
+  can_approve_sars_correspondence: false,
 };
 
 export const consultantPermissionFields: Array<{
@@ -132,6 +138,16 @@ export const consultantPermissionFields: Array<{
     label: "Tax Coach AI",
     description: "Allow this consultant to use Tax Coach AI (general knowledge, past-case precedent, and case-scoped chat).",
   },
+  {
+    key: "can_generate_sars_correspondence",
+    label: "Generate SARS Correspondence",
+    description: "Allow this consultant to draft SARS correspondence with Tax AI from an active case.",
+  },
+  {
+    key: "can_approve_sars_correspondence",
+    label: "Approve SARS Correspondence",
+    description: "Allow this consultant to approve SARS correspondence drafts, moving them out of Draft status.",
+  },
 ];
 
 export function sanitizeStaffPermissions(values: StaffPermissionValues): StaffPermissionValues {
@@ -155,6 +171,10 @@ export function sanitizeStaffPermissions(values: StaffPermissionValues): StaffPe
 
   if (!next.can_view_messages) {
     next.can_reply_messages = false;
+  }
+
+  if (!next.can_use_tax_coach_ai) {
+    next.can_generate_sars_correspondence = false;
   }
 
   if (next.can_manage_clients) {
