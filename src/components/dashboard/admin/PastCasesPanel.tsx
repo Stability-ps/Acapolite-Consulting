@@ -1,3 +1,4 @@
+import { DocumentIngestionDialog } from "./DocumentIngestionDialog";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { logSystemActivity } from "@/lib/systemActivityLog";
 import {
+  runKnowledgeIndex,
   AI_INDEX_STATUS_LABELS,
   ANONYMISATION_STATUS_LABELS,
   buildPastCaseDocumentStoragePath,
@@ -27,7 +29,6 @@ import {
   getAiIndexStatusBadgeClass,
   getAiKnowledgeSignedUrl,
   getAnonymisationStatusBadgeClass,
-  removeFromDocumentsBucket,
   uploadToDocumentsBucket,
   validateAiKnowledgeFile,
 } from "@/lib/aiKnowledgeStorage";
@@ -165,12 +166,11 @@ export function PastCasesPanel() {
   };
 
   const triggerIndexing = async (docId: string, action: "index" | "remove") => {
-    const { error } = await supabase.functions.invoke("ai-knowledge-index", {
-      body: { table: "past_case_documents", id: docId, action },
-    });
-    if (error) {
-      console.error("AI indexing trigger failed", error);
-    }
+    try {
+      const status = await runKnowledgeIndex("past_case_documents", docId, action);
+      if (status === "processing") toast.info("Still processing. Check indexing again shortly.");
+    } catch (error) {toast.error(error instanceof Error ? error.message : "Indexing failed. Original preserved.");}
+
   };
 
   const handleSaveMetadata = async () => {
@@ -182,7 +182,7 @@ export function PastCasesPanel() {
       toast.error("Your session is not ready yet.");
       return;
     }
-    if (form.approved_for_ai_use && form.anonymisation_status === "contains_confidential_information") {
+    if (form.approved_for_ai_use && form.anonymisation_status !== "anonymised") {
       toast.error("This record is flagged as containing confidential information and cannot be approved for AI use until it is reviewed and anonymised.");
       return;
     }
@@ -244,6 +244,12 @@ export function PastCasesPanel() {
           await refetchDocuments();
         }
 
+        if (payload.approved_for_ai_use && payload.anonymisation_status === "anonymised") {
+          for (const document of activeDocuments ?? []) {
+            if (document.ai_index_status !== "indexed") await triggerIndexing(document.id, "index");
+          }
+          await refetchDocuments();
+        }
         toast.success("Past case updated.");
       } else {
         const { data: inserted, error } = await supabase
@@ -310,13 +316,11 @@ export function PastCasesPanel() {
     }
 
     setUploadingDocument(true);
-    let uploadedPath: string | null = null;
 
     try {
       const checksum = await computeFileChecksumSha256(selectedFile);
       const path = buildPastCaseDocumentStoragePath(editingId, selectedFile.name);
       await uploadToDocumentsBucket(path, selectedFile);
-      uploadedPath = path;
 
       const { data: inserted, error } = await supabase
         .from("past_case_documents")
@@ -357,7 +361,7 @@ export function PastCasesPanel() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       await refetchDocuments();
     } catch (error) {
-      if (uploadedPath) await removeFromDocumentsBucket(uploadedPath);
+      // Preserve the private original when a later operation fails.
       toast.error(error instanceof Error ? error.message : "Unable to attach this document.");
     } finally {
       setUploadingDocument(false);
@@ -396,6 +400,8 @@ export function PastCasesPanel() {
           Add Past Case
         </Button>
       </div>
+
+      <DocumentIngestionDialog kind="past_case" />
 
       {isLoading ? (
         <div className="text-muted-foreground font-body">Loading...</div>

@@ -1,3 +1,5 @@
+import { getAiKnowledgeSignedUrl } from "@/lib/aiKnowledgeStorage";
+import { DocumentIngestionDialog } from "./DocumentIngestionDialog";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -177,6 +179,8 @@ export function CorrespondenceTemplatesPanel() {
         </Button>
       </div>
 
+      <DocumentIngestionDialog kind="template" />
+
       {isLoading ? (
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : templates && templates.length > 0 ? (
@@ -217,6 +221,7 @@ export function CorrespondenceTemplatesPanel() {
         description="Global structure only. Not linked to any client or case."
       >
         <div className="space-y-5">
+          {editingId && templates?.find(t => t.id === editingId)?.source_file_path && <Button variant="outline" onClick={async () => {try {const source = templates.find(t => t.id === editingId)!; window.open(await getAiKnowledgeSignedUrl(source.source_file_path!), "_blank", "noopener,noreferrer");} catch {toast.error("Unable to open the private source.");}}}>Open original template</Button>}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Name *</label>

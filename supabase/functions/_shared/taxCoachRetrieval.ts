@@ -88,6 +88,7 @@ export async function retrievePastCases(
     .from("past_cases")
     .select("id, title, case_type, tax_type, sars_stage, issue, outcome, success_status, summary, key_arguments, lessons_learned, precedent_value")
     .eq("approved_for_ai_use", true)
+    .eq("anonymisation_status", "anonymised")
     .limit(20);
 
   const filter = buildOrFilter(searchWords, ["title", "issue", "outcome", "summary", "case_type", "tax_type"]);

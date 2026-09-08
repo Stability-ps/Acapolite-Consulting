@@ -735,6 +735,12 @@ export type Database = {
       }
       correspondence_templates: {
         Row: {
+          source_file_name: string | null
+          source_file_path: string | null
+          source_file_size: number | null
+          source_mime_type: string | null
+          source_checksum_sha256: string | null
+
           approved: boolean
           body_structure: string | null
           case_type: string | null
@@ -751,6 +757,12 @@ export type Database = {
           version: number
         }
         Insert: {
+          source_file_name?: string | null
+          source_file_path?: string | null
+          source_file_size?: number | null
+          source_mime_type?: string | null
+          source_checksum_sha256?: string | null
+
           approved?: boolean
           body_structure?: string | null
           case_type?: string | null
@@ -767,6 +779,12 @@ export type Database = {
           version?: number
         }
         Update: {
+          source_file_name?: string | null
+          source_file_path?: string | null
+          source_file_size?: number | null
+          source_mime_type?: string | null
+          source_checksum_sha256?: string | null
+
           approved?: boolean
           body_structure?: string | null
           case_type?: string | null
