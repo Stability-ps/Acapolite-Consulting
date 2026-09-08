@@ -1,13 +1,23 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { canUseTaxCoach } from "../_shared/taxCoachAccess.ts";
-import { TAX_COACH_INSTRUCTIONS } from "../_shared/taxCoachPrompt.ts";
+import { buildGroundedInstructions } from "../_shared/taxCoachPrompt.ts";
 import {
   buildTaxCoachAttachmentInput,
   validateTaxCoachAttachments,
   type TaxCoachAttachment,
 } from "../_shared/taxCoachAttachments.ts";
+import {
+  extractSearchWords,
+  retrieveCaseDocuments,
+  retrievePastCases,
+  retrieveTaxKnowledge,
+  type RetrievedSource,
+} from "../_shared/taxCoachRetrieval.ts";
+import { extractFileCitationIds, resolveFileCitations } from "../_shared/taxCoachFileCitations.ts";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function corsHeaders(request: Request) {
   return {
@@ -80,6 +90,53 @@ Deno.serve(async (request) => {
       return json(request, { error: "Attach up to 3 valid PDF, PNG, JPEG or WebP files within the size limits." }, 400);
     }
 
+    const requestedScope = payload?.scope === "case" ? "case" : "general";
+    const clientId = typeof payload?.clientId === "string" ? payload.clientId : null;
+    const caseId = typeof payload?.caseId === "string" ? payload.caseId : null;
+    const includeKnowledge = payload?.includeKnowledge !== false;
+    const includePastCases = payload?.includePastCases !== false;
+
+    if (requestedScope === "case" && (!clientId || !UUID_PATTERN.test(clientId) || !caseId || !UUID_PATTERN.test(caseId))) {
+      return json(request, { error: "Case-scoped requests require a valid clientId and caseId." }, 400);
+    }
+
+    const searchWords = extractSearchWords(payload.messages);
+
+    const [knowledgeSources, pastCaseSources, caseDocumentSources] = await Promise.all([
+      includeKnowledge ? retrieveTaxKnowledge(callerClient, searchWords) : Promise.resolve<RetrievedSource[]>([]),
+      includePastCases ? retrievePastCases(callerClient, searchWords) : Promise.resolve<RetrievedSource[]>([]),
+      requestedScope === "case" && clientId && caseId
+        ? retrieveCaseDocuments(callerClient, clientId, caseId)
+        : Promise.resolve<RetrievedSource[]>([]),
+    ]);
+
+    const allSources = [...caseDocumentSources, ...knowledgeSources, ...pastCaseSources];
+
+    // Resolve which OpenAI vector stores (real file-content search, not just
+    // structured metadata) are in scope for this request. General mode only
+    // ever sees the two global domain stores; case documents are added only
+    // when scope === "case" and only that case's own store - never another
+    // client's or case's store.
+    const [knowledgeStoreRow, pastCasesStoreRow, caseRow] = await Promise.all([
+      includeKnowledge
+        ? callerClient.from("ai_vector_stores").select("openai_vector_store_id").eq("domain", "tax_knowledge").maybeSingle()
+        : Promise.resolve({ data: null }),
+      includePastCases
+        ? callerClient.from("ai_vector_stores").select("openai_vector_store_id").eq("domain", "past_cases").maybeSingle()
+        : Promise.resolve({ data: null }),
+      requestedScope === "case" && caseId
+        ? callerClient.from("cases").select("openai_vector_store_id").eq("id", caseId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const vectorStoreIds = [
+      knowledgeStoreRow.data?.openai_vector_store_id,
+      pastCasesStoreRow.data?.openai_vector_store_id,
+      caseRow.data?.openai_vector_store_id,
+    ].filter((id): id is string => Boolean(id));
+
+    const instructions = buildGroundedInstructions(requestedScope, allSources);
+
     const attachments = (payload.attachments ?? []) as TaxCoachAttachment[];
     const lastMessageIndex = payload.messages.length - 1;
 
@@ -92,7 +149,7 @@ Deno.serve(async (request) => {
       body: JSON.stringify({
         model: Deno.env.get("OPENAI_TAX_COACH_MODEL") || Deno.env.get("OPENAI_WHATSAPP_MODEL") || "gpt-4.1-mini",
         store: false,
-        instructions: TAX_COACH_INSTRUCTIONS,
+        instructions,
         input: payload.messages.map((message: ChatMessage, index: number) => ({
           role: message.role,
           content: message.role === "assistant"
@@ -103,6 +160,12 @@ Deno.serve(async (request) => {
               ],
         })),
         text: { verbosity: "medium" },
+        ...(vectorStoreIds.length > 0
+          ? {
+              tools: [{ type: "file_search", vector_store_ids: vectorStoreIds }],
+              include: ["file_search_call.results"],
+            }
+          : {}),
       }),
     });
 
@@ -117,7 +180,18 @@ Deno.serve(async (request) => {
         .find((item: { type?: string; text?: string }) => item.type === "output_text")?.text;
 
     if (!answer) return json(request, { error: "Tax Coach AI returned no answer." }, 502);
-    return json(request, { answer });
+
+    const fileCitationIds = extractFileCitationIds(result.output);
+    const fileCitations = await resolveFileCitations(callerClient, fileCitationIds);
+
+    return json(request, {
+      answer,
+      sources: [
+        ...allSources.map((source) => ({ citationLabel: source.citationLabel, classification: source.classification })),
+        ...fileCitations,
+      ],
+      scope: requestedScope,
+    });
   } catch (error) {
     console.error("Tax Coach AI failed", error instanceof Error ? error.message : "Unknown error");
     return json(request, { error: "Tax Coach AI is temporarily unavailable." }, 500);
