@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   UserRoundCheck,
   Megaphone,
+  BookOpen,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -108,6 +109,7 @@ const adminItems = [
   { title: "Tax Coach AI", url: "/dashboard/staff/tax-coach-ai", icon: Sparkles, permission: "can_use_tax_coach_ai" as StaffPermissionKey },
   { title: "WhatsApp QA", url: "/dashboard/staff/whatsapp-qa", icon: ShieldCheck, permission: "can_view_overview" as StaffPermissionKey },
   { title: "Social Media", url: "/dashboard/staff/social-media", icon: Megaphone, permission: "can_view_overview" as StaffPermissionKey },
+  { title: "AI Knowledge", url: "/dashboard/staff/ai-knowledge", icon: BookOpen, permission: "can_view_overview" as StaffPermissionKey },
   { title: "System Activity Log", url: "/dashboard/staff/activity-log", icon: ClipboardList, permission: "can_view_overview" as StaffPermissionKey },
 ];
 

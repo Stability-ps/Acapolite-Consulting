@@ -58,6 +58,7 @@ import AdminActivityLog from "./pages/dashboard/admin/AdminActivityLog";
 import TaxCoachAIStaff from "./pages/dashboard/admin/TaxCoachAIStaff";
 import AdminWhatsAppQA from "./pages/dashboard/admin/AdminWhatsAppQA";
 import AdminSocialMedia from "./pages/dashboard/admin/AdminSocialMedia";
+import AdminAiKnowledge from "./pages/dashboard/admin/AdminAiKnowledge";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -235,6 +236,7 @@ function AppRoutes() {
                 <Route path="staff/users" element={<AdminUsers />} />
                 <Route path="staff/whatsapp-qa" element={<AdminWhatsAppQA />} />
                 <Route path="staff/social-media" element={<AdminSocialMedia />} />
+                <Route path="staff/ai-knowledge" element={<AdminAiKnowledge />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />
