@@ -18,6 +18,7 @@ export type StaffPermissionValues = Pick<
   | "can_manage_invoices"
   | "can_view_messages"
   | "can_reply_messages"
+  | "can_use_tax_coach_ai"
 >;
 
 export type StaffPermissionKey = Exclude<keyof StaffPermissionValues, "assigned_clients_only">;
@@ -36,6 +37,7 @@ export const fullStaffPermissions: StaffPermissionValues = {
   can_manage_invoices: true,
   can_view_messages: true,
   can_reply_messages: true,
+  can_use_tax_coach_ai: true,
 };
 
 export const defaultConsultantPermissions: StaffPermissionValues = {
@@ -52,6 +54,7 @@ export const defaultConsultantPermissions: StaffPermissionValues = {
   can_manage_invoices: false,
   can_view_messages: true,
   can_reply_messages: true,
+  can_use_tax_coach_ai: false,
 };
 
 export const consultantPermissionFields: Array<{
@@ -123,6 +126,11 @@ export const consultantPermissionFields: Array<{
     key: "can_reply_messages",
     label: "Reply to Messages",
     description: "Allow sending replies to client messages.",
+  },
+  {
+    key: "can_use_tax_coach_ai",
+    label: "Tax Coach AI",
+    description: "Allow this consultant to use Tax Coach AI (general knowledge, past-case precedent, and case-scoped chat).",
   },
 ];
 
