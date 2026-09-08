@@ -61,7 +61,8 @@ export async function uploadToDocumentsBucket(path: string, file: File) {
 }
 
 export async function removeFromDocumentsBucket(path: string) {
-  await supabase.storage.from("documents").remove([path]);
+  const { error } = await supabase.storage.from("documents").remove([path]);
+  if (error) throw new Error(error.message);
 }
 
 export async function getAiKnowledgeSignedUrl(path: string, expiresInSeconds = 600) {

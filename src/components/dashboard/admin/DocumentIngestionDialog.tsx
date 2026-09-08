@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { computeFileChecksumSha256, downloadAiKnowledgeFile, getAiKnowledgeSignedUrl, sanitizeAiKnowledgeFileName, uploadToDocumentsBucket } from "@/lib/aiKnowledgeStorage";
+import { computeFileChecksumSha256, downloadAiKnowledgeFile, getAiKnowledgeSignedUrl, removeFromDocumentsBucket, sanitizeAiKnowledgeFileName, uploadToDocumentsBucket } from "@/lib/aiKnowledgeStorage";
 import { metadataFields, normalizeMetadata, type IngestionKind } from "../../../../supabase/functions/_shared/ingestionMetadata";
 
 type SourceFile = {file_name: string; file_path: string; file_size: number; mime_type: string; checksum_sha256: string};
@@ -23,6 +23,16 @@ export function DocumentIngestionDialog({kind}: {kind: IngestionKind}) {
   const [pastCaseId, setPastCaseId] = useState<string | null>(null);
   const [savedPaths, setSavedPaths] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
+  const cleanupTemporaryFiles = async (paths: string[]) => {
+    const temporaryPaths = paths.filter(path => path.startsWith("ai-knowledge/intake/"));
+    if (!temporaryPaths.length) return;
+    try {
+      await Promise.all(temporaryPaths.map(path => removeFromDocumentsBucket(path)));
+    } catch (error) {
+      console.error("Temporary upload cleanup failed", error);
+      setNotice("The file was removed from this form, but private temporary cleanup needs attention.");
+    }
+  };
   const analyse = async (sources = files) => {
     setBusy(true);
     try {
@@ -91,17 +101,20 @@ export function DocumentIngestionDialog({kind}: {kind: IngestionKind}) {
       }
       await cache.invalidateQueries();
       toast.success("Draft saved. Open it to review and explicitly approve for AI use.");
+      const committedPaths = new Set(savedPaths);
+      const temporary = files.filter(file => !committedPaths.has(file.file_path)).map(file => file.file_path);
+      await cleanupTemporaryFiles(temporary);
       setOpen(false); setFiles([]); setMetadata(normalizeMetadata(kind, {})); setPastCaseId(null); setSavedPaths([]); setReviewed(false); setNotice("");
     } catch (error) {setNotice(error instanceof Error ? error.message : "Save failed. Private originals are preserved; retry saving.");}
     finally {setBusy(false);}
   };
   return <>
     <Button variant="outline" className="rounded-xl" onClick={() => setOpen(true)}>{titles[kind]}</Button>
-    <DashboardItemDialog open={open} onOpenChange={value => {if (!busy) setOpen(value);}} title={titles[kind]} description="Upload, review the proposed details, then save a draft. Approval is a separate step.">
+    <DashboardItemDialog open={open} onOpenChange={value => { if (!busy) { if (!value) void cleanupTemporaryFiles(files.filter(file => !savedPaths.includes(file.file_path)).map(file => file.file_path)); setOpen(value); } }} title={titles[kind]} description="Upload, review the proposed details, then save a draft. Approval is a separate step.">
       <div className="space-y-4">
         {kind === "past_case" && <p className="text-sm">These files belong to one historical matter. Redact taxpayer information before upload. AI suggestions do not replace anonymisation review.</p>}
         <label className="block">Source document{kind === "past_case" ? "s (up to five)" : ""}<Input type="file" accept=".pdf,.docx,.txt" multiple={kind === "past_case"} disabled={busy || files.length > 0} onChange={e => void upload(e.target.files)} /></label>
-        {files.map((file, index) => <div key={file.file_path} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3"><p className="text-sm truncate">{index + 1}. {file.file_name} — stored privately</p><div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={busy} onClick={async () => { try { window.open(await getAiKnowledgeSignedUrl(file.file_path), "_blank", "noopener,noreferrer"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to open file."); } }}>View</Button><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void downloadAiKnowledgeFile(file.file_path, file.file_name)}>Download</Button><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => { setFiles(previous => previous.filter((_, fileIndex) => fileIndex !== index)); setReviewed(false); window.setTimeout(() => document.querySelector<HTMLInputElement>("input[type=file]")?.click(), 0); }}>Change</Button><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { setFiles(previous => previous.filter((_, fileIndex) => fileIndex !== index)); setReviewed(false); }}>Remove</Button></div></div>)}
+        {files.map((file, index) => <div key={file.file_path} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3"><p className="text-sm truncate">{index + 1}. {file.file_name} — stored privately</p><div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={busy} onClick={async () => { try { window.open(await getAiKnowledgeSignedUrl(file.file_path), "_blank", "noopener,noreferrer"); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to open file."); } }}>View</Button><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void downloadAiKnowledgeFile(file.file_path, file.file_name)}>Download</Button><Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => { void cleanupTemporaryFiles([file.file_path]); setFiles(previous => previous.filter((_, fileIndex) => fileIndex !== index)); setReviewed(false); window.setTimeout(() => document.querySelector<HTMLInputElement>("input[type=file]")?.click(), 0); }}>Change</Button><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { void cleanupTemporaryFiles([file.file_path]); setFiles(previous => previous.filter((_, fileIndex) => fileIndex !== index)); setReviewed(false); }}>Remove</Button></div></div>)}
         {notice && <p role="status" className="text-sm">{notice}</p>}
         {busy && <p role="status">Processing this document…</p>}
         {files.length > 0 && <>
