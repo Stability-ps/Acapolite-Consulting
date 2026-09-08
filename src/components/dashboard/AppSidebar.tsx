@@ -16,6 +16,7 @@ import {
   Coins,
   Sparkles,
   ExternalLink,
+  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -58,6 +59,7 @@ const adminItems = [
   { title: "Messages", url: "/dashboard/staff/messages", icon: MessageSquare, permission: "can_view_messages" as StaffPermissionKey },
   { title: "External Tool", url: "/dashboard/staff/external-tools", icon: ExternalLink, permission: "can_view_overview" as StaffPermissionKey },
   { title: "Tax Coach AI", url: "/dashboard/staff/tax-coach-ai", icon: Sparkles, permission: "can_view_overview" as StaffPermissionKey },
+  { title: "AI Knowledge", url: "/dashboard/staff/ai-knowledge", icon: BookOpen, permission: "can_view_overview" as StaffPermissionKey },
   { title: "System Activity Log", url: "/dashboard/staff/activity-log", icon: ClipboardList, permission: "can_view_overview" as StaffPermissionKey },
 ];
 

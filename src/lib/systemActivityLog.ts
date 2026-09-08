@@ -11,9 +11,21 @@ type ActivityAction =
   | "document_missing_requested"
   | "invoice_created"
   | "invoice_sent"
-  | "invoice_marked_paid";
+  | "invoice_marked_paid"
+  | "tax_knowledge_uploaded"
+  | "tax_knowledge_updated"
+  | "tax_knowledge_archived"
+  | "tax_knowledge_ai_approved"
+  | "tax_knowledge_ai_revoked"
+  | "past_case_created"
+  | "past_case_updated"
+  | "past_case_anonymisation_changed"
+  | "past_case_ai_approved"
+  | "past_case_ai_revoked"
+  | "past_case_document_uploaded"
+  | "past_case_document_deleted";
 
-type ActivityTarget = "case" | "document" | "invoice" | "practitioner_profile";
+type ActivityTarget = "case" | "document" | "invoice" | "practitioner_profile" | "tax_knowledge_library" | "past_case" | "past_case_document";
 
 type LogActivityInput = {
   actorProfileId: string;
