@@ -103,3 +103,9 @@ export async function deleteFile(apiKey: string, fileId: string): Promise<void> 
     console.error("Failed to delete OpenAI file object", error instanceof Error ? error.message : "unknown error");
   }
 }
+
+export async function hasVectorStoreContent(apiKey: string, vectorStoreId: string, fileId: string): Promise<boolean> {
+  const result = await openaiJson(`/vector_stores/${vectorStoreId}/files/${fileId}/content`, apiKey);
+  const parts = result.data ?? result.content;
+  return Array.isArray(parts) && parts.some((part: {text?: string}) => typeof part.text === "string" && part.text.trim().length > 0);
+}

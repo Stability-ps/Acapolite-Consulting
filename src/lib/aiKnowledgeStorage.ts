@@ -171,3 +171,18 @@ export function getAnonymisationStatusBadgeClass(status: PastCaseAnonymisationSt
       return "bg-slate-100 text-slate-600 border-slate-300";
   }
 }
+
+// Bounded status checks only: they never start another upload.
+export async function runKnowledgeIndex(table: "tax_knowledge_library" | "past_case_documents", id: string, action: "index" | "remove") {
+  const invoke = async (nextAction: string) => {
+    const {data, error} = await supabase.functions.invoke("ai-knowledge-index", {body: {table, id, action: nextAction}});
+    if (error || data?.error || data?.status === "failed") throw new Error(data?.error || error?.message || "Indexing failed; original preserved.");
+    return data?.status;
+  };
+  let status = await invoke(action);
+  for (let attempt = 0; status === "processing" && attempt < 10; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    status = await invoke("status");
+  }
+  return status;
+}

@@ -1,3 +1,5 @@
+import { normalizeMetadata } from "../../../../supabase/functions/_shared/ingestionMetadata";
+import { DocumentIngestionDialog } from "./DocumentIngestionDialog";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -19,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { logSystemActivity } from "@/lib/systemActivityLog";
 import {
+  runKnowledgeIndex,
   AI_INDEX_STATUS_LABELS,
   KNOWLEDGE_STATUS_LABELS,
   buildTaxKnowledgeStoragePath,
@@ -27,7 +30,6 @@ import {
   getAiIndexStatusBadgeClass,
   getAiKnowledgeSignedUrl,
   getKnowledgeStatusBadgeClass,
-  removeFromDocumentsBucket,
   uploadToDocumentsBucket,
   validateAiKnowledgeFile,
 } from "@/lib/aiKnowledgeStorage";
@@ -177,13 +179,10 @@ export function TaxKnowledgeLibraryPanel() {
   };
 
   const triggerIndexing = async (id: string, action: "index" | "remove") => {
-    const { error } = await supabase.functions.invoke("ai-knowledge-index", {
-      body: { table: "tax_knowledge_library", id, action },
-    });
-    if (error) {
-      console.error("AI indexing trigger failed", error);
-      toast.error("Saved, but triggering AI indexing failed. Use Retry Indexing below.");
-    }
+    try {
+      const status = await runKnowledgeIndex("tax_knowledge_library", id, action);
+      if (status === "processing") toast.info("Still processing. Use Check / Retry Indexing to check completion.");
+    } catch (error) {toast.error(error instanceof Error ? error.message : "Indexing failed. Original preserved.");}
     await queryClient.invalidateQueries({ queryKey: ["ai-knowledge-tax-library"] });
   };
 
@@ -205,7 +204,6 @@ export function TaxKnowledgeLibraryPanel() {
 
     setSaving(true);
 
-    let uploadedPath: string | null = null;
 
     try {
       const tags = form.tags
@@ -219,7 +217,6 @@ export function TaxKnowledgeLibraryPanel() {
         const checksum = await computeFileChecksumSha256(selectedFile);
         const path = buildTaxKnowledgeStoragePath(selectedFile.name);
         await uploadToDocumentsBucket(path, selectedFile);
-        uploadedPath = path;
         fileFields = {
           file_name: selectedFile.name,
           file_path: path,
@@ -290,7 +287,7 @@ export function TaxKnowledgeLibraryPanel() {
         const revokingApproval = Boolean(previousEntry?.approved_for_ai_use) && !payload.approved_for_ai_use;
         const nowArchived = previousEntry?.status !== "archived" && payload.status === "archived";
 
-        if (selectedFile) {
+        if (payload.approved_for_ai_use && payload.status !== "archived" && (selectedFile || !previousEntry?.approved_for_ai_use)) {
           await triggerIndexing(savedId, "index");
         } else if (revokingApproval || nowArchived) {
           await triggerIndexing(savedId, "remove");
@@ -311,9 +308,7 @@ export function TaxKnowledgeLibraryPanel() {
       setDialogOpen(false);
       resetForm();
     } catch (error) {
-      if (uploadedPath) {
-        await removeFromDocumentsBucket(uploadedPath);
-      }
+      // Preserve the private original even if indexing or a later operation fails.
       toast.error(error instanceof Error ? error.message : "Unable to save this entry.");
     } finally {
       setSaving(false);
@@ -356,6 +351,8 @@ export function TaxKnowledgeLibraryPanel() {
           Add Entry
         </Button>
       </div>
+
+      <DocumentIngestionDialog kind="tax_knowledge" />
 
       {isLoading ? (
         <div className="text-muted-foreground font-body">Loading...</div>
@@ -402,6 +399,17 @@ export function TaxKnowledgeLibraryPanel() {
         description="Global reference material. Not linked to any client or case."
       >
         <div className="space-y-5">
+          {editingId && entries?.find(e => e.id === editingId)?.file_path && <Button variant="outline" disabled={saving} onClick={async () => {
+            setSaving(true);
+            try {
+              const file = entries.find(e => e.id === editingId)!;
+              const {data, error} = await supabase.functions.invoke("ai-document-analyze", {body: {kind: "tax_knowledge", files: [{path: file.file_path}]}});
+              if (error || data?.error) throw new Error(data?.error ?? error?.message);
+              setForm(f => ({...f, ...normalizeMetadata("tax_knowledge", data.metadata)}));
+              toast.info("Proposed details loaded. Review before saving; unknown dates stay blank.");
+            } catch (error) {toast.error(error instanceof Error ? error.message : "Analysis failed. Original preserved.");}
+            finally {setSaving(false);}
+          }}>Propose details from document</Button>}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Title *</label>
@@ -550,7 +558,7 @@ export function TaxKnowledgeLibraryPanel() {
                     {AI_INDEX_STATUS_LABELS[entries.find((e) => e.id === editingId)!.ai_index_status]}
                   </span>
                   <Button type="button" variant="outline" className="rounded-xl" onClick={() => void handleRetryIndexing()} disabled={retryingIndex}>
-                    {retryingIndex ? "Checking..." : "Retry Indexing"}
+                    {retryingIndex ? "Checking..." : "Check / Retry Indexing"}
                   </Button>
                 </>
               ) : null}
