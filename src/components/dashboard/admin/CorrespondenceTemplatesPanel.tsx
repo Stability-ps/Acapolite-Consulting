@@ -343,7 +343,7 @@ export function CorrespondenceTemplatesPanel() {
         confirmLabel="Remove Source"
         busyLabel="Removing..."
         busy={sourceBusy}
-        onConfirm={() => void handleTemplateLifecycle("remove-source")}
+        onConfirm={() => handleTemplateLifecycle("remove-source")}
       />
 
       <KnowledgeActionConfirm
@@ -354,7 +354,7 @@ export function CorrespondenceTemplatesPanel() {
         confirmLabel="Delete Template"
         busyLabel="Deleting..."
         busy={sourceBusy}
-        onConfirm={() => void handleTemplateLifecycle("delete")}
+        onConfirm={() => handleTemplateLifecycle("delete")}
       />
     </div>
   );

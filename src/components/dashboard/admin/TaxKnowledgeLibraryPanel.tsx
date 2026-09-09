@@ -641,7 +641,7 @@ export function TaxKnowledgeLibraryPanel() {
         confirmLabel="Delete Entry"
         busyLabel="Deleting..."
         busy={lifecycleBusy}
-        onConfirm={() => void handleLifecycle("delete")}
+        onConfirm={() => handleLifecycle("delete")}
       />
     </div>
   );

@@ -1,6 +1,5 @@
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -8,6 +7,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { useRef, useState } from "react";
 
 interface KnowledgeActionConfirmProps {
   open: boolean;
@@ -18,7 +19,7 @@ interface KnowledgeActionConfirmProps {
   busyLabel?: string;
   destructive?: boolean;
   busy: boolean;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
 }
 
 export function KnowledgeActionConfirm({
@@ -32,25 +33,45 @@ export function KnowledgeActionConfirm({
   busy,
   onConfirm,
 }: KnowledgeActionConfirmProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submitInFlight = useRef(false);
+  const isBusy = busy || isSubmitting;
+
+  const handleConfirm = async () => {
+    if (isBusy || submitInFlight.current) return;
+
+    submitInFlight.current = true;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await onConfirm();
+    } catch {
+      setError("The action could not be completed. No success was recorded.");
+    } finally {
+      submitInFlight.current = false;
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <AlertDialog open={open} onOpenChange={(next) => { if (!next && busy) return; onOpenChange(next); }}>
+    <AlertDialog open={open} onOpenChange={(next) => { if (!next && isBusy) return; onOpenChange(next); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={(event) => {
-              event.preventDefault();
-              onConfirm();
-            }}
-            disabled={busy}
+          <AlertDialogCancel disabled={isBusy}>Cancel</AlertDialogCancel>
+          <Button
+            type="button"
+            onClick={() => void handleConfirm()}
+            disabled={isBusy}
             className={destructive ? "bg-red-600 text-white hover:bg-red-700" : undefined}
           >
-            {busy ? (busyLabel ?? "Working...") : confirmLabel}
-          </AlertDialogAction>
+            {isBusy ? (busyLabel ?? "Working...") : confirmLabel}
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

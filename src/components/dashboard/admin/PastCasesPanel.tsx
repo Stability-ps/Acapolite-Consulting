@@ -732,7 +732,7 @@ export function PastCasesPanel() {
         confirmLabel="Remove Document"
         busyLabel="Removing..."
         busy={removingDocId === removeDialogDoc?.id}
-        onConfirm={() => void confirmRemoveDocument()}
+        onConfirm={confirmRemoveDocument}
       />
 
       <KnowledgeActionConfirm
@@ -743,7 +743,7 @@ export function PastCasesPanel() {
         confirmLabel="Delete Past Case"
         busyLabel="Deleting..."
         busy={caseLifecycleBusy}
-        onConfirm={() => void handleCaseLifecycle("delete")}
+        onConfirm={() => handleCaseLifecycle("delete")}
       />
 
       <KnowledgeActionConfirm
@@ -755,7 +755,7 @@ export function PastCasesPanel() {
         busyLabel="Replacing..."
         destructive={false}
         busy={replacingDocId === pendingDuplicateReplace?.doc.id}
-        onConfirm={() => void confirmDuplicateReplace()}
+        onConfirm={confirmDuplicateReplace}
       />
     </div>
   );
