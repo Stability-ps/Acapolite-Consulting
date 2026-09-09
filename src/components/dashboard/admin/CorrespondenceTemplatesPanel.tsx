@@ -194,8 +194,10 @@ export function CorrespondenceTemplatesPanel() {
         toast.success("Source file removed.");
         setRemoveSourceDialogOpen(false);
       } else if (action === "archive" || action === "restore") {
-        const { error } = await supabase.from("correspondence_templates").update({ status: action === "archive" ? "archived" : "active" }).eq("id", row.id); if (error) throw new Error(error.message);
+        const nextStatus = action === "archive" ? "archived" : "active";
+        const { error } = await supabase.from("correspondence_templates").update({ status: nextStatus }).eq("id", row.id); if (error) throw new Error(error.message);
         await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: action === "archive" ? "template_archived" : "template_restored", targetType: "correspondence_template", targetId: row.id, metadata: { name: row.name } });
+        setForm((current) => ({ ...current, status: nextStatus }));
         toast.success(action === "archive" ? "Template archived." : "Template restored.");
       } else if (file) {
         const validationError = validateAiKnowledgeFile(file); if (validationError) throw new Error(validationError);
