@@ -198,3 +198,11 @@ export async function runKnowledgeIndex(table: "tax_knowledge_library" | "past_c
   }
   return status;
 }
+
+export async function deleteAiKnowledgeRecord(table: "tax_knowledge_library" | "past_cases" | "past_case_documents" | "correspondence_templates", id: string) {
+  const { data, error } = await supabase.functions.invoke("delete-ai-knowledge", { body: { table, id } });
+  if (error || data?.error || data?.success !== true) {
+    throw new Error(data?.error ?? error?.message ?? "Unable to delete this knowledge record.");
+  }
+  return data as { success: true; table: string; id: string; deletedCount: number };
+}

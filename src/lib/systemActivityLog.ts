@@ -17,6 +17,15 @@ type ActivityAction =
   | "tax_knowledge_archived"
   | "tax_knowledge_ai_approved"
   | "tax_knowledge_ai_revoked"
+  | "knowledge_entry_created"
+  | "knowledge_file_replaced"
+  | "knowledge_file_removed"
+  | "knowledge_entry_archived"
+  | "knowledge_entry_restored"
+  | "knowledge_entry_deleted"
+  | "index_removed"
+  | "index_retried"
+  | "temporary_upload_cleaned"
   | "past_case_created"
   | "past_case_updated"
   | "past_case_anonymisation_changed"
@@ -24,6 +33,18 @@ type ActivityAction =
   | "past_case_ai_revoked"
   | "past_case_document_uploaded"
   | "past_case_document_deleted"
+  | "past_case_document_added"
+  | "past_case_document_replaced"
+  | "past_case_document_removed"
+  | "past_case_archived"
+  | "past_case_restored"
+  | "past_case_deleted"
+  | "template_created"
+  | "template_source_replaced"
+  | "template_source_removed"
+  | "template_archived"
+  | "template_restored"
+  | "template_deleted"
   | "correspondence_generated"
   | "correspondence_saved"
   | "correspondence_edited"
@@ -33,7 +54,7 @@ type ActivityAction =
   | "correspondence_superseded"
   | "correspondence_archived";
 
-type ActivityTarget = "case" | "document" | "invoice" | "practitioner_profile" | "tax_knowledge_library" | "past_case" | "past_case_document";
+type ActivityTarget = "case" | "document" | "invoice" | "practitioner_profile" | "tax_knowledge_library" | "past_case" | "past_case_document" | "correspondence_template";
 
 type LogActivityInput = {
   actorProfileId: string;

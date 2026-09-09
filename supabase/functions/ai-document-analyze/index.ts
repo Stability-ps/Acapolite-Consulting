@@ -20,9 +20,9 @@ Deno.serve(async req => {
     for (const file of files) {
       if (typeof file.path !== "string" || file.path.includes("..")) return reply({error: "Invalid intake file path"}, 400);
       if (!file.path.startsWith(`ai-knowledge/intake/${user.id}/`)) {
-        if (kind !== "tax_knowledge" || !file.path.startsWith("ai-knowledge/tax-library/")) return reply({error: "Invalid source path"}, 400);
-        const {data: source} = await client.from("tax_knowledge_library").select("id").eq("file_path", file.path).maybeSingle();
-        if (!source) return reply({error: "Source record not accessible"}, 404);
+        if (kind !== "tax_knowledge" || !file.path.startsWith("ai-knowledge/")) return reply({error: "Invalid source path"}, 400);
+        const {data: source} = await client.storage.from("documents").list(file.path.split("/").slice(0, -1).join("/"), {search: file.path.split("/").pop()});
+        if (!source?.some(entry => entry.name === file.path.split("/").pop())) return reply({error: "Source record not accessible"}, 404);
       }
       const {data: blob, error} = await client.storage.from("documents").download(file.path);
       if (error || !blob) return reply({error: "Cannot read the private source file"}, 400);

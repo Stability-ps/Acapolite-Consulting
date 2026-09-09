@@ -27,12 +27,12 @@ import {
   KNOWLEDGE_STATUS_LABELS,
   buildTaxKnowledgeStoragePath,
   computeFileChecksumSha256,
+  deleteAiKnowledgeRecord,
   findTaxKnowledgeDuplicateByChecksum,
   getAiIndexStatusBadgeClass,
   getAiKnowledgeSignedUrl,
   getKnowledgeStatusBadgeClass,
   uploadToDocumentsBucket,
-  removeFromDocumentsBucket,
   validateAiKnowledgeFile,
 } from "@/lib/aiKnowledgeStorage";
 
@@ -267,6 +267,21 @@ export function TaxKnowledgeLibraryPanel() {
           targetId: editingId,
           metadata: { title: payload.title },
         });
+        if (selectedFile && previousEntry?.file_path) {
+          await logSystemActivity({
+            actorProfileId: user.id,
+            actorRole: "admin",
+            action: "knowledge_file_replaced",
+            targetType: "tax_knowledge_library",
+            targetId: editingId,
+            metadata: {
+              title: payload.title,
+              previousFilePath: previousEntry.file_path,
+              filePath: selectedFile ? fileFields.file_path : null,
+              checksumSha256: fileFields.checksum_sha256,
+            },
+          });
+        }
       } else {
         const { data: inserted, error } = await supabase
           .from("tax_knowledge_library")
@@ -284,6 +299,18 @@ export function TaxKnowledgeLibraryPanel() {
           targetId: inserted.id,
           metadata: { title: payload.title, hasFile: Boolean(selectedFile) },
         });
+        await logSystemActivity({
+          actorProfileId: user.id,
+          actorRole: "admin",
+          action: "knowledge_entry_created",
+          targetType: "tax_knowledge_library",
+          targetId: inserted.id,
+          metadata: {
+            title: payload.title,
+            filePath: fileFields.file_path,
+            checksumSha256: fileFields.checksum_sha256,
+          },
+        });
       }
 
       if (savedId) {
@@ -294,6 +321,7 @@ export function TaxKnowledgeLibraryPanel() {
           await triggerIndexing(savedId, "index");
         } else if (revokingApproval || nowArchived) {
           await triggerIndexing(savedId, "remove");
+          await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "index_removed", targetType: "tax_knowledge_library", targetId: savedId, metadata: { reason: nowArchived ? "archived" : "approval_revoked" } });
 
           await logSystemActivity({
             actorProfileId: user.id,
@@ -322,6 +350,7 @@ export function TaxKnowledgeLibraryPanel() {
     if (!editingId) return;
     setRetryingIndex(true);
     try {
+      await logSystemActivity({ actorProfileId: user.id!, actorRole: "admin", action: "index_retried", targetType: "tax_knowledge_library", targetId: editingId, metadata: {} });
       await triggerIndexing(editingId, "index");
     } finally {
       setRetryingIndex(false);
@@ -335,10 +364,7 @@ export function TaxKnowledgeLibraryPanel() {
     setLifecycleBusy(true);
     try {
       if (action === "delete") {
-        if (row.openai_file_id) await triggerIndexing(row.id, "remove");
-        if (row.file_path) await removeFromDocumentsBucket(row.file_path);
-        const { error } = await supabase.from("tax_knowledge_library").delete().eq("id", row.id);
-        if (error) throw new Error(error.message);
+        await deleteAiKnowledgeRecord("tax_knowledge_library", row.id);
         toast.success("Tax Knowledge entry deleted.");
         setDialogOpen(false);
         resetForm();
@@ -346,8 +372,13 @@ export function TaxKnowledgeLibraryPanel() {
         const nextStatus = action === "archive" ? "archived" : "draft";
         const { error } = await supabase.from("tax_knowledge_library").update({ status: nextStatus, approved_for_ai_use: action === "restore" ? row.approved_for_ai_use : false, ai_index_status: action === "archive" ? "removed" : row.ai_index_status }).eq("id", row.id);
         if (error) throw new Error(error.message);
-        if (action === "archive") await triggerIndexing(row.id, "remove");
+        if (action === "archive") {
+          await triggerIndexing(row.id, "remove");
+          await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "index_removed", targetType: "tax_knowledge_library", targetId: row.id, metadata: { reason: "archived" } });
+          await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "knowledge_entry_archived", targetType: "tax_knowledge_library", targetId: row.id, metadata: { title: row.title } });
+        }
         if (action === "restore" && row.approved_for_ai_use && row.file_path) await triggerIndexing(row.id, "index");
+        if (action === "restore") await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "knowledge_entry_restored", targetType: "tax_knowledge_library", targetId: row.id, metadata: { title: row.title } });
         toast.success(action === "archive" ? "Entry archived." : "Entry restored.");
       }
       await queryClient.invalidateQueries({ queryKey: ["ai-knowledge-tax-library"] });

@@ -26,6 +26,7 @@ import {
   ANONYMISATION_STATUS_LABELS,
   buildPastCaseDocumentStoragePath,
   computeFileChecksumSha256,
+  deleteAiKnowledgeRecord,
   findPastCaseDocumentDuplicateByChecksum,
   getAiIndexStatusBadgeClass,
   getAiKnowledgeSignedUrl,
@@ -351,7 +352,15 @@ export function PastCasesPanel() {
         action: "past_case_document_uploaded",
         targetType: "past_case_document",
         targetId: inserted.id,
-        metadata: { pastCaseId: editingId, fileName: selectedFile.name },
+          metadata: { pastCaseId: editingId, fileName: selectedFile.name },
+        });
+      await logSystemActivity({
+        actorProfileId: user.id,
+        actorRole: "admin",
+        action: "past_case_document_added",
+        targetType: "past_case_document",
+        targetId: inserted.id,
+        metadata: { pastCaseId: editingId, fileName: selectedFile.name, filePath: path, checksumSha256: checksum },
       });
 
       if (form.approved_for_ai_use) {
@@ -403,7 +412,7 @@ export function PastCasesPanel() {
       if (error) throw new Error(error.message);
       if (form.approved_for_ai_use) await triggerIndexing(doc.id, "index");
       if (doc.file_path) await removeFromDocumentsBucket(doc.file_path);
-      await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_document_uploaded", targetType: "past_case_document", targetId: doc.id, metadata: { event: "past_case_document_replaced", pastCaseId: editingId, fileName: file.name } });
+      await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_document_replaced", targetType: "past_case_document", targetId: doc.id, metadata: { pastCaseId: editingId, fileName: file.name, filePath: replacementPath, checksumSha256: checksum, previousFilePath: doc.file_path } });
       toast.success("Past Case document replaced.");
       await refetchDocuments();
     } catch (error) {
@@ -415,11 +424,8 @@ export function PastCasesPanel() {
     if (!user || !window.confirm(`Remove ${doc.file_name} from this Past Case?`)) return;
     setRemovingDocId(doc.id);
     try {
-      if (doc.openai_file_id) await triggerIndexing(doc.id, "remove");
-      await removeFromDocumentsBucket(doc.file_path);
-      const { error } = await supabase.from("past_case_documents").delete().eq("id", doc.id);
-      if (error) throw new Error(error.message);
-      await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_document_deleted", targetType: "past_case_document", targetId: doc.id, metadata: { event: "past_case_document_removed", pastCaseId: editingId } });
+      await deleteAiKnowledgeRecord("past_case_documents", doc.id);
+      await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_document_removed", targetType: "past_case_document", targetId: doc.id, metadata: { pastCaseId: editingId, fileName: doc.file_name, filePath: doc.file_path, checksumSha256: doc.checksum_sha256 } });
       toast.success("Past Case document removed.");
       await refetchDocuments();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Document removal failed; no database row was deleted."); }
@@ -434,22 +440,20 @@ export function PastCasesPanel() {
     try {
       const docs = activeDocuments ?? [];
       if (action === "delete") {
-        for (const doc of docs) { if (doc.openai_file_id) await triggerIndexing(doc.id, "remove"); }
-        for (const doc of docs) await removeFromDocumentsBucket(doc.file_path);
-        const { error: childError } = await supabase.from("past_case_documents").delete().eq("past_case_id", row.id);
-        if (childError) throw new Error(childError.message);
-        const { error } = await supabase.from("past_cases").delete().eq("id", row.id);
-        if (error) throw new Error(error.message);
+        await deleteAiKnowledgeRecord("past_cases", row.id);
         toast.success("Past Case deleted."); setDialogOpen(false); resetForm();
       } else if (action === "archive") {
         for (const doc of docs) { if (doc.openai_file_id) await triggerIndexing(doc.id, "remove"); }
+        if (docs.some(doc => doc.openai_file_id)) await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "index_removed", targetType: "past_case", targetId: row.id, metadata: { documentCount: docs.length, reason: "archived" } });
         const { error } = await supabase.from("past_cases").update({ is_archived: true, archived_at: new Date().toISOString(), archived_by: user.id }).eq("id", row.id);
         if (error) throw new Error(error.message);
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_archived", targetType: "past_case", targetId: row.id, metadata: { title: row.title, documentCount: docs.length } });
         toast.success("Past Case archived.");
       } else {
         const { error } = await supabase.from("past_cases").update({ is_archived: false, archived_at: null, archived_by: null }).eq("id", row.id);
         if (error) throw new Error(error.message);
         if (row.approved_for_ai_use && row.anonymisation_status === "anonymised") for (const doc of docs) await triggerIndexing(doc.id, "index");
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_restored", targetType: "past_case", targetId: row.id, metadata: { title: row.title } });
         toast.success("Past Case restored.");
       }
       await queryClient.invalidateQueries({ queryKey: ["ai-knowledge-past-cases"] }); await refetchDocuments();
@@ -641,6 +645,7 @@ export function PastCasesPanel() {
                       onClick={async () => {
                         setRetryingDocId(doc.id);
                         try {
+                          await logSystemActivity({ actorProfileId: user.id!, actorRole: "admin", action: "index_retried", targetType: "past_case_document", targetId: doc.id, metadata: { pastCaseId: editingId, fileName: doc.file_name } });
                           await triggerIndexing(doc.id, "index");
                           await refetchDocuments();
                         } finally {

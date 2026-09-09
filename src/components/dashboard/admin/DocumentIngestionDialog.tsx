@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { logSystemActivity } from "@/lib/systemActivityLog";
 import { computeFileChecksumSha256, downloadAiKnowledgeFile, getAiKnowledgeSignedUrl, removeFromDocumentsBucket, sanitizeAiKnowledgeFileName, uploadToDocumentsBucket } from "@/lib/aiKnowledgeStorage";
 import { metadataFields, normalizeMetadata, type IngestionKind } from "../../../../supabase/functions/_shared/ingestionMetadata";
 
@@ -27,7 +28,10 @@ export function DocumentIngestionDialog({kind}: {kind: IngestionKind}) {
     const temporaryPaths = paths.filter(path => path.startsWith("ai-knowledge/intake/"));
     if (!temporaryPaths.length) return;
     try {
-      await Promise.all(temporaryPaths.map(path => removeFromDocumentsBucket(path)));
+      await Promise.all(temporaryPaths.map(async path => {
+        await removeFromDocumentsBucket(path);
+        if (user) await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "temporary_upload_cleaned", targetType: "document", targetId: null, metadata: { domain: kind, filePath: path } });
+      }));
     } catch (error) {
       console.error("Temporary upload cleanup failed", error);
       setNotice("The file was removed from this form, but private temporary cleanup needs attention.");
@@ -79,25 +83,29 @@ export function DocumentIngestionDialog({kind}: {kind: IngestionKind}) {
       const nullable = Object.fromEntries(Object.entries(values).map(([k,v]) => [k, v || null]));
       const tags = values.tags?.split(",").map(t => t.trim()).filter(Boolean) ?? [];
       if (kind === "tax_knowledge") {
-        const {error} = await supabase.from("tax_knowledge_library").insert({...nullable, title: values.title, jurisdiction: values.jurisdiction || "South Africa", tags, ...files[0], status: "draft", approved_for_ai_use: false, ai_index_status: "pending", created_by: user.id});
-        if (error) throw error;
+        const {data: inserted, error} = await supabase.from("tax_knowledge_library").insert({...nullable, title: values.title, jurisdiction: values.jurisdiction || "South Africa", tags, ...files[0], status: "draft", approved_for_ai_use: false, ai_index_status: "pending", created_by: user.id}).select("id").single();
+        if (error || !inserted) throw error ?? new Error("Unable to save Tax Knowledge entry.");
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "knowledge_entry_created", targetType: "tax_knowledge_library", targetId: inserted.id, metadata: { title: values.title, filePath: files[0].file_path, checksumSha256: files[0].checksum_sha256, domain: kind } });
       } else if (kind === "past_case") {
         let id = pastCaseId;
         if (!id) {
           const {data, error} = await supabase.from("past_cases").insert({...nullable, title: values.title, tags, approved_for_ai_use: false, anonymisation_status: "not_reviewed", created_by: user.id}).select("id").single();
           if (error) throw error;
           id = data.id; setPastCaseId(id);
+          await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_created", targetType: "past_case", targetId: id, metadata: { title: values.title, domain: kind } });
         }
         // Keep progress if a later file fails; retry does not create a second case.
         for (const file of files.filter(f => !savedPaths.includes(f.file_path))) {
-          const {error} = await supabase.from("past_case_documents").insert({...file, past_case_id: id, ai_index_status: "pending", created_by: user.id});
-          if (error) throw error;
+          const {data: insertedDocument, error} = await supabase.from("past_case_documents").insert({...file, past_case_id: id, ai_index_status: "pending", created_by: user.id}).select("id").single();
+          if (error || !insertedDocument) throw error ?? new Error("Unable to save Past Case document.");
           setSavedPaths(paths => [...paths, file.file_path]);
+          await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_document_added", targetType: "past_case_document", targetId: insertedDocument.id, metadata: { pastCaseId: id, fileName: file.file_name, filePath: file.file_path, checksumSha256: file.checksum_sha256, domain: kind } });
         }
       } else {
         const file = files[0];
-        const {error} = await supabase.from("correspondence_templates").insert({...nullable, name: values.name, correspondence_type: values.correspondence_type || "Other / custom", approved: false, status: "draft", created_by: user.id, source_file_name: file.file_name, source_file_path: file.file_path, source_file_size: file.file_size, source_mime_type: file.mime_type, source_checksum_sha256: file.checksum_sha256});
-        if (error) throw error;
+        const {data: inserted, error} = await supabase.from("correspondence_templates").insert({...nullable, name: values.name, correspondence_type: values.correspondence_type || "Other / custom", approved: false, status: "draft", created_by: user.id, source_file_name: file.file_name, source_file_path: file.file_path, source_file_size: file.file_size, source_mime_type: file.mime_type, source_checksum_sha256: file.checksum_sha256}).select("id").single();
+        if (error || !inserted) throw error ?? new Error("Unable to save correspondence template.");
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "template_created", targetType: "correspondence_template", targetId: inserted.id, metadata: { name: values.name, filePath: file.file_path, checksumSha256: file.checksum_sha256, domain: kind } });
       }
       await cache.invalidateQueries();
       toast.success("Draft saved. Open it to review and explicitly approve for AI use.");

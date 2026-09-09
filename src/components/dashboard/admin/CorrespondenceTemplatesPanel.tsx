@@ -1,4 +1,4 @@
-import { computeFileChecksumSha256, downloadAiKnowledgeFile, getAiKnowledgeSignedUrl, removeFromDocumentsBucket, uploadToDocumentsBucket, validateAiKnowledgeFile, buildTaxKnowledgeStoragePath } from "@/lib/aiKnowledgeStorage";
+import { computeFileChecksumSha256, deleteAiKnowledgeRecord, downloadAiKnowledgeFile, getAiKnowledgeSignedUrl, removeFromDocumentsBucket, uploadToDocumentsBucket, validateAiKnowledgeFile, buildTaxKnowledgeStoragePath } from "@/lib/aiKnowledgeStorage";
 import { DocumentIngestionDialog } from "./DocumentIngestionDialog";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { CORRESPONDENCE_TYPES } from "@/lib/sarsCorrespondence";
+import { logSystemActivity } from "@/lib/systemActivityLog";
 
 type TemplateRow = Tables<"correspondence_templates">;
 
@@ -150,10 +151,13 @@ export function CorrespondenceTemplatesPanel() {
         if (error) throw new Error(error.message);
         toast.success("Template updated.");
       } else {
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from("correspondence_templates")
-          .insert({ ...payload, created_by: user.id });
-        if (error) throw new Error(error.message);
+          .insert({ ...payload, created_by: user.id })
+          .select("id")
+          .single();
+        if (error || !inserted) throw new Error(error?.message ?? "Unable to create template.");
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "template_created", targetType: "correspondence_template", targetId: inserted.id, metadata: { name: payload.name } });
         toast.success("Template created.");
       }
 
@@ -167,7 +171,7 @@ export function CorrespondenceTemplatesPanel() {
     }
   };
 
-  const handleTemplateLifecycle = async (action: "archive" | "restore" | "delete" | "remove-source", file?: File) => {
+  const handleTemplateLifecycle = async (action: "archive" | "restore" | "delete" | "remove-source" | "replace-source", file?: File) => {
     const row = templates?.find((t) => t.id === editingId);
     if (!row || !user) return;
     if ((action === "delete" || action === "remove-source") && !window.confirm(action === "delete" ? `Permanently delete "${row.name}"?` : "Remove this private source file?")) return;
@@ -175,15 +179,16 @@ export function CorrespondenceTemplatesPanel() {
     let newPath: string | null = null;
     try {
       if (action === "delete") {
-        if (row.source_file_path) await removeFromDocumentsBucket(row.source_file_path);
-        const { error } = await supabase.from("correspondence_templates").delete().eq("id", row.id); if (error) throw new Error(error.message);
+        await deleteAiKnowledgeRecord("correspondence_templates", row.id);
         toast.success("Template deleted."); setDialogOpen(false); resetForm();
       } else if (action === "remove-source") {
         if (row.source_file_path) await removeFromDocumentsBucket(row.source_file_path);
         const { error } = await supabase.from("correspondence_templates").update({ source_file_name: null, source_file_path: null, source_file_size: null, source_mime_type: null, source_checksum_sha256: null }).eq("id", row.id); if (error) throw new Error(error.message);
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "template_source_removed", targetType: "correspondence_template", targetId: row.id, metadata: { name: row.name, previousFilePath: row.source_file_path, checksumSha256: row.source_checksum_sha256 } });
         toast.success("Source file removed.");
       } else if (action === "archive" || action === "restore") {
         const { error } = await supabase.from("correspondence_templates").update({ status: action === "archive" ? "archived" : "active" }).eq("id", row.id); if (error) throw new Error(error.message);
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: action === "archive" ? "template_archived" : "template_restored", targetType: "correspondence_template", targetId: row.id, metadata: { name: row.name } });
         toast.success(action === "archive" ? "Template archived." : "Template restored.");
       } else if (file) {
         const validationError = validateAiKnowledgeFile(file); if (validationError) throw new Error(validationError);
@@ -194,6 +199,7 @@ export function CorrespondenceTemplatesPanel() {
         await uploadToDocumentsBucket(newPath, file);
         const { error } = await supabase.from("correspondence_templates").update({ source_file_name: file.name, source_file_path: newPath, source_file_size: file.size, source_mime_type: file.type, source_checksum_sha256: checksum, version: row.version + 1 }).eq("id", row.id); if (error) throw new Error(error.message);
         if (row.source_file_path) await removeFromDocumentsBucket(row.source_file_path);
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "template_source_replaced", targetType: "correspondence_template", targetId: row.id, metadata: { name: row.name, fileName: file.name, filePath: newPath, checksumSha256: checksum, previousFilePath: row.source_file_path } });
         toast.success("Source file replaced. Reviewed fields were preserved.");
       }
       await queryClient.invalidateQueries({ queryKey: ["correspondence-templates"] });
