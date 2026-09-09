@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { unzipSync, strFromU8 } from "npm:fflate@0.8.2";
-import { metadataFields, normalizeMetadata, TEMPLATE_CORRESPONDENCE_TYPES, type IngestionKind } from "../_shared/ingestionMetadata.ts";
+import { isPermittedIngestionSourcePath, metadataFields, normalizeMetadata, TEMPLATE_CORRESPONDENCE_TYPES, type IngestionKind } from "../_shared/ingestionMetadata.ts";
 
 Deno.serve(async req => {
   const headers = { "Access-Control-Allow-Origin": req.headers.get("Origin") ?? "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Content-Type": "application/json", Vary: "Origin" };
@@ -19,8 +19,8 @@ Deno.serve(async req => {
     let total = 0;
     for (const file of files) {
       if (typeof file.path !== "string" || file.path.includes("..")) return reply({error: "Invalid intake file path"}, 400);
+      if (!isPermittedIngestionSourcePath(kind, file.path, user.id)) return reply({error: "Invalid source path"}, 400);
       if (!file.path.startsWith(`ai-knowledge/intake/${user.id}/`)) {
-        if (kind !== "tax_knowledge" || !file.path.startsWith("ai-knowledge/")) return reply({error: "Invalid source path"}, 400);
         const {data: source} = await client.storage.from("documents").list(file.path.split("/").slice(0, -1).join("/"), {search: file.path.split("/").pop()});
         if (!source?.some(entry => entry.name === file.path.split("/").pop())) return reply({error: "Source record not accessible"}, 404);
       }

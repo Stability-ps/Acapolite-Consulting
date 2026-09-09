@@ -11,6 +11,12 @@ export const TEMPLATE_CORRESPONDENCE_TYPES = [
   "General SARS correspondence", "Audit response", "Verification response", "Request for Relevant Material response", "Supporting document cover letter", "Objection motivation", "Objection cover letter", "Appeal motivation", "ADR correspondence", "Suspension of payment request", "Payment arrangement request", "Compromise motivation", "Request for reasons", "Remission request", "Penalty remission correspondence", "Interest correspondence", "Extension request", "Compliance status correspondence", "VAT correspondence", "PAYE correspondence", "Income Tax correspondence", "Corporate Income Tax correspondence", "SARS follow-up", "Escalation", "Arrangement/default explanation", "Payment notification", "Withdrawal request", "Practitioner cover letter", "Other / custom",
 ] as const;
 
+export function isPermittedIngestionSourcePath(kind: IngestionKind, path: string, userId: string) {
+  if (path.startsWith(`ai-knowledge/intake/${userId}/`)) return true;
+  if (kind === "tax_knowledge") return path.startsWith("ai-knowledge/");
+  return kind === "template" && path.startsWith("ai-knowledge/correspondence-templates/");
+}
+
 export function normalizeMetadata(kind: IngestionKind, raw: unknown): Record<string, string> {
   const input = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
   return Object.fromEntries(metadataFields[kind].map(key => {
