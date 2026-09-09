@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { KnowledgeActionConfirm } from "@/components/dashboard/admin/KnowledgeActionConfirm";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -74,6 +75,8 @@ export function CorrespondenceTemplatesPanel() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [sourceBusy, setSourceBusy] = useState(false);
+  const [deleteTemplateDialogOpen, setDeleteTemplateDialogOpen] = useState(false);
+  const [removeSourceDialogOpen, setRemoveSourceDialogOpen] = useState(false);
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ["correspondence-templates"],
@@ -174,18 +177,18 @@ export function CorrespondenceTemplatesPanel() {
   const handleTemplateLifecycle = async (action: "archive" | "restore" | "delete" | "remove-source" | "replace-source", file?: File) => {
     const row = templates?.find((t) => t.id === editingId);
     if (!row || !user) return;
-    if ((action === "delete" || action === "remove-source") && !window.confirm(action === "delete" ? `Permanently delete "${row.name}"?` : "Remove this private source file?")) return;
     setSourceBusy(true);
     let newPath: string | null = null;
     try {
       if (action === "delete") {
         await deleteAiKnowledgeRecord("correspondence_templates", row.id);
-        toast.success("Template deleted."); setDialogOpen(false); resetForm();
+        toast.success("Template deleted."); setDeleteTemplateDialogOpen(false); setDialogOpen(false); resetForm();
       } else if (action === "remove-source") {
         if (row.source_file_path) await removeFromDocumentsBucket(row.source_file_path);
         const { error } = await supabase.from("correspondence_templates").update({ source_file_name: null, source_file_path: null, source_file_size: null, source_mime_type: null, source_checksum_sha256: null }).eq("id", row.id); if (error) throw new Error(error.message);
         await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "template_source_removed", targetType: "correspondence_template", targetId: row.id, metadata: { name: row.name, previousFilePath: row.source_file_path, checksumSha256: row.source_checksum_sha256 } });
         toast.success("Source file removed.");
+        setRemoveSourceDialogOpen(false);
       } else if (action === "archive" || action === "restore") {
         const { error } = await supabase.from("correspondence_templates").update({ status: action === "archive" ? "archived" : "active" }).eq("id", row.id); if (error) throw new Error(error.message);
         await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: action === "archive" ? "template_archived" : "template_restored", targetType: "correspondence_template", targetId: row.id, metadata: { name: row.name } });
@@ -262,7 +265,7 @@ export function CorrespondenceTemplatesPanel() {
         description="Global structure only. Not linked to any client or case."
       >
         <div className="space-y-5">
-          {editingId && templates?.find(t => t.id === editingId) && <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={async () => {try {const source = templates.find(t => t.id === editingId)!; window.open(await getAiKnowledgeSignedUrl(source.source_file_path!), "_blank", "noopener,noreferrer");} catch {toast.error("Unable to open the private source.");}}}>Open Source File</Button><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={() => {const source = templates.find(t => t.id === editingId)!; if (source.source_file_path) void downloadAiKnowledgeFile(source.source_file_path, source.source_file_name ?? undefined);}}>Download</Button><label className="inline-flex items-center"><input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => void handleTemplateLifecycle("replace-source", event.target.files?.[0])} /><span className="inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm cursor-pointer">Replace Source File</span></label><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={() => void handleTemplateLifecycle("remove-source")}>Remove Source File</Button><Button variant="outline" disabled={sourceBusy} onClick={() => void handleTemplateLifecycle(form.status === "archived" ? "restore" : "archive")}>{form.status === "archived" ? "Restore" : "Archive"}</Button><Button variant="destructive" disabled={sourceBusy} onClick={() => void handleTemplateLifecycle("delete")}>Delete</Button></div>}
+          {editingId && templates?.find(t => t.id === editingId) && <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={async () => {try {const source = templates.find(t => t.id === editingId)!; window.open(await getAiKnowledgeSignedUrl(source.source_file_path!), "_blank", "noopener,noreferrer");} catch {toast.error("Unable to open the private source.");}}}>Open Source File</Button><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={() => {const source = templates.find(t => t.id === editingId)!; if (source.source_file_path) void downloadAiKnowledgeFile(source.source_file_path, source.source_file_name ?? undefined);}}>Download</Button><label className="inline-flex items-center"><input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => void handleTemplateLifecycle("replace-source", event.target.files?.[0])} /><span className="inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm cursor-pointer">Replace Source File</span></label><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={() => setRemoveSourceDialogOpen(true)}>Remove Source File</Button><Button variant="outline" disabled={sourceBusy} onClick={() => void handleTemplateLifecycle(form.status === "archived" ? "restore" : "archive")}>{form.status === "archived" ? "Restore" : "Archive"}</Button><Button variant="destructive" disabled={sourceBusy} onClick={() => setDeleteTemplateDialogOpen(true)}>Delete</Button></div>}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Name *</label>
@@ -331,6 +334,28 @@ export function CorrespondenceTemplatesPanel() {
           </div>
         </div>
       </DashboardItemDialog>
+
+      <KnowledgeActionConfirm
+        open={removeSourceDialogOpen}
+        onOpenChange={(open) => { if (!open) setRemoveSourceDialogOpen(false); }}
+        title="Remove source file?"
+        description="The source file will be removed, but the reviewed template structure and metadata will remain."
+        confirmLabel="Remove Source"
+        busyLabel="Removing..."
+        busy={sourceBusy}
+        onConfirm={() => void handleTemplateLifecycle("remove-source")}
+      />
+
+      <KnowledgeActionConfirm
+        open={deleteTemplateDialogOpen}
+        onOpenChange={(open) => { if (!open) setDeleteTemplateDialogOpen(false); }}
+        title="Delete correspondence template permanently?"
+        description="This permanently removes the template and its stored source file. This action cannot be undone."
+        confirmLabel="Delete Template"
+        busyLabel="Deleting..."
+        busy={sourceBusy}
+        onConfirm={() => void handleTemplateLifecycle("delete")}
+      />
     </div>
   );
 }

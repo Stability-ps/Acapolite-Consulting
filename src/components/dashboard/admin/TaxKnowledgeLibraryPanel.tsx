@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { KnowledgeActionConfirm } from "@/components/dashboard/admin/KnowledgeActionConfirm";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -93,6 +94,7 @@ export function TaxKnowledgeLibraryPanel() {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [retryingIndex, setRetryingIndex] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { data: entries, isLoading } = useQuery({
     queryKey: ["ai-knowledge-tax-library"],
@@ -360,12 +362,12 @@ export function TaxKnowledgeLibraryPanel() {
   const handleLifecycle = async (action: "archive" | "restore" | "delete") => {
     const row = entries?.find((entry) => entry.id === editingId);
     if (!row || !user) return;
-    if (action === "delete" && !window.confirm(`Permanently delete "${row.title}" and its private source file?`)) return;
     setLifecycleBusy(true);
     try {
       if (action === "delete") {
         await deleteAiKnowledgeRecord("tax_knowledge_library", row.id);
         toast.success("Tax Knowledge entry deleted.");
+        setDeleteDialogOpen(false);
         setDialogOpen(false);
         resetForm();
       } else {
@@ -610,7 +612,7 @@ export function TaxKnowledgeLibraryPanel() {
           {editingId ? (
             <div className="pt-2 border-t border-border flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" className="rounded-xl" onClick={() => void handleLifecycle(form.status === "archived" ? "restore" : "archive")} disabled={lifecycleBusy}>{lifecycleBusy ? "Working..." : form.status === "archived" ? "Restore" : "Archive"}</Button>
-              <Button type="button" variant="destructive" className="rounded-xl" onClick={() => void handleLifecycle("delete")} disabled={lifecycleBusy}>Delete</Button>
+              <Button type="button" variant="destructive" className="rounded-xl" onClick={() => setDeleteDialogOpen(true)} disabled={lifecycleBusy}>Delete</Button>
               <Button type="button" variant="outline" className="rounded-xl" onClick={() => openFile(entries!.find((e) => e.id === editingId)!)} disabled={openingId === editingId || !entries?.find((e) => e.id === editingId)?.file_path}>
                 <ExternalLink className="h-4 w-4 mr-2" />
                 {openingId === editingId ? "Opening..." : "Open Current File"}
@@ -630,6 +632,17 @@ export function TaxKnowledgeLibraryPanel() {
           ) : null}
         </div>
       </DashboardItemDialog>
+
+      <KnowledgeActionConfirm
+        open={deleteDialogOpen}
+        onOpenChange={(open) => { if (!open) setDeleteDialogOpen(false); }}
+        title="Delete Tax Knowledge entry permanently?"
+        description="This permanently removes the source document and AI index. This action cannot be undone."
+        confirmLabel="Delete Entry"
+        busyLabel="Deleting..."
+        busy={lifecycleBusy}
+        onConfirm={() => void handleLifecycle("delete")}
+      />
     </div>
   );
 }
