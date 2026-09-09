@@ -54,6 +54,10 @@ export function buildPastCaseDocumentStoragePath(pastCaseId: string, fileName: s
   return `ai-knowledge/past-cases/${pastCaseId}/${Date.now()}-${sanitizeAiKnowledgeFileName(fileName)}`;
 }
 
+export function buildCorrespondenceTemplateStoragePath(fileName: string) {
+  return `ai-knowledge/correspondence-templates/${Date.now()}-${sanitizeAiKnowledgeFileName(fileName)}`;
+}
+
 export async function uploadToDocumentsBucket(path: string, file: File) {
   const { error } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
   if (error) throw new Error(error.message);

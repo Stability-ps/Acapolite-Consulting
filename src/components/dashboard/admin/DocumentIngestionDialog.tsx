@@ -109,9 +109,6 @@ export function DocumentIngestionDialog({kind}: {kind: IngestionKind}) {
       }
       await cache.invalidateQueries();
       toast.success("Draft saved. Open it to review and explicitly approve for AI use.");
-      const committedPaths = new Set(savedPaths);
-      const temporary = files.filter(file => !committedPaths.has(file.file_path)).map(file => file.file_path);
-      await cleanupTemporaryFiles(temporary);
       setOpen(false); setFiles([]); setMetadata(normalizeMetadata(kind, {})); setPastCaseId(null); setSavedPaths([]); setReviewed(false); setNotice("");
     } catch (error) {setNotice(error instanceof Error ? error.message : "Save failed. Private originals are preserved; retry saving.");}
     finally {setBusy(false);}

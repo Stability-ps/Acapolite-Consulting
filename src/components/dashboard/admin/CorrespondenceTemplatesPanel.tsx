@@ -1,4 +1,4 @@
-import { computeFileChecksumSha256, deleteAiKnowledgeRecord, downloadAiKnowledgeFile, getAiKnowledgeSignedUrl, removeFromDocumentsBucket, uploadToDocumentsBucket, validateAiKnowledgeFile, buildTaxKnowledgeStoragePath } from "@/lib/aiKnowledgeStorage";
+import { buildCorrespondenceTemplateStoragePath, computeFileChecksumSha256, deleteAiKnowledgeRecord, downloadAiKnowledgeFile, getAiKnowledgeSignedUrl, removeFromDocumentsBucket, uploadToDocumentsBucket, validateAiKnowledgeFile } from "@/lib/aiKnowledgeStorage";
 import { DocumentIngestionDialog } from "./DocumentIngestionDialog";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { CORRESPONDENCE_TYPES } from "@/lib/sarsCorrespondence";
 import { logSystemActivity } from "@/lib/systemActivityLog";
+import { normalizeMetadata } from "../../../../supabase/functions/_shared/ingestionMetadata";
 
 type TemplateRow = Tables<"correspondence_templates">;
 
@@ -75,6 +76,7 @@ export function CorrespondenceTemplatesPanel() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [sourceBusy, setSourceBusy] = useState(false);
+  const [sourceProposal, setSourceProposal] = useState<Partial<FormState> | null>(null);
   const [deleteTemplateDialogOpen, setDeleteTemplateDialogOpen] = useState(false);
   const [removeSourceDialogOpen, setRemoveSourceDialogOpen] = useState(false);
 
@@ -112,12 +114,14 @@ export function CorrespondenceTemplatesPanel() {
       approved: row.approved,
       status: row.status,
     });
+    setSourceProposal(null);
     setDialogOpen(true);
   };
 
   const closeDialog = () => {
     if (saving) return;
     setDialogOpen(false);
+    setSourceProposal(null);
     resetForm();
   };
 
@@ -198,7 +202,7 @@ export function CorrespondenceTemplatesPanel() {
         const checksum = await computeFileChecksumSha256(file);
         const duplicate = await supabase.from("correspondence_templates").select("id").eq("source_checksum_sha256", checksum).neq("id", row.id).maybeSingle();
         if (duplicate.error) throw duplicate.error; if (duplicate.data) throw new Error("This exact source file already belongs to another template.");
-        newPath = buildTaxKnowledgeStoragePath(file.name);
+        newPath = buildCorrespondenceTemplateStoragePath(file.name);
         await uploadToDocumentsBucket(newPath, file);
         const { error } = await supabase.from("correspondence_templates").update({ source_file_name: file.name, source_file_path: newPath, source_file_size: file.size, source_mime_type: file.type, source_checksum_sha256: checksum, version: row.version + 1 }).eq("id", row.id); if (error) throw new Error(error.message);
         if (row.source_file_path) await removeFromDocumentsBucket(row.source_file_path);
@@ -208,6 +212,44 @@ export function CorrespondenceTemplatesPanel() {
       await queryClient.invalidateQueries({ queryKey: ["correspondence-templates"] });
     } catch (error) { if (newPath) { try { await removeFromDocumentsBucket(newPath); } catch (cleanupError) { console.error("Replacement cleanup failed", cleanupError); } } toast.error(error instanceof Error ? error.message : "Template lifecycle action failed; existing record preserved."); }
     finally { setSourceBusy(false); }
+  };
+
+  const analyseTemplateSource = async () => {
+    const row = templates?.find((template) => template.id === editingId);
+    if (!row?.source_file_path) return;
+
+    setSourceBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-document-analyze", {
+        body: { kind: "template", files: [{ path: row.source_file_path }] },
+      });
+      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? "Source analysis failed.");
+
+      const proposed = normalizeMetadata("template", data.metadata ?? {});
+      setSourceProposal({
+        name: proposed.name,
+        correspondence_type: proposed.correspondence_type,
+        tax_type: proposed.tax_type,
+        case_type: proposed.case_type,
+        purpose: proposed.purpose,
+        body_structure: proposed.body_structure,
+      });
+      toast.success("Source analysis is ready for review. Your reviewed fields were not changed.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to analyse this source file.");
+    } finally {
+      setSourceBusy(false);
+    }
+  };
+
+  const applySourceProposal = () => {
+    if (!sourceProposal) return;
+    setForm((current) => ({
+      ...current,
+      ...Object.fromEntries(Object.entries(sourceProposal).filter(([, value]) => value !== undefined)),
+    }));
+    setSourceProposal(null);
+    toast.success("Suggestions copied into the form. Save Changes to apply them to the template.");
   };
 
   return (
@@ -265,7 +307,8 @@ export function CorrespondenceTemplatesPanel() {
         description="Global structure only. Not linked to any client or case."
       >
         <div className="space-y-5">
-          {editingId && templates?.find(t => t.id === editingId) && <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={async () => {try {const source = templates.find(t => t.id === editingId)!; window.open(await getAiKnowledgeSignedUrl(source.source_file_path!), "_blank", "noopener,noreferrer");} catch {toast.error("Unable to open the private source.");}}}>Open Source File</Button><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={() => {const source = templates.find(t => t.id === editingId)!; if (source.source_file_path) void downloadAiKnowledgeFile(source.source_file_path, source.source_file_name ?? undefined);}}>Download</Button><label className="inline-flex items-center"><input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => void handleTemplateLifecycle("replace-source", event.target.files?.[0])} /><span className="inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm cursor-pointer">Replace Source File</span></label><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={() => setRemoveSourceDialogOpen(true)}>Remove Source File</Button><Button variant="outline" disabled={sourceBusy} onClick={() => void handleTemplateLifecycle(form.status === "archived" ? "restore" : "archive")}>{form.status === "archived" ? "Restore" : "Archive"}</Button><Button variant="destructive" disabled={sourceBusy} onClick={() => setDeleteTemplateDialogOpen(true)}>Delete</Button></div>}
+          {editingId && templates?.find(t => t.id === editingId) && <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={async () => {try {const source = templates.find(t => t.id === editingId)!; window.open(await getAiKnowledgeSignedUrl(source.source_file_path!), "_blank", "noopener,noreferrer");} catch {toast.error("Unable to open the private source.");}}}>Open Source File</Button><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={() => {const source = templates.find(t => t.id === editingId)!; if (source.source_file_path) void downloadAiKnowledgeFile(source.source_file_path, source.source_file_name ?? undefined);}}>Download</Button><label className="inline-flex items-center"><input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" onChange={(event) => void handleTemplateLifecycle("replace-source", event.target.files?.[0])} /><span className="inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm cursor-pointer">Replace Source File</span></label><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={() => void analyseTemplateSource()}>Analyse Source</Button><Button variant="outline" disabled={sourceBusy || !templates.find(t => t.id === editingId)?.source_file_path} onClick={() => setRemoveSourceDialogOpen(true)}>Remove Source File</Button><Button variant="outline" disabled={sourceBusy} onClick={() => void handleTemplateLifecycle(form.status === "archived" ? "restore" : "archive")}>{form.status === "archived" ? "Restore" : "Archive"}</Button><Button variant="destructive" disabled={sourceBusy} onClick={() => setDeleteTemplateDialogOpen(true)}>Delete</Button></div>}
+          {sourceProposal && <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3"><div><p className="font-medium text-sm">Suggestions from the current source</p><p className="text-xs text-muted-foreground">These suggestions have not changed the reviewed template. Apply them to the form only if you want to review and save them.</p></div><dl className="grid gap-2 text-sm sm:grid-cols-2">{Object.entries(sourceProposal).map(([field, value]) => <div key={field} className={field === "body_structure" ? "sm:col-span-2" : ""}><dt className="text-muted-foreground capitalize">{field.replaceAll("_", " ")}</dt><dd className="whitespace-pre-wrap">{value || "—"}</dd></div>)}</dl><Button type="button" variant="outline" onClick={applySourceProposal}>Use Suggestions in Form</Button></div>}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-foreground font-body mb-2">Name *</label>
