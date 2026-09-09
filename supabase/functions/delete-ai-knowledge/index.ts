@@ -141,11 +141,40 @@ Deno.serve(async (request) => {
       return json(request, { success: true, table, id, deletedCount: 1 + (documents?.length ?? 0) });
     }
 
-    const { data: row, error: rowError } = await adminClient
-      .from(table)
-      .select(table === "tax_knowledge_library" ? "id,title,file_name,file_path,checksum_sha256,openai_file_id" : table === "past_case_documents" ? "id,file_name,file_path,checksum_sha256,openai_file_id,past_case_id" : "id,name,source_file_name,source_file_path,source_checksum_sha256")
-      .eq("id", id)
-      .maybeSingle();
+    type DeletableRow = {
+      id: string;
+      title?: string | null;
+      name?: string | null;
+      file_name?: string | null;
+      file_path?: string | null;
+      source_file_name?: string | null;
+      source_file_path?: string | null;
+      checksum_sha256?: string | null;
+      source_checksum_sha256?: string | null;
+      openai_file_id?: string | null;
+    };
+
+    let row: DeletableRow | null;
+    let rowError: { message: string } | null;
+    if (table === "tax_knowledge_library") {
+      ({ data: row, error: rowError } = await adminClient
+        .from("tax_knowledge_library")
+        .select("id,title,file_name,file_path,checksum_sha256,openai_file_id")
+        .eq("id", id)
+        .maybeSingle());
+    } else if (table === "past_case_documents") {
+      ({ data: row, error: rowError } = await adminClient
+        .from("past_case_documents")
+        .select("id,file_name,file_path,checksum_sha256,openai_file_id,past_case_id")
+        .eq("id", id)
+        .maybeSingle());
+    } else {
+      ({ data: row, error: rowError } = await adminClient
+        .from("correspondence_templates")
+        .select("id,name,source_file_name,source_file_path,source_checksum_sha256")
+        .eq("id", id)
+        .maybeSingle());
+    }
     if (rowError || !row) return json(request, { error: "Record not found." }, 404);
 
     if (table === "tax_knowledge_library" || table === "past_case_documents") {
