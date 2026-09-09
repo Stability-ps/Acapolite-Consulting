@@ -10,6 +10,10 @@ describe('document ingestion boundaries', () => {
     expect(normalizeMetadata('tax_knowledge', {approved_for_ai_use:true})).not.toHaveProperty('approved_for_ai_use');
     expect(normalizeMetadata('past_case', {closed_date:'2024-02-29'}).closed_date).toBe('2024-02-29');
   });
+  it('keeps extracted template types within the SARS selector vocabulary', () => {
+    expect(normalizeMetadata('template', {correspondence_type:'Request for review'}).correspondence_type).toBe('Other / custom');
+    expect(normalizeMetadata('template', {correspondence_type:'Audit response'}).correspondence_type).toBe('Audit response');
+  });
   it('restricts search to source identity and the current checksum', () => {
     expect(contentFilter('tax_knowledge_library', [{id:'one',openai_file_id:'file-one',checksum_sha256:'hash'}])).toEqual({type:'and',filters:[{type:'eq',key:'source_table',value:'tax_knowledge_library'},{type:'or',filters:[{type:'and',filters:[{type:'eq',key:'source_id',value:'one'},{type:'eq',key:'checksum',value:'hash'}]}]}]});
   });
