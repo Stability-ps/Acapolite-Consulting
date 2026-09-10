@@ -50,6 +50,9 @@ export type Database = {
           entity_id: string | null
           entity_type: string | null
           id: string
+          is_archived: boolean
+          archived_at: string | null
+          archived_by: string | null
         }
         Insert: {
           action: string
@@ -61,6 +64,9 @@ export type Database = {
           entity_id?: string | null
           entity_type?: string | null
           id?: string
+          is_archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
         }
         Update: {
           action?: string
@@ -72,6 +78,9 @@ export type Database = {
           entity_id?: string | null
           entity_type?: string | null
           id?: string
+          is_archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
         }
         Relationships: [
           {

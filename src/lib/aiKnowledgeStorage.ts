@@ -54,6 +54,10 @@ export function buildPastCaseDocumentStoragePath(pastCaseId: string, fileName: s
   return `ai-knowledge/past-cases/${pastCaseId}/${Date.now()}-${sanitizeAiKnowledgeFileName(fileName)}`;
 }
 
+export function buildCorrespondenceTemplateStoragePath(fileName: string) {
+  return `ai-knowledge/correspondence-templates/${Date.now()}-${sanitizeAiKnowledgeFileName(fileName)}`;
+}
+
 export async function uploadToDocumentsBucket(path: string, file: File) {
   const { error } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
   if (error) throw new Error(error.message);
@@ -61,7 +65,8 @@ export async function uploadToDocumentsBucket(path: string, file: File) {
 }
 
 export async function removeFromDocumentsBucket(path: string) {
-  await supabase.storage.from("documents").remove([path]);
+  const { error } = await supabase.storage.from("documents").remove([path]);
+  if (error) throw new Error(error.message);
 }
 
 export async function getAiKnowledgeSignedUrl(path: string, expiresInSeconds = 600) {
@@ -70,6 +75,17 @@ export async function getAiKnowledgeSignedUrl(path: string, expiresInSeconds = 6
     throw new Error(error?.message ?? "Unable to create a signed URL for this file.");
   }
   return data.signedUrl;
+}
+
+export async function downloadAiKnowledgeFile(path: string, fileName?: string) {
+  const { data, error } = await supabase.storage.from("documents").download(path);
+  if (error || !data) throw new Error(error?.message ?? "Unable to download this private file.");
+  const url = URL.createObjectURL(data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName || path.split("/").pop() || "download";
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function findTaxKnowledgeDuplicateByChecksum(checksum: string) {
@@ -185,4 +201,12 @@ export async function runKnowledgeIndex(table: "tax_knowledge_library" | "past_c
     status = await invoke("status");
   }
   return status;
+}
+
+export async function deleteAiKnowledgeRecord(table: "tax_knowledge_library" | "past_cases" | "past_case_documents" | "correspondence_templates", id: string) {
+  const { data, error } = await supabase.functions.invoke("delete-ai-knowledge", { body: { table, id } });
+  if (error || data?.error || data?.success !== true) {
+    throw new Error(data?.error ?? error?.message ?? "Unable to delete this knowledge record.");
+  }
+  return data as { success: true; table: string; id: string; deletedCount: number };
 }

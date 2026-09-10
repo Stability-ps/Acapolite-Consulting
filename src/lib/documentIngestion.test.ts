@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { normalizeMetadata } from '../../supabase/functions/_shared/ingestionMetadata';
+import { isPermittedIngestionSourcePath, normalizeMetadata } from '../../supabase/functions/_shared/ingestionMetadata';
 import { retrieveContent, contentFilter } from '../../supabase/functions/_shared/taxCoachContent';
 
 beforeEach(() => vi.stubGlobal("AbortSignal", {timeout: () => new AbortController().signal}));
@@ -9,6 +9,15 @@ describe('document ingestion boundaries', () => {
     expect(normalizeMetadata('tax_knowledge', {publication_date:'2025-02-30', effective_from:'2025', title:'Guide', approved_for_ai_use:true, client_id:'x'})).toMatchObject({title:'Guide', publication_date:'',effective_from:'',effective_to:''});
     expect(normalizeMetadata('tax_knowledge', {approved_for_ai_use:true})).not.toHaveProperty('approved_for_ai_use');
     expect(normalizeMetadata('past_case', {closed_date:'2024-02-29'}).closed_date).toBe('2024-02-29');
+  });
+  it('keeps extracted template types within the SARS selector vocabulary', () => {
+    expect(normalizeMetadata('template', {correspondence_type:'Request for review'}).correspondence_type).toBe('Other / custom');
+    expect(normalizeMetadata('template', {correspondence_type:'Audit response'}).correspondence_type).toBe('Audit response');
+  });
+  it('allows reanalysis only for the matching private knowledge domain', () => {
+    expect(isPermittedIngestionSourcePath('template', 'ai-knowledge/correspondence-templates/file.txt', 'admin-id')).toBe(true);
+    expect(isPermittedIngestionSourcePath('template', 'ai-knowledge/tax-library/file.txt', 'admin-id')).toBe(false);
+    expect(isPermittedIngestionSourcePath('past_case', 'ai-knowledge/correspondence-templates/file.txt', 'admin-id')).toBe(false);
   });
   it('restricts search to source identity and the current checksum', () => {
     expect(contentFilter('tax_knowledge_library', [{id:'one',openai_file_id:'file-one',checksum_sha256:'hash'}])).toEqual({type:'and',filters:[{type:'eq',key:'source_table',value:'tax_knowledge_library'},{type:'or',filters:[{type:'and',filters:[{type:'eq',key:'source_id',value:'one'},{type:'eq',key:'checksum',value:'hash'}]}]}]});

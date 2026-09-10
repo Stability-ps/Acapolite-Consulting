@@ -33,7 +33,7 @@ export async function retrieveContent(client: SupabaseClient, apiKey: string, qu
     if (domain.table === "tax_knowledge_library") request = request.eq("approved_for_ai_use", true).neq("status", "archived");
     if (domain.table === "documents") request = request.eq("client_id", clientId).eq("case_id", caseId);
     if (domain.table === "past_case_documents") {
-      const {data: parents, error} = await client.from("past_cases").select("id").eq("approved_for_ai_use", true).eq("anonymisation_status", "anonymised");
+      const {data: parents, error} = await client.from("past_cases").select("id").eq("approved_for_ai_use", true).eq("anonymisation_status", "anonymised").eq("is_archived", false);
       if (error) throw error;
       if (!parents?.length) continue;
       request = request.in("past_case_id", parents.map(p => p.id));

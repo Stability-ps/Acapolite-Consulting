@@ -15,26 +15,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { KnowledgeActionConfirm } from "@/components/dashboard/admin/KnowledgeActionConfirm";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { logSystemActivity } from "@/lib/systemActivityLog";
 import {
+  downloadAiKnowledgeFile,
   runKnowledgeIndex,
   AI_INDEX_STATUS_LABELS,
   ANONYMISATION_STATUS_LABELS,
   buildPastCaseDocumentStoragePath,
   computeFileChecksumSha256,
+  deleteAiKnowledgeRecord,
   findPastCaseDocumentDuplicateByChecksum,
   getAiIndexStatusBadgeClass,
   getAiKnowledgeSignedUrl,
   getAnonymisationStatusBadgeClass,
   uploadToDocumentsBucket,
+  removeFromDocumentsBucket,
   validateAiKnowledgeFile,
 } from "@/lib/aiKnowledgeStorage";
 
 type PastCaseRow = Tables<"past_cases">;
 type PastCaseDocumentRow = Tables<"past_case_documents">;
+const rowIsArchived = (row?: PastCaseRow) => Boolean(row?.is_archived);
 
 type FormState = {
   title: string;
@@ -91,6 +96,12 @@ export function PastCasesPanel() {
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [openingDocId, setOpeningDocId] = useState<string | null>(null);
   const [retryingDocId, setRetryingDocId] = useState<string | null>(null);
+  const [replacingDocId, setReplacingDocId] = useState<string | null>(null);
+  const [removingDocId, setRemovingDocId] = useState<string | null>(null);
+  const [caseLifecycleBusy, setCaseLifecycleBusy] = useState(false);
+  const [removeDialogDoc, setRemoveDialogDoc] = useState<PastCaseDocumentRow | null>(null);
+  const [deleteCaseDialogOpen, setDeleteCaseDialogOpen] = useState(false);
+  const [pendingDuplicateReplace, setPendingDuplicateReplace] = useState<{ doc: PastCaseDocumentRow; file: File; duplicateName: string } | null>(null);
 
   const { data: entries, isLoading } = useQuery({
     queryKey: ["ai-knowledge-past-cases"],
@@ -345,7 +356,15 @@ export function PastCasesPanel() {
         action: "past_case_document_uploaded",
         targetType: "past_case_document",
         targetId: inserted.id,
-        metadata: { pastCaseId: editingId, fileName: selectedFile.name },
+          metadata: { pastCaseId: editingId, fileName: selectedFile.name },
+        });
+      await logSystemActivity({
+        actorProfileId: user.id,
+        actorRole: "admin",
+        action: "past_case_document_added",
+        targetType: "past_case_document",
+        targetId: inserted.id,
+        metadata: { pastCaseId: editingId, fileName: selectedFile.name, filePath: path, checksumSha256: checksum },
       });
 
       if (form.approved_for_ai_use) {
@@ -378,6 +397,93 @@ export function PastCasesPanel() {
     } finally {
       setOpeningDocId(null);
     }
+  };
+
+  const performReplace = async (doc: PastCaseDocumentRow, file: File, checksum: string) => {
+    if (!editingId || !user) return;
+    setReplacingDocId(doc.id);
+    const replacementPath = buildPastCaseDocumentStoragePath(editingId, file.name);
+    try {
+      await uploadToDocumentsBucket(replacementPath, file);
+      if (doc.openai_file_id) await triggerIndexing(doc.id, "remove");
+      const { error } = await supabase.from("past_case_documents").update({ file_name: file.name, file_path: replacementPath, file_size: file.size, mime_type: file.type, checksum_sha256: checksum, ai_index_status: "pending", ai_index_error: null, openai_file_id: null, ai_indexed_at: null }).eq("id", doc.id);
+      if (error) throw new Error(error.message);
+      if (form.approved_for_ai_use) await triggerIndexing(doc.id, "index");
+      if (doc.file_path) await removeFromDocumentsBucket(doc.file_path);
+      await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_document_replaced", targetType: "past_case_document", targetId: doc.id, metadata: { pastCaseId: editingId, fileName: file.name, filePath: replacementPath, checksumSha256: checksum, previousFilePath: doc.file_path } });
+      toast.success("Past Case document replaced.");
+      await refetchDocuments();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Replacement failed. The new private source was preserved for retry.");
+    } finally { setReplacingDocId(null); }
+  };
+
+  const replaceDocument = async (doc: PastCaseDocumentRow, file: File | null) => {
+    if (!editingId || !user || !file) return;
+    const validationError = validateAiKnowledgeFile(file);
+    if (validationError) { toast.error(validationError); return; }
+    const checksum = await computeFileChecksumSha256(file);
+    const duplicate = await findPastCaseDocumentDuplicateByChecksum(checksum);
+    if (duplicate && duplicate.id !== doc.id) {
+      setPendingDuplicateReplace({ doc, file, duplicateName: duplicate.file_name });
+      return;
+    }
+    await performReplace(doc, file, checksum);
+  };
+
+  const confirmDuplicateReplace = async () => {
+    if (!pendingDuplicateReplace) return;
+    const { doc, file } = pendingDuplicateReplace;
+    const checksum = await computeFileChecksumSha256(file);
+    setPendingDuplicateReplace(null);
+    await performReplace(doc, file, checksum);
+  };
+
+  const requestRemoveDocument = (doc: PastCaseDocumentRow) => {
+    if (!user) return;
+    setRemoveDialogDoc(doc);
+  };
+
+  const confirmRemoveDocument = async () => {
+    const doc = removeDialogDoc;
+    if (!doc || !user) return;
+    setRemovingDocId(doc.id);
+    try {
+      await deleteAiKnowledgeRecord("past_case_documents", doc.id);
+      await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_document_removed", targetType: "past_case_document", targetId: doc.id, metadata: { pastCaseId: editingId, fileName: doc.file_name, filePath: doc.file_path, checksumSha256: doc.checksum_sha256 } });
+      toast.success("Past Case document removed.");
+      setRemoveDialogDoc(null);
+      await refetchDocuments();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Document removal failed; no database row was deleted."); }
+    finally { setRemovingDocId(null); }
+  };
+
+  const handleCaseLifecycle = async (action: "archive" | "restore" | "delete") => {
+    const row = entries?.find((entry) => entry.id === editingId);
+    if (!row || !user) return;
+    setCaseLifecycleBusy(true);
+    try {
+      const docs = activeDocuments ?? [];
+      if (action === "delete") {
+        await deleteAiKnowledgeRecord("past_cases", row.id);
+        toast.success("Past Case deleted."); setDeleteCaseDialogOpen(false); setDialogOpen(false); resetForm();
+      } else if (action === "archive") {
+        for (const doc of docs) { if (doc.openai_file_id) await triggerIndexing(doc.id, "remove"); }
+        if (docs.some(doc => doc.openai_file_id)) await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "index_removed", targetType: "past_case", targetId: row.id, metadata: { documentCount: docs.length, reason: "archived" } });
+        const { error } = await supabase.from("past_cases").update({ is_archived: true, archived_at: new Date().toISOString(), archived_by: user.id }).eq("id", row.id);
+        if (error) throw new Error(error.message);
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_archived", targetType: "past_case", targetId: row.id, metadata: { title: row.title, documentCount: docs.length } });
+        toast.success("Past Case archived.");
+      } else {
+        const { error } = await supabase.from("past_cases").update({ is_archived: false, archived_at: null, archived_by: null }).eq("id", row.id);
+        if (error) throw new Error(error.message);
+        if (row.approved_for_ai_use && row.anonymisation_status === "anonymised") for (const doc of docs) await triggerIndexing(doc.id, "index");
+        await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "past_case_restored", targetType: "past_case", targetId: row.id, metadata: { title: row.title } });
+        toast.success("Past Case restored.");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["ai-knowledge-past-cases"] }); await refetchDocuments();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Past Case lifecycle action failed; records were preserved."); }
+    finally { setCaseLifecycleBusy(false); }
   };
 
   return (
@@ -535,6 +641,7 @@ export function PastCasesPanel() {
 
           {editingId ? (
             <div className="pt-4 border-t border-border space-y-3">
+              <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" className="rounded-xl" onClick={() => void handleCaseLifecycle(rowIsArchived(entries?.find((entry) => entry.id === editingId)) ? "restore" : "archive")} disabled={caseLifecycleBusy}>{caseLifecycleBusy ? "Working..." : rowIsArchived(entries?.find((entry) => entry.id === editingId)) ? "Restore" : "Archive Past Case"}</Button><Button type="button" variant="destructive" className="rounded-xl" onClick={() => setDeleteCaseDialogOpen(true)} disabled={caseLifecycleBusy}>Delete Past Case</Button></div>
               <p className="text-sm font-semibold text-foreground font-body">Supporting Documents</p>
 
               {(activeDocuments ?? []).map((doc) => (
@@ -550,6 +657,9 @@ export function PastCasesPanel() {
                       <ExternalLink className="h-4 w-4 mr-1" />
                       {openingDocId === doc.id ? "Opening..." : "Open"}
                     </Button>
+                    <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => void downloadAiKnowledgeFile(doc.file_path, doc.file_name)}>Download</Button>
+                    <label className="inline-flex items-center"><input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" disabled={replacingDocId === doc.id} onChange={(event) => void replaceDocument(doc, event.target.files?.[0] ?? null)} /><span className="inline-flex items-center justify-center rounded-xl border px-3 py-2 text-sm cursor-pointer hover:bg-accent">{replacingDocId === doc.id ? "Replacing..." : "Replace"}</span></label>
+                    <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => requestRemoveDocument(doc)} disabled={removingDocId === doc.id}>{removingDocId === doc.id ? "Removing..." : "Remove"}</Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -560,6 +670,7 @@ export function PastCasesPanel() {
                       onClick={async () => {
                         setRetryingDocId(doc.id);
                         try {
+                          await logSystemActivity({ actorProfileId: user.id!, actorRole: "admin", action: "index_retried", targetType: "past_case_document", targetId: doc.id, metadata: { pastCaseId: editingId, fileName: doc.file_name } });
                           await triggerIndexing(doc.id, "index");
                           await refetchDocuments();
                         } finally {
@@ -612,6 +723,40 @@ export function PastCasesPanel() {
           ) : null}
         </div>
       </DashboardItemDialog>
+
+      <KnowledgeActionConfirm
+        open={Boolean(removeDialogDoc)}
+        onOpenChange={(open) => { if (!open) setRemoveDialogDoc(null); }}
+        title="Remove document?"
+        description={removeDialogDoc ? `Remove "${removeDialogDoc.file_name}" from this Past Case? Its private file and AI index will be removed. Other Past Case documents will remain unchanged.` : ""}
+        confirmLabel="Remove Document"
+        busyLabel="Removing..."
+        busy={removingDocId === removeDialogDoc?.id}
+        onConfirm={confirmRemoveDocument}
+      />
+
+      <KnowledgeActionConfirm
+        open={deleteCaseDialogOpen}
+        onOpenChange={(open) => { if (!open) setDeleteCaseDialogOpen(false); }}
+        title="Delete Past Case permanently?"
+        description="This permanently removes the Past Case, its stored documents and AI indexes. This action cannot be undone."
+        confirmLabel="Delete Past Case"
+        busyLabel="Deleting..."
+        busy={caseLifecycleBusy}
+        onConfirm={() => handleCaseLifecycle("delete")}
+      />
+
+      <KnowledgeActionConfirm
+        open={Boolean(pendingDuplicateReplace)}
+        onOpenChange={(open) => { if (!open) setPendingDuplicateReplace(null); }}
+        title="Replace with duplicate file?"
+        description={pendingDuplicateReplace ? `This exact file is already attached as "${pendingDuplicateReplace.duplicateName}". Replace "${pendingDuplicateReplace.doc.file_name}" with it anyway?` : ""}
+        confirmLabel="Replace Anyway"
+        busyLabel="Replacing..."
+        destructive={false}
+        busy={replacingDocId === pendingDuplicateReplace?.doc.id}
+        onConfirm={confirmDuplicateReplace}
+      />
     </div>
   );
 }

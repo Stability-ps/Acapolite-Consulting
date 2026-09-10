@@ -16,16 +16,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { KnowledgeActionConfirm } from "@/components/dashboard/admin/KnowledgeActionConfirm";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { logSystemActivity } from "@/lib/systemActivityLog";
 import {
   runKnowledgeIndex,
+  downloadAiKnowledgeFile,
   AI_INDEX_STATUS_LABELS,
   KNOWLEDGE_STATUS_LABELS,
   buildTaxKnowledgeStoragePath,
   computeFileChecksumSha256,
+  deleteAiKnowledgeRecord,
   findTaxKnowledgeDuplicateByChecksum,
   getAiIndexStatusBadgeClass,
   getAiKnowledgeSignedUrl,
@@ -90,6 +93,8 @@ export function TaxKnowledgeLibraryPanel() {
   const [saving, setSaving] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [retryingIndex, setRetryingIndex] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { data: entries, isLoading } = useQuery({
     queryKey: ["ai-knowledge-tax-library"],
@@ -264,6 +269,21 @@ export function TaxKnowledgeLibraryPanel() {
           targetId: editingId,
           metadata: { title: payload.title },
         });
+        if (selectedFile && previousEntry?.file_path) {
+          await logSystemActivity({
+            actorProfileId: user.id,
+            actorRole: "admin",
+            action: "knowledge_file_replaced",
+            targetType: "tax_knowledge_library",
+            targetId: editingId,
+            metadata: {
+              title: payload.title,
+              previousFilePath: previousEntry.file_path,
+              filePath: selectedFile ? fileFields.file_path : null,
+              checksumSha256: fileFields.checksum_sha256,
+            },
+          });
+        }
       } else {
         const { data: inserted, error } = await supabase
           .from("tax_knowledge_library")
@@ -281,6 +301,18 @@ export function TaxKnowledgeLibraryPanel() {
           targetId: inserted.id,
           metadata: { title: payload.title, hasFile: Boolean(selectedFile) },
         });
+        await logSystemActivity({
+          actorProfileId: user.id,
+          actorRole: "admin",
+          action: "knowledge_entry_created",
+          targetType: "tax_knowledge_library",
+          targetId: inserted.id,
+          metadata: {
+            title: payload.title,
+            filePath: fileFields.file_path,
+            checksumSha256: fileFields.checksum_sha256,
+          },
+        });
       }
 
       if (savedId) {
@@ -291,6 +323,7 @@ export function TaxKnowledgeLibraryPanel() {
           await triggerIndexing(savedId, "index");
         } else if (revokingApproval || nowArchived) {
           await triggerIndexing(savedId, "remove");
+          await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "index_removed", targetType: "tax_knowledge_library", targetId: savedId, metadata: { reason: nowArchived ? "archived" : "approval_revoked" } });
 
           await logSystemActivity({
             actorProfileId: user.id,
@@ -319,10 +352,40 @@ export function TaxKnowledgeLibraryPanel() {
     if (!editingId) return;
     setRetryingIndex(true);
     try {
+      await logSystemActivity({ actorProfileId: user.id!, actorRole: "admin", action: "index_retried", targetType: "tax_knowledge_library", targetId: editingId, metadata: {} });
       await triggerIndexing(editingId, "index");
     } finally {
       setRetryingIndex(false);
     }
+  };
+
+  const handleLifecycle = async (action: "archive" | "restore" | "delete") => {
+    const row = entries?.find((entry) => entry.id === editingId);
+    if (!row || !user) return;
+    setLifecycleBusy(true);
+    try {
+      if (action === "delete") {
+        await deleteAiKnowledgeRecord("tax_knowledge_library", row.id);
+        toast.success("Tax Knowledge entry deleted.");
+        setDeleteDialogOpen(false);
+        setDialogOpen(false);
+        resetForm();
+      } else {
+        const nextStatus = action === "archive" ? "archived" : "draft";
+        const { error } = await supabase.from("tax_knowledge_library").update({ status: nextStatus, approved_for_ai_use: action === "restore" ? row.approved_for_ai_use : false, ai_index_status: action === "archive" ? "removed" : row.ai_index_status }).eq("id", row.id);
+        if (error) throw new Error(error.message);
+        if (action === "archive") {
+          await triggerIndexing(row.id, "remove");
+          await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "index_removed", targetType: "tax_knowledge_library", targetId: row.id, metadata: { reason: "archived" } });
+          await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "knowledge_entry_archived", targetType: "tax_knowledge_library", targetId: row.id, metadata: { title: row.title } });
+        }
+        if (action === "restore" && row.approved_for_ai_use && row.file_path) await triggerIndexing(row.id, "index");
+        if (action === "restore") await logSystemActivity({ actorProfileId: user.id, actorRole: "admin", action: "knowledge_entry_restored", targetType: "tax_knowledge_library", targetId: row.id, metadata: { title: row.title } });
+        toast.success(action === "archive" ? "Entry archived." : "Entry restored.");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["ai-knowledge-tax-library"] });
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Lifecycle action failed; no record was deleted."); }
+    finally { setLifecycleBusy(false); }
   };
 
   const openFile = async (row: KnowledgeRow) => {
@@ -548,10 +611,13 @@ export function TaxKnowledgeLibraryPanel() {
 
           {editingId ? (
             <div className="pt-2 border-t border-border flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => void handleLifecycle(form.status === "archived" ? "restore" : "archive")} disabled={lifecycleBusy}>{lifecycleBusy ? "Working..." : form.status === "archived" ? "Restore" : "Archive"}</Button>
+              <Button type="button" variant="destructive" className="rounded-xl" onClick={() => setDeleteDialogOpen(true)} disabled={lifecycleBusy}>Delete</Button>
               <Button type="button" variant="outline" className="rounded-xl" onClick={() => openFile(entries!.find((e) => e.id === editingId)!)} disabled={openingId === editingId || !entries?.find((e) => e.id === editingId)?.file_path}>
                 <ExternalLink className="h-4 w-4 mr-2" />
                 {openingId === editingId ? "Opening..." : "Open Current File"}
               </Button>
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => { const file = entries?.find((e) => e.id === editingId); if (file?.file_path) void downloadAiKnowledgeFile(file.file_path, file.file_name ?? undefined); }} disabled={!entries?.find((e) => e.id === editingId)?.file_path}>Download</Button>
               {entries?.find((e) => e.id === editingId)?.file_path ? (
                 <>
                   <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border font-body ${getAiIndexStatusBadgeClass(entries.find((e) => e.id === editingId)!.ai_index_status)}`}>
@@ -566,6 +632,17 @@ export function TaxKnowledgeLibraryPanel() {
           ) : null}
         </div>
       </DashboardItemDialog>
+
+      <KnowledgeActionConfirm
+        open={deleteDialogOpen}
+        onOpenChange={(open) => { if (!open) setDeleteDialogOpen(false); }}
+        title="Delete Tax Knowledge entry permanently?"
+        description="This permanently removes the source document and AI index. This action cannot be undone."
+        confirmLabel="Delete Entry"
+        busyLabel="Deleting..."
+        busy={lifecycleBusy}
+        onConfirm={() => handleLifecycle("delete")}
+      />
     </div>
   );
 }
