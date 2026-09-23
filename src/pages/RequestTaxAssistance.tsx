@@ -60,11 +60,13 @@ import {
   getPrimaryServiceForSelection,
   getStepFromSearchParam,
   getServiceIntent,
+  getRequestSource,
   isNationwideSelection,
   loadWizardDraft,
   PHONE_COUNTRY_OPTIONS,
   REQUEST_WIZARD_QUERY_KEY,
   REQUEST_WIZARD_INTENT_QUERY_KEY,
+  REQUEST_WIZARD_SOURCE_QUERY_KEY,
   saveWizardStep,
   SERVICE_CATEGORIES_BY_ENTITY,
   SOUTH_AFRICAN_PROVINCES,
@@ -391,6 +393,7 @@ export default function RequestTaxAssistance() {
 
   const currentStep = getStepFromSearchParam(searchParams.get(REQUEST_WIZARD_QUERY_KEY));
   const serviceIntent = getServiceIntent(searchParams.get(REQUEST_WIZARD_INTENT_QUERY_KEY));
+  const requestSource = getRequestSource(searchParams.get(REQUEST_WIZARD_SOURCE_QUERY_KEY));
   const entityType = draft.who.entityType;
   const categories = entityType ? SERVICE_CATEGORIES_BY_ENTITY[entityType] : [];
   const groupedSelectedServices = entityType
@@ -556,6 +559,20 @@ export default function RequestTaxAssistance() {
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
+        </Button>
+      );
+    }
+
+    if (requestSource) {
+      return (
+        <Button
+          type="button"
+          variant="ghost"
+          className="rounded-full px-0 text-slate-600"
+          onClick={() => hardRedirect(requestSource.path)}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to {requestSource.label}
         </Button>
       );
     }
