@@ -3,7 +3,12 @@
   "redirects": [
     {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "www.acapoliteconsulting.co.za" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "www.acapoliteconsulting.co.za"
+        }
+      ],
       "destination": "https://acapoliteconsulting.co.za/$1",
       "permanent": true
     }
@@ -11,26 +16,95 @@
   "headers": [
     {
       "source": "/login",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     },
     {
       "source": "/register",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     },
     {
       "source": "/reset-password",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     },
     {
       "source": "/dashboard",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     },
     {
       "source": "/dashboard/(.*)",
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     }
   ],
   "rewrites": [
+    {
+      "source": "/our-services",
+      "destination": "/our-services/index.html"
+    },
+    {
+      "source": "/sars-tax-assistance",
+      "destination": "/sars-tax-assistance/index.html"
+    },
+    {
+      "source": "/sars-debt",
+      "destination": "/sars-debt/index.html"
+    },
+    {
+      "source": "/sars-payment-arrangements",
+      "destination": "/sars-payment-arrangements/index.html"
+    },
+    {
+      "source": "/sars-compromise",
+      "destination": "/sars-compromise/index.html"
+    },
+    {
+      "source": "/sars-objections",
+      "destination": "/sars-objections/index.html"
+    },
+    {
+      "source": "/accounting-services",
+      "destination": "/accounting-services/index.html"
+    },
+    {
+      "source": "/bookkeeping-services",
+      "destination": "/bookkeeping-services/index.html"
+    },
+    {
+      "source": "/cipc-company-compliance",
+      "destination": "/cipc-company-compliance/index.html"
+    },
+    {
+      "source": "/tax-returns",
+      "destination": "/tax-returns/index.html"
+    },
+    {
+      "source": "/vat-services",
+      "destination": "/vat-services/index.html"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
