@@ -15,6 +15,7 @@ import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Paperclip } from "lucide
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useSeo } from "@/hooks/useSeo";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { getAppBaseUrl } from "@/lib/siteUrl";
 
@@ -131,6 +132,13 @@ function normalizeIdNumber(value: string) {
 }
 
 export default function Register() {
+  useSeo({
+    title: "Create an Account | Acapolite Consulting",
+    description: "Create an Acapolite Consulting client or practitioner account.",
+    path: "/register",
+    robots: "noindex, nofollow",
+  });
+
   const [accountType, setAccountType] = useState<AccountType>("client");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

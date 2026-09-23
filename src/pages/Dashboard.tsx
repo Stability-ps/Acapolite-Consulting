@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
+import { useSeo } from "@/hooks/useSeo";
 import { Navigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/AppSidebar";
@@ -12,6 +13,13 @@ import { NotificationBell } from "@/components/dashboard/NotificationBell";
 export default function Dashboard() {
   const { user, loading, role } = useAuth();
   const location = useLocation();
+
+  useSeo({
+    title: "Dashboard | Acapolite Consulting",
+    description: "Secure client and staff dashboard for Acapolite Consulting.",
+    path: location.pathname,
+    robots: "noindex, nofollow",
+  });
 
   if (loading) {
     return (

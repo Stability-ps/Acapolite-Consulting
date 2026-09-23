@@ -403,6 +403,12 @@ export default function RequestTaxAssistance() {
     title: "Request SARS & Tax Assistance | Acapolite Consulting",
     description: "Submit a secure request for SARS, tax, VAT, PAYE, accounting or CIPC assistance and get matched with a qualified professional in South Africa.",
     path: "/request-tax-assistance",
+    // Any query string (step/province/city/etc.) is a wizard-state variant
+    // of the same page, not a distinct piece of content — canonical above
+    // already points every variant at the bare path, and noindex here is
+    // belt-and-braces so Google doesn't index the parameterised URL itself
+    // even if it chooses to ignore the canonical hint.
+    robots: searchParams.toString().length > 0 ? "noindex, follow" : "index, follow",
   });
 
   useEffect(() => {

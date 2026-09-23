@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { getAppBaseUrl } from "@/lib/siteUrl";
+import { useSeo } from "@/hooks/useSeo";
 
 function getRecoveryTypeFromHash() {
   if (typeof window === "undefined") {
@@ -19,6 +20,13 @@ function getRecoveryTypeFromHash() {
 }
 
 export default function ResetPassword() {
+  useSeo({
+    title: "Reset Password | Acapolite Consulting",
+    description: "Reset your Acapolite Consulting account password.",
+    path: "/reset-password",
+    robots: "noindex, nofollow",
+  });
+
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
