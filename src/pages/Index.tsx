@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { SEO } from "@/components/seo/SEO";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
 import { Hero } from "@/components/landing/Hero";
@@ -34,6 +35,11 @@ const Index = () => {
 
   return (
     <div className="min-h-screen">
+      <SEO
+        title="Acapolite Consulting | Tax, Accounting & SARS Support South Africa"
+        description="Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa."
+        path="/"
+      />
       <LandingHeader />
       <Hero />
       <HowItWorks />

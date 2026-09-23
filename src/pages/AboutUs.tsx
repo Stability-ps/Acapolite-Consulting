@@ -1,9 +1,14 @@
+import { SEO } from "@/components/seo/SEO";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
-
-
 
 export default function AboutUs() {
   return (
+    <>
+    <SEO
+      title="About Acapolite Consulting | Tax & Business Support"
+      description="Acapolite Consulting is a professional digital platform that connects individuals and businesses with qualified tax practitioners, accountants, and compliance professionals across South Africa."
+      path="/about-us"
+    />
     <div className="min-h-screen bg-surface-gradient px-4 py-12 sm:py-16">
       <div className="mx-auto w-full max-w-5xl">
         <div className="rounded-[32px] border border-border bg-card p-6 shadow-elevated sm:p-10">
@@ -80,5 +85,6 @@ export default function AboutUs() {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,12 @@ export default function ContactUs() {
   };
 
   return (
+    <>
+    <SEO
+      title="Contact Acapolite Consulting | Tax & SARS Assistance"
+      description="Send your request and the Acapolite team will assist you. All support requests use this unified form so we can route you to the right specialist faster."
+      path="/contact-us"
+    />
     <PublicPageLayout
       eyebrow="Support"
       title="Contact Us"
@@ -165,5 +172,6 @@ export default function ContactUs() {
         </div>
       </form>
     </PublicPageLayout>
+    </>
   );
 }

@@ -1,7 +1,14 @@
+import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 
 export default function TrustSafety() {
   return (
+    <>
+    <SEO
+      title="Trust & Safety | Acapolite Consulting"
+      description="Acapolite Consulting is committed to providing a secure and trusted environment for clients and practitioners, with policies that protect user data and ensure professional conduct."
+      path="/trust-safety"
+    />
     <PublicPageLayout
       eyebrow="Trust & Safety"
       title="Trust & Safety — Acapolite Consulting"
@@ -95,5 +102,6 @@ export default function TrustSafety() {
         </section>
       </div>
     </PublicPageLayout>
+    </>
   );
 }

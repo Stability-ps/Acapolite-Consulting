@@ -1,7 +1,14 @@
+import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 
 export default function Faq() {
   return (
+    <>
+    <SEO
+      title="Frequently Asked Questions (FAQ) | Acapolite Consulting"
+      description="Quick answers to the most common questions from clients and practitioners using the Acapolite platform."
+      path="/faq"
+    />
     <PublicPageLayout
       eyebrow="Support"
       title="Frequently Asked Questions (FAQ) — Acapolite Consulting"
@@ -131,5 +138,6 @@ export default function Faq() {
         </section>
       </div>
     </PublicPageLayout>
+    </>
   );
 }
