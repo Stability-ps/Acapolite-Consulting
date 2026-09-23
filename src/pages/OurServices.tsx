@@ -19,6 +19,12 @@ const categories: ServiceCategory[] = [
     linkLabel: "View SARS & Tax Assistance",
   },
   {
+    title: "VAT Services",
+    body: "Get professional assistance with VAT registration, VAT201 returns, compliance, SARS verification and audit requests, and VAT refund matters.",
+    href: "/vat-services",
+    linkLabel: "View VAT Services",
+  },
+  {
     title: "Tax Returns",
     body: "Get help preparing and submitting personal income tax returns (ITR12) and company tax returns (ITR14), including late or outstanding submissions from prior years.",
     href: "/tax-returns",
@@ -78,11 +84,10 @@ export default function OurServices() {
           </section>
 
           <section className="rounded-2xl border border-border bg-muted/30 p-5 sm:p-6">
-            <h2 className="text-base font-semibold text-foreground">VAT &amp; PAYE</h2>
+            <h2 className="text-base font-semibold text-foreground">PAYE &amp; Payroll Taxes</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              VAT and PAYE matters — registration, returns and compliance — are handled as part of SARS &amp;
-              Tax Assistance and Accounting Services above. Submit a request and specify VAT or PAYE so it can
-              be routed to a practitioner who handles that area.
+              PAYE, UIF and SDL matters remain part of SARS &amp; Tax Assistance and Accounting Services. Submit a
+              request and specify the payroll tax type and periods involved so the matter can be routed appropriately.
             </p>
           </section>
 
