@@ -40,6 +40,7 @@ for (const route of rawHtmlSeoRoutes) {
   const canonical = `${SITE_URL}${route.path}`;
   let html = replaceTitle(template, route.title);
   html = replaceMeta(html, "name", "description", route.description);
+  html = replaceMeta(html, "name", "robots", "index, follow");
   html = replaceMeta(html, "property", "og:title", route.title);
   html = replaceMeta(html, "property", "og:description", route.description);
   html = replaceMeta(html, "property", "og:url", canonical);
@@ -49,6 +50,19 @@ for (const route of rawHtmlSeoRoutes) {
 
   const outDir = resolve(DIST, route.path.slice(1));
   mkdirSync(outDir, { recursive: true });
+  const expected = [
+    `<title>${escapeHtml(route.title)}</title>`,
+    `content="${escapeHtml(route.description)}"`,
+    `<link rel="canonical" href="${canonical}" />`,
+    'meta name="robots" content="index, follow"',
+  ];
+
+  for (const marker of expected) {
+    if (!html.includes(marker)) {
+      throw new Error(`Generated raw HTML validation failed for ${route.path}: missing ${marker}`);
+    }
+  }
+
   writeFileSync(resolve(outDir, "index.html"), html, "utf8");
 }
 
