@@ -1,10 +1,11 @@
 import { motion } from "framer-motion";
-import { BookOpen, Building2, Calculator, FileText, ShieldCheck } from "lucide-react";
+import { BookOpen, Building2, Calculator, FileText, ReceiptText, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const services = [
   { icon: FileText, title: "Tax Returns", desc: "Personal (ITR12) and company (ITR14) tax returns, including late and outstanding submissions.", href: "/tax-returns" },
   { icon: ShieldCheck, title: "SARS & Tax Assistance", desc: "SARS debt, payment arrangements, objections and disputes, audits, and general SARS compliance matters.", href: "/sars-tax-assistance" },
+  { icon: ReceiptText, title: "VAT Services", desc: "VAT registration, VAT201 returns, SARS verification and audit support, compliance reviews, and VAT refund matters.", href: "/vat-services" },
   { icon: Calculator, title: "Accounting Services", desc: "Financial statements, management accounts, payroll processing, and financial reporting.", href: "/accounting-services" },
   { icon: BookOpen, title: "Bookkeeping", desc: "Monthly bookkeeping, reconciliations, and ledger maintenance to keep your records accurate.", href: "/bookkeeping-services" },
   { icon: Building2, title: "CIPC & Company Compliance", desc: "Company registration, amendments, annual returns, and beneficial ownership filings.", href: "/cipc-company-compliance" },
@@ -33,7 +34,7 @@ export function Services() {
           </p>
         </motion.div>
 
-        <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-5">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {services.map((service, index) => (
             <motion.div
               key={service.title}
