@@ -1,10 +1,18 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react";
 import { useSeo } from "@/hooks/useSeo";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { buildServiceSchema } from "@/lib/structuredData";
+import { buildBreadcrumbSchema, buildServiceSchema } from "@/lib/structuredData";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 import { Button } from "@/components/ui/button";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 type LandingPageConfig = {
   path: string;
@@ -26,6 +34,11 @@ type LandingPageConfig = {
    */
   robots?: string;
   relatedLinks?: { label: string; href: string }[];
+  audience?: string[];
+  process?: string[];
+  faqs?: { question: string; answer: string }[];
+  officialSources?: { label: string; href: string }[];
+  reviewedDate?: string;
 };
 
 const configs: Record<string, LandingPageConfig> = {
@@ -86,6 +99,40 @@ const configs: Record<string, LandingPageConfig> = {
     ctaTitle: "Request accounting assistance",
     ctaBody:
       "Tell us what your business needs and submit a service request for professional accounting support.",
+    audience: [
+      "Businesses that need annual financial statements or management accounts",
+      "Companies preparing records for tax, funding or compliance work",
+      "Growing businesses that need recurring monthly reporting",
+      "Businesses with incomplete accounting records that need clean-up before reporting",
+    ],
+    process: [
+      "Tell us the reporting period, business type and accounting work required.",
+      "A professional reviews the available records and identifies missing information.",
+      "The accounting work is prepared from the records supplied and any agreed follow-up information.",
+      "You receive the completed work or continue securely where further tax or compliance support is required.",
+    ],
+    faqs: [
+      {
+        question: "Is accounting the same as bookkeeping?",
+        answer:
+          "No. Bookkeeping focuses on maintaining transaction records and reconciliations. Accounting uses those records to prepare statements, management reports and other financial information. A business may need both.",
+      },
+      {
+        question: "Can you help if our records are behind?",
+        answer:
+          "Yes. The request can include accounting record clean-up or historical work. The professional will first assess what records are available and what needs to be reconstructed or completed.",
+      },
+      {
+        question: "Can accounting support connect to tax work?",
+        answer:
+          "Yes. Reliable accounting records often support company tax returns and other compliance work. Where tax assistance is also required, the relevant SARS service can be handled as a separate or connected request.",
+      },
+    ],
+    relatedLinks: [
+      { label: "Bookkeeping Services", href: "/bookkeeping-services" },
+      { label: "Company Tax Returns", href: "/tax-returns" },
+      { label: "CIPC & Company Compliance", href: "/cipc-company-compliance" },
+    ],
   },
   bookkeeping: {
     path: "/bookkeeping-services",
@@ -112,6 +159,39 @@ const configs: Record<string, LandingPageConfig> = {
     ctaTitle: "Get your books up to date",
     ctaBody:
       "Submit your bookkeeping request and provide the period and type of assistance you need.",
+    audience: [
+      "Small and growing businesses that need monthly books kept up to date",
+      "Businesses preparing records for an accountant or tax practitioner",
+      "Companies with unreconciled bank, customer or supplier transactions",
+      "Businesses that need historical bookkeeping catch-up or clean-up",
+    ],
+    process: [
+      "Specify the period, volume of records and whether the work is current or historical.",
+      "Provide the available bank statements, invoices, receipts and accounting-system records.",
+      "The professional records and reconciles transactions within the agreed scope.",
+      "Outstanding items are identified so the books can support accounting, tax and management reporting.",
+    ],
+    faqs: [
+      {
+        question: "What records are normally needed for bookkeeping?",
+        answer:
+          "The exact list depends on the business, but it commonly starts with bank statements, sales and purchase records, invoices, receipts and any existing accounting-system data.",
+      },
+      {
+        question: "Can you catch up several months of bookkeeping?",
+        answer:
+          "Yes. Historical clean-up can be requested. The scope depends on how many periods are outstanding and the quality and completeness of the available records.",
+      },
+      {
+        question: "What happens after the books are up to date?",
+        answer:
+          "The records can then support management accounts, financial statements and tax work where those services are required.",
+      },
+    ],
+    relatedLinks: [
+      { label: "Accounting Services", href: "/accounting-services" },
+      { label: "Tax Returns", href: "/tax-returns" },
+    ],
   },
   cipc: {
     path: "/cipc-company-compliance",
@@ -138,6 +218,44 @@ const configs: Record<string, LandingPageConfig> = {
     ctaTitle: "Request CIPC or company compliance help",
     ctaBody:
       "Submit your request and select the company or business-support service that applies.",
+    audience: [
+      "New businesses that need company registration assistance",
+      "Companies or close corporations with annual returns to file",
+      "Entities that need beneficial ownership information filed or updated",
+      "Businesses that need company-record amendments or compliance catch-up",
+    ],
+    process: [
+      "Identify the entity and the CIPC filing or company change required.",
+      "Review the company information and supporting records needed for that transaction.",
+      "Prepare or complete the applicable CIPC filing and resolve missing information with you.",
+      "Keep the filing confirmation or updated company records as evidence of the completed transaction.",
+    ],
+    faqs: [
+      {
+        question: "Do companies and close corporations need to file annual returns?",
+        answer:
+          "Yes. CIPC states that companies and close corporations must file annual returns within the applicable annual filing period.",
+      },
+      {
+        question: "How does beneficial ownership affect annual returns?",
+        answer:
+          "CIPC currently requires beneficial ownership information to be submitted and up to date as part of the annual-return process. Its annual-return system includes beneficial ownership filing before the annual return is completed.",
+      },
+      {
+        question: "Can Acapolite help with more than one CIPC issue at once?",
+        answer:
+          "Yes. Describe all required changes or outstanding filings in the request so the professional can identify the correct sequence and supporting documents.",
+      },
+    ],
+    officialSources: [
+      { label: "CIPC — Annual Return Filing System", href: "https://annualreturns.cipc.co.za/" },
+      { label: "CIPC — Beneficial Ownership and Annual Returns", href: "https://www.cipc.co.za/?p=20728" },
+    ],
+    reviewedDate: "23 September 2026",
+    relatedLinks: [
+      { label: "Accounting Services", href: "/accounting-services" },
+      { label: "Tax Returns", href: "/tax-returns" },
+    ],
   },
   returns: {
     path: "/tax-returns",
@@ -164,6 +282,56 @@ const configs: Record<string, LandingPageConfig> = {
     ctaTitle: "Get help with your tax returns",
     ctaBody:
       "Submit your request, indicate the tax years or periods involved, and tell us whether you have access to SARS eFiling.",
+    audience: [
+      "Individuals who need help reviewing or submitting an ITR12",
+      "Companies that need assistance preparing and submitting an ITR14",
+      "Taxpayers with late or outstanding income-tax returns",
+      "Taxpayers who need supporting records organised before filing",
+    ],
+    process: [
+      "Identify the taxpayer type and the tax year or outstanding periods involved.",
+      "Review the available SARS information and supporting records.",
+      "Prepare the return information and resolve missing items before submission.",
+      "After filing, review the resulting SARS assessment or follow-up request where further assistance is required.",
+    ],
+    faqs: [
+      {
+        question: "What is an ITR12?",
+        answer:
+          "SARS uses ITR12 for the Income Tax Return for Individuals. The filing requirement and information needed depend on the taxpayer's circumstances for the relevant year of assessment.",
+      },
+      {
+        question: "What is an ITR14?",
+        answer:
+          "ITR14 is the SARS Income Tax Return for Companies. SARS provides the company return electronically through eFiling.",
+      },
+      {
+        question: "Can you help with a previous year's return?",
+        answer:
+          "Yes. Previous-year return availability depends on the taxpayer profile and the periods SARS has made available. Tell us which years are outstanding so the practitioner can review the full filing position.",
+      },
+      {
+        question: "What if SARS has already issued an assessment?",
+        answer:
+          "The assessment should be reviewed separately from preparing the return. If the issue is an assessment or decision you disagree with, the SARS objections and disputes process may be relevant.",
+      },
+    ],
+    officialSources: [
+      {
+        label: "SARS — How to submit an Income Tax Return (ITR12)",
+        href: "https://www.sars.gov.za/individuals/how-do-i-send-sars-my-return/how-to-submit-an-income-tax-return-itr12-in-respect-of-individuals/",
+      },
+      {
+        label: "SARS — Guide to Complete the Company Income Tax Return (ITR14)",
+        href: "https://www.sars.gov.za/guide-to-complete-the-income-tax-return-itr14-for-companies/",
+      },
+    ],
+    reviewedDate: "23 September 2026",
+    relatedLinks: [
+      { label: "SARS & Tax Assistance", href: "/sars-tax-assistance" },
+      { label: "SARS Objections & Disputes", href: "/sars-objections" },
+      { label: "Accounting Services", href: "/accounting-services" },
+    ],
   },
   help: {
     path: "/request-professional-help",
@@ -215,6 +383,13 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
         path: config.path,
       })}
     />
+    <JsonLd
+      data={buildBreadcrumbSchema([
+        { name: "Home", path: "/" },
+        { name: "Our Services", path: "/our-services" },
+        { name: config.eyebrow, path: config.path },
+      ])}
+    />
     <PublicPageLayout
       eyebrow={config.eyebrow}
       title={config.title}
@@ -222,6 +397,22 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
       maxWidthClassName="max-w-6xl"
     >
       <div className="space-y-10 font-body">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild><Link to="/">Home</Link></BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild><Link to="/our-services">Our Services</Link></BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{config.eyebrow}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+
         <section className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr]">
           <div>
             <h2 className="text-xl font-semibold text-foreground">How Acapolite can help</h2>
@@ -264,10 +455,44 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
           </aside>
         </section>
 
+        {config.audience && (
+          <section>
+            <h2 className="text-lg font-semibold text-foreground">Who this service is for</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {config.audience.map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-2xl border border-border bg-background/60 p-4">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                  <span className="text-sm leading-6 text-foreground">{item}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {config.process && (
+          <section className="rounded-[28px] border border-border bg-muted/30 p-6 sm:p-8">
+            <h2 className="text-lg font-semibold text-foreground">How the service works</h2>
+            <ol className="mt-4 space-y-3">
+              {config.process.map((step, index) => (
+                <li key={step} className="flex gap-3 text-sm leading-6 text-muted-foreground">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                    {index + 1}
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
         {config.relatedLinks && (
           <section className="rounded-[28px] border border-primary/15 bg-primary/5 p-6 sm:p-8">
-            <h2 className="text-lg font-semibold text-foreground">SARS debt &amp; dispute guidance</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">Choose the page that best matches the issue you need to resolve.</p>
+            <h2 className="text-lg font-semibold text-foreground">
+              {config.path === "/sars-tax-assistance" ? "SARS debt & dispute guidance" : "Related services"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Choose the specialist page that best matches the next part of your request.
+            </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {config.relatedLinks.map((item) => (
                 <Link key={item.href} to={item.href} className="inline-flex items-center justify-between rounded-xl border border-border bg-background/70 p-4 text-sm font-semibold text-primary hover:underline">
@@ -284,6 +509,44 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
             {config.whyItMatters}
           </p>
         </section>
+
+        {config.faqs && (
+          <section>
+            <h2 className="text-lg font-semibold text-foreground">Common questions</h2>
+            <div className="mt-4 space-y-5">
+              {config.faqs.map((faq) => (
+                <div key={faq.question}>
+                  <h3 className="font-semibold text-foreground">{faq.question}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{faq.answer}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {config.officialSources && (
+          <section className="rounded-2xl border border-border bg-muted/30 p-5 sm:p-6">
+            <h2 className="text-base font-semibold text-foreground">Official sources reviewed</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Process information on this page was checked against the following primary sources
+              {config.reviewedDate ? ` on ${config.reviewedDate}` : ""}.
+            </p>
+            <ul className="mt-4 space-y-2">
+              {config.officialSources.map((source) => (
+                <li key={source.href}>
+                  <a
+                    href={source.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                  >
+                    {source.label}<ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="rounded-[28px] border border-border p-6 sm:p-8">
           <h2 className="text-lg font-semibold text-foreground">What happens after you submit?</h2>
