@@ -112,7 +112,7 @@ function OfficialSources({ items }: { items: Source[] }) {
   );
 }
 
-function AssistanceCta({ title, intent }: { title: string; intent: string }) {
+function AssistanceCta({ title, intent, from }: { title: string; intent: string; from: string }) {
   return (
     <section className="rounded-[28px] border border-primary/15 bg-primary/5 p-6 sm:p-7">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Professional assistance</p>
@@ -122,7 +122,7 @@ function AssistanceCta({ title, intent }: { title: string; intent: string }) {
         available supporting records before recommending the appropriate process.
       </p>
       <Button asChild className="mt-6 w-full rounded-xl sm:w-auto">
-        <Link to={`/request-tax-assistance?step=1&intent=${intent}`}>
+        <Link to={`/request-tax-assistance?step=1&intent=${intent}&from=${encodeURIComponent(from)}`}>
           Request SARS Assistance
           <ArrowRight className="ml-2 h-4 w-4" />
         </Link>
@@ -333,7 +333,7 @@ export function SarsDebtPage() {
         </div>
       </section>
 
-      <AssistanceCta title="Get help choosing the right SARS debt process" intent="sars-debt" />
+      <AssistanceCta title="Get help choosing the right SARS debt process" intent="sars-debt" from="/sars-debt" />
     </PageShell>
   );
 }
@@ -443,7 +443,7 @@ export function SarsPaymentArrangementsPage() {
         />
       </section>
 
-      <AssistanceCta title="Prepare a SARS payment-arrangement request" intent="payment-arrangement" />
+      <AssistanceCta title="Prepare a SARS payment-arrangement request" intent="payment-arrangement" from="/sars-payment-arrangements" />
     </PageShell>
   );
 }
@@ -567,7 +567,7 @@ export function SarsCompromisePage() {
         </div>
       </section>
 
-      <AssistanceCta title="Prepare a properly supported Section 200 submission" intent="compromise" />
+      <AssistanceCta title="Prepare a properly supported Section 200 submission" intent="compromise" from="/sars-compromise" />
     </PageShell>
   );
 }
@@ -688,7 +688,7 @@ export function SarsObjectionsPage() {
         />
       </section>
 
-      <AssistanceCta title="Get help with a SARS objection or dispute" intent="objections" />
+      <AssistanceCta title="Get help with a SARS objection or dispute" intent="objections" from="/sars-objections" />
     </PageShell>
   );
 }
