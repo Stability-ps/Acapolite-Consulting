@@ -83,6 +83,11 @@ const queryClient = new QueryClient({
 function AppRoutes() {
   const location = useLocation();
 
+  useEffect(() => {
+    if (location.hash) return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname]);
+
   return (
     <Routes location={location} key={location.pathname}>
             <Route path="/" element={<Index />} />
