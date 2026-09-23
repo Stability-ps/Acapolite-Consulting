@@ -64,6 +64,7 @@ import {
   loadWizardDraft,
   PHONE_COUNTRY_OPTIONS,
   REQUEST_WIZARD_QUERY_KEY,
+  REQUEST_WIZARD_INTENT_QUERY_KEY,
   saveWizardStep,
   SERVICE_CATEGORIES_BY_ENTITY,
   SOUTH_AFRICAN_PROVINCES,
@@ -389,7 +390,7 @@ export default function RequestTaxAssistance() {
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
 
   const currentStep = getStepFromSearchParam(searchParams.get(REQUEST_WIZARD_QUERY_KEY));
-  const serviceIntent = getServiceIntent(searchParams.get("intent"));
+  const serviceIntent = getServiceIntent(searchParams.get(REQUEST_WIZARD_INTENT_QUERY_KEY));
   const entityType = draft.who.entityType;
   const categories = entityType ? SERVICE_CATEGORIES_BY_ENTITY[entityType] : [];
   const groupedSelectedServices = entityType
@@ -745,7 +746,6 @@ export default function RequestTaxAssistance() {
         source_intent: serviceIntent
           ? { key: serviceIntent.key, label: serviceIntent.label }
           : null,
-        source_path: location.pathname,
         ad_attribution: getAdAttribution(),
       },
     };
