@@ -521,7 +521,7 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
             <h2 className="mt-3 font-display text-2xl text-foreground">{config.ctaTitle}</h2>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">{config.ctaBody}</p>
             <Button asChild className="mt-6 w-full rounded-xl">
-              <Link to={`/request-tax-assistance?step=1&intent=${requestIntentByPath[config.path] ?? "sars"}`}>
+              <Link to={`/request-tax-assistance?step=1&intent=${requestIntentByPath[config.path] ?? "sars"}&from=${encodeURIComponent(config.path)}`}>
                 Submit a Service Request
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
