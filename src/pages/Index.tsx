@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { buildOrganizationSchema, buildWebsiteSchema } from "@/lib/structuredData";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
 import { Hero } from "@/components/landing/Hero";
@@ -11,7 +13,6 @@ import { Features } from "@/components/landing/Features";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Services } from "@/components/landing/Services";
 import { VerifiedPractitioners } from "@/components/landing/VerifiedPractitioners";
-import { Testimonials } from "@/components/landing/Testimonials";
 import { AreasWeServe } from "@/components/landing/AreasWeServe";
 import { CTA } from "@/components/landing/CTA";
 import { Footer } from "@/components/landing/Footer";
@@ -40,6 +41,8 @@ const Index = () => {
         description="Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa."
         path="/"
       />
+      <JsonLd data={buildOrganizationSchema()} />
+      <JsonLd data={buildWebsiteSchema()} />
       <LandingHeader />
       <Hero />
       <HowItWorks />
@@ -48,7 +51,6 @@ const Index = () => {
       <Services />
       <Features />
       <VerifiedPractitioners />
-      <Testimonials />
       <AreasWeServe />
       <DatanamixPartner />
       <CTA />
