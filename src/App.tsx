@@ -68,6 +68,7 @@ import AdminWhatsAppQA from "./pages/dashboard/admin/AdminWhatsAppQA";
 import AdminSocialMedia from "./pages/dashboard/admin/AdminSocialMedia";
 import AdminAiKnowledge from "./pages/dashboard/admin/AdminAiKnowledge";
 import NotFound from "./pages/NotFound";
+import { SarsDebtPage, SarsPaymentArrangementsPage, SarsCompromisePage, SarsObjectionsPage } from "./pages/SarsMoneyPages";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -112,6 +113,10 @@ function AppRoutes() {
             <Route path="/help-center" element={<HelpCenter />} />
             <Route path="/about-us" element={<AboutUs />} />
             <Route path="/sars-tax-assistance" element={<SarsTaxAssistanceLandingPage />} />
+            <Route path="/sars-debt" element={<SarsDebtPage />} />
+            <Route path="/sars-payment-arrangements" element={<SarsPaymentArrangementsPage />} />
+            <Route path="/sars-compromise" element={<SarsCompromisePage />} />
+            <Route path="/sars-objections" element={<SarsObjectionsPage />} />
             <Route path="/accounting-services" element={<AccountingServicesLandingPage />} />
             <Route path="/bookkeeping-services" element={<BookkeepingServicesLandingPage />} />
             <Route path="/cipc-company-compliance" element={<CipcComplianceLandingPage />} />
