@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, ExternalLink, CheckCircle2 } from "lucide-react";
 import { useSeo } from "@/hooks/useSeo";
@@ -65,7 +66,7 @@ function SarsBreadcrumbs({ items }: { items: Crumb[] }) {
         {items.map((item, index) => {
           const isLast = index === items.length - 1;
           return (
-            <div key={item.name} className="contents">
+            <Fragment key={item.name}>
               <BreadcrumbItem>
                 {isLast || !item.path ? (
                   <BreadcrumbPage>{item.name}</BreadcrumbPage>
@@ -76,7 +77,7 @@ function SarsBreadcrumbs({ items }: { items: Crumb[] }) {
                 )}
               </BreadcrumbItem>
               {!isLast && <BreadcrumbSeparator />}
-            </div>
+            </Fragment>
           );
         })}
       </BreadcrumbList>
@@ -185,7 +186,7 @@ function PageShell({
   eyebrow: string;
   crumbs: Crumb[];
   sources: Source[];
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   useSeo({
     title: `${title} | Acapolite Consulting`,
