@@ -22,7 +22,7 @@ export function Services() {
         >
           <span className="mb-2 block text-sm font-semibold uppercase tracking-widest text-primary font-body">Our Services</span>
           <h2 className="mb-4 font-display text-3xl font-bold text-foreground md:text-5xl">
-            Get Help Across Every SARS Need
+            Professional Support for Tax, SARS &amp; Business Needs
           </h2>
           <p className="mx-auto max-w-3xl text-lg text-muted-foreground font-body">
             Browse our core categories or visit the{" "}
