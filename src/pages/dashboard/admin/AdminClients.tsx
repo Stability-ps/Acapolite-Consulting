@@ -61,6 +61,26 @@ const provinces = [
 
 const SA_ID_NUMBER_LENGTH = 13;
 
+// Mirrors one row of bulk-invite-clients-to-portal's response `results`
+// array (supabase/functions/bulk-invite-clients-to-portal/index.ts).
+type BulkInviteResultRow = {
+  client_id: string;
+  status: "invited" | "existing_account_found" | "already_linked" | "invalid_email" | "not_found" | "invite_failed" | "link_verification_failed";
+  message: string | null;
+};
+
+function bulkInviteStatusLabel(status: BulkInviteResultRow["status"]) {
+  switch (status) {
+    case "invited": return "Invited";
+    case "existing_account_found": return "Existing account found";
+    case "already_linked": return "Already linked";
+    case "invalid_email": return "No valid email";
+    case "not_found": return "Not found";
+    case "link_verification_failed": return "Link failed";
+    default: return "Failed";
+  }
+}
+
 export type StaffClient = {
   archive_notes: string | null;
   archive_reason: string | null;
@@ -289,6 +309,9 @@ export default function AdminClients() {
   const [updatingInvoiceId, setUpdatingInvoiceId] = useState<string | null>(null);
   const [showInvoiceWarningActions, setShowInvoiceWarningActions] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
+  const [isBulkInviting, setIsBulkInviting] = useState(false);
+  const [bulkInviteResults, setBulkInviteResults] = useState<BulkInviteResultRow[] | null>(null);
 
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importStep, setImportStep] = useState<"upload" | "mapping" | "preview" | "confirm" | "importing" | "results">("upload");
@@ -964,6 +987,56 @@ export default function AdminClients() {
     await refreshClientViews();
   };
 
+  const toggleClientSelected = (clientId: string) => {
+    setSelectedClientIds((current) => {
+      const next = new Set(current);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  };
+
+  const allFilteredSelected = filteredClients.length > 0 && filteredClients.every((client) => selectedClientIds.has(client.id));
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedClientIds((current) => {
+      if (allFilteredSelected) {
+        const next = new Set(current);
+        filteredClients.forEach((client) => next.delete(client.id));
+        return next;
+      }
+      const next = new Set(current);
+      filteredClients.forEach((client) => next.add(client.id));
+      return next;
+    });
+  };
+
+  const bulkInviteSelectedClients = async () => {
+    const clientIds = Array.from(selectedClientIds);
+    if (clientIds.length === 0 || isBulkInviting) return;
+
+    setIsBulkInviting(true);
+    const { data, error } = await supabase.functions.invoke("bulk-invite-clients-to-portal", {
+      body: { client_ids: clientIds },
+    });
+    setIsBulkInviting(false);
+
+    if (error || data?.error) {
+      toast.error(data?.error || error?.message || "Unable to invite the selected clients to the portal.");
+      return;
+    }
+
+    const results = (data.results ?? []) as BulkInviteResultRow[];
+    setBulkInviteResults(results);
+    setSelectedClientIds(new Set());
+
+    const summary = data.summary as { invited: number; total: number } | undefined;
+    if (summary) {
+      toast.success(`Invited ${summary.invited} of ${summary.total} selected client${summary.total === 1 ? "" : "s"}.`);
+    }
+    await refreshClientViews();
+  };
+
   const exportClientList = (format: ExportFormat) => {
     exportClients(filteredClients.map(clientToExportRecord), format, "clients");
   };
@@ -987,7 +1060,17 @@ export default function AdminClients() {
   };
 
   const handleImportFileSelected = async (file: File) => {
-    const parsed = await parseImportFile(file);
+    // parseImportFile can now throw (upload hardening: oversized file, too
+    // many rows, or an unsupported extension) - previously nothing here
+    // caught a parse failure at all, so even a genuinely corrupt XLSX left
+    // the file input silently stuck with no feedback.
+    let parsed: Awaited<ReturnType<typeof parseImportFile>>;
+    try {
+      parsed = await parseImportFile(file);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't read that file.");
+      return;
+    }
     if (!parsed.headers.length || !parsed.rows.length) {
       toast.error("Couldn't read any rows from that file.");
       return;
@@ -1232,6 +1315,30 @@ export default function AdminClients() {
         </div>
       ) : null}
 
+      {canManageClients && filteredClients.length > 0 ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-accent/20 p-3">
+          <span className="text-sm text-muted-foreground font-body">
+            {selectedClientIds.size > 0 ? `${selectedClientIds.size} selected` : "Select clients to bulk-invite them to the portal"}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rounded-xl"
+            onClick={bulkInviteSelectedClients}
+            disabled={selectedClientIds.size === 0 || isBulkInviting}
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            {isBulkInviting ? "Inviting..." : `Invite Selected to Portal${selectedClientIds.size > 0 ? ` (${selectedClientIds.size})` : ""}`}
+          </Button>
+          {selectedClientIds.size > 0 ? (
+            <Button type="button" size="sm" variant="ghost" className="rounded-xl" onClick={() => setSelectedClientIds(new Set())}>
+              Clear selection
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {isLoading || isLoadingAccessibleClientIds ? (
         <div className="text-muted-foreground font-body">Loading...</div>
       ) : filteredClients.length > 0 ? (
@@ -1239,6 +1346,11 @@ export default function AdminClients() {
           <table className="w-full min-w-[820px]">
             <thead>
               <tr className="border-b border-border">
+                {canManageClients ? (
+                  <th className="whitespace-nowrap p-4 text-left">
+                    <Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAllFiltered} aria-label="Select all clients" />
+                  </th>
+                ) : null}
                 <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Name</th>
                 <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Email</th>
                 <th className="whitespace-nowrap p-4 text-left text-sm font-semibold text-foreground font-body">Type</th>
@@ -1258,6 +1370,15 @@ export default function AdminClients() {
                     className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-accent/30"
                     onClick={() => setSelectedClientId(client.id)}
                   >
+                    {canManageClients ? (
+                      <td className="whitespace-nowrap p-4" onClick={(event) => event.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedClientIds.has(client.id)}
+                          onCheckedChange={() => toggleClientSelected(client.id)}
+                          aria-label={`Select ${getClientName(client)}`}
+                        />
+                      </td>
+                    ) : null}
                     <td className="whitespace-nowrap p-4 text-sm font-medium text-foreground font-body">{getClientName(client)}</td>
                     <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{getClientEmail(client) || "-"}</td>
                     <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{getClientTypeLabel(client.client_type)}</td>
@@ -2211,6 +2332,45 @@ export default function AdminClients() {
           setSelectedClientId(clientId);
         }}
       />
+
+      <DashboardItemDialog
+        open={bulkInviteResults !== null}
+        onOpenChange={(open) => {
+          if (!open) setBulkInviteResults(null);
+        }}
+        title="Bulk Portal Invitations"
+        description="Result for each client selected for this bulk invitation."
+      >
+        <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+          {(bulkInviteResults ?? []).map((result) => {
+            const client = clients?.find((c) => c.id === result.client_id);
+            const isSuccess = result.status === "invited";
+            return (
+              <div
+                key={result.client_id}
+                className="flex flex-col gap-1 rounded-xl border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-foreground font-body">{client ? getClientName(client) : result.client_id}</p>
+                  {result.message ? <p className="text-xs text-muted-foreground font-body">{result.message}</p> : null}
+                </div>
+                <span
+                  className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${
+                    isSuccess ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
+                  }`}
+                >
+                  {bulkInviteStatusLabel(result.status)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button type="button" className="rounded-xl" onClick={() => setBulkInviteResults(null)}>
+            Done
+          </Button>
+        </div>
+      </DashboardItemDialog>
     </div>
   );
 }

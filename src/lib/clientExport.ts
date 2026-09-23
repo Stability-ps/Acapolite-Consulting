@@ -56,14 +56,33 @@ const EXPORT_COLUMNS: { key: keyof ClientExportRecord; label: string }[] = [
   { key: "created_at", label: "Joined" },
 ];
 
+// CSV/XLSX formula-injection protection (PR8): a cell whose text starts
+// with =, +, -, @, a tab, or a carriage return is interpreted as a formula
+// by Excel/Google Sheets/LibreOffice on open - not just for CSV, spreadsheet
+// apps apply the same leading-character rule to text cells in .xlsx too.
+// Every value here can originate from an uploaded CSV/XLSX (client_name,
+// notes, address fields, etc. all flow through unvalidated free text), so
+// this is applied to every exported string cell, not just ones a staff
+// member typed by hand. Prefixing a bare apostrophe is the standard
+// mitigation (OWASP CSV Injection): it forces the cell to open as literal
+// text instead of being evaluated.
+const FORMULA_TRIGGER_PATTERN = /^[=+\-@\t\r]/;
+
+export function sanitizeCellText(value: string): string {
+  return FORMULA_TRIGGER_PATTERN.test(value) ? `'${value}` : value;
+}
+
 function toCellValue(record: ClientExportRecord, key: keyof ClientExportRecord): string | number {
   const value = record[key];
   if (value === null || value === undefined) return "";
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return sanitizeCellText(value);
   return value;
 }
 
-function buildRows(records: ClientExportRecord[]) {
+// Exported so tests can assert on the exact row shape fed to both the CSV
+// and XLSX writers, instead of only the pure sanitizeCellText() helper.
+export function buildRows(records: ClientExportRecord[]) {
   return records.map((record) => {
     const row: Record<string, string | number> = {};
     for (const column of EXPORT_COLUMNS) {

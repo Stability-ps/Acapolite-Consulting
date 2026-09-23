@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { escapeCsvCell, triggerDownload } from "@/lib/clientExport";
+import { escapeCsvCell, sanitizeCellText, triggerDownload } from "@/lib/clientExport";
 import { isIssueRow, rowStatusLabel } from "@/lib/clientImportHistory";
 
 // The single report-generation implementation for import results, used both
@@ -47,16 +47,21 @@ const REPORT_COLUMNS = [
 
 function buildReportRow(row: ImportReportRowSource, enrichment: ClientEnrichmentMap): Record<string, string> {
   const enriched = row.client_id ? enrichment[row.client_id] : undefined;
+  // client_name/reason/duplicate_reason can echo back free text from a
+  // rejected row's original uploaded file (a row that failed validation was
+  // never inserted into the DB, so this is the only place that text ends
+  // up) - sanitizeCellText neutralizes any formula-injection attempt in it,
+  // same as every field in clientExport.ts.
   return {
     "Source Row": String(row.row_number),
-    "Client Name": row.client_name ?? "",
+    "Client Name": sanitizeCellText(row.client_name ?? ""),
     "Client Type": enriched?.client_type ?? "",
     Email: enriched?.email ?? "",
     Phone: enriched?.phone ?? "",
     Outcome: rowStatusLabel(row.status),
-    Reason: row.reason ?? "",
+    Reason: sanitizeCellText(row.reason ?? ""),
     "Created Client ID": row.client_id ?? "",
-    "Duplicate/Review Information": row.duplicate_reason ?? "",
+    "Duplicate/Review Information": sanitizeCellText(row.duplicate_reason ?? ""),
   };
 }
 
