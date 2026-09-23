@@ -1,12 +1,19 @@
+import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 
 export default function OurServices() {
   return (
-    <PublicPageLayout
-      eyebrow="Company"
-      title="Our Services — Acapolite Consulting"
-      description="Acapolite Consulting provides access to qualified tax practitioners and accounting professionals who assist individuals and businesses with tax compliance, financial management, and regulatory obligations. Our platform ensures reliable, secure, and professional service delivery."
-    >
+    <>
+      <SEO
+        title="Tax & Business Services South Africa | Acapolite Consulting"
+        description="Acapolite Consulting provides access to qualified tax practitioners and accounting professionals who assist individuals and businesses with tax compliance, financial management, and regulatory obligations."
+        path="/our-services"
+      />
+      <PublicPageLayout
+        eyebrow="Company"
+        title="Our Services — Acapolite Consulting"
+        description="Acapolite Consulting provides access to qualified tax practitioners and accounting professionals who assist individuals and businesses with tax compliance, financial management, and regulatory obligations. Our platform ensures reliable, secure, and professional service delivery."
+      >
       <div className="space-y-8 text-sm text-foreground font-body">
         <section>
           <h2 className="text-lg font-semibold">Individual Tax Services</h2>
@@ -102,6 +109,7 @@ export default function OurServices() {
           </ul>
         </section>
       </div>
-    </PublicPageLayout>
+      </PublicPageLayout>
+    </>
   );
 }

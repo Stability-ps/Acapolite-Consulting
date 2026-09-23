@@ -1,27 +1,14 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
+import { SEO } from "@/components/seo/SEO";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
 const PAGE_TITLE = "Data Deletion Request | Acapolite Consulting";
 const PAGE_DESCRIPTION = "Information on how to request deletion of eligible personal data associated with Acapolite Consulting services, including WhatsApp communications.";
 
 export default function DataDeletion() {
-  useEffect(() => {
-    const previousTitle = document.title;
-    const descriptionTag = document.querySelector('meta[name="description"]');
-    const previousDescription = descriptionTag?.getAttribute("content") ?? null;
-
-    document.title = PAGE_TITLE;
-    descriptionTag?.setAttribute("content", PAGE_DESCRIPTION);
-
-    return () => {
-      document.title = previousTitle;
-      if (previousDescription !== null) descriptionTag?.setAttribute("content", previousDescription);
-    };
-  }, []);
-
   return (
     <div className="min-h-screen bg-surface-gradient px-4 py-12 sm:py-16">
+      <SEO title={PAGE_TITLE} description={PAGE_DESCRIPTION} path="/data-deletion" />
       <div className="mx-auto w-full max-w-4xl">
         <div className="rounded-[32px] border border-border bg-card p-6 shadow-elevated sm:p-10">
           <AcapoliteLogo className="mb-6 h-12" />

@@ -1,5 +1,6 @@
 import { ArrowRight, BadgeCheck, BriefcaseBusiness, Building2, CheckCircle2, Coins, FileCheck2, Globe2, ShieldCheck, Sparkles, Users2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { SEO } from "@/components/seo/SEO";
 import { Footer } from "@/components/landing/Footer";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
@@ -79,6 +80,11 @@ export default function Practitioners() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title="Join Acapolite as a Tax Practitioner | Grow Your Practice"
+        description="Receive verified client requests, build trusted visibility, and manage secure client work through one professional platform built for South African tax practitioners."
+        path="/practitioners"
+      />
       <LandingHeader />
 
       <main>

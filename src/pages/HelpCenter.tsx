@@ -1,8 +1,15 @@
 import { Link } from "react-router-dom";
+import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 
 export default function HelpCenter() {
   return (
+    <>
+    <SEO
+      title="Help Center | Acapolite Consulting"
+      description="Find answers quickly or reach the Acapolite team directly. Review the FAQs and Trust & Safety policies before submitting a support request."
+      path="/help-center"
+    />
     <PublicPageLayout
       eyebrow="Support"
       title="Help Center"
@@ -48,5 +55,6 @@ export default function HelpCenter() {
         </ul>
       </div>
     </PublicPageLayout>
+    </>
   );
 }

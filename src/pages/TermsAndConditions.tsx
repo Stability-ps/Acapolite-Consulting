@@ -1,9 +1,15 @@
 import { Link } from "react-router-dom";
+import { SEO } from "@/components/seo/SEO";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
 export default function TermsAndConditions() {
   return (
     <div className="min-h-screen bg-surface-gradient px-4 py-12 sm:py-16">
+      <SEO
+        title="Terms & Conditions | Acapolite Consulting"
+        description="These Terms and Conditions govern the use of the Acapolite Consulting platform."
+        path="/terms-and-conditions"
+      />
       <div className="mx-auto w-full max-w-4xl">
         <div className="rounded-[32px] border border-border bg-card p-6 shadow-elevated sm:p-10">
           <AcapoliteLogo className="mb-6 h-12" />

@@ -1,7 +1,14 @@
+import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 
 export default function HowAcapoliteWorks() {
   return (
+    <>
+    <SEO
+      title="How Acapolite Works | Tax & SARS Assistance Platform"
+      description="Acapolite Consulting is a professional digital platform designed to connect individuals, businesses, and organizations with qualified tax practitioners, simplifying access to trusted financial and tax services."
+      path="/how-acapolite-works"
+    />
     <PublicPageLayout
       eyebrow="Company"
       title="How Acapolite Works"
@@ -127,5 +134,6 @@ export default function HowAcapoliteWorks() {
         </section>
       </div>
     </PublicPageLayout>
+    </>
   );
 }

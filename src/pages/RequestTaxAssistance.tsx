@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
+import { useSeo } from "@/hooks/useSeo";
 import { supabase } from "@/integrations/supabase/client";
 import type { Enums, TablesInsert } from "@/integrations/supabase/types";
 import { getAppBaseUrl } from "@/lib/siteUrl";
@@ -397,6 +398,12 @@ export default function RequestTaxAssistance() {
     () => buildRegisterQueryFromContact(draft.contact),
     [draft.contact],
   );
+
+  useSeo({
+    title: "Request SARS & Tax Assistance | Acapolite Consulting",
+    description: "Submit a secure request for SARS, tax, VAT, PAYE, accounting or CIPC assistance and get matched with a qualified professional in South Africa.",
+    path: "/request-tax-assistance",
+  });
 
   useEffect(() => {
     saveWizardStep("who", draft.who);
@@ -1015,6 +1022,7 @@ export default function RequestTaxAssistance() {
   return (
     <div className="min-h-screen bg-[#FAFAF6] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
+        <h1 className="sr-only">Request SARS &amp; Tax Assistance — Acapolite Consulting</h1>
         <div className="flex flex-wrap items-center justify-between gap-4">
           {renderBackControl()}
           <AcapoliteLogo className="h-11" />
@@ -1029,7 +1037,7 @@ export default function RequestTaxAssistance() {
             {currentStep === 1 ? (
               <section className="rounded-[2rem] border border-[#E7E7E7] bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 1</p>
-                <h1 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">Who is this request for?</h1>
+                <h2 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">Who is this request for?</h2>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                   This helps us match you with the right type of professional.
                 </p>
@@ -1114,7 +1122,7 @@ export default function RequestTaxAssistance() {
             {currentStep === 2 ? (
               <section className="rounded-[2rem] border border-[#E7E7E7] bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 2</p>
-                <h1 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">What do you need help with?</h1>
+                <h2 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">What do you need help with?</h2>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                   Select all that apply so we can match you with the right professionals.
                 </p>
@@ -1233,7 +1241,7 @@ export default function RequestTaxAssistance() {
             {currentStep === 3 && entityType ? (
               <section className="rounded-[2rem] border border-[#E7E7E7] bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 3</p>
-                <h1 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">Tell us more about your request</h1>
+                <h2 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">Tell us more about your request</h2>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                   This helps us match you with the right professionals who can assist you.
                 </p>
@@ -1357,7 +1365,7 @@ export default function RequestTaxAssistance() {
             {currentStep === 4 ? (
               <section className="rounded-[2rem] border border-[#E7E7E7] bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 4</p>
-                <h1 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">Your contact information</h1>
+                <h2 className="mt-3 text-2xl font-black tracking-[-0.03em] text-[#102B46] sm:text-3xl">Your contact information</h2>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                   Please provide your details so we can connect you with the right professionals.
                 </p>
@@ -1470,7 +1478,7 @@ export default function RequestTaxAssistance() {
             {currentStep === 5 ? (
               <section className="rounded-[2.5rem] border border-[#E7E7E7] bg-white p-6 shadow-sm sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#C49A22]">Step 5</p>
-                <h1 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">Review your request</h1>
+                <h2 className="mt-3 text-3xl font-black tracking-[-0.03em] text-[#102B46]">Review your request</h2>
                 <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
                   Please review your details below before submitting your request.
                 </p>

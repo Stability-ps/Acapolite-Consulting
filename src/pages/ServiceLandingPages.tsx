@@ -1,10 +1,11 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { useSeo } from "@/hooks/useSeo";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 import { Button } from "@/components/ui/button";
 
 type LandingPageConfig = {
+  path: string;
   eyebrow: string;
   title: string;
   description: string;
@@ -18,6 +19,7 @@ type LandingPageConfig = {
 
 const configs: Record<string, LandingPageConfig> = {
   sars: {
+    path: "/sars-tax-assistance",
     eyebrow: "SARS & Tax Assistance",
     title: "Professional SARS & Tax Assistance Across South Africa",
     description:
@@ -43,6 +45,7 @@ const configs: Record<string, LandingPageConfig> = {
       "Submit a secure service request and select the SARS or tax services relevant to your situation.",
   },
   accounting: {
+    path: "/accounting-services",
     eyebrow: "Accounting Services",
     title: "Professional Accounting Services for South African Businesses",
     description:
@@ -68,6 +71,7 @@ const configs: Record<string, LandingPageConfig> = {
       "Tell us what your business needs and submit a service request for professional accounting support.",
   },
   bookkeeping: {
+    path: "/bookkeeping-services",
     eyebrow: "Bookkeeping Services",
     title: "Professional Bookkeeping Services Across South Africa",
     description:
@@ -93,6 +97,7 @@ const configs: Record<string, LandingPageConfig> = {
       "Submit your bookkeeping request and provide the period and type of assistance you need.",
   },
   cipc: {
+    path: "/cipc-company-compliance",
     eyebrow: "CIPC & Company Compliance",
     title: "CIPC & Company Compliance Support",
     description:
@@ -118,6 +123,7 @@ const configs: Record<string, LandingPageConfig> = {
       "Submit your request and select the company or business-support service that applies.",
   },
   returns: {
+    path: "/tax-returns",
     eyebrow: "Tax Returns",
     title: "Personal & Company Tax Return Assistance",
     description:
@@ -143,6 +149,7 @@ const configs: Record<string, LandingPageConfig> = {
       "Submit your request, indicate the tax years or periods involved, and tell us whether you have access to SARS eFiling.",
   },
   help: {
+    path: "/request-professional-help",
     eyebrow: "Professional Business Support",
     title: "Get Professional Tax, Accounting & Business Help",
     description:
@@ -169,26 +176,12 @@ const configs: Record<string, LandingPageConfig> = {
   },
 };
 
-function usePageMeta(title: string, description: string) {
-  useEffect(() => {
-    const previousTitle = document.title;
-    const meta = document.querySelector('meta[name="description"]');
-    const previousDescription = meta?.getAttribute("content") ?? null;
-
-    document.title = title;
-    meta?.setAttribute("content", description);
-
-    return () => {
-      document.title = previousTitle;
-      if (meta && previousDescription !== null) {
-        meta.setAttribute("content", previousDescription);
-      }
-    };
-  }, [title, description]);
-}
-
 function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
-  usePageMeta(`${config.title} | Acapolite Consulting`, config.metaDescription);
+  useSeo({
+    title: `${config.title} | Acapolite Consulting`,
+    description: config.metaDescription,
+    path: config.path,
+  });
 
   return (
     <PublicPageLayout
