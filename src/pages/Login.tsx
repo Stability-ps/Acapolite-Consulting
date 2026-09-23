@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useSeo } from "@/hooks/useSeo";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
@@ -17,6 +18,13 @@ export default function Login() {
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [resending, setResending] = useState(false);
   const { dashboardPath, loading: authLoading, user, isConfirmed } = useAuth();
+
+  useSeo({
+    title: "Sign In | Acapolite Consulting",
+    description: "Sign in to your Acapolite Consulting account.",
+    path: "/login",
+    robots: "noindex, nofollow",
+  });
 
   useEffect(() => {
     if (!authLoading && user && isConfirmed) {

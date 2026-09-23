@@ -1,8 +1,16 @@
 import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import { useSeo } from "@/hooks/useSeo";
 
 const NotFound = () => {
   const location = useLocation();
+
+  useSeo({
+    title: "Page Not Found | Acapolite Consulting",
+    description: "The page you're looking for doesn't exist or may have moved.",
+    path: location.pathname,
+    robots: "noindex, nofollow",
+  });
 
   useEffect(() => {
     console.error("404 Error: User attempted to access non-existent route:", location.pathname);

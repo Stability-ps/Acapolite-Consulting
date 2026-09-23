@@ -70,7 +70,7 @@ export function AreasWeServe() {
             >
               <li>
                 <Link
-                  to={`/request-tax-assistance?step=1&province=${encodeURIComponent(area.province)}`}
+                  to="/request-tax-assistance?step=1"
                   className="font-bold text-[#20242A] underline-offset-4 hover:text-primary hover:underline"
                 >
                   {area.province}
@@ -79,7 +79,7 @@ export function AreasWeServe() {
               {area.cities.map((city) => (
                 <li key={city}>
                   <Link
-                    to={`/request-tax-assistance?step=1&province=${encodeURIComponent(area.province)}&city=${encodeURIComponent(city)}`}
+                    to="/request-tax-assistance?step=1"
                     className="text-[#2F353D] underline-offset-4 hover:text-primary hover:underline"
                   >
                     {city}
