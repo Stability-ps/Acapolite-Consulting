@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Search, Trash2, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowRight, Download, Loader2, Search, Trash2, Upload, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { DeletePlatformUserDialog } from "@/components/dashboard/DeletePlatformUserDialog";
+import { ClientImportPreview } from "@/components/dashboard/admin/ClientImportPreview";
+import { ClientImportResults, type ImportRowResult, type ImportSummary } from "@/components/dashboard/admin/ClientImportResults";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import {
@@ -22,6 +24,26 @@ import {
   isOrganisationClientType,
   type ClientTypeValue,
 } from "@/lib/clientRisk";
+import {
+  IMPORT_FIELD_KEYS,
+  IMPORT_FIELD_LABELS,
+  applyColumnMapping,
+  downloadImportTemplate,
+  guessColumnMapping,
+  parseImportFile,
+  type ColumnMapping,
+  type ImportFieldKey,
+} from "@/lib/clientImport";
+import {
+  buildPreviewRows,
+  defaultRowAction,
+  normalizeEmail as normalizeImportEmail,
+  summarizeRowActions,
+  type ExistingClientRecord,
+  type PreviewRow,
+  type UserAction,
+} from "@/lib/clientImportPreview";
+import { exportClients, type ClientExportRecord, type ExportFormat } from "@/lib/clientExport";
 
 const provinces = [
   "Gauteng",
@@ -37,19 +59,21 @@ const provinces = [
 
 const SA_ID_NUMBER_LENGTH = 13;
 
-type StaffClient = {
+export type StaffClient = {
   archive_notes: string | null;
   archive_reason: string | null;
   archived_at: string | null;
   archived_by: string | null;
   id: string;
-  profile_id: string;
+  profile_id: string | null;
   created_by: string | null;
   client_type: string;
   company_registration_number: string | null;
   first_name: string | null;
   last_name: string | null;
   company_name: string | null;
+  email: string | null;
+  phone: string | null;
   tax_number: string | null;
   sars_reference_number: string | null;
   id_number: string | null;
@@ -180,6 +204,55 @@ function formatCurrency(value: number) {
   return `R ${Number(value || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// clients.email/clients.phone are the canonical business contact fields
+// (a no-portal client only has these). profiles.email/profiles.phone are
+// only a fallback for older portal-linked records that predate the
+// decouple-from-portal-accounts work.
+export function getClientEmail(client: StaffClient) {
+  return client.email || client.profiles?.email || null;
+}
+
+export function getClientPhone(client: StaffClient) {
+  return client.phone || client.profiles?.phone || null;
+}
+
+function clientToExportRecord(client: StaffClient): ClientExportRecord {
+  return {
+    client_code: client.client_code,
+    client_type: client.client_type,
+    first_name: client.first_name,
+    last_name: client.last_name,
+    company_name: client.company_name,
+    company_registration_number: client.company_registration_number,
+    id_number: client.id_number,
+    tax_number: client.tax_number,
+    sars_reference_number: client.sars_reference_number,
+    vat_number: client.vat_number,
+    email: getClientEmail(client),
+    phone: getClientPhone(client),
+    address_line_1: client.address_line_1,
+    address_line_2: client.address_line_2,
+    city: client.city,
+    province: client.province,
+    postal_code: client.postal_code,
+    country: client.country,
+    notes: client.notes,
+    returns_filed: client.returns_filed,
+    sars_outstanding_debt: client.sars_outstanding_debt,
+    is_archived: client.is_archived,
+    created_at: client.created_at,
+  };
+}
+
+function ConfirmTile({ label, value, className }: { label: string; value: number; className?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-3 text-center">
+      <p className={`text-2xl font-bold ${className ?? "text-foreground"}`}>{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
 function canEditClientRecord(client: StaffClient | null, role: string | null, userId?: string) {
   if (!client) {
     return false;
@@ -213,6 +286,20 @@ export default function AdminClients() {
   const [isUpdatingReturnStatus, setIsUpdatingReturnStatus] = useState(false);
   const [updatingInvoiceId, setUpdatingInvoiceId] = useState<string | null>(null);
   const [showInvoiceWarningActions, setShowInvoiceWarningActions] = useState(false);
+  const [isInviting, setIsInviting] = useState(false);
+
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importStep, setImportStep] = useState<"upload" | "mapping" | "preview" | "confirm" | "importing" | "results">("upload");
+  const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importRawRows, setImportRawRows] = useState<Record<string, string>[]>([]);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({});
+  const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
+  const [rowActions, setRowActions] = useState<Record<number, UserAction>>({});
+  const [importBatchId, setImportBatchId] = useState<string | null>(null);
+  const [isBuildingPreview, setIsBuildingPreview] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResults, setImportResults] = useState<{ summary: ImportSummary; rows: ImportRowResult[] } | null>(null);
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageClients = role === "consultant" || hasStaffPermission("can_manage_clients");
@@ -222,6 +309,8 @@ export default function AdminClients() {
   const canViewInvoices = hasStaffPermission("can_view_invoices");
   const canResolveReturnWarnings = canManageClients || canViewClientWorkspace;
   const canResolveInvoiceWarnings = canManageInvoices || canViewInvoices || canViewClientWorkspace;
+  const canExportClients = hasStaffPermission("can_export_clients");
+  const canImportClients = hasStaffPermission("can_import_clients");
   const practitionerFilterId = searchParams.get("practitionerId") ?? "";
 
   const { data: clients, isLoading } = useQuery({
@@ -327,8 +416,8 @@ export default function AdminClients() {
 
     return scopedClients.filter((client) => {
       const name = getClientName(client).toLowerCase();
-      const email = (client.profiles?.email || "").toLowerCase();
-      const phone = (client.profiles?.phone || "").toLowerCase();
+      const email = (getClientEmail(client) || "").toLowerCase();
+      const phone = (getClientPhone(client) || "").toLowerCase();
       const taxNumber = (client.tax_number || "").toLowerCase();
       const clientCode = (client.client_code || "").toLowerCase();
       const clientType = (client.client_type || "").toLowerCase();
@@ -473,7 +562,7 @@ export default function AdminClients() {
       email: client.profiles?.email || "",
       password: "",
       fullName: client.profiles?.full_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || client.company_name || "",
-      phone: client.profiles?.phone || "",
+      phone: getClientPhone(client) || "",
       clientType: CLIENT_TYPE_OPTIONS.some((option) => option.value === client.client_type)
         ? (client.client_type as ClientTypeValue)
         : "individual",
@@ -693,18 +782,24 @@ export default function AdminClients() {
     const firstName = formState.firstName.trim() || nameParts.firstName;
     const lastName = formState.lastName.trim() || nameParts.lastName;
 
-    const { error: profileUpdateError } = await supabase
-      .from("profiles")
-      .update({
-        full_name: resolvedFullName || null,
-        phone: formState.phone.trim() || null,
-      })
-      .eq("id", selectedClient.profile_id);
+    // Business phone lives on clients.phone (the canonical field for both
+    // portal-linked and no-portal clients). profiles.phone belongs to the
+    // portal account's own identity and is deliberately left untouched here
+    // - editing a client's business contact details should never silently
+    // change the credentials/identity of the linked portal login.
+    if (selectedClient.profile_id) {
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update({
+          full_name: resolvedFullName || null,
+        })
+        .eq("id", selectedClient.profile_id);
 
-    if (profileUpdateError) {
-      toast.error(profileUpdateError.message);
-      setIsSavingEdit(false);
-      return;
+      if (profileUpdateError) {
+        toast.error(profileUpdateError.message);
+        setIsSavingEdit(false);
+        return;
+      }
     }
 
     const { error: clientUpdateError } = await supabase
@@ -719,6 +814,7 @@ export default function AdminClients() {
         company_name: isOrganisationClientType(formState.clientType)
           ? formState.companyName.trim() || null
           : null,
+        phone: formState.phone.trim() || null,
         tax_number: formState.taxNumber.trim() || null,
         sars_reference_number: formState.sarsReferenceNumber.trim() || null,
         id_number: formState.clientType === "individual" ? formState.idNumber.trim() || null : null,
@@ -840,6 +936,142 @@ export default function AdminClients() {
     await refreshClientViews();
   };
 
+  const inviteClientToPortal = async () => {
+    if (!selectedClient) return;
+
+    setIsInviting(true);
+    const { data, error } = await supabase.functions.invoke("invite-client-to-portal", {
+      body: { client_id: selectedClient.id },
+    });
+    setIsInviting(false);
+
+    if (error || data?.error) {
+      toast.error(data?.error || error?.message || "Unable to invite this client to the portal.");
+      return;
+    }
+
+    if (data.status === "existing_account_found") {
+      toast.error(`A portal account already exists for ${data.existing_email}. Link it manually before inviting.`);
+      return;
+    }
+
+    toast.success("Portal invitation sent.");
+    await refreshClientViews();
+  };
+
+  const exportClientList = (format: ExportFormat) => {
+    exportClients(filteredClients.map(clientToExportRecord), format, "clients");
+  };
+
+  const exportSingleClient = (client: StaffClient, format: ExportFormat) => {
+    exportClients([clientToExportRecord(client)], format, `client-${client.client_code || client.id}`);
+  };
+
+  const resetImportState = () => {
+    setImportStep("upload");
+    setImportFileName(null);
+    setImportHeaders([]);
+    setImportRawRows([]);
+    setColumnMapping({});
+    setPreviewRows([]);
+    setRowActions({});
+    setImportBatchId(null);
+    setImportResults(null);
+    setIsBuildingPreview(false);
+    setIsImporting(false);
+  };
+
+  const handleImportFileSelected = async (file: File) => {
+    const parsed = await parseImportFile(file);
+    if (!parsed.headers.length || !parsed.rows.length) {
+      toast.error("Couldn't read any rows from that file.");
+      return;
+    }
+    setImportFileName(file.name);
+    setImportHeaders(parsed.headers);
+    setImportRawRows(parsed.rows);
+    setColumnMapping(guessColumnMapping(parsed.headers));
+    setImportBatchId(null);
+    setImportStep("mapping");
+  };
+
+  const updateColumnMapping = (field: ImportFieldKey, header: string) => {
+    setColumnMapping((current) => ({ ...current, [field]: header === "__none__" ? undefined : header }));
+    setImportBatchId(null);
+  };
+
+  const buildImportPreview = async () => {
+    setIsBuildingPreview(true);
+    try {
+      const mappedRows = importRawRows.map((raw) => applyColumnMapping(raw, columnMapping));
+
+      const { data: existingClientsData, error: existingClientsError } = await supabase
+        .from("clients")
+        .select("id,email,phone,vat_number,tax_number,sars_reference_number,company_registration_number,client_code,first_name,last_name,company_name");
+      if (existingClientsError) {
+        toast.error(existingClientsError.message);
+        return;
+      }
+
+      const uniqueEmails = Array.from(new Set(mappedRows.map((row) => normalizeImportEmail(row.email)).filter(Boolean)));
+      const { data: profilesData, error: profilesError } = uniqueEmails.length
+        ? await supabase.from("profiles").select("email").in("email", uniqueEmails)
+        : { data: [] as { email: string | null }[], error: null };
+      if (profilesError) {
+        toast.error(profilesError.message);
+        return;
+      }
+      const portalEmails = new Set((profilesData ?? []).map((p) => normalizeImportEmail(p.email ?? "")).filter(Boolean));
+
+      const rows = buildPreviewRows(mappedRows, (existingClientsData ?? []) as ExistingClientRecord[], portalEmails);
+      setPreviewRows(rows);
+      setRowActions(Object.fromEntries(rows.map((row) => [row.rowNumber, defaultRowAction(row.status)])));
+      setImportBatchId(null);
+      setImportStep("preview");
+    } finally {
+      setIsBuildingPreview(false);
+    }
+  };
+
+  const updateRowAction = (rowNumber: number, action: UserAction) => {
+    setRowActions((current) => ({ ...current, [rowNumber]: action }));
+  };
+
+  const runClientImport = async () => {
+    if (isImporting) return;
+    setIsImporting(true);
+    setImportStep("importing");
+    const batchId = importBatchId ?? crypto.randomUUID();
+    if (!importBatchId) setImportBatchId(batchId);
+
+    try {
+      const payloadRows = previewRows.map((row) => ({
+        row_number: row.rowNumber,
+        mapped: row.mapped,
+        user_action: rowActions[row.rowNumber] ?? defaultRowAction(row.status),
+      }));
+
+      const { data, error } = await supabase.functions.invoke("import-clients", {
+        body: { batch_id: batchId, source_filename: importFileName, rows: payloadRows },
+      });
+
+      if (error || data?.error) {
+        toast.error(data?.error || error?.message || "Unable to import clients.");
+        setImportStep("confirm");
+        return;
+      }
+
+      setImportResults({ summary: data.summary, rows: data.rows });
+      setImportStep("results");
+      await refreshClientViews();
+      if (data.summary.imported_count > 0) {
+        toast.success(`Imported ${data.summary.imported_count} client${data.summary.imported_count === 1 ? "" : "s"}.`);
+      }
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -864,6 +1096,44 @@ export default function AdminClients() {
               className="rounded-xl pl-9"
             />
           </div>
+          {canExportClients ? (
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl flex-1 sm:flex-none"
+                onClick={() => exportClientList("csv")}
+                disabled={!filteredClients.length}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                CSV
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl flex-1 sm:flex-none"
+                onClick={() => exportClientList("xlsx")}
+                disabled={!filteredClients.length}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                XLSX
+              </Button>
+            </div>
+          ) : null}
+          {canImportClients ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl flex-1 sm:flex-none"
+              onClick={() => {
+                resetImportState();
+                setIsImportOpen(true);
+              }}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Import Clients
+            </Button>
+          ) : null}
           {canShowClientCreationControls ? (
             <div className="flex items-center gap-3">
               <Button
@@ -943,7 +1213,7 @@ export default function AdminClients() {
                     onClick={() => setSelectedClientId(client.id)}
                   >
                     <td className="whitespace-nowrap p-4 text-sm font-medium text-foreground font-body">{getClientName(client)}</td>
-                    <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{client.profiles?.email || "-"}</td>
+                    <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{getClientEmail(client) || "-"}</td>
                     <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{getClientTypeLabel(client.client_type)}</td>
                     <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{client.tax_number || "-"}</td>
                     <td className="whitespace-nowrap p-4 text-sm text-muted-foreground font-body">{client.client_code || "-"}</td>
@@ -1313,11 +1583,11 @@ export default function AdminClients() {
               </div>
               <div className="min-w-0 rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Email</p>
-                <p className={detailValueClass}>{selectedClient.profiles?.email || "Not provided"}</p>
+                <p className={detailValueClass}>{getClientEmail(selectedClient) || "Not provided"}</p>
               </div>
               <div className="min-w-0 rounded-2xl border border-border bg-accent/30 p-4">
                 <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">Phone</p>
-                <p className={detailValueClass}>{selectedClient.profiles?.phone || "Not provided"}</p>
+                <p className={detailValueClass}>{getClientPhone(selectedClient) || "Not provided"}</p>
               </div>
             </div>
 
@@ -1451,17 +1721,41 @@ export default function AdminClients() {
               </div>
             ) : null}
 
-            {canEditSelectedClient || canViewClientWorkspace ? (
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                  onClick={() => setIsDeleteClientOpen(true)}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Client
-                </Button>
+            {canEditSelectedClient || canViewClientWorkspace || canExportClients ? (
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+                {canExportClients ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => exportSingleClient(selectedClient, "csv")}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export Client
+                  </Button>
+                ) : null}
+                {!selectedClient.profile_id && canEditSelectedClient ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={inviteClientToPortal}
+                    disabled={isInviting || !getClientEmail(selectedClient)}
+                  >
+                    {isInviting ? "Inviting..." : "Invite to Portal"}
+                  </Button>
+                ) : null}
+                {selectedClient.profile_id ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                    onClick={() => setIsDeleteClientOpen(true)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Client
+                  </Button>
+                ) : null}
                 {canEditSelectedClient ? (
                   <Button
                     type="button"
@@ -1679,6 +1973,155 @@ export default function AdminClients() {
         ) : selectedClient ? (
           <div className="rounded-2xl border border-border bg-accent/20 p-4 text-sm text-muted-foreground font-body">
             Practitioners can only edit clients they created.
+          </div>
+        ) : null}
+      </DashboardItemDialog>
+
+      <DashboardItemDialog
+        open={canImportClients && isImportOpen}
+        onOpenChange={(open) => {
+          if (importStep === "importing") return;
+          setIsImportOpen(open);
+          if (!open) resetImportState();
+        }}
+        title="Import Clients"
+        description="Upload a CSV or XLSX file, map its columns, review a dry-run preview, then confirm the write. Nothing is written until you confirm."
+      >
+        {importStep === "upload" ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-border bg-accent/30 p-4">
+              <p className="text-sm text-foreground font-body">
+                Upload a CSV or XLSX file of clients. You'll map columns and review every row before anything is written.
+              </p>
+            </div>
+            <div>
+              <Button type="button" variant="outline" className="rounded-xl" onClick={downloadImportTemplate}>
+                Download Template
+              </Button>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-foreground font-body">File</label>
+              <Input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                className="rounded-xl"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void handleImportFileSelected(file);
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {importStep === "mapping" ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground font-body">
+              Match each column from "{importFileName}" to a client field. Unmapped fields are left blank.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {IMPORT_FIELD_KEYS.map((field) => (
+                <div key={field}>
+                  <label className="mb-2 block text-sm font-semibold text-foreground font-body">{IMPORT_FIELD_LABELS[field]}</label>
+                  <Select value={columnMapping[field] ?? "__none__"} onValueChange={(value) => updateColumnMapping(field, value)}>
+                    <SelectTrigger className="w-full rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Not mapped</SelectItem>
+                      {importHeaders.map((header) => (
+                        <SelectItem key={header} value={header}>{header}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => setImportStep("upload")}>
+                Back
+              </Button>
+              <Button type="button" className="rounded-xl" onClick={buildImportPreview} disabled={isBuildingPreview}>
+                {isBuildingPreview ? "Checking..." : "Continue to Preview"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {importStep === "preview" ? (
+          <div className="space-y-4">
+            <ClientImportPreview rows={previewRows} rowActions={rowActions} onRowActionChange={updateRowAction} />
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => setImportStep("mapping")}>
+                Back to Mapping
+              </Button>
+              <Button type="button" className="rounded-xl" onClick={() => setImportStep("confirm")} disabled={!previewRows.length}>
+                Continue to Import
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {importStep === "confirm" ? (() => {
+          const counts = summarizeRowActions(previewRows, rowActions);
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <ConfirmTile label="Source rows" value={previewRows.length} />
+                <ConfirmTile label="Will be imported" value={counts.toImport} className="text-emerald-600" />
+                <ConfirmTile label="Will be skipped" value={counts.toSkip} className="text-slate-600" />
+                <ConfirmTile label="Blocked" value={counts.blocked} className="text-red-600" />
+              </div>
+              {counts.forcedImportAnyway > 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 font-body">
+                  {counts.forcedImportAnyway} row(s) will be imported despite a duplicate warning (explicitly approved via "Import Anyway"). This is recorded in the import audit trail.
+                </div>
+              ) : null}
+              <p className="text-xs text-muted-foreground font-body">
+                Every row is re-checked against the current client database immediately before writing, so a change made since this preview (e.g. by another staff member) can still block or alter its outcome.
+              </p>
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => setImportStep("preview")} disabled={isImporting}>
+                  Back to Preview
+                </Button>
+                <Button type="button" className="rounded-xl" onClick={runClientImport} disabled={isImporting}>
+                  Confirm Import
+                </Button>
+              </div>
+            </div>
+          );
+        })() : null}
+
+        {importStep === "importing" ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="font-body text-sm font-medium text-foreground">Importing clients…</p>
+            <p className="font-body text-xs text-muted-foreground">This can take a moment for larger files. Please don't close this window.</p>
+          </div>
+        ) : null}
+
+        {importStep === "results" && importResults ? (
+          <div className="space-y-4">
+            <ClientImportResults
+              summary={importResults.summary}
+              rows={importResults.rows}
+              onOpenClient={(clientId) => {
+                setIsImportOpen(false);
+                setSelectedClientId(clientId);
+              }}
+            />
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                className="rounded-xl"
+                onClick={() => {
+                  setIsImportOpen(false);
+                  resetImportState();
+                }}
+              >
+                Done
+              </Button>
+            </div>
           </div>
         ) : null}
       </DashboardItemDialog>

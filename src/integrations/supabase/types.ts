@@ -539,6 +539,120 @@ export type Database = {
           },
         ]
       }
+      client_import_batch_rows: {
+        Row: {
+          batch_id: string
+          client_id: string | null
+          client_name: string | null
+          created_at: string
+          duplicate_reason: string | null
+          forced_import_anyway: boolean
+          id: string
+          matched_client_ids: string[] | null
+          reason: string | null
+          row_number: number
+          status: string
+        }
+        Insert: {
+          batch_id: string
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string
+          duplicate_reason?: string | null
+          forced_import_anyway?: boolean
+          id?: string
+          matched_client_ids?: string[] | null
+          reason?: string | null
+          row_number: number
+          status: string
+        }
+        Update: {
+          batch_id?: string
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string
+          duplicate_reason?: string | null
+          forced_import_anyway?: boolean
+          id?: string
+          matched_client_ids?: string[] | null
+          reason?: string | null
+          row_number?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_import_batch_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "client_import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_import_batch_rows_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "client_dashboard_summary"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "client_import_batch_rows_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_import_batches: {
+        Row: {
+          actor_profile_id: string | null
+          blocked_count: number
+          completed_at: string | null
+          created_at: string
+          failed_count: number
+          id: string
+          imported_count: number
+          skipped_count: number
+          source_filename: string | null
+          status: string
+          total_rows: number
+        }
+        Insert: {
+          actor_profile_id?: string | null
+          blocked_count?: number
+          completed_at?: string | null
+          created_at?: string
+          failed_count?: number
+          id: string
+          imported_count?: number
+          skipped_count?: number
+          source_filename?: string | null
+          status?: string
+          total_rows?: number
+        }
+        Update: {
+          actor_profile_id?: string | null
+          blocked_count?: number
+          completed_at?: string | null
+          created_at?: string
+          failed_count?: number
+          id?: string
+          imported_count?: number
+          skipped_count?: number
+          source_filename?: string | null
+          status?: string
+          total_rows?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_import_batches_actor_profile_id_fkey"
+            columns: ["actor_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           address_line_1: string | null
@@ -556,14 +670,16 @@ export type Database = {
           country: string | null
           created_at: string
           created_by: string | null
+          email: string | null
           first_name: string | null
           id: string
           id_number: string | null
           is_archived: boolean
           last_name: string | null
           notes: string | null
+          phone: string | null
           postal_code: string | null
-          profile_id: string
+          profile_id: string | null
           province: string | null
           returns_filed: boolean
           sars_outstanding_debt: number
@@ -588,14 +704,16 @@ export type Database = {
           country?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string | null
           first_name?: string | null
           id?: string
           id_number?: string | null
           is_archived?: boolean
           last_name?: string | null
           notes?: string | null
+          phone?: string | null
           postal_code?: string | null
-          profile_id: string
+          profile_id?: string | null
           province?: string | null
           returns_filed?: boolean
           sars_outstanding_debt?: number
@@ -620,14 +738,16 @@ export type Database = {
           country?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string | null
           first_name?: string | null
           id?: string
           id_number?: string | null
           is_archived?: boolean
           last_name?: string | null
           notes?: string | null
+          phone?: string | null
           postal_code?: string | null
-          profile_id?: string
+          profile_id?: string | null
           province?: string | null
           returns_filed?: boolean
           sars_outstanding_debt?: number
@@ -3702,7 +3822,9 @@ export type Database = {
         Row: {
           assigned_clients_only: boolean
           can_approve_sars_correspondence: boolean
+          can_export_clients: boolean
           can_generate_sars_correspondence: boolean
+          can_import_clients: boolean
           can_manage_cases: boolean
           can_manage_clients: boolean
           can_manage_invoices: boolean
@@ -3723,7 +3845,9 @@ export type Database = {
         Insert: {
           assigned_clients_only?: boolean
           can_approve_sars_correspondence?: boolean
+          can_export_clients?: boolean
           can_generate_sars_correspondence?: boolean
+          can_import_clients?: boolean
           can_manage_cases?: boolean
           can_manage_clients?: boolean
           can_manage_invoices?: boolean
@@ -3744,7 +3868,9 @@ export type Database = {
         Update: {
           assigned_clients_only?: boolean
           can_approve_sars_correspondence?: boolean
+          can_export_clients?: boolean
           can_generate_sars_correspondence?: boolean
+          can_import_clients?: boolean
           can_manage_cases?: boolean
           can_manage_clients?: boolean
           can_manage_invoices?: boolean
