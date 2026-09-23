@@ -73,7 +73,9 @@ function buildRows(records: ClientExportRecord[]) {
   });
 }
 
-function escapeCsvCell(value: string | number): string {
+// Exported so other report generators (e.g. importReport.ts) reuse the same
+// CSV-escaping/download primitives instead of a second implementation.
+export function escapeCsvCell(value: string | number): string {
   const text = String(value);
   if (/[",\n]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
@@ -81,7 +83,7 @@ function escapeCsvCell(value: string | number): string {
   return text;
 }
 
-function triggerDownload(blob: Blob, filename: string) {
+export function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

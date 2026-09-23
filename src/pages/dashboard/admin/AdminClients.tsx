@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Download, Loader2, Search, Trash2, Upload, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowRight, Download, History, Loader2, Search, Trash2, Upload, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -44,6 +44,8 @@ import {
   type UserAction,
 } from "@/lib/clientImportPreview";
 import { exportClients, type ClientExportRecord, type ExportFormat } from "@/lib/clientExport";
+import { exportImportReport, type ClientEnrichmentMap, type ImportReportFormat } from "@/lib/importReport";
+import { ClientImportHistory } from "@/components/dashboard/admin/ClientImportHistory";
 
 const provinces = [
   "Gauteng",
@@ -300,6 +302,9 @@ export default function AdminClients() {
   const [isBuildingPreview, setIsBuildingPreview] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState<{ summary: ImportSummary; rows: ImportRowResult[] } | null>(null);
+  const [isImportHistoryOpen, setIsImportHistoryOpen] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState<"results" | "issues" | null>(null);
+  const [downloadFormat, setDownloadFormat] = useState<ImportReportFormat>("csv");
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageClients = role === "consultant" || hasStaffPermission("can_manage_clients");
@@ -1072,6 +1077,36 @@ export default function AdminClients() {
     }
   };
 
+  const downloadImportReport = async (issuesOnly: boolean) => {
+    if (!importResults || isDownloadingReport) return;
+    setIsDownloadingReport(issuesOnly ? "issues" : "results");
+    try {
+      const clientIds = Array.from(new Set(importResults.rows.map((row) => row.client_id).filter((id): id is string => Boolean(id))));
+      let enrichment: ClientEnrichmentMap = {};
+      if (clientIds.length) {
+        const { data, error } = await supabase.from("clients").select("id,client_type,email,phone").in("id", clientIds);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        enrichment = Object.fromEntries((data ?? []).map((c) => [c.id, { client_type: c.client_type, email: c.email, phone: c.phone }]));
+      }
+
+      const result = exportImportReport(
+        importResults.rows,
+        enrichment,
+        downloadFormat,
+        `import-${issuesOnly ? "issues" : "results"}-${importBatchId?.slice(0, 8) ?? "batch"}`,
+        { issuesOnly },
+      );
+      if (!result.exported) {
+        toast.error("No issue rows to report for this import.");
+      }
+    } finally {
+      setIsDownloadingReport(null);
+    }
+  };
+
   return (
     <div>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1132,6 +1167,17 @@ export default function AdminClients() {
             >
               <Upload className="mr-2 h-4 w-4" />
               Import Clients
+            </Button>
+          ) : null}
+          {canImportClients ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl flex-1 sm:flex-none"
+              onClick={() => setIsImportHistoryOpen(true)}
+            >
+              <History className="mr-2 h-4 w-4" />
+              Import History
             </Button>
           ) : null}
           {canShowClientCreationControls ? (
@@ -2110,7 +2156,38 @@ export default function AdminClients() {
                 setSelectedClientId(clientId);
               }}
             />
-            <div className="flex justify-end">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <Select value={downloadFormat} onValueChange={(value) => setDownloadFormat(value as ImportReportFormat)}>
+                  <SelectTrigger className="w-[100px] rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="csv">CSV</SelectItem>
+                    <SelectItem value="xlsx">XLSX</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => downloadImportReport(false)}
+                  disabled={isDownloadingReport !== null}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {isDownloadingReport === "results" ? "Preparing..." : "Download Results"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => downloadImportReport(true)}
+                  disabled={isDownloadingReport !== null}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {isDownloadingReport === "issues" ? "Preparing..." : "Download Issues"}
+                </Button>
+              </div>
               <Button
                 type="button"
                 className="rounded-xl"
@@ -2125,6 +2202,15 @@ export default function AdminClients() {
           </div>
         ) : null}
       </DashboardItemDialog>
+
+      <ClientImportHistory
+        open={canImportClients && isImportHistoryOpen}
+        onOpenChange={setIsImportHistoryOpen}
+        onOpenClient={(clientId) => {
+          setIsImportHistoryOpen(false);
+          setSelectedClientId(clientId);
+        }}
+      />
     </div>
   );
 }
