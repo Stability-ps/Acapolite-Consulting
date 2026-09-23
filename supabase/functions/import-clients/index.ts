@@ -131,17 +131,30 @@ Deno.serve(async (request) => {
       return jsonResponse(request, { error: "You must be signed in to import clients." }, 401);
     }
 
-    const { data: callerProfile, error: callerProfileError } = await callerClient
-      .from("profiles")
-      .select("role")
-      .eq("id", callerUser.id)
-      .maybeSingle();
+    const [{ data: callerProfile, error: callerProfileError }, { data: callerPermissions, error: callerPermissionsError }] = await Promise.all([
+      callerClient.from("profiles").select("role").eq("id", callerUser.id).maybeSingle(),
+      callerClient.from("staff_permissions").select("can_import_clients").eq("profile_id", callerUser.id).maybeSingle(),
+    ]);
 
     if (callerProfileError) {
       return jsonResponse(request, { error: callerProfileError.message }, 400);
     }
+    if (callerPermissionsError) {
+      return jsonResponse(request, { error: callerPermissionsError.message }, 400);
+    }
     if (callerProfile?.role !== "admin" && callerProfile?.role !== "consultant") {
       return jsonResponse(request, { error: "Only Acapolite staff can import clients." }, 403);
+    }
+    // staff_permissions.can_import_clients was only ever enforced by hiding
+    // the Import button (AdminClients.tsx) - this endpoint itself accepted
+    // any admin/consultant JWT regardless of the flag. Closing that gap here
+    // mirrors the can_view_client_import_history() fix already applied to
+    // the import-history RLS policies (20260913090000_gate_import_history_
+    // on_can_import_clients.sql) - same permission, now enforced on both the
+    // read side and this write side.
+    const canImport = callerProfile.role === "admin" || callerPermissions?.can_import_clients === true;
+    if (!canImport) {
+      return jsonResponse(request, { error: "Importing clients is not enabled for this account." }, 403);
     }
 
     const payload = (await request.json()) as ImportPayload;
