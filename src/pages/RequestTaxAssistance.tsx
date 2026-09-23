@@ -59,6 +59,7 @@ import {
   getPrimaryCategoryForSelection,
   getPrimaryServiceForSelection,
   getStepFromSearchParam,
+  getServiceIntent,
   isNationwideSelection,
   loadWizardDraft,
   PHONE_COUNTRY_OPTIONS,
@@ -388,6 +389,7 @@ export default function RequestTaxAssistance() {
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
 
   const currentStep = getStepFromSearchParam(searchParams.get(REQUEST_WIZARD_QUERY_KEY));
+  const serviceIntent = getServiceIntent(searchParams.get("intent"));
   const entityType = draft.who.entityType;
   const categories = entityType ? SERVICE_CATEGORIES_BY_ENTITY[entityType] : [];
   const groupedSelectedServices = entityType
@@ -482,9 +484,15 @@ export default function RequestTaxAssistance() {
       if (validCurrent.length > 0) {
         return validCurrent;
       }
+      const intentCategory = serviceIntent && entityType
+        ? serviceIntent.categoryForEntity(entityType)
+        : null;
+      if (intentCategory && categories.some((category) => category.key === intentCategory)) {
+        return [intentCategory];
+      }
       return [categories[0].key];
     });
-  }, [categories]);
+  }, [categories, entityType, serviceIntent?.key]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -734,6 +742,10 @@ export default function RequestTaxAssistance() {
       risk_indicator: signals.riskIndicator,
       intake_payload: {
         ...buildIntakePayload(draft),
+        source_intent: serviceIntent
+          ? { key: serviceIntent.key, label: serviceIntent.label }
+          : null,
+        source_path: location.pathname,
         ad_attribution: getAdAttribution(),
       },
     };
@@ -1033,6 +1045,12 @@ export default function RequestTaxAssistance() {
           {renderBackControl()}
           <AcapoliteLogo className="h-11" />
         </div>
+
+        {serviceIntent ? (
+          <div className="mt-6 rounded-2xl border border-[#E7D6A6] bg-[#FFF8E4] px-4 py-3 text-sm text-[#102B46]">
+            <span className="font-semibold">You came here for:</span> {serviceIntent.label}. We’ll keep that in mind while you complete the request.
+          </div>
+        ) : null}
 
         <div className="mt-8">
           <RequestWizardProgress currentStep={currentStep} />
