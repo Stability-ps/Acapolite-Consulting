@@ -74,6 +74,78 @@ const configs: Record<string, LandingPageConfig> = {
       { label: "Objections & Disputes", href: "/sars-objections" },
     ],
   },
+  vat: {
+    path: "/vat-services",
+    eyebrow: "VAT Services",
+    title: "VAT Registration, Returns & SARS VAT Assistance",
+    description:
+      "Professional VAT support for South African businesses, including registration, VAT201 returns, compliance, SARS verification and refund matters.",
+    metaDescription:
+      "VAT services across South Africa for registration, VAT201 returns, compliance, SARS verification, audits and VAT refund matters.",
+    intro:
+      "VAT obligations depend on the nature and value of taxable supplies, the vendor's registration status and the records supporting each VAT period. Acapolite helps businesses request professional assistance for routine VAT compliance and SARS VAT matters.",
+    services: [
+      "Compulsory and voluntary VAT registration assistance",
+      "VAT201 return preparation and submission support",
+      "VAT account and compliance reviews",
+      "Supporting-document preparation for SARS verification",
+      "VAT audit and verification assistance",
+      "VAT refund follow-up and supporting-document reviews",
+      "Banking-detail and refund impediment checks",
+      "Historical VAT return and compliance catch-up",
+    ],
+    whyItMatters:
+      "From 1 April 2026, SARS applies a R2.3 million compulsory VAT registration threshold and a R120 000 voluntary threshold, subject to the applicable rules and exceptions. VAT refunds can also be affected by outstanding returns or debt, banking details, and verification or audit processes. The correct next step therefore depends on the vendor's facts and SARS account position.",
+    ctaTitle: "Request VAT assistance",
+    ctaBody:
+      "Tell us whether you need help with VAT registration, returns, compliance, verification, an audit or a refund matter.",
+    audience: [
+      "Businesses approaching or exceeding the compulsory VAT registration threshold",
+      "Businesses considering voluntary VAT registration",
+      "VAT vendors that need help preparing or correcting VAT201 returns",
+      "Vendors dealing with SARS VAT verification, audit or delayed refund matters",
+    ],
+    process: [
+      "Identify the VAT issue, affected periods and current SARS registration or account status.",
+      "Review the available VAT201 information, accounting records and supporting documents relevant to the request.",
+      "Prepare the registration, return, compliance response or supporting submission within the agreed scope.",
+      "Where SARS follow-up is required, review the resulting notice, verification, audit or refund status and determine the next appropriate step.",
+    ],
+    faqs: [
+      {
+        question: "What is the compulsory VAT registration threshold?",
+        answer:
+          "SARS states that from 1 April 2026 compulsory VAT registration generally applies when taxable supplies exceed, or in specified circumstances are expected to exceed, R2.3 million in a consecutive 12-month period. The applicable enterprise and registration rules still need to be considered.",
+      },
+      {
+        question: "Can a business register voluntarily below R2.3 million?",
+        answer:
+          "Yes, in qualifying circumstances. SARS states that the voluntary registration threshold is R120 000 from 1 April 2026, subject to the VAT registration rules and exceptions.",
+      },
+      {
+        question: "Why can a VAT refund be delayed?",
+        answer:
+          "SARS identifies several possible impediments, including outstanding VAT returns, outstanding tax debt that may be set off, banking-detail issues, and a refund selected for verification, inspection or audit.",
+      },
+      {
+        question: "Can you help when SARS asks for VAT supporting documents?",
+        answer:
+          "Yes. The request can cover review and organisation of the available records and assistance responding to a SARS VAT verification or audit request. The documents required depend on the transaction and SARS request.",
+      },
+    ],
+    officialSources: [
+      { label: "SARS — Register for VAT", href: "https://www.sars.gov.za/types-of-tax/value-added-tax/register-for-vat/" },
+      { label: "SARS — VAT Refunds for Vendors", href: "https://www.sars.gov.za/types-of-tax/value-added-tax/vat-refunds-for-vendors/" },
+      { label: "SARS — Value-Added Tax", href: "https://www.sars.gov.za/types-of-tax/value-added-tax/" },
+    ],
+    reviewedDate: "23 September 2026",
+    relatedLinks: [
+      { label: "SARS & Tax Assistance", href: "/sars-tax-assistance" },
+      { label: "Accounting Services", href: "/accounting-services" },
+      { label: "Bookkeeping Services", href: "/bookkeeping-services" },
+      { label: "SARS Objections & Disputes", href: "/sars-objections" },
+    ],
+  },
   accounting: {
     path: "/accounting-services",
     eyebrow: "Accounting Services",
@@ -579,6 +651,10 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
 
 export function SarsTaxAssistanceLandingPage() {
   return <ServiceLandingPage config={configs.sars} />;
+}
+
+export function VatServicesLandingPage() {
+  return <ServiceLandingPage config={configs.vat} />;
 }
 
 export function AccountingServicesLandingPage() {
