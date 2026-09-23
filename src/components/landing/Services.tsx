@@ -3,10 +3,10 @@ import { BriefcaseBusiness, Building2, Calculator, UserRound } from "lucide-reac
 import { Link } from "react-router-dom";
 
 const services = [
-  { icon: UserRound, title: "Individual Tax Services", desc: "Personal income tax returns, SARS issues, compliance checks, and dispute support." },
-  { icon: Building2, title: "Business Tax Services", desc: "Company tax returns, VAT registration/returns, PAYE compliance, and audit support." },
-  { icon: Calculator, title: "Accounting Services", desc: "Bookkeeping, financial statements, management accounts, and payroll processing." },
-  { icon: BriefcaseBusiness, title: "Business Support Services", desc: "Company registration, amendments, annual returns, and compliance monitoring." },
+  { icon: UserRound, title: "Individual Tax Services", desc: "Personal income tax returns, SARS issues, compliance checks, and dispute support.", href: "/tax-returns" },
+  { icon: Building2, title: "Business Tax Services", desc: "Company tax returns, VAT registration/returns, PAYE compliance, and audit support.", href: "/sars-tax-assistance" },
+  { icon: Calculator, title: "Accounting Services", desc: "Bookkeeping, financial statements, management accounts, and payroll processing.", href: "/accounting-services" },
+  { icon: BriefcaseBusiness, title: "Business Support Services", desc: "Company registration, amendments, annual returns, and compliance monitoring.", href: "/cipc-company-compliance" },
 ];
 
 export function Services() {
@@ -43,7 +43,7 @@ export function Services() {
               </div>
               <h3 className="mb-2 font-display text-lg font-semibold text-card-foreground">{service.title}</h3>
               <p className="text-sm leading-relaxed text-muted-foreground font-body">{service.desc}</p>
-              <Link to="/our-services" className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline">
+              <Link to={service.href} className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline">
                 View services
               </Link>
             </motion.div>
