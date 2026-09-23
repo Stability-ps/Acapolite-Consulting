@@ -1,12 +1,13 @@
 import { motion } from "framer-motion";
-import { BriefcaseBusiness, Building2, Calculator, UserRound } from "lucide-react";
+import { BookOpen, Building2, Calculator, FileText, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const services = [
-  { icon: UserRound, title: "Individual Tax Services", desc: "Personal income tax returns, SARS issues, compliance checks, and dispute support.", href: "/tax-returns" },
-  { icon: Building2, title: "Business Tax Services", desc: "Company tax returns, VAT registration/returns, PAYE compliance, and audit support.", href: "/sars-tax-assistance" },
-  { icon: Calculator, title: "Accounting Services", desc: "Bookkeeping, financial statements, management accounts, and payroll processing.", href: "/accounting-services" },
-  { icon: BriefcaseBusiness, title: "Business Support Services", desc: "Company registration, amendments, annual returns, and compliance monitoring.", href: "/cipc-company-compliance" },
+  { icon: FileText, title: "Tax Returns", desc: "Personal (ITR12) and company (ITR14) tax returns, including late and outstanding submissions.", href: "/tax-returns" },
+  { icon: ShieldCheck, title: "SARS & Tax Assistance", desc: "SARS debt, payment arrangements, objections and disputes, audits, and general SARS compliance matters.", href: "/sars-tax-assistance" },
+  { icon: Calculator, title: "Accounting Services", desc: "Financial statements, management accounts, payroll processing, and financial reporting.", href: "/accounting-services" },
+  { icon: BookOpen, title: "Bookkeeping", desc: "Monthly bookkeeping, reconciliations, and ledger maintenance to keep your records accurate.", href: "/bookkeeping-services" },
+  { icon: Building2, title: "CIPC & Company Compliance", desc: "Company registration, amendments, annual returns, and beneficial ownership filings.", href: "/cipc-company-compliance" },
 ];
 
 export function Services() {
@@ -21,14 +22,18 @@ export function Services() {
         >
           <span className="mb-2 block text-sm font-semibold uppercase tracking-widest text-primary font-body">Our Services</span>
           <h2 className="mb-4 font-display text-3xl font-bold text-foreground md:text-5xl">
-            Get Help Across Every SARS Need
+            Professional Support for Tax, SARS &amp; Business Needs
           </h2>
           <p className="mx-auto max-w-3xl text-lg text-muted-foreground font-body">
-            Browse our core categories or visit the full services page for detailed coverage and specialist support.
+            Browse our core categories or visit the{" "}
+            <Link to="/our-services" className="font-semibold text-primary hover:underline">
+              full services page
+            </Link>{" "}
+            for detailed coverage and specialist support.
           </p>
         </motion.div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-5">
           {services.map((service, index) => (
             <motion.div
               key={service.title}

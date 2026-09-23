@@ -13,6 +13,11 @@
 //   - the request-tax-assistance wizard's query-string states (the wizard
 //     always canonicalises to the bare path; only that bare path is listed)
 //   - the SPA's catch-all 404 route
+//   - /request-professional-help (SEO PR4: paid-traffic/Ads landing page,
+//     set to noindex,follow in src/pages/ServiceLandingPages.tsx — not part
+//     of the organic architecture, so it does not belong in the sitemap.
+//     The route itself, its canonical tag and its Ads/lead functionality
+//     are unchanged — only sitemap + indexation status moved.)
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -27,7 +32,6 @@ const routes = [
   { path: "/bookkeeping-services", priority: "0.9", changefreq: "monthly" },
   { path: "/cipc-company-compliance", priority: "0.9", changefreq: "monthly" },
   { path: "/tax-returns", priority: "0.9", changefreq: "monthly" },
-  { path: "/request-professional-help", priority: "0.8", changefreq: "monthly" },
   { path: "/request-tax-assistance", priority: "0.9", changefreq: "monthly" },
   { path: "/how-acapolite-works", priority: "0.7", changefreq: "monthly" },
   { path: "/practitioners", priority: "0.7", changefreq: "monthly" },
