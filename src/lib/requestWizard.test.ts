@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getServiceIntent } from "@/lib/requestWizard";
+import { getRequestSource, getServiceIntent } from "@/lib/requestWizard";
 
 describe("request wizard service intent", () => {
   it("recognises supported service-page intents", () => {
@@ -23,5 +23,13 @@ describe("request wizard service intent", () => {
   it("ignores unknown or missing intent values", () => {
     expect(getServiceIntent("unknown")).toBeNull();
     expect(getServiceIntent(null)).toBeNull();
+  });
+  it("accepts only allow-listed internal request source paths", () => {
+    expect(getRequestSource("/vat-services")).toEqual({ path: "/vat-services", label: "VAT Services" });
+    expect(getRequestSource("%2Fsars-debt")).toEqual({ path: "/sars-debt", label: "SARS Debt" });
+    expect(getRequestSource("https://example.com")).toBeNull();
+    expect(getRequestSource("//example.com")).toBeNull();
+    expect(getRequestSource("/dashboard/staff")).toBeNull();
+    expect(getRequestSource("/unknown-page")).toBeNull();
   });
 });
