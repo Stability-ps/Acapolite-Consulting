@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 
 const primaryNavItems = [
   { label: "Home", href: "/" },
-  { label: "Services", href: "/#services" },
+  { label: "Services", href: "/our-services" },
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Practitioners", href: "/practitioners" },
   { label: "Contact", href: "/contact-us" },
@@ -63,6 +63,22 @@ export function LandingHeader() {
 
     if (href.startsWith("/#")) {
       return location.pathname === "/" && location.hash === href.slice(1);
+    }
+
+    if (href === "/our-services") {
+      return [
+        "/our-services",
+        "/sars-tax-assistance",
+        "/sars-debt",
+        "/sars-payment-arrangements",
+        "/sars-compromise",
+        "/sars-objections",
+        "/vat-services",
+        "/tax-returns",
+        "/accounting-services",
+        "/bookkeeping-services",
+        "/cipc-company-compliance",
+      ].includes(location.pathname);
     }
 
     return location.pathname === href;

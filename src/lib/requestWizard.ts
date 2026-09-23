@@ -166,6 +166,160 @@ function createService(value: WizardService, credits: number, isOther = false): 
 }
 
 export const REQUEST_WIZARD_QUERY_KEY = "step";
+export const REQUEST_WIZARD_INTENT_QUERY_KEY = "intent";
+export const REQUEST_WIZARD_SOURCE_QUERY_KEY = "from";
+
+export type ServiceIntentKey =
+  | "sars"
+  | "sars-debt"
+  | "payment-arrangement"
+  | "compromise"
+  | "objections"
+  | "vat"
+  | "tax-returns"
+  | "accounting"
+  | "bookkeeping"
+  | "cipc";
+
+type ServiceIntentConfig = {
+  label: string;
+  categoryForEntity: (entityType: WizardEntityType) => WizardServiceCategory;
+};
+
+const serviceIntentConfigs: Record<ServiceIntentKey, ServiceIntentConfig> = {
+  sars: {
+    label: "SARS & Tax Assistance",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  "sars-debt": {
+    label: "SARS Debt Help",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  "payment-arrangement": {
+    label: "SARS Payment Arrangement",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  compromise: {
+    label: "Section 200 Compromise",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  objections: {
+    label: "SARS Objection or Dispute",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  vat: {
+    label: "VAT Services",
+    categoryForEntity: () => "business_tax",
+  },
+  "tax-returns": {
+    label: "Tax Returns",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  accounting: {
+    label: "Accounting Services",
+    categoryForEntity: () => "accounting",
+  },
+  bookkeeping: {
+    label: "Bookkeeping Services",
+    categoryForEntity: () => "accounting",
+  },
+  cipc: {
+    label: "CIPC & Company Compliance",
+    categoryForEntity: () => "business_support",
+  },
+};
+
+export function getServiceIntent(value?: string | null) {
+  if (!value || !(value in serviceIntentConfigs)) {
+    return null;
+  }
+
+  return {
+    key: value as ServiceIntentKey,
+    ...serviceIntentConfigs[value as ServiceIntentKey],
+  };
+}
+
+const publicRequestSourceLabels: Record<string, string> = {
+  "/": "Home",
+  "/our-services": "Our Services",
+  "/sars-tax-assistance": "SARS & Tax Assistance",
+  "/sars-debt": "SARS Debt",
+  "/sars-payment-arrangements": "SARS Payment Arrangements",
+  "/sars-compromise": "Section 200 Compromise",
+  "/sars-objections": "SARS Objections & Disputes",
+  "/vat-services": "VAT Services",
+  "/tax-returns": "Tax Returns",
+  "/accounting-services": "Accounting Services",
+  "/bookkeeping-services": "Bookkeeping Services",
+  "/cipc-company-compliance": "CIPC & Company Compliance",
+};
+
+export function getRequestSource(value?: string | null) {
+  if (!value) return null;
+
+  let decoded = value;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+
+  if (!decoded.startsWith("/") || decoded.startsWith("//")) {
+    return null;
+  }
+
+  const path = decoded.split("?")[0].split("#")[0];
+  const label = publicRequestSourceLabels[path];
+  if (!label) {
+    return null;
+  }
+
+  return { path, label };
+}
+
 
 export const REQUEST_WIZARD_STORAGE_KEYS: Record<StepStorageKey, string> = {
   who: "acapolite-request-wizard-step-1",
