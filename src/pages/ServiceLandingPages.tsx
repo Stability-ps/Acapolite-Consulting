@@ -17,6 +17,14 @@ type LandingPageConfig = {
   whyItMatters: string;
   ctaTitle: string;
   ctaBody: string;
+  /**
+   * Meta robots override. Defaults to indexable (see useSeo). Set to
+   * "noindex, follow" for pages that exist for paid-traffic/Ads purposes
+   * only and are not part of the organic content architecture — crawlers
+   * must still be able to reach the page to see this directive, so it must
+   * never be paired with a robots.txt Disallow for the same path.
+   */
+  robots?: string;
 };
 
 const configs: Record<string, LandingPageConfig> = {
@@ -175,6 +183,11 @@ const configs: Record<string, LandingPageConfig> = {
     ctaTitle: "Submit your request",
     ctaBody:
       "Choose the services you need, provide your details and submit the request securely through Acapolite.",
+    // Paid-traffic (Google Ads) landing page, not an organic SEO page — see
+    // the PR4 report for the reasoning. Kept fully functional (indexable
+    // routing, canonical, Ads attribution, lead submission all unchanged);
+    // only excluded from organic indexation and the sitemap.
+    robots: "noindex, follow",
   },
 };
 
@@ -183,6 +196,7 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
     title: `${config.title} | Acapolite Consulting`,
     description: config.metaDescription,
     path: config.path,
+    ...(config.robots ? { robots: config.robots } : {}),
   });
 
   return (
