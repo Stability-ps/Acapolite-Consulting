@@ -21,6 +21,8 @@ export type StaffPermissionValues = Pick<
   | "can_use_tax_coach_ai"
   | "can_generate_sars_correspondence"
   | "can_approve_sars_correspondence"
+  | "can_export_clients"
+  | "can_import_clients"
 >;
 
 export type StaffPermissionKey = Exclude<keyof StaffPermissionValues, "assigned_clients_only">;
@@ -42,6 +44,8 @@ export const fullStaffPermissions: StaffPermissionValues = {
   can_use_tax_coach_ai: true,
   can_generate_sars_correspondence: true,
   can_approve_sars_correspondence: true,
+  can_export_clients: true,
+  can_import_clients: true,
 };
 
 export const defaultConsultantPermissions: StaffPermissionValues = {
@@ -61,6 +65,8 @@ export const defaultConsultantPermissions: StaffPermissionValues = {
   can_use_tax_coach_ai: false,
   can_generate_sars_correspondence: false,
   can_approve_sars_correspondence: false,
+  can_export_clients: false,
+  can_import_clients: false,
 };
 
 export const consultantPermissionFields: Array<{
@@ -152,6 +158,16 @@ export const consultantPermissionFields: Array<{
     key: "can_approve_sars_correspondence",
     label: "Approve SARS Correspondence",
     description: "Allow this consultant to approve SARS correspondence drafts, moving them out of Draft status.",
+  },
+  {
+    key: "can_export_clients",
+    label: "Export Clients",
+    description: "Allow exporting the client list or an individual client record to CSV/XLSX.",
+  },
+  {
+    key: "can_import_clients",
+    label: "Import Clients",
+    description: "Allow bulk-importing clients from an uploaded CSV/XLSX file.",
   },
 ];
 
