@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 
 const primaryNavItems = [
   { label: "Home", href: "/" },
-  { label: "Services", href: "/#services" },
+  { label: "Services", href: "/our-services" },
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Practitioners", href: "/practitioners" },
   { label: "Contact", href: "/contact-us" },
