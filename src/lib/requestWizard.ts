@@ -166,6 +166,121 @@ function createService(value: WizardService, credits: number, isOther = false): 
 }
 
 export const REQUEST_WIZARD_QUERY_KEY = "step";
+export const REQUEST_WIZARD_INTENT_QUERY_KEY = "intent";
+
+export type ServiceIntentKey =
+  | "sars"
+  | "sars-debt"
+  | "payment-arrangement"
+  | "compromise"
+  | "objections"
+  | "vat"
+  | "tax-returns"
+  | "accounting"
+  | "bookkeeping"
+  | "cipc";
+
+type ServiceIntentConfig = {
+  label: string;
+  categoryForEntity: (entityType: WizardEntityType) => WizardServiceCategory;
+};
+
+const serviceIntentConfigs: Record<ServiceIntentKey, ServiceIntentConfig> = {
+  sars: {
+    label: "SARS & Tax Assistance",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  "sars-debt": {
+    label: "SARS Debt Help",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  "payment-arrangement": {
+    label: "SARS Payment Arrangement",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  compromise: {
+    label: "Section 200 Compromise",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  objections: {
+    label: "SARS Objection or Dispute",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  vat: {
+    label: "VAT Services",
+    categoryForEntity: () => "business_tax",
+  },
+  "tax-returns": {
+    label: "Tax Returns",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
+  accounting: {
+    label: "Accounting Services",
+    categoryForEntity: () => "accounting",
+  },
+  bookkeeping: {
+    label: "Bookkeeping Services",
+    categoryForEntity: () => "accounting",
+  },
+  cipc: {
+    label: "CIPC & Company Compliance",
+    categoryForEntity: () => "business_support",
+  },
+};
+
+export function getServiceIntent(value?: string | null) {
+  if (!value || !(value in serviceIntentConfigs)) {
+    return null;
+  }
+
+  return {
+    key: value as ServiceIntentKey,
+    ...serviceIntentConfigs[value as ServiceIntentKey],
+  };
+}
+
 
 export const REQUEST_WIZARD_STORAGE_KEYS: Record<StepStorageKey, string> = {
   who: "acapolite-request-wizard-step-1",
