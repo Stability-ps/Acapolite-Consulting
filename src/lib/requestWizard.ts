@@ -167,6 +167,7 @@ function createService(value: WizardService, credits: number, isOther = false): 
 
 export const REQUEST_WIZARD_QUERY_KEY = "step";
 export const REQUEST_WIZARD_INTENT_QUERY_KEY = "intent";
+export const REQUEST_WIZARD_SOURCE_QUERY_KEY = "from";
 
 export type ServiceIntentKey =
   | "sars"
@@ -279,6 +280,44 @@ export function getServiceIntent(value?: string | null) {
     key: value as ServiceIntentKey,
     ...serviceIntentConfigs[value as ServiceIntentKey],
   };
+}
+
+const publicRequestSourceLabels: Record<string, string> = {
+  "/": "Home",
+  "/our-services": "Our Services",
+  "/sars-tax-assistance": "SARS & Tax Assistance",
+  "/sars-debt": "SARS Debt",
+  "/sars-payment-arrangements": "SARS Payment Arrangements",
+  "/sars-compromise": "Section 200 Compromise",
+  "/sars-objections": "SARS Objections & Disputes",
+  "/vat-services": "VAT Services",
+  "/tax-returns": "Tax Returns",
+  "/accounting-services": "Accounting Services",
+  "/bookkeeping-services": "Bookkeeping Services",
+  "/cipc-company-compliance": "CIPC & Company Compliance",
+};
+
+export function getRequestSource(value?: string | null) {
+  if (!value) return null;
+
+  let decoded = value;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+
+  if (!decoded.startsWith("/") || decoded.startsWith("//")) {
+    return null;
+  }
+
+  const path = decoded.split("?")[0].split("#")[0];
+  const label = publicRequestSourceLabels[path];
+  if (!label) {
+    return null;
+  }
+
+  return { path, label };
 }
 
 
