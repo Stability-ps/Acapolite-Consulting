@@ -36,6 +36,7 @@ const routes = [
   { path: "/bookkeeping-services", priority: "0.9", changefreq: "monthly" },
   { path: "/cipc-company-compliance", priority: "0.9", changefreq: "monthly" },
   { path: "/tax-returns", priority: "0.9", changefreq: "monthly" },
+  { path: "/vat-services", priority: "0.9", changefreq: "monthly" },
   { path: "/request-tax-assistance", priority: "0.9", changefreq: "monthly" },
   { path: "/how-acapolite-works", priority: "0.7", changefreq: "monthly" },
   { path: "/practitioners", priority: "0.7", changefreq: "monthly" },
