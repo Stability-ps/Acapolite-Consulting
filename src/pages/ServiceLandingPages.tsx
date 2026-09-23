@@ -25,6 +25,7 @@ type LandingPageConfig = {
    * never be paired with a robots.txt Disallow for the same path.
    */
   robots?: string;
+  relatedLinks?: { label: string; href: string }[];
 };
 
 const configs: Record<string, LandingPageConfig> = {
@@ -53,6 +54,12 @@ const configs: Record<string, LandingPageConfig> = {
     ctaTitle: "Tell us what SARS assistance you need",
     ctaBody:
       "Submit a secure service request and select the SARS or tax services relevant to your situation.",
+    relatedLinks: [
+      { label: "SARS Debt Help", href: "/sars-debt" },
+      { label: "Payment Arrangements", href: "/sars-payment-arrangements" },
+      { label: "Section 200 Compromise", href: "/sars-compromise" },
+      { label: "Objections & Disputes", href: "/sars-objections" },
+    ],
   },
   accounting: {
     path: "/accounting-services",
@@ -256,6 +263,20 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
             </p>
           </aside>
         </section>
+
+        {config.relatedLinks && (
+          <section className="rounded-[28px] border border-primary/15 bg-primary/5 p-6 sm:p-8">
+            <h2 className="text-lg font-semibold text-foreground">SARS debt &amp; dispute guidance</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Choose the page that best matches the issue you need to resolve.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {config.relatedLinks.map((item) => (
+                <Link key={item.href} to={item.href} className="inline-flex items-center justify-between rounded-xl border border-border bg-background/70 p-4 text-sm font-semibold text-primary hover:underline">
+                  {item.label}<ArrowRight className="h-4 w-4" />
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-[28px] border border-border bg-muted/30 p-6 sm:p-8">
           <h2 className="text-lg font-semibold text-foreground">Why the details matter</h2>
