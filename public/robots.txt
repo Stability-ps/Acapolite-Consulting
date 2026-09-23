@@ -1,8 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /dashboard
-Disallow: /login
-Disallow: /register
-Disallow: /reset-password
 
 Sitemap: https://acapoliteconsulting.co.za/sitemap.xml
