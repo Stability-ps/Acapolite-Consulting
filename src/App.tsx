@@ -37,6 +37,7 @@ import {
   ProfessionalHelpLandingPage,
   SarsTaxAssistanceLandingPage,
   TaxReturnsLandingPage,
+  VatServicesLandingPage,
 } from "./pages/ServiceLandingPages";
 import Dashboard from "./pages/Dashboard";
 import DashboardOverview from "./pages/dashboard/Overview";
@@ -121,6 +122,7 @@ function AppRoutes() {
             <Route path="/bookkeeping-services" element={<BookkeepingServicesLandingPage />} />
             <Route path="/cipc-company-compliance" element={<CipcComplianceLandingPage />} />
             <Route path="/tax-returns" element={<TaxReturnsLandingPage />} />
+            <Route path="/vat-services" element={<VatServicesLandingPage />} />
             <Route path="/request-professional-help" element={<ProfessionalHelpLandingPage />} />
             <Route
               path="/request-tax-assistance"
