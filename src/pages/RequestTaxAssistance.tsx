@@ -549,20 +549,6 @@ export default function RequestTaxAssistance() {
       );
     }
 
-    if (user) {
-      return (
-        <Button
-          type="button"
-          variant="ghost"
-          className="rounded-full px-0 text-slate-600"
-          onClick={() => navigate(dashboardPath, { replace: true })}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-      );
-    }
-
     if (requestSource) {
       return (
         <Button
@@ -573,6 +559,20 @@ export default function RequestTaxAssistance() {
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to {requestSource.label}
+        </Button>
+      );
+    }
+
+    if (user) {
+      return (
+        <Button
+          type="button"
+          variant="ghost"
+          className="rounded-full px-0 text-slate-600"
+          onClick={() => navigate(dashboardPath, { replace: true })}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
         </Button>
       );
     }
