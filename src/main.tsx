@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { captureAdAttribution } from "@/lib/googleAds";
 
 const CLARITY_PROJECT_ID = "w7lukcm2zs";
 
@@ -34,5 +35,6 @@ function initializeMicrosoftClarity(projectId: string) {
 }
 
 initializeMicrosoftClarity(CLARITY_PROJECT_ID);
+captureAdAttribution();
 
 createRoot(document.getElementById("root")!).render(<App />);

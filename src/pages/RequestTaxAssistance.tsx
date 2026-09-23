@@ -41,6 +41,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Enums, TablesInsert } from "@/integrations/supabase/types";
 import { getAppBaseUrl } from "@/lib/siteUrl";
+import { getAdAttribution, trackGoogleAdsLeadConversion } from "@/lib/googleAds";
 import {
   buildIntakePayload,
   buildRegisterQueryFromContact,
@@ -718,7 +719,10 @@ export default function RequestTaxAssistance() {
       has_multiple_tax_types: signals.hasMultipleTaxTypes,
       has_legal_complexity: signals.hasLegalComplexity,
       risk_indicator: signals.riskIndicator,
-      intake_payload: buildIntakePayload(draft),
+      intake_payload: {
+        ...buildIntakePayload(draft),
+        ad_attribution: getAdAttribution(),
+      },
     };
 
     return { priorityLevel, requestPayload };
@@ -851,6 +855,8 @@ export default function RequestTaxAssistance() {
         selectedServiceLabels,
         priorityLevel,
       );
+
+      trackGoogleAdsLeadConversion(insertResult.data.id);
 
       clearWizardDraft();
       setDraft(getInitialWizardDraft());
