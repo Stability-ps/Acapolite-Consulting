@@ -30,6 +30,14 @@ import Practitioners from "./pages/Practitioners";
 import ContactUs from "./pages/ContactUs";
 import HelpCenter from "./pages/HelpCenter";
 import AboutUs from "./pages/AboutUs";
+import {
+  AccountingServicesLandingPage,
+  BookkeepingServicesLandingPage,
+  CipcComplianceLandingPage,
+  ProfessionalHelpLandingPage,
+  SarsTaxAssistanceLandingPage,
+  TaxReturnsLandingPage,
+} from "./pages/ServiceLandingPages";
 import Dashboard from "./pages/Dashboard";
 import DashboardOverview from "./pages/dashboard/Overview";
 import TaxCoachAIClient from "./pages/dashboard/TaxCoachAIClient";
@@ -103,6 +111,12 @@ function AppRoutes() {
             <Route path="/contact-us" element={<ContactUs />} />
             <Route path="/help-center" element={<HelpCenter />} />
             <Route path="/about-us" element={<AboutUs />} />
+            <Route path="/sars-tax-assistance" element={<SarsTaxAssistanceLandingPage />} />
+            <Route path="/accounting-services" element={<AccountingServicesLandingPage />} />
+            <Route path="/bookkeeping-services" element={<BookkeepingServicesLandingPage />} />
+            <Route path="/cipc-company-compliance" element={<CipcComplianceLandingPage />} />
+            <Route path="/tax-returns" element={<TaxReturnsLandingPage />} />
+            <Route path="/request-professional-help" element={<ProfessionalHelpLandingPage />} />
             <Route
               path="/request-tax-assistance"
               element={<RequestTaxAssistance />}
