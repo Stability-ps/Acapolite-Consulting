@@ -24,35 +24,8 @@ import { dirname, resolve } from "node:path";
 
 const SITE_URL = "https://acapoliteconsulting.co.za";
 
-const routes = [
-  { path: "/", priority: "1.0", changefreq: "weekly" },
-  { path: "/our-services", priority: "0.9", changefreq: "monthly" },
-  { path: "/sars-tax-assistance", priority: "0.9", changefreq: "monthly" },
-  { path: "/sars-debt", priority: "0.9", changefreq: "monthly" },
-  { path: "/sars-payment-arrangements", priority: "0.9", changefreq: "monthly" },
-  { path: "/sars-compromise", priority: "0.9", changefreq: "monthly" },
-  { path: "/sars-objections", priority: "0.9", changefreq: "monthly" },
-  { path: "/accounting-services", priority: "0.9", changefreq: "monthly" },
-  { path: "/bookkeeping-services", priority: "0.9", changefreq: "monthly" },
-  { path: "/cipc-company-compliance", priority: "0.9", changefreq: "monthly" },
-  { path: "/tax-returns", priority: "0.9", changefreq: "monthly" },
-  { path: "/vat-services", priority: "0.9", changefreq: "monthly" },
-  { path: "/request-tax-assistance", priority: "0.9", changefreq: "monthly" },
-  { path: "/how-acapolite-works", priority: "0.7", changefreq: "monthly" },
-  { path: "/practitioners", priority: "0.7", changefreq: "monthly" },
-  { path: "/about-us", priority: "0.6", changefreq: "yearly" },
-  { path: "/contact-us", priority: "0.6", changefreq: "yearly" },
-  { path: "/help-center", priority: "0.5", changefreq: "monthly" },
-  { path: "/faq", priority: "0.5", changefreq: "monthly" },
-  { path: "/trust-safety", priority: "0.4", changefreq: "yearly" },
-  { path: "/privacy-policy", priority: "0.3", changefreq: "yearly" },
-  { path: "/terms-and-conditions", priority: "0.3", changefreq: "yearly" },
-  { path: "/cookie-policy", priority: "0.3", changefreq: "yearly" },
-  { path: "/refund-policy", priority: "0.3", changefreq: "yearly" },
-  { path: "/disclaimer", priority: "0.3", changefreq: "yearly" },
-  { path: "/practitioner-guidelines", priority: "0.3", changefreq: "yearly" },
-  { path: "/data-deletion", priority: "0.2", changefreq: "yearly" },
-];
+import { publicRoutes as routes } from "./public-seo-routes.mjs";
+
 
 const urls = routes
   .map(
