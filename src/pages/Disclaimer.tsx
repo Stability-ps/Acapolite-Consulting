@@ -36,7 +36,17 @@ export default function Disclaimer() {
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold">2. Professional Advice Disclaimer</h2>
+              <h2 className="text-lg font-semibold">2. Relationship with SARS</h2>
+              <p className="mt-2 text-muted-foreground">
+                Acapolite Consulting is an independent professional services platform and is not affiliated with,
+                endorsed by, or acting on behalf of the South African Revenue Service (SARS). Practitioners on the
+                platform may assist clients with SARS-related matters, but Acapolite Consulting itself is not SARS
+                and does not represent SARS in any capacity.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold">3. Professional Advice Disclaimer</h2>
               <p className="mt-2 text-muted-foreground">
                 Information provided by practitioners through the platform is their responsibility.
               </p>
@@ -49,7 +59,7 @@ export default function Disclaimer() {
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold">3. Service Outcomes</h2>
+              <h2 className="text-lg font-semibold">4. Service Outcomes</h2>
               <ul className="mt-3 list-disc pl-5 text-muted-foreground">
                 <li>Acapolite Consulting does not guarantee successful outcomes of services</li>
                 <li>Results depend on practitioner expertise and client cooperation</li>
@@ -59,7 +69,7 @@ export default function Disclaimer() {
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold">4. System Availability</h2>
+              <h2 className="text-lg font-semibold">5. System Availability</h2>
               <p className="mt-2 text-muted-foreground">
                 While efforts are made to maintain reliable service, uninterrupted access cannot be guaranteed.
               </p>
@@ -71,7 +81,7 @@ export default function Disclaimer() {
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold">5. Third-Party Services</h2>
+              <h2 className="text-lg font-semibold">6. Third-Party Services</h2>
               <ul className="mt-3 list-disc pl-5 text-muted-foreground">
                 <li>Payments may be processed through third-party providers such as PayFast</li>
                 <li>Third-party services operate under their own terms and policies</li>
@@ -80,7 +90,7 @@ export default function Disclaimer() {
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold">6. User Responsibility</h2>
+              <h2 className="text-lg font-semibold">7. User Responsibility</h2>
               <ul className="mt-3 list-disc pl-5 text-muted-foreground">
                 <li>Users must protect their login credentials</li>
                 <li>Users must provide accurate and truthful information</li>
@@ -90,7 +100,7 @@ export default function Disclaimer() {
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold">7. Limitation of Liability</h2>
+              <h2 className="text-lg font-semibold">8. Limitation of Liability</h2>
               <p className="mt-2 text-muted-foreground">
                 To the fullest extent permitted by law, Acapolite Consulting shall not be liable for indirect,
                 incidental, or consequential damages arising from the use of the platform.
@@ -98,7 +108,7 @@ export default function Disclaimer() {
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold">8. Updates to Disclaimer</h2>
+              <h2 className="text-lg font-semibold">9. Updates to Disclaimer</h2>
               <p className="mt-2 text-muted-foreground">
                 Acapolite Consulting reserves the right to update this Disclaimer when necessary. Updated versions
                 will be published on the platform.
@@ -106,7 +116,7 @@ export default function Disclaimer() {
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold">9. Contact Information</h2>
+              <h2 className="text-lg font-semibold">10. Contact Information</h2>
               <p className="mt-2 text-muted-foreground">
                 For questions regarding this Disclaimer, please contact info@acapoliteconsulting.co.za.
               </p>

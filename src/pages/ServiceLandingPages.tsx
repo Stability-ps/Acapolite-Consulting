@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import { useSeo } from "@/hooks/useSeo";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { buildServiceSchema } from "@/lib/structuredData";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 import { Button } from "@/components/ui/button";
 
@@ -184,6 +186,14 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
   });
 
   return (
+    <>
+    <JsonLd
+      data={buildServiceSchema({
+        name: config.title,
+        description: config.metaDescription,
+        path: config.path,
+      })}
+    />
     <PublicPageLayout
       eyebrow={config.eyebrow}
       title={config.title}
@@ -226,6 +236,10 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
             <Button asChild variant="outline" className="mt-3 w-full rounded-xl">
               <Link to="/our-services">View All Services</Link>
             </Button>
+            <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+              <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+              Secure &amp; confidential — your details are only shared with verified professionals who respond to your request.
+            </p>
           </aside>
         </section>
 
@@ -261,6 +275,7 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
         </p>
       </div>
     </PublicPageLayout>
+    </>
   );
 }
 

@@ -25,6 +25,8 @@ export function TrustSidebar({
         <p>We only share your details with verified professionals.</p>
         <p>Your information is never sold or shared.</p>
         <p>You are in control of your information.</p>
+        <p>Qualified practitioners will respond to your request — you choose who to work with.</p>
+        <p>Acapolite Consulting is an independent platform and is not affiliated with SARS.</p>
       </div>
     </aside>
   );

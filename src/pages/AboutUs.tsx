@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
@@ -79,6 +80,25 @@ export default function AboutUs() {
                 continuously improve our platform to ensure security, reliability, and professional excellence. Our
                 goal is to build long-term trust with clients and practitioners by delivering dependable solutions
                 that support financial success.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold">How to Reach Us</h2>
+              <p className="mt-2 text-muted-foreground">
+                Acapolite Consulting operates nationwide across South Africa. For general enquiries, email{" "}
+                <a href="mailto:support@acapoliteconsulting.co.za" className="text-primary underline underline-offset-2">
+                  support@acapoliteconsulting.co.za
+                </a>{" "}
+                or call{" "}
+                <a href="tel:+27102886912" className="text-primary underline underline-offset-2">
+                  +27 10 288 6912
+                </a>
+                . See our{" "}
+                <Link to="/contact-us" className="text-primary underline underline-offset-2">Contact Us</Link> page
+                for the full range of support options, and our{" "}
+                <Link to="/trust-safety" className="text-primary underline underline-offset-2">Trust &amp; Safety</Link>{" "}
+                page for how practitioner verification works on the platform.
               </p>
             </section>
           </div>

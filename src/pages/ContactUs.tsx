@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { SEO } from "@/components/seo/SEO";
+import { trackGoogleAdsEvent } from "@/lib/googleAds";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,18 @@ export default function ContactUs() {
           <p><strong>General Support:</strong> <a href="mailto:support@acapoliteconsulting.co.za" className="text-[#022D73] hover:underline">support@acapoliteconsulting.co.za</a></p>
           <p><strong>Billing & Refunds:</strong> <a href="mailto:accounts@acapoliteconsulting.co.za" className="text-[#022D73] hover:underline">accounts@acapoliteconsulting.co.za</a></p>
           <p><strong>Office Phone:</strong> <a href="tel:+27102886912" className="text-[#022D73] hover:underline">+27 10 288 6912</a></p>
+          <p>
+            <strong>WhatsApp:</strong>{" "}
+            <a
+              href="https://wa.me/27675575506"
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => trackGoogleAdsEvent("whatsapp_click", { link_location: "contact_us" })}
+              className="text-[#022D73] hover:underline"
+            >
+              Chat with us on WhatsApp
+            </a>
+          </p>
         </div>
       </div>
 

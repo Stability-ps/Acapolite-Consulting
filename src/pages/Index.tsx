@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { buildOrganizationSchema, buildWebsiteSchema } from "@/lib/structuredData";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { ScrollToTopButton } from "@/components/landing/ScrollToTopButton";
 import { Hero } from "@/components/landing/Hero";
@@ -40,6 +42,8 @@ const Index = () => {
         description="Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa."
         path="/"
       />
+      <JsonLd data={buildOrganizationSchema()} />
+      <JsonLd data={buildWebsiteSchema()} />
       <LandingHeader />
       <Hero />
       <HowItWorks />
