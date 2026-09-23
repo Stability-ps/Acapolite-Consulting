@@ -14,7 +14,7 @@ type ServiceCategory = {
 const categories: ServiceCategory[] = [
   {
     title: "SARS & Tax Assistance",
-    body: "Get support with SARS matters affecting individuals and businesses, from routine compliance to more involved cases. This can include SARS debt and payment arrangements, compromise applications, objections and disputes, and general SARS compliance matters. A practitioner reviews your situation before recommending a way forward.",
+    body: "Get support with SARS matters affecting individuals and businesses, including tax debt, payment arrangements, compromise applications, objections and disputes. Start with the SARS hub for the appropriate specialist guidance and assistance route.",
     href: "/sars-tax-assistance",
     linkLabel: "View SARS & Tax Assistance",
   },

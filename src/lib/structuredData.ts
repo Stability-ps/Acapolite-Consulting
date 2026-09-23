@@ -125,3 +125,23 @@ export function buildServiceSchema({ name, description, path }: ServiceSchemaInp
     provider: buildOrganizationRef(),
   };
 }
+
+
+export type BreadcrumbSchemaItem = {
+  name: string;
+  path: string;
+};
+
+/** BreadcrumbList for pages that render the same visible navigation hierarchy. */
+export function buildBreadcrumbSchema(items: BreadcrumbSchemaItem[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: `${SITE_URL}${item.path}`,
+    })),
+  };
+}
