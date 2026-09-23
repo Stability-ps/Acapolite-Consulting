@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { buildPersonSchema } from "@/lib/structuredData";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
 export default function AboutUs() {
@@ -10,6 +12,7 @@ export default function AboutUs() {
       description="Acapolite Consulting is a professional digital platform that connects individuals and businesses with qualified tax practitioners, accountants, and compliance professionals across South Africa."
       path="/about-us"
     />
+    <JsonLd data={buildPersonSchema()} />
     <div className="min-h-screen bg-surface-gradient px-4 py-12 sm:py-16">
       <div className="mx-auto w-full max-w-5xl">
         <div className="rounded-[32px] border border-border bg-card p-6 shadow-elevated sm:p-10">
@@ -31,6 +34,14 @@ export default function AboutUs() {
                 support. Many individuals and businesses struggle to find trusted professionals who can assist with
                 SARS matters, accounting services, and regulatory compliance. Our platform bridges this gap by
                 providing a structured and secure environment where clients and practitioners can connect efficiently.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold">Leadership</h2>
+              <p className="mt-2 text-muted-foreground">
+                Acapolite Consulting's leadership includes Patric Sandiso Sibande, a Registered Tax Practitioner
+                (SA)™ and member of the South African Institute of Taxation (SAIT).
               </p>
             </section>
 

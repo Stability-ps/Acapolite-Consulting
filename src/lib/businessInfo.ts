@@ -36,3 +36,11 @@ export const SOCIAL_LINKS = [
 // add a `address`/`geo` field to schema without a verified physical
 // address from the business.
 export const AREA_SERVED = "South Africa";
+
+// Explicitly approved for public disclosure. Do not add a SAIT membership
+// number, SARS tax practitioner number, years of experience, client counts,
+// or any other unverified detail without separate, explicit approval.
+export const LEADERSHIP_NAME = "Patric Sandiso Sibande";
+export const LEADERSHIP_TITLE = "Registered Tax Practitioner (SA)™";
+export const LEADERSHIP_BODY = "South African Institute of Taxation (SAIT)";
+export const LEADERSHIP_ID = `${SITE_URL}/about-us#patric-sibande`;
