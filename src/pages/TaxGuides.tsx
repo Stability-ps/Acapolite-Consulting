@@ -57,8 +57,8 @@ const guides: Guide[] = [
       }
     ],
     sources: [
-      { label: "SARS — Dispute a Tax Assessment or Decision", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/dispute-a-tax-assessment-or-decision/" },
-      { label: "Tax Administration Act 28 of 2011 — section 164", href: "https://www.sars.gov.za/wp-content/uploads/Legal/Acts/LAPD-LPrim-Act-2012-01-Tax-Administration-Act-2011.pdf" }
+      { label: "SARS — Dispute a Tax Assessment or Decision", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/" },
+      { label: "Tax Administration Act 28 of 2011 — section 164", href: "https://www.sars.gov.za/legal-counsel/tax-administration/" }
     ]
   },
   {
@@ -94,8 +94,8 @@ const guides: Guide[] = [
       }
     ],
     sources: [
-      { label: "SARS — Dispute a Tax Assessment or Decision", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/dispute-a-tax-assessment-or-decision/" },
-      { label: "SARS — Dispute Resolution", href: "https://www.sars.gov.za/legal-counsel/dispute-resolution-judgments/dispute-resolution/" }
+      { label: "SARS — Dispute a Tax Assessment or Decision", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/" },
+      { label: "SARS — Dispute Resolution", href: "https://www.sars.gov.za/legal-counsel/dispute-resolution-judgments/" }
     ]
   },
   {
@@ -133,7 +133,7 @@ const guides: Guide[] = [
     ],
     sources: [
       { label: "SARS — Owing SARS Money", href: "https://www.sars.gov.za/individuals/how-do-i-pay/owing-sars-money/" },
-      { label: "Tax Administration Act 28 of 2011 — sections 200–207", href: "https://www.sars.gov.za/wp-content/uploads/Legal/Acts/LAPD-LPrim-Act-2012-01-Tax-Administration-Act-2011.pdf" }
+      { label: "Tax Administration Act 28 of 2011 — sections 200–207", href: "https://www.sars.gov.za/legal-counsel/tax-administration/" }
     ]
   },
   {
@@ -169,7 +169,7 @@ const guides: Guide[] = [
     ],
     sources: [
       { label: "SARS — VAT Refunds for Vendors", href: "https://www.sars.gov.za/types-of-tax/value-added-tax/vat-refunds-for-vendors/" },
-      { label: "SARS — Complaints", href: "https://www.sars.gov.za/contact-us/complaints/" }
+      { label: "SARS — Complaints", href: "https://www.sars.gov.za/contact-us/lodge-a-complaint/" }
     ]
   },
   {
@@ -206,7 +206,7 @@ const guides: Guide[] = [
     ],
     sources: [
       { label: "SARS — Owing SARS Money", href: "https://www.sars.gov.za/individuals/how-do-i-pay/owing-sars-money/" },
-      { label: "Tax Administration Act 28 of 2011 — sections 167–168", href: "https://www.sars.gov.za/wp-content/uploads/Legal/Acts/LAPD-LPrim-Act-2012-01-Tax-Administration-Act-2011.pdf" }
+      { label: "Tax Administration Act 28 of 2011 — sections 167–168", href: "https://www.sars.gov.za/legal-counsel/tax-administration/" }
     ]
   },
   {
@@ -243,7 +243,7 @@ const guides: Guide[] = [
     sources: [
       { label: "SARS — Guide to Third Party Appointments via eFiling", href: "https://www.sars.gov.za/guide-to-third-party-appointments-via-efiling/" },
       { label: "SARS — Owing SARS Money", href: "https://www.sars.gov.za/individuals/how-do-i-pay/owing-sars-money/" },
-      { label: "Tax Administration Act 28 of 2011 — section 179", href: "https://www.sars.gov.za/wp-content/uploads/Legal/Acts/LAPD-LPrim-Act-2012-01-Tax-Administration-Act-2011.pdf" }
+      { label: "Tax Administration Act 28 of 2011 — section 179", href: "https://www.sars.gov.za/legal-counsel/tax-administration/" }
     ]
   },
   {
