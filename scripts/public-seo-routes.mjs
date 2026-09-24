@@ -1,6 +1,7 @@
 export const publicRoutes = [
   {
     path: "/",
+    lastmod: "2026-09-24",
     priority: "1.0",
     changefreq: "weekly",
     title: "Acapolite Consulting | Tax, Accounting & SARS Support South Africa",
