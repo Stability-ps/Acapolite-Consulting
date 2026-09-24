@@ -171,6 +171,14 @@ export const publicRoutes = [
     description: "Prepare VAT verification supporting documents by following the SARS letter, checking the correct VAT period and retaining proof of submission.",
   },
   {
+    path: "/tax-consultant-pretoria",
+    lastmod: "2026-09-24",
+    priority: "0.8",
+    changefreq: "monthly",
+    title: "Tax Consultant Pretoria | SARS, Tax & Accounting Support | Acapolite",
+    description: "Tax consultant support for Pretoria individuals and businesses. Get help with SARS debt, objections, VAT, tax returns, accounting and bookkeeping from a Registered Tax Practitioner (SA)™.",
+  },
+  {
     path: "/request-tax-assistance",
     lastmod: "2026-09-24",
     priority: "0.9",
