@@ -19,6 +19,24 @@ const categories: ServiceCategory[] = [
     linkLabel: "View SARS & Tax Assistance",
   },
   {
+    title: "SARS Tax Compliance Status",
+    body: "Get help identifying and resolving issues affecting SARS Tax Compliance Status, including outstanding returns, debt and related account matters.",
+    href: "/sars-tax-compliance-status",
+    linkLabel: "View Tax Compliance Support",
+  },
+  {
+    title: "SARS Audit & Verification",
+    body: "Get professional assistance reviewing SARS verification or audit letters, organising supporting documents and responding to the tax period under review.",
+    href: "/sars-audit-verification",
+    linkLabel: "View Audit & Verification Support",
+  },
+  {
+    title: "PAYE, UIF & SDL",
+    body: "Get employer payroll-tax support for PAYE, UIF, SDL, EMP201-related matters, outstanding periods and payroll record reconciliation.",
+    href: "/paye-uif-sdl-services",
+    linkLabel: "View PAYE, UIF & SDL Services",
+  },
+  {
     title: "VAT Services",
     body: "Get professional assistance with VAT registration, VAT201 returns, compliance, SARS verification and audit requests, and VAT refund matters.",
     href: "/vat-services",
@@ -81,14 +99,6 @@ export default function OurServices() {
                 </Link>
               </div>
             ))}
-          </section>
-
-          <section className="rounded-2xl border border-border bg-muted/30 p-5 sm:p-6">
-            <h2 className="text-base font-semibold text-foreground">PAYE &amp; Payroll Taxes</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              PAYE, UIF and SDL matters remain part of SARS &amp; Tax Assistance and Accounting Services. Submit a
-              request and specify the payroll tax type and periods involved so the matter can be routed appropriately.
-            </p>
           </section>
 
           <section className="rounded-2xl border border-border bg-muted/30 p-5 sm:p-6">
