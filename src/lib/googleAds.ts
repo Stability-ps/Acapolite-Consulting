@@ -61,12 +61,21 @@ export function getAdAttribution(): Attribution {
 export function trackGoogleAdsLeadConversion(transactionId?: string) {
   const gtag = getGtag();
   if (!gtag) {
-    console.warn("Google Ads conversion not sent: gtag is unavailable.");
+    console.warn("Google Ads/GA4 lead conversion not sent: gtag is unavailable.");
     return;
   }
 
+  // Existing Google Ads conversion. This remains the bidding signal for the
+  // current Ads account and is fired only after a service request is stored.
   gtag("event", "conversion", {
     send_to: LEAD_CONVERSION_SEND_TO,
+    transaction_id: transactionId || undefined,
+  });
+
+  // GA4 lead event for the Analytics property configured in index.html.
+  // Do not fire this for wizard page views or Step 5 review visits.
+  gtag("event", "generate_lead", {
+    lead_source: "request_tax_assistance",
     transaction_id: transactionId || undefined,
   });
 }
