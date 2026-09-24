@@ -32,6 +32,31 @@ if (exactSeoRewriteSources.length !== rawHtmlSeoRoutes.length) {
   );
 }
 
+
+const redirects = vercel.redirects || [];
+const legacyServicesRedirect = redirects.find((redirect) => redirect.source === "/services");
+if (
+  !legacyServicesRedirect ||
+  legacyServicesRedirect.destination !== "/our-services" ||
+  legacyServicesRedirect.permanent !== true
+) {
+  throw new Error("SEO routing validation failed: /services must permanently redirect to /our-services");
+}
+
+if (rewriteMap.has("/(.*)")) {
+  throw new Error("SEO routing validation failed: blanket SPA rewrite would turn unknown URLs into soft 404s");
+}
+
+for (const route of ["/login", "/register", "/reset-password", "/privacy-policy", "/data-deletion", "/refund-policy", "/disclaimer", "/practitioner-guidelines", "/cookie-policy", "/terms-and-conditions", "/request-professional-help", "/dashboard", "/dashboard/(.*)"]) {
+  if (rewriteMap.get(route) !== "/index.html") {
+    throw new Error(`SEO routing validation failed: expected SPA deep-link rewrite for ${route}`);
+  }
+}
+
+if (rawHtmlSeoRoutes.some((route) => route.path === "/request-professional-help")) {
+  throw new Error("SEO routing validation failed: paid landing page must not be part of raw organic SEO routes");
+}
+
 console.log(
   `SEO routing validated for ${rawHtmlSeoRoutes.length} route-specific HTML rewrites`,
 );
