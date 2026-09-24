@@ -30,7 +30,7 @@ import { publicRoutes as routes } from "./public-seo-routes.mjs";
 const urls = routes
   .map(
     (r) =>
-      `  <url>\n    <loc>${SITE_URL}${r.path}</loc>\n    <changefreq>${r.changefreq}</changefreq>\n    <priority>${r.priority}</priority>\n  </url>`,
+      `  <url>\n    <loc>${SITE_URL}${r.path}</loc>${r.lastmod ? `\n    <lastmod>${r.lastmod}</lastmod>` : ""}\n    <changefreq>${r.changefreq}</changefreq>\n    <priority>${r.priority}</priority>\n  </url>`,
   )
   .join("\n");
 
