@@ -215,6 +215,15 @@ function PageShell({
           <SarsBreadcrumbs items={crumbs} />
           {children}
           <OfficialSources items={pageSources} />
+          <div className="rounded-2xl border border-border bg-background/70 p-5">
+            <p className="text-sm font-semibold text-foreground">
+              Reviewed by Patric Sandiso Sibande — Registered Tax Practitioner (SA)™
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Practitioner review helps keep the process guidance aligned with the primary SARS and legislative sources cited on this page.
+              {" "}<Link to="/about-us" className="font-medium text-primary hover:underline">About Acapolite and its leadership</Link>.
+            </p>
+          </div>
           <p className="text-xs leading-5 text-muted-foreground">
             Last reviewed: {REVIEWED_DATE}. Acapolite Consulting is an independent professional services platform
             and is not affiliated with or endorsed by SARS. Outcomes depend on the taxpayer's facts, compliance
