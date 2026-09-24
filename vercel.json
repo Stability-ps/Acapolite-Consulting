@@ -33,6 +33,11 @@
       ],
       "destination": "https://acapoliteconsulting.co.za/$1",
       "permanent": true
+    },
+    {
+      "source": "/services",
+      "destination": "/our-services",
+      "permanent": true
     }
   ],
   "headers": [
@@ -126,6 +131,34 @@
     {
       "source": "/vat-services",
       "destination": "/vat-services/index.html"
+    },
+    {
+      "source": "/how-acapolite-works",
+      "destination": "/how-acapolite-works/index.html"
+    },
+    {
+      "source": "/practitioners",
+      "destination": "/practitioners/index.html"
+    },
+    {
+      "source": "/about-us",
+      "destination": "/about-us/index.html"
+    },
+    {
+      "source": "/contact-us",
+      "destination": "/contact-us/index.html"
+    },
+    {
+      "source": "/help-center",
+      "destination": "/help-center/index.html"
+    },
+    {
+      "source": "/faq",
+      "destination": "/faq/index.html"
+    },
+    {
+      "source": "/trust-safety",
+      "destination": "/trust-safety/index.html"
     },
     {
       "source": "/(.*)",
