@@ -29,6 +29,7 @@ import Practitioners from "./pages/Practitioners";
 import ContactUs from "./pages/ContactUs";
 import HelpCenter from "./pages/HelpCenter";
 import AboutUs from "./pages/AboutUs";
+import TaxConsultantPretoria from "./pages/TaxConsultantPretoria";
 import {
   AccountingServicesLandingPage,
   BookkeepingServicesLandingPage,
@@ -134,6 +135,7 @@ function AppRoutes() {
             <Route path="/contact-us" element={<ContactUs />} />
             <Route path="/help-center" element={<HelpCenter />} />
             <Route path="/about-us" element={<AboutUs />} />
+            <Route path="/tax-consultant-pretoria" element={<TaxConsultantPretoria />} />
             <Route path="/tax-guides" element={<TaxGuidesHub />} />
             <Route path="/tax-guides/sars-suspension-of-payment-section-164" element={<SarsSuspensionPaymentGuide />} />
             <Route path="/tax-guides/sars-objection-deadline-guide" element={<SarsObjectionDeadlineGuide />} />
