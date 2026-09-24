@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -40,35 +40,36 @@ import {
   TaxReturnsLandingPage,
   VatServicesLandingPage,
 } from "./pages/ServiceLandingPages";
-import Dashboard from "./pages/Dashboard";
-import DashboardOverview from "./pages/dashboard/Overview";
-import TaxCoachAIClient from "./pages/dashboard/TaxCoachAIClient";
-import ServiceRequests from "./pages/dashboard/ServiceRequests";
-import Cases from "./pages/dashboard/Cases";
-import Documents from "./pages/dashboard/Documents";
-import Invoices from "./pages/dashboard/Invoices";
-import Messages from "./pages/dashboard/Messages";
-import Notifications from "./pages/dashboard/Notifications";
-import Deadlines from "./pages/dashboard/Deadlines";
-import AdminDeadlines from "./pages/dashboard/admin/AdminDeadlines";
-import SettingsPage from "./pages/dashboard/Settings";
-import AdminClients from "./pages/dashboard/admin/AdminClients";
-import AdminCases from "./pages/dashboard/admin/AdminCases";
-import AdminInvoices from "./pages/dashboard/admin/AdminInvoices";
-import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
-import AdminMessages from "./pages/dashboard/admin/AdminMessages";
-import AdminNotifications from "./pages/dashboard/admin/AdminNotifications";
-import AdminClientWorkspace from "./pages/dashboard/admin/AdminClientWorkspace";
-import AdminUsers from "./pages/dashboard/admin/AdminUsers";
-import AdminServiceRequests from "./pages/dashboard/admin/AdminServiceRequests";
-import PractitionerProfile from "./pages/dashboard/admin/PractitionerProfile";
-import PractitionerCredits from "./pages/dashboard/admin/PractitionerCredits";
-import PractitionerDocumentsUploadPage from "./pages/dashboard/admin/PractitionerDocumentsUploadPage";
-import AdminActivityLog from "./pages/dashboard/admin/AdminActivityLog";
-import TaxCoachAIStaff from "./pages/dashboard/admin/TaxCoachAIStaff";
-import AdminWhatsAppQA from "./pages/dashboard/admin/AdminWhatsAppQA";
-import AdminSocialMedia from "./pages/dashboard/admin/AdminSocialMedia";
-import AdminAiKnowledge from "./pages/dashboard/admin/AdminAiKnowledge";
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const DashboardOverview = lazy(() => import("./pages/dashboard/Overview"));
+const TaxCoachAIClient = lazy(() => import("./pages/dashboard/TaxCoachAIClient"));
+const ServiceRequests = lazy(() => import("./pages/dashboard/ServiceRequests"));
+const Cases = lazy(() => import("./pages/dashboard/Cases"));
+const Documents = lazy(() => import("./pages/dashboard/Documents"));
+const Invoices = lazy(() => import("./pages/dashboard/Invoices"));
+const Messages = lazy(() => import("./pages/dashboard/Messages"));
+const Notifications = lazy(() => import("./pages/dashboard/Notifications"));
+const Deadlines = lazy(() => import("./pages/dashboard/Deadlines"));
+const AdminDeadlines = lazy(() => import("./pages/dashboard/admin/AdminDeadlines"));
+const SettingsPage = lazy(() => import("./pages/dashboard/Settings"));
+const AdminClients = lazy(() => import("./pages/dashboard/admin/AdminClients"));
+const AdminCases = lazy(() => import("./pages/dashboard/admin/AdminCases"));
+const AdminInvoices = lazy(() => import("./pages/dashboard/admin/AdminInvoices"));
+const AdminDocuments = lazy(() => import("./pages/dashboard/admin/AdminDocuments"));
+const AdminMessages = lazy(() => import("./pages/dashboard/admin/AdminMessages"));
+const AdminNotifications = lazy(() => import("./pages/dashboard/admin/AdminNotifications"));
+const AdminClientWorkspace = lazy(() => import("./pages/dashboard/admin/AdminClientWorkspace"));
+const AdminUsers = lazy(() => import("./pages/dashboard/admin/AdminUsers"));
+const AdminServiceRequests = lazy(() => import("./pages/dashboard/admin/AdminServiceRequests"));
+const PractitionerProfile = lazy(() => import("./pages/dashboard/admin/PractitionerProfile"));
+const PractitionerCredits = lazy(() => import("./pages/dashboard/admin/PractitionerCredits"));
+const PractitionerDocumentsUploadPage = lazy(() => import("./pages/dashboard/admin/PractitionerDocumentsUploadPage"));
+const AdminActivityLog = lazy(() => import("./pages/dashboard/admin/AdminActivityLog"));
+const TaxCoachAIStaff = lazy(() => import("./pages/dashboard/admin/TaxCoachAIStaff"));
+const AdminWhatsAppQA = lazy(() => import("./pages/dashboard/admin/AdminWhatsAppQA"));
+const AdminSocialMedia = lazy(() => import("./pages/dashboard/admin/AdminSocialMedia"));
+const AdminAiKnowledge = lazy(() => import("./pages/dashboard/admin/AdminAiKnowledge"));
+
 import NotFound from "./pages/NotFound";
 import { SarsDebtPage, SarsPaymentArrangementsPage, SarsCompromisePage, SarsObjectionsPage } from "./pages/SarsMoneyPages";
 
@@ -90,7 +91,8 @@ function AppRoutes() {
   }, [location.pathname]);
 
   return (
-    <Routes location={location} key={location.pathname}>
+    <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-muted-foreground">Loading…</div>}>
+      <Routes location={location} key={location.pathname}>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -267,7 +269,8 @@ function AppRoutes() {
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 
