@@ -214,6 +214,15 @@ function PageShell({
         <div className="space-y-10 font-body">
           <SarsBreadcrumbs items={crumbs} />
           {children}
+          <section className="rounded-[28px] border border-border bg-background/60 p-6">
+            <h2 className="text-lg font-semibold text-foreground">Related practitioner-reviewed tax guides</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Explore source-backed guidance on objections, suspension of payment, debt arrangements, compromises and VAT refund delays.
+            </p>
+            <Link to="/tax-guides" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+              Browse SARS &amp; Tax Guides <ArrowRight className="h-4 w-4" />
+            </Link>
+          </section>
           <OfficialSources items={pageSources} />
           <div className="rounded-2xl border border-border bg-background/70 p-5">
             <p className="text-sm font-semibold text-foreground">

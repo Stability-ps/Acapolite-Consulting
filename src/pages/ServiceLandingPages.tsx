@@ -77,6 +77,7 @@ const configs: Record<string, LandingPageConfig> = {
     ctaBody:
       "Submit a secure service request and select the SARS or tax services relevant to your situation.",
     relatedLinks: [
+      { label: "SARS & Tax Guides", href: "/tax-guides" },
       { label: "SARS Debt Help", href: "/sars-debt" },
       { label: "Payment Arrangements", href: "/sars-payment-arrangements" },
       { label: "Section 200 Compromise", href: "/sars-compromise" },
