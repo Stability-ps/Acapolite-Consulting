@@ -94,7 +94,14 @@ export const publicRoutes = [
     title: "VAT Registration, Returns & SARS VAT Assistance | Acapolite Consulting",
     description: "VAT services across South Africa for registration, VAT201 returns, compliance, SARS verification, audits and VAT refund matters.",
   },
-  { path: "/request-tax-assistance", priority: "0.9", changefreq: "monthly" },
+  {
+    path: "/request-tax-assistance",
+    lastmod: "2026-09-24",
+    priority: "0.9",
+    changefreq: "monthly",
+    title: "Request Tax Assistance | Acapolite Consulting",
+    description: "Request professional tax and SARS assistance from Acapolite Consulting. Tell us what you need help with and submit your enquiry securely online.",
+  },
   {
     path: "/how-acapolite-works",
     lastmod: "2026-09-24",
