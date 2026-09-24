@@ -368,7 +368,7 @@ export function TaxGuidesHub() {
   useSeo({
     title: "SARS & Tax Guides South Africa | Acapolite Consulting",
     description: "Practitioner-reviewed SARS and tax guides covering objections, suspension of payment, tax debt compromises, payment arrangements and VAT refund delays.",
-    canonicalPath: "/tax-guides",
+    path: "/tax-guides",
   });
 
   return (
@@ -402,7 +402,7 @@ export function TaxGuidesHub() {
 
 function GuidePage({ guide }: { guide: Guide }) {
   const path = `/tax-guides/${guide.slug}`;
-  useSeo({ title: `${guide.title} | Acapolite Consulting`, description: guide.description, canonicalPath: path });
+  useSeo({ title: `${guide.title} | Acapolite Consulting`, description: guide.description, path });
   return (
     <PublicPageLayout
       eyebrow="Practitioner-reviewed tax guide"
