@@ -9,8 +9,6 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { RequireRole } from "@/components/auth/RequireRole";
 import { RequireStaffPermission } from "@/components/auth/RequireStaffPermission";
 import { DashboardIndexRedirect } from "@/components/auth/DashboardIndexRedirect";
-import { StaffOverviewRouter } from "@/components/auth/StaffOverviewRouter";
-import { StaffExternalToolsRouter } from "@/components/auth/StaffExternalToolsRouter";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -40,6 +38,8 @@ import {
   TaxReturnsLandingPage,
   VatServicesLandingPage,
 } from "./pages/ServiceLandingPages";
+const StaffOverviewRouter = lazy(() => import("@/components/auth/StaffOverviewRouter").then((module) => ({ default: module.StaffOverviewRouter })));
+const StaffExternalToolsRouter = lazy(() => import("@/components/auth/StaffExternalToolsRouter").then((module) => ({ default: module.StaffExternalToolsRouter })));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const DashboardOverview = lazy(() => import("./pages/dashboard/Overview"));
 const TaxCoachAIClient = lazy(() => import("./pages/dashboard/TaxCoachAIClient"));
