@@ -208,6 +208,157 @@ const guides: Guide[] = [
       { label: "SARS — Owing SARS Money", href: "https://www.sars.gov.za/individuals/how-do-i-pay/owing-sars-money/" },
       { label: "Tax Administration Act 28 of 2011 — sections 167–168", href: "https://www.sars.gov.za/wp-content/uploads/Legal/Acts/LAPD-LPrim-Act-2012-01-Tax-Administration-Act-2011.pdf" }
     ]
+  },
+  {
+    slug: "sars-final-demand-third-party-appointment",
+    title: "SARS Final Demand and Third-Party Appointment: What Happens When Tax Debt Is Not Addressed",
+    description: "Understand SARS final demands and third-party appointments under section 179, including how banks, employers or other third parties can become part of tax-debt collection.",
+    intro: "A SARS final demand is a debt-collection warning that should be treated as time-sensitive. If outstanding tax debt is not addressed, SARS has statutory recovery mechanisms that can include appointing a third party that holds or owes money for the taxpayer.",
+    serviceHref: "/sars-debt",
+    serviceLabel: "SARS tax-debt assistance",
+    sections: [
+      {
+        heading: "What a third-party appointment means",
+        paragraphs: [
+          "Under section 179 of the Tax Administration Act, SARS may require a person who holds or owes money for or to a taxpayer to pay money to SARS in satisfaction of outstanding tax debt. SARS guidance identifies banks, employers and other third parties as examples.",
+          "SARS's current Third Party Appointment guide states that this collection process follows a final demand where the taxpayer has not complied with the demand for payment. The legislation also contains circumstances in which SARS need not issue a final demand if a senior SARS official is satisfied that doing so would prejudice collection."
+        ]
+      },
+      {
+        heading: "What to check immediately",
+        bullets: [
+          "Confirm the tax type, periods and balance reflected by SARS and reconcile them to the taxpayer's account.",
+          "Open the final demand and other SARS correspondence and note the dates, case references and recovery steps described.",
+          "Identify whether the debt is disputed, undisputed, already subject to an arrangement, or affected by returns or payments not yet correctly allocated.",
+          "Consider the appropriate statutory route rather than ignoring the demand: payment, an instalment arrangement, compromise where applicable, or a dispute and separate suspension-of-payment process where there is a genuine dispute."
+        ]
+      },
+      {
+        heading: "Why early action matters",
+        paragraphs: [
+          "A final demand is not the point to begin guessing at the account balance. The practical first step is to establish exactly what SARS says is outstanding and what process is already under way. A taxpayer who has received a third-party appointment or whose bank has already acted should preserve the notices and transaction records for review."
+        ]
+      }
+    ],
+    sources: [
+      { label: "SARS — Guide to Third Party Appointments via eFiling", href: "https://www.sars.gov.za/guide-to-third-party-appointments-via-efiling/" },
+      { label: "SARS — Owing SARS Money", href: "https://www.sars.gov.za/individuals/how-do-i-pay/owing-sars-money/" },
+      { label: "Tax Administration Act 28 of 2011 — section 179", href: "https://www.sars.gov.za/wp-content/uploads/Legal/Acts/LAPD-LPrim-Act-2012-01-Tax-Administration-Act-2011.pdf" }
+    ]
+  },
+  {
+    slug: "sars-request-for-reasons",
+    title: "SARS Request for Reasons: When It Fits Before an Objection",
+    description: "A practitioner-reviewed guide to requesting reasons from SARS before an objection, including the current 30-business-day request period and how the process affects the objection timeline.",
+    intro: "A Request for Reasons is intended to help a taxpayer understand the basis of an assessment sufficiently to formulate an objection. It is not a general SARS follow-up channel and it should be used for the assessment or account outcomes for which the process is available.",
+    serviceHref: "/sars-objections",
+    serviceLabel: "SARS objections and dispute assistance",
+    sections: [
+      {
+        heading: "When reasons can help",
+        paragraphs: [
+          "SARS states that a taxpayer who does not understand or is aggrieved by an assessment may request reasons to enable the taxpayer to formulate an objection. The request comes before the objection and should identify the assessment or decision and the reasons that are needed.",
+          "SARS's Request for Reasons page states that the request must be delivered within 30 business days from the date of the assessment or decision, subject to the applicable dispute rules and process."
+        ]
+      },
+      {
+        heading: "Do not use it for the wrong problem",
+        bullets: [
+          "Use Request for Correction where the issue is an error that the RFC process permits the taxpayer to correct.",
+          "Do not use Request for Reasons merely to chase an outstanding refund or obtain general tax advice.",
+          "For supported tax types, follow the eFiling or prescribed SARS process rather than sending an informal letter to an unrelated channel.",
+          "Keep the reasons outcome because it affects how the grounds of objection are prepared and can affect the objection period."
+        ]
+      },
+      {
+        heading: "Effect on the objection timeline",
+        paragraphs: [
+          "SARS states that once a valid Request for Reasons for an assessment has been submitted, the period for lodging the objection is extended in accordance with the dispute-resolution rules. The taxpayer should calculate the eventual objection deadline from the actual reasons correspondence and procedural history rather than assume the original assessment date still controls."
+        ]
+      }
+    ],
+    sources: [
+      { label: "SARS — Request for Reasons", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/request-for-reasons/" },
+      { label: "SARS — Objections", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/objections/" },
+      { label: "SARS — Guide to submit a dispute via eFiling", href: "https://www.sars.gov.za/guide-to-submit-a-dispute-via-efiling/" }
+    ]
+  },
+  {
+    slug: "sars-objection-disallowed-appeal-adr",
+    title: "SARS Objection Disallowed: Appeal, ADR and the Next Procedural Step",
+    description: "What to review after SARS disallows or partially allows an objection, including the 30-business-day appeal period and the role of Alternative Dispute Resolution.",
+    intro: "A disallowed objection does not necessarily end a tax dispute. SARS provides an appeal process, and a valid appeal may in appropriate cases proceed through Alternative Dispute Resolution by mutual agreement.",
+    serviceHref: "/sars-objections",
+    serviceLabel: "SARS appeal and dispute assistance",
+    sections: [
+      {
+        heading: "Start with the objection outcome",
+        paragraphs: [
+          "Read the SARS objection outcome against the grounds and supporting material that were actually submitted. Identify which grounds were accepted, rejected or only partly allowed, and the reasons SARS gives for its decision.",
+          "SARS states that an appeal must generally be lodged within 30 business days after delivery of the objection outcome. The rules also provide limited extension mechanisms where the relevant requirements are met."
+        ]
+      },
+      {
+        heading: "Preparing the appeal",
+        bullets: [
+          "Identify which grounds of objection are being taken on appeal.",
+          "Explain why the taxpayer disagrees with SARS's decision on those grounds.",
+          "Include substantiating documents relevant to the grounds of appeal.",
+          "Do not use the appeal to introduce a new objection against a part or amount of the assessment that was not previously objected to."
+        ]
+      },
+      {
+        heading: "Where ADR fits",
+        paragraphs: [
+          "SARS explains that after a valid appeal, SARS and the taxpayer may by mutual agreement attempt to resolve the appeal through the Alternative Dispute Resolution process. ADR is therefore part of the appeal framework; it is not a substitute for lodging a valid appeal within the applicable procedural period.",
+          "The next step depends on the objection outcome, the grounds preserved in the dispute, the appeal deadline and whether ADR is suitable for the particular matter."
+        ]
+      }
+    ],
+    sources: [
+      { label: "SARS — Appeals", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/appeals/" },
+      { label: "SARS — Dispute Resolution Process", href: "https://www.sars.gov.za/legal-counsel/dispute-resolution-judgments/dispute-resolution-process/" },
+      { label: "SARS — What if I do not agree?", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/" }
+    ]
+  },
+  {
+    slug: "sars-vat-verification-supporting-documents",
+    title: "SARS VAT Verification: Supporting Documents and Submission Checks",
+    description: "A practical guide to VAT verification supporting documents, SARS correspondence, eFiling uploads and what vendors should check before submitting relevant material.",
+    intro: "VAT verification is a check of information declared in a return against supporting records and other information available to SARS. The correct document pack depends on the verification letter and the transactions SARS has asked the vendor to substantiate.",
+    serviceHref: "/vat-services",
+    serviceLabel: "VAT verification and compliance assistance",
+    sections: [
+      {
+        heading: "Follow the verification letter",
+        paragraphs: [
+          "SARS notifies a taxpayer selected for verification and specifies the information or documents required and the applicable due date. For VAT, the supporting-document link becomes available on the VAT201 work page after the relevant SARS correspondence is issued.",
+          "SARS guidance says relevant material should be uploaded when SARS has requested it. The vendor should therefore build the submission around the actual verification letter rather than upload a generic bundle that does not answer the request."
+        ]
+      },
+      {
+        heading: "Before clicking Submit to SARS",
+        bullets: [
+          "Read the verification letter and map each requested item to the document or reconciliation that answers it.",
+          "Check that invoices, schedules, accounting records and other records are for the correct VAT period and transactions.",
+          "Confirm that every intended file has uploaded successfully and is readable before final submission.",
+          "Keep the SARS letter, case reference and proof or status showing that the material was submitted.",
+          "If a discrepancy remains after verification and SARS issues a revised assessment, review the assessment and the available correction or dispute route."
+        ]
+      },
+      {
+        heading: "Verification and audit are different",
+        paragraphs: [
+          "SARS describes verification as checking information in a declaration or return against third-party data, financial and accounting records and supporting documents. An audit is a broader examination of financial statements, accounting records and supporting documents to determine whether the tax position was correctly declared.",
+          "Where SARS identifies financial risk, a matter can be referred for audit. Vendors expecting a refund should also be aware that an unresolved verification or audit can affect when the refund is released."
+        ]
+      }
+    ],
+    sources: [
+      { label: "SARS — Guide to Completing the VAT201 Return", href: "https://www.sars.gov.za/guide-to-completing-the-value-added-tax-vat201-return/" },
+      { label: "SARS — Being Audited or Selected for Verification", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/being-audited-or-selected-for-verification/" },
+      { label: "SARS — Upload Supporting Documents", href: "https://www.sars.gov.za/faq/how-do-i-upload-submit-supporting-documents/" }
+    ]
   }
 ];
 
@@ -350,3 +501,7 @@ export function SarsObjectionDeadlineGuide() { return <GuidePage guide={guides[1
 export function SarsCompromiseChecklistGuide() { return <GuidePage guide={guides[2]} />; }
 export function SarsVatRefundDelayGuide() { return <GuidePage guide={guides[3]} />; }
 export function SarsPaymentArrangementDocumentsGuide() { return <GuidePage guide={guides[4]} />; }
+export function SarsFinalDemandGuide() { return <GuidePage guide={guides[5]} />; }
+export function SarsRequestForReasonsGuide() { return <GuidePage guide={guides[6]} />; }
+export function SarsObjectionDisallowedGuide() { return <GuidePage guide={guides[7]} />; }
+export function SarsVatVerificationGuide() { return <GuidePage guide={guides[8]} />; }
