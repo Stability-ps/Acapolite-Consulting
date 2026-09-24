@@ -113,6 +113,18 @@
       "destination": "/sars-objections/index.html"
     },
     {
+      "source": "/paye-uif-sdl-services",
+      "destination": "/paye-uif-sdl-services/index.html"
+    },
+    {
+      "source": "/sars-audit-verification",
+      "destination": "/sars-audit-verification/index.html"
+    },
+    {
+      "source": "/sars-tax-compliance-status",
+      "destination": "/sars-tax-compliance-status/index.html"
+    },
+    {
       "source": "/accounting-services",
       "destination": "/accounting-services/index.html"
     },
