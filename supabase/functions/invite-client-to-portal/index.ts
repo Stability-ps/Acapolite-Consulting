@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { deriveInviteFullName, isValidInviteEmail } from "../_shared/clientPortalInvite.ts";
+import { inviteSingleClientToPortal } from "../_shared/clientPortalInvite.ts";
 
 // Grants portal access to an existing, already-created clients row. Never
 // generates or accepts a password: uses Supabase's admin invite flow
@@ -12,6 +12,19 @@ import { deriveInviteFullName, isValidInviteEmail } from "../_shared/clientPorta
 // already exists for that email, this refuses to create a second account
 // and reports it back as a match to review instead (never silently
 // duplicates or auto-merges).
+//
+// Authorization (PR8 hardening): role admin/consultant alone used to be
+// enough to invite ANY client in the system, regardless of
+// staff_permissions.can_manage_clients or whether this consultant is even
+// assigned to that client. Both gaps are closed here:
+//   - can_manage_clients is now checked server-side, mirroring the button's
+//     own client-side gating in AdminClients.tsx instead of trusting it.
+//   - the target client's visibility is re-checked through the CALLER's own
+//     RLS-scoped client (see inviteSingleClientToPortal) before any
+//     service-role access, so a restricted-scope consultant can't invite a
+//     client outside their assignment by guessing/enumerating client_id.
+// The actual invite mechanics live in _shared/clientPortalInvite.ts, shared
+// verbatim with bulk-invite-clients-to-portal.
 
 type InvitePayload = {
   client_id?: string;
@@ -69,17 +82,23 @@ Deno.serve(async (request) => {
       return jsonResponse(request, { error: "You must be signed in to invite clients to the portal." }, 401);
     }
 
-    const { data: callerProfile, error: callerProfileError } = await callerClient
-      .from("profiles")
-      .select("role")
-      .eq("id", callerUser.id)
-      .maybeSingle();
+    const [{ data: callerProfile, error: callerProfileError }, { data: callerPermissions, error: callerPermissionsError }] = await Promise.all([
+      callerClient.from("profiles").select("role").eq("id", callerUser.id).maybeSingle(),
+      callerClient.from("staff_permissions").select("can_manage_clients").eq("profile_id", callerUser.id).maybeSingle(),
+    ]);
 
     if (callerProfileError) {
       return jsonResponse(request, { error: callerProfileError.message }, 400);
     }
+    if (callerPermissionsError) {
+      return jsonResponse(request, { error: callerPermissionsError.message }, 400);
+    }
     if (callerProfile?.role !== "admin" && callerProfile?.role !== "consultant") {
       return jsonResponse(request, { error: "Only Acapolite staff can invite clients to the portal." }, 403);
+    }
+    const isAuthorised = callerProfile.role === "admin" || callerPermissions?.can_manage_clients === true;
+    if (!isAuthorised) {
+      return jsonResponse(request, { error: "Inviting clients to the portal is not enabled for this account." }, 403);
     }
 
     const payload = (await request.json()) as InvitePayload;
@@ -88,84 +107,38 @@ Deno.serve(async (request) => {
       return jsonResponse(request, { error: "client_id is required." }, 400);
     }
 
-    const { data: client, error: clientError } = await adminClient
-      .from("clients")
-      .select("id, profile_id, email, first_name, last_name, company_name, client_type")
-      .eq("id", clientId)
-      .maybeSingle();
-
-    if (clientError) {
-      return jsonResponse(request, { error: clientError.message }, 400);
-    }
-    if (!client) {
-      return jsonResponse(request, { error: "Client not found." }, 404);
-    }
-    if (client.profile_id) {
-      return jsonResponse(request, { error: "This client already has a linked portal account." }, 400);
-    }
-
-    const email = (client.email ?? "").trim().toLowerCase();
-    if (!isValidInviteEmail(email)) {
-      return jsonResponse(request, { error: "This client doesn't have a valid email address to invite." }, 400);
-    }
-
-    const { data: existingProfile, error: existingProfileError } = await adminClient
-      .from("profiles")
-      .select("id, email, full_name")
-      .ilike("email", email)
-      .maybeSingle();
-
-    if (existingProfileError) {
-      return jsonResponse(request, { error: existingProfileError.message }, 400);
-    }
-
-    if (existingProfile) {
-      return jsonResponse(request, {
-        status: "existing_account_found",
-        existing_email: existingProfile.email,
-        existing_profile_id: existingProfile.id,
-      }, 200);
-    }
-
-    const fullName = deriveInviteFullName(client, email);
-
     const portalUrl = (Deno.env.get("PORTAL_URL") || "https://acapoliteconsulting.co.za").replace(/\/+$/, "");
+    const result = await inviteSingleClientToPortal({ adminClient, callerClient, clientId, portalUrl });
 
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${portalUrl}/reset-password`,
-      data: {
-        role: "client",
-        account_type: "client",
-        full_name: fullName,
-        client_type: client.client_type,
-        linking_client_id: client.id,
-      },
-    });
-
-    if (inviteError || !inviteData?.user) {
-      return jsonResponse(request, { error: inviteError?.message || "Unable to send the portal invitation." }, 400);
+    switch (result.status) {
+      case "not_found":
+        return jsonResponse(request, { error: "Client not found or not accessible." }, 404);
+      case "already_linked":
+        return jsonResponse(request, { error: "This client already has a linked portal account." }, 400);
+      case "invalid_email":
+        return jsonResponse(request, { error: "This client doesn't have a valid email address to invite." }, 400);
+      case "existing_account_found":
+        return jsonResponse(request, {
+          status: "existing_account_found",
+          existing_email: result.existingEmail,
+          existing_profile_id: result.existingProfileId,
+        }, 200);
+      case "invite_failed":
+        return jsonResponse(request, { error: result.message }, 400);
+      case "link_verification_failed":
+        return jsonResponse(request, { error: "The invitation was sent, but linking it to this client's record failed. Check the client manually before retrying." }, 500);
+      case "invited": {
+        await adminClient.from("system_activity_log").insert({
+          actor_profile_id: callerUser.id,
+          actor_role: callerProfile.role,
+          action: "client_portal_invited",
+          target_type: "client",
+          target_id: clientId,
+          metadata: { email: result.email },
+        });
+        return jsonResponse(request, { status: "invited", profile_id: result.profileId }, 200);
+      }
     }
-
-    const { data: linkedClient, error: verifyError } = await adminClient
-      .from("clients")
-      .select("profile_id")
-      .eq("id", clientId)
-      .maybeSingle();
-
-    if (verifyError || linkedClient?.profile_id !== inviteData.user.id) {
-      return jsonResponse(request, { error: "The invitation was sent, but linking it to this client's record failed. Check the client manually before retrying." }, 500);
-    }
-
-    await adminClient.from("system_activity_log").insert({
-      actor_profile_id: callerUser.id,
-      actor_role: callerProfile.role,
-      action: "client_portal_invited",
-      target_type: "client",
-      target_id: clientId,
-      metadata: { email },
-    });
-
-    return jsonResponse(request, { status: "invited", profile_id: inviteData.user.id }, 200);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error while inviting this client to the portal.";
     return jsonResponse(request, { error: message }, 500);

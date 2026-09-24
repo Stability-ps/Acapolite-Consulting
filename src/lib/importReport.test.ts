@@ -79,4 +79,25 @@ describe("buildImportReportRows", () => {
     );
     expect(built[0].Outcome).toContain("Unrecognised status");
   });
+
+  // PR8: a blocked/skipped/failed row's client_name/reason/duplicate_reason
+  // can echo raw text straight from an uploaded (attacker-controllable) CSV
+  // row that was never inserted into the DB - this is the one place that
+  // text can still reach an exported spreadsheet cell unvalidated.
+  it("neutralizes formula-injection attempts in client_name/reason/duplicate_reason", () => {
+    const built = buildImportReportRows(
+      [{
+        row_number: 5,
+        status: "blocked_validation",
+        client_id: null,
+        client_name: "=cmd|'/c calc'!A1",
+        reason: "+HYPERLINK(\"http://evil.test\")",
+        duplicate_reason: "@SUM(1,2)",
+      }],
+      {},
+    );
+    expect(built[0]["Client Name"]).toBe("'=cmd|'/c calc'!A1");
+    expect(built[0].Reason).toBe("'+HYPERLINK(\"http://evil.test\")");
+    expect(built[0]["Duplicate/Review Information"]).toBe("'@SUM(1,2)");
+  });
 });

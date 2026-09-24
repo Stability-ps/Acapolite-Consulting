@@ -86,6 +86,21 @@ function normalizeHeader(value: string): string {
   return value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 }
 
+// Upload hardening (PR8): nothing previously bounded the size of a file a
+// staff member could pick, or the number of rows it produced, before it hit
+// the server's own MAX_ROWS_PER_BATCH=5000 cap in import-clients/index.ts -
+// an oversized file would fully parse and run duplicate-matching in the
+// browser first, for nothing, and a genuinely huge one risks hanging the
+// tab. These two constants make the client fail fast, with a clear message,
+// before any of that work starts. MAX_IMPORT_ROWS intentionally mirrors the
+// server's MAX_ROWS_PER_BATCH (same "different runtimes, must stay in sync"
+// duplication already accepted for IMPORT_FIELD_KEYS - see the file header).
+export const MAX_IMPORT_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+export const MAX_IMPORT_ROWS = 5000;
+const ACCEPTED_IMPORT_EXTENSIONS = /\.(csv|xlsx|xls)$/i;
+
+export class ImportFileError extends Error {}
+
 export type ParsedImportFile = {
   headers: string[];
   rows: Record<string, string>[];
@@ -181,13 +196,22 @@ function parseXlsxBuffer(buffer: ArrayBuffer): ParsedImportFile {
 }
 
 export async function parseImportFile(file: File): Promise<ParsedImportFile> {
-  const isXlsx = /\.xlsx?$/i.test(file.name);
-  if (isXlsx) {
-    const buffer = await file.arrayBuffer();
-    return parseXlsxBuffer(buffer);
+  if (!ACCEPTED_IMPORT_EXTENSIONS.test(file.name)) {
+    throw new ImportFileError("Unsupported file type. Upload a .csv, .xlsx, or .xls file.");
   }
-  const text = await file.text();
-  return parseCsvText(text);
+  if (file.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+    const maxMb = (MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(0);
+    throw new ImportFileError(`That file is too large (limit ${maxMb} MB). Split it into smaller files and import them separately.`);
+  }
+
+  const isXlsx = /\.xlsx?$/i.test(file.name);
+  const parsed = isXlsx ? parseXlsxBuffer(await file.arrayBuffer()) : parseCsvText(await file.text());
+
+  if (parsed.rows.length > MAX_IMPORT_ROWS) {
+    throw new ImportFileError(`This file has ${parsed.rows.length.toLocaleString()} rows, which is over the ${MAX_IMPORT_ROWS.toLocaleString()}-row limit for a single import. Split it into smaller files.`);
+  }
+
+  return parsed;
 }
 
 export type ColumnMapping = Partial<Record<ImportFieldKey, string>>;
