@@ -375,7 +375,7 @@ export function TaxGuidesHub() {
     <PublicPageLayout
       eyebrow="Tax knowledge"
       title="SARS & Tax Guides"
-      description="Practical, source-backed guidance for South African taxpayers and businesses. Each guide is reviewed by Patric Sandiso Sibande, Registered Tax Practitioner (SA)™, and links to the primary SARS or legislative material used."
+      description="Practical, source-backed guidance for South African taxpayers and businesses. Each guide is reviewed by a Registered Tax Practitioner (SA)™ and links to the primary SARS or legislative material used."
       backHref="/sars-tax-assistance"
       backLabel="SARS & Tax Assistance"
       maxWidthClassName="max-w-6xl"
@@ -428,8 +428,7 @@ function GuidePage({ guide }: { guide: Guide }) {
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-border bg-muted/30 p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Reviewed by</p>
-          <p className="mt-2 font-semibold text-foreground">Patric Sandiso Sibande</p>
-          <p className="text-sm text-muted-foreground">Registered Tax Practitioner (SA)™</p>
+          <p className="mt-2 font-semibold text-foreground">Registered Tax Practitioner (SA)™</p>
           <Link to="/about-us" className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">About the reviewer</Link>
         </div>
         <div className="rounded-2xl border border-border bg-muted/30 p-5">
