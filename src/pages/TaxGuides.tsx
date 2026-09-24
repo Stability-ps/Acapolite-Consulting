@@ -221,14 +221,14 @@ const guides: Guide[] = [
         heading: "What a third-party appointment means",
         paragraphs: [
           "Under section 179 of the Tax Administration Act, SARS may require a person who holds or owes money for or to a taxpayer to pay money to SARS in satisfaction of outstanding tax debt. SARS guidance identifies banks, employers and other third parties as examples.",
-          "SARS's current Third Party Appointment guide states that this collection process follows a final demand where the taxpayer has not complied with the demand for payment. The legislation also contains circumstances in which SARS need not issue a final demand if a senior SARS official is satisfied that doing so would prejudice collection."
+          "SARS's current Third Party Appointment guide states that this collection process follows a final demand where the taxpayer has not complied with the demand for payment. Section 179 generally requires delivery of a final demand for payment at least 10 business days before a third-party appointment, while the legislation also contains circumstances in which SARS need not issue a final demand if a senior SARS official is satisfied that doing so would prejudice collection."
         ]
       },
       {
         heading: "What to check immediately",
         bullets: [
           "Confirm the tax type, periods and balance reflected by SARS and reconcile them to the taxpayer's account.",
-          "Open the final demand and other SARS correspondence and note the dates, case references and recovery steps described.",
+          "Open the final demand and other SARS correspondence immediately and note the delivery date, case references and recovery steps described; the section 179 process can turn on a 10-business-day period.",
           "Identify whether the debt is disputed, undisputed, already subject to an arrangement, or affected by returns or payments not yet correctly allocated.",
           "Consider the appropriate statutory route rather than ignoring the demand: payment, an instalment arrangement, compromise where applicable, or a dispute and separate suspension-of-payment process where there is a genuine dispute."
         ]
@@ -317,7 +317,7 @@ const guides: Guide[] = [
     ],
     sources: [
       { label: "SARS — Appeals", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/appeals/" },
-      { label: "SARS — Dispute Resolution Process Process", href: "https://www.sars.gov.za/legal-counsel/dispute-resolution-judgments/dispute-resolution-process/" },
+      { label: "SARS — Dispute Resolution Process", href: "https://www.sars.gov.za/legal-counsel/dispute-resolution-judgments/dispute-resolution-process/" },
       { label: "SARS — What if I do not agree?", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/" }
     ]
   },
