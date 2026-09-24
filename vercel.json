@@ -189,6 +189,22 @@
       "destination": "/tax-guides/sars-payment-arrangement-documents/index.html"
     },
     {
+      "source": "/tax-guides/sars-final-demand-third-party-appointment",
+      "destination": "/tax-guides/sars-final-demand-third-party-appointment/index.html"
+    },
+    {
+      "source": "/tax-guides/sars-request-for-reasons",
+      "destination": "/tax-guides/sars-request-for-reasons/index.html"
+    },
+    {
+      "source": "/tax-guides/sars-objection-disallowed-appeal-adr",
+      "destination": "/tax-guides/sars-objection-disallowed-appeal-adr/index.html"
+    },
+    {
+      "source": "/tax-guides/sars-vat-verification-supporting-documents",
+      "destination": "/tax-guides/sars-vat-verification-supporting-documents/index.html"
+    },
+    {
       "source": "/login",
       "destination": "/index.html"
     },
