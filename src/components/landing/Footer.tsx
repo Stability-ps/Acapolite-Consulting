@@ -86,6 +86,7 @@ export function Footer() {
           <div className="space-y-3">
             <p className="text-sm font-semibold text-background font-body">Support</p>
             <div className="grid gap-2 text-sm text-background/70 font-body">
+              <Link to="/tax-guides" className="hover:text-background">SARS &amp; Tax Guides</Link>
               <Link to="/help-center" className="hover:text-background">Help Center</Link>
               <Link to="/faq" className="hover:text-background">FAQ</Link>
               <Link to="/trust-safety" className="hover:text-background">Trust &amp; Safety</Link>
