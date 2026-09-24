@@ -393,6 +393,19 @@ export function TaxGuidesHub() {
           </article>
         ))}
       </div>
+      <section className="mt-8 rounded-2xl border border-primary/15 bg-primary/5 p-6">
+        <h2 className="text-lg font-semibold text-foreground">Need professional SARS assistance?</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Use the guides to understand the process, then choose the specialist service that matches the matter.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button asChild variant="outline"><Link to="/sars-debt">SARS Debt</Link></Button>
+          <Button asChild variant="outline"><Link to="/sars-objections">Objections &amp; Appeals</Link></Button>
+          <Button asChild variant="outline"><Link to="/sars-audit-verification">Audit &amp; Verification</Link></Button>
+          <Button asChild variant="outline"><Link to="/sars-tax-compliance-status">Tax Compliance Status</Link></Button>
+          <Button asChild><Link to="/request-tax-assistance?step=1&intent=sars&from=%2Ftax-guides">Request Assistance</Link></Button>
+        </div>
+      </section>
       <div className="mt-8 rounded-2xl border border-border bg-muted/30 p-6 text-sm leading-6 text-muted-foreground">
         These guides provide general information and do not replace advice based on a taxpayer's own assessment, correspondence, facts and deadlines. Acapolite Consulting is independent and is not affiliated with or endorsed by SARS.
       </div>
