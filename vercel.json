@@ -38,6 +38,11 @@
       "source": "/services",
       "destination": "/our-services",
       "permanent": true
+    },
+    {
+      "source": "/services",
+      "destination": "/our-services",
+      "permanent": true
     }
   ],
   "headers": [
