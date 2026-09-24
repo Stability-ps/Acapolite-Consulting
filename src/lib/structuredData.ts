@@ -145,3 +145,47 @@ export function buildBreadcrumbSchema(items: BreadcrumbSchemaItem[]) {
     })),
   };
 }
+
+
+export type ArticleSchemaInput = {
+  headline: string;
+  description: string;
+  path: string;
+  datePublished: string;
+  dateModified: string;
+};
+
+/** Article schema for substantive, practitioner-reviewed tax guidance pages. */
+export function buildArticleSchema({
+  headline,
+  description,
+  path,
+  datePublished,
+  dateModified,
+}: ArticleSchemaInput) {
+  const url = `${SITE_URL}${path}`;
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "@id": `${url}#article`,
+    headline,
+    description,
+    url,
+    mainEntityOfPage: url,
+    datePublished,
+    dateModified,
+    author: {
+      "@type": "Person",
+      "@id": LEADERSHIP_ID,
+      name: LEADERSHIP_NAME,
+      jobTitle: LEADERSHIP_TITLE,
+    },
+    publisher: {
+      ...buildOrganizationRef(),
+      logo: {
+        "@type": "ImageObject",
+        url: LOGO_URL,
+      },
+    },
+  };
+}
