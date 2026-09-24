@@ -79,6 +79,10 @@ import {
   SarsCompromiseChecklistGuide,
   SarsVatRefundDelayGuide,
   SarsPaymentArrangementDocumentsGuide,
+  SarsFinalDemandGuide,
+  SarsRequestForReasonsGuide,
+  SarsObjectionDisallowedGuide,
+  SarsVatVerificationGuide,
 } from "./pages/TaxGuides";
 
 
@@ -136,6 +140,10 @@ function AppRoutes() {
             <Route path="/tax-guides/sars-section-200-compromise-checklist" element={<SarsCompromiseChecklistGuide />} />
             <Route path="/tax-guides/sars-vat-refund-delays" element={<SarsVatRefundDelayGuide />} />
             <Route path="/tax-guides/sars-payment-arrangement-documents" element={<SarsPaymentArrangementDocumentsGuide />} />
+            <Route path="/tax-guides/sars-final-demand-third-party-appointment" element={<SarsFinalDemandGuide />} />
+            <Route path="/tax-guides/sars-request-for-reasons" element={<SarsRequestForReasonsGuide />} />
+            <Route path="/tax-guides/sars-objection-disallowed-appeal-adr" element={<SarsObjectionDisallowedGuide />} />
+            <Route path="/tax-guides/sars-vat-verification-supporting-documents" element={<SarsVatVerificationGuide />} />
             <Route path="/sars-tax-assistance" element={<SarsTaxAssistanceLandingPage />} />
             <Route path="/sars-debt" element={<SarsDebtPage />} />
             <Route path="/sars-payment-arrangements" element={<SarsPaymentArrangementsPage />} />
