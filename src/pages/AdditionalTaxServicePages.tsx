@@ -85,7 +85,7 @@ function ServicePage({ config }: { config: PageConfig }) {
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           {config.services.map((item) => <div key={item} className="flex gap-3 text-sm text-muted-foreground"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><span>{item}</span></div>)}
         </div>
-        <Button asChild className="mt-7"><Link to="/request-tax-assistance?step=1">Request assistance<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+        <Button asChild className="mt-7"><Link to={`/request-tax-assistance?step=1&intent=sars&from=${encodeURIComponent(config.path)}`}>Request assistance<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
       </section>
       <section className="mt-10"><h2 className="text-2xl font-semibold text-foreground">How we approach the matter</h2><ol className="mt-5 grid gap-4 md:grid-cols-2">{config.process.map((item, i) => <li key={item} className="rounded-2xl border border-border bg-background p-5"><span className="text-xs font-semibold text-primary">STEP {i + 1}</span><p className="mt-2 text-sm leading-6 text-muted-foreground">{item}</p></li>)}</ol></section>
       <section className="mt-10"><h2 className="text-2xl font-semibold text-foreground">Frequently asked questions</h2><div className="mt-5 space-y-4">{config.faqs.map((faq) => <details key={faq.question} className="rounded-2xl border border-border bg-background p-5"><summary className="cursor-pointer font-semibold text-foreground">{faq.question}</summary><p className="mt-3 text-sm leading-6 text-muted-foreground">{faq.answer}</p></details>)}</div></section>
