@@ -226,7 +226,7 @@ function PageShell({
           <OfficialSources items={pageSources} />
           <div className="rounded-2xl border border-border bg-background/70 p-5">
             <p className="text-sm font-semibold text-foreground">
-              Reviewed by Patric Sandiso Sibande — Registered Tax Practitioner (SA)™
+              Reviewed by Registered Tax Practitioner (SA)™
             </p>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
               Practitioner review helps keep the process guidance aligned with the primary SARS and legislative sources cited on this page.

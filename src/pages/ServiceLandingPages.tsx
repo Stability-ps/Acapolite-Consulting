@@ -612,7 +612,7 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
         {config.reviewedDate && (
           <section className="rounded-2xl border border-border bg-background/70 p-5 sm:p-6">
             <p className="text-sm font-semibold text-foreground">
-              Reviewed by Patric Sandiso Sibande — Registered Tax Practitioner (SA)™
+              Reviewed by Registered Tax Practitioner (SA)™
             </p>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
               Practitioner review supports the tax-process guidance on this page.{" "}

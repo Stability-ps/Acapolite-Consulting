@@ -15,10 +15,6 @@
 import {
   AREA_SERVED,
   BUSINESS_NAME,
-  LEADERSHIP_BODY,
-  LEADERSHIP_ID,
-  LEADERSHIP_NAME,
-  LEADERSHIP_TITLE,
   LOGO_URL,
   ORGANIZATION_ID,
   SITE_URL,
@@ -80,28 +76,6 @@ export function buildWebsiteSchema() {
     // No SearchAction: the public site has no site-search feature
     // (confirmed by repo search — only authenticated dashboard search UIs
     // exist). Do not add one without a real search endpoint.
-  };
-}
-
-/**
- * Person definition for approved leadership shown on /about-us. Contains
- * only explicitly approved fields (name, designation, professional-body
- * membership) — no registration/membership numbers, no years of
- * experience, no client counts, no private contact details. Rendered only
- * on /about-us, where the name is actually visible on the page.
- */
-export function buildPersonSchema() {
-  return {
-    "@context": "https://schema.org",
-    "@type": "Person",
-    "@id": LEADERSHIP_ID,
-    name: LEADERSHIP_NAME,
-    jobTitle: LEADERSHIP_TITLE,
-    memberOf: {
-      "@type": "Organization",
-      name: LEADERSHIP_BODY,
-    },
-    worksFor: { "@id": ORGANIZATION_ID },
   };
 }
 
@@ -174,12 +148,7 @@ export function buildArticleSchema({
     mainEntityOfPage: url,
     datePublished,
     dateModified,
-    author: {
-      "@type": "Person",
-      "@id": LEADERSHIP_ID,
-      name: LEADERSHIP_NAME,
-      jobTitle: LEADERSHIP_TITLE,
-    },
+    author: buildOrganizationRef(),
     publisher: {
       ...buildOrganizationRef(),
       logo: {
