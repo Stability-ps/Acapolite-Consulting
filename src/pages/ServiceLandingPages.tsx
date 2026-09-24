@@ -82,6 +82,9 @@ const configs: Record<string, LandingPageConfig> = {
       { label: "Payment Arrangements", href: "/sars-payment-arrangements" },
       { label: "Section 200 Compromise", href: "/sars-compromise" },
       { label: "Objections & Disputes", href: "/sars-objections" },
+      { label: "Tax Compliance Status", href: "/sars-tax-compliance-status" },
+      { label: "SARS Audit & Verification", href: "/sars-audit-verification" },
+      { label: "PAYE, UIF & SDL", href: "/paye-uif-sdl-services" },
     ],
   },
   vat: {
