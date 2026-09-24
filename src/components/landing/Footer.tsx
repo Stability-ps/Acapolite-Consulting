@@ -77,6 +77,7 @@ export function Footer() {
               <Link to="/about-us" className="hover:text-background">About Us</Link>
               <Link to="/how-acapolite-works" className="hover:text-background">How Acapolite Works</Link>
               <Link to="/our-services" className="hover:text-background">Our Services</Link>
+              <Link to="/tax-consultant-pretoria" className="hover:text-background">Tax Consultant Pretoria</Link>
               <Link to="/practitioners" className="hover:text-background">For Practitioners</Link>
               <Link to="/practitioner-guidelines" className="hover:text-background">Practitioner Guidelines</Link>
               <Link to="/contact-us" className="hover:text-background">Contact Us</Link>
