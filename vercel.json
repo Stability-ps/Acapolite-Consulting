@@ -161,6 +161,10 @@
       "destination": "/trust-safety/index.html"
     },
     {
+      "source": "/request-tax-assistance",
+      "destination": "/request-tax-assistance/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
