@@ -23,7 +23,7 @@ function replaceMeta(html, attr, key, value) {
     "i",
   );
   const tag = `<meta ${attr}="${key}" content="${escapeHtml(value)}" />`;
-  return pattern.test(html) ? html.replace(pattern, tag) : html.replace("</head>", `    ${tag}\\n  </head>`);
+  return pattern.test(html) ? html.replace(pattern, tag) : html.replace("</head>", `    ${tag}\n  </head>`);
 }
 
 function replaceTitle(html, title) {
@@ -33,7 +33,7 @@ function replaceTitle(html, title) {
 function replaceCanonical(html, href) {
   const tag = `<link rel="canonical" href="${href}" />`;
   const pattern = /<link\s+rel=["']canonical["'][^>]*>/i;
-  return pattern.test(html) ? html.replace(pattern, tag) : html.replace("</head>", `    ${tag}\\n  </head>`);
+  return pattern.test(html) ? html.replace(pattern, tag) : html.replace("</head>", `    ${tag}\n  </head>`);
 }
 
 for (const route of rawHtmlSeoRoutes) {
