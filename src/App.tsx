@@ -29,6 +29,7 @@ import Practitioners from "./pages/Practitioners";
 import ContactUs from "./pages/ContactUs";
 import HelpCenter from "./pages/HelpCenter";
 import AboutUs from "./pages/AboutUs";
+import { SarsTaxComplianceStatusPage, SarsAuditVerificationPage, PayeUifSdlServicesPage } from "./pages/AdditionalTaxServicePages";
 import TaxConsultantPretoria from "./pages/TaxConsultantPretoria";
 import {
   AccountingServicesLandingPage,
@@ -151,6 +152,9 @@ function AppRoutes() {
             <Route path="/sars-payment-arrangements" element={<SarsPaymentArrangementsPage />} />
             <Route path="/sars-compromise" element={<SarsCompromisePage />} />
             <Route path="/sars-objections" element={<SarsObjectionsPage />} />
+            <Route path="/sars-tax-compliance-status" element={<SarsTaxComplianceStatusPage />} />
+            <Route path="/sars-audit-verification" element={<SarsAuditVerificationPage />} />
+            <Route path="/paye-uif-sdl-services" element={<PayeUifSdlServicesPage />} />
             <Route path="/accounting-services" element={<AccountingServicesLandingPage />} />
             <Route path="/bookkeeping-services" element={<BookkeepingServicesLandingPage />} />
             <Route path="/cipc-company-compliance" element={<CipcComplianceLandingPage />} />
