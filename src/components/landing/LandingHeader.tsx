@@ -22,6 +22,7 @@ const primaryNavItems = [
 ] as const;
 
 const resourceLinks = [
+  { label: "Tax Guides", href: "/tax-guides" },
   { label: "Help Center", href: "/help-center" },
   { label: "FAQ", href: "/faq" },
   { label: "How Acapolite Works", href: "/how-acapolite-works" },
