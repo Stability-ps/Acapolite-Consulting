@@ -72,6 +72,15 @@ const AdminAiKnowledge = lazy(() => import("./pages/dashboard/admin/AdminAiKnowl
 
 import NotFound from "./pages/NotFound";
 import { SarsDebtPage, SarsPaymentArrangementsPage, SarsCompromisePage, SarsObjectionsPage } from "./pages/SarsMoneyPages";
+import {
+  TaxGuidesHub,
+  SarsSuspensionPaymentGuide,
+  SarsObjectionDeadlineGuide,
+  SarsCompromiseChecklistGuide,
+  SarsVatRefundDelayGuide,
+  SarsPaymentArrangementDocumentsGuide,
+} from "./pages/TaxGuides";
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -121,6 +130,12 @@ function AppRoutes() {
             <Route path="/contact-us" element={<ContactUs />} />
             <Route path="/help-center" element={<HelpCenter />} />
             <Route path="/about-us" element={<AboutUs />} />
+            <Route path="/tax-guides" element={<TaxGuidesHub />} />
+            <Route path="/tax-guides/sars-suspension-of-payment-section-164" element={<SarsSuspensionPaymentGuide />} />
+            <Route path="/tax-guides/sars-objection-deadline-guide" element={<SarsObjectionDeadlineGuide />} />
+            <Route path="/tax-guides/sars-section-200-compromise-checklist" element={<SarsCompromiseChecklistGuide />} />
+            <Route path="/tax-guides/sars-vat-refund-delays" element={<SarsVatRefundDelayGuide />} />
+            <Route path="/tax-guides/sars-payment-arrangement-documents" element={<SarsPaymentArrangementDocumentsGuide />} />
             <Route path="/sars-tax-assistance" element={<SarsTaxAssistanceLandingPage />} />
             <Route path="/sars-debt" element={<SarsDebtPage />} />
             <Route path="/sars-payment-arrangements" element={<SarsPaymentArrangementsPage />} />
