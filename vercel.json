@@ -6,6 +6,28 @@
       "has": [
         {
           "type": "host",
+          "value": "acapolite.co.za"
+        }
+      ],
+      "destination": "https://acapoliteconsulting.co.za/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.acapolite.co.za"
+        }
+      ],
+      "destination": "https://acapoliteconsulting.co.za/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
           "value": "www.acapoliteconsulting.co.za"
         }
       ],
