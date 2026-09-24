@@ -1,7 +1,6 @@
 export const publicRoutes = [
   {
     path: "/",
-    lastmod: "2026-09-24",
     priority: "1.0",
     changefreq: "weekly",
     title: "Acapolite Consulting | Tax, Accounting & SARS Support South Africa",
@@ -9,7 +8,6 @@ export const publicRoutes = [
   },
   {
     path: "/our-services",
-    lastmod: "2026-09-24",
     priority: "0.9",
     changefreq: "monthly",
     title: "Our Services | Acapolite Consulting",
@@ -17,7 +15,6 @@ export const publicRoutes = [
   },
   {
     path: "/sars-tax-assistance",
-    lastmod: "2026-09-24",
     priority: "0.9",
     changefreq: "monthly",
     title: "Professional SARS & Tax Assistance Across South Africa | Acapolite Consulting",
@@ -73,7 +70,6 @@ export const publicRoutes = [
   },
   {
     path: "/cipc-company-compliance",
-    lastmod: "2026-09-24",
     priority: "0.9",
     changefreq: "monthly",
     title: "CIPC & Company Compliance Support | Acapolite Consulting",
@@ -81,7 +77,6 @@ export const publicRoutes = [
   },
   {
     path: "/tax-returns",
-    lastmod: "2026-09-24",
     priority: "0.9",
     changefreq: "monthly",
     title: "Personal & Company Tax Return Assistance | Acapolite Consulting",
