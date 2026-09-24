@@ -205,6 +205,10 @@
       "destination": "/tax-guides/sars-vat-verification-supporting-documents/index.html"
     },
     {
+      "source": "/tax-consultant-pretoria",
+      "destination": "/tax-consultant-pretoria/index.html"
+    },
+    {
       "source": "/login",
       "destination": "/index.html"
     },
