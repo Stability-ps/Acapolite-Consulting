@@ -927,10 +927,11 @@ export default function AdminInvoices() {
       clientEmail,
       clientName: getClientName(selectedInvoice),
       serviceDescription: invoiceTitle.trim() || invoiceDescription.trim() || selectedInvoice.title || selectedInvoice.description || "Professional tax services",
-      amount: (Number(invoiceSubtotal || selectedInvoice.subtotal || 0) + Number(invoiceVatAmount || selectedInvoice.tax_amount || 0)),
+      amount: Number(selectedInvoice.balance_due ?? computedFinalTotal ?? selectedInvoice.total_amount ?? 0),
       dueDate: invoiceDueDate || selectedInvoice.due_date,
       caseNumber: selectedInvoice.case_id ? formatCaseReference(selectedInvoice.case_id) : undefined,
       status: selectedStatus || selectedInvoice.status,
+      notificationKey: `invoice_created:${selectedInvoice.id}:resend:${Date.now()}`,
     });
 
     setResendingInvoice(false);
@@ -954,7 +955,7 @@ export default function AdminInvoices() {
       }
     }
 
-    toast.success(notification.skipped ? "Invoice email was already logged for this invoice." : "Invoice email sent to the client.");
+    toast.success(notification.skipped ? "Invoice email was not resent because this delivery was already logged." : "Invoice email resent to the client.");
     if (user && role) {
       await logSystemActivity({
         actorProfileId: user.id,

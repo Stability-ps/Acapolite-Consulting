@@ -73,6 +73,7 @@ type InvoiceCreatedPayload = {
   amount?: string;
   dueDate?: string;
   status?: string;
+  notificationKey?: string;
 };
 
 type ProofOfPaymentUploadedPayload = {
@@ -2244,7 +2245,7 @@ function buildEmailContent(params: {
     const safeAmount = escapeHtml(amount);
     const safeDueDate = escapeHtml(dueDate);
     const safeStatus = escapeHtml(status);
-    const notificationKey = `invoice_created:${invoiceId}`;
+    const notificationKey = trimString(payload.notificationKey) || `invoice_created:${invoiceId}`;
 
     return {
       requiresAuth: true,

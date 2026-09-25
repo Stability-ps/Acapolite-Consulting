@@ -11,6 +11,7 @@ type InvoiceNotificationInput = {
   dueDate?: string | null;
   caseNumber?: string | null;
   status?: string | null;
+  notificationKey?: string | null;
 };
 
 type InvoiceNotificationResult = {
@@ -63,6 +64,7 @@ export async function sendInvoiceCreatedNotification(
       amount: formatCurrency(input.amount),
       dueDate: formatDateLabel(input.dueDate),
       status: formatStatusLabel(input.status),
+      notificationKey: input.notificationKey?.trim() || undefined,
     },
   });
 
