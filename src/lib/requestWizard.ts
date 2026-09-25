@@ -180,7 +180,8 @@ export type ServiceIntentKey =
   | "accounting"
   | "bookkeeping"
   | "cipc"
-  | "provisional-tax";
+  | "provisional-tax"
+  | "vdp";
 
 type ServiceIntentConfig = {
   label: string;
@@ -274,6 +275,17 @@ const serviceIntentConfigs: Record<ServiceIntentKey, ServiceIntentConfig> = {
             ? "npo_organisation_services"
             : "business_tax",
   },
+  vdp: {
+    label: "Voluntary Disclosure Programme (VDP)",
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
   accounting: {
     label: "Accounting Services",
     categoryForEntity: () => "accounting",
@@ -313,6 +325,7 @@ const publicRequestSourceLabels: Record<string, string> = {
   "/bookkeeping-services": "Bookkeeping Services",
   "/cipc-company-compliance": "CIPC & Company Compliance",
   "/provisional-tax": "Provisional Tax & IRP6",
+  "/sars-voluntary-disclosure": "SARS Voluntary Disclosure Programme (VDP)",
 };
 
 export function getRequestSource(value?: string | null) {
