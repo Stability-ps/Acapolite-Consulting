@@ -212,6 +212,22 @@ export const publicRoutes = [
     description: "Request professional tax and SARS assistance from Acapolite Consulting. Tell us what you need help with and submit your enquiry securely online.",
   },
   {
+    // Paid-traffic (Google Ads) landing page - deliberately noindex and
+    // excluded from the sitemap (see src/pages/ServiceLandingPages.tsx's
+    // `help` config, the source of truth this title/description mirrors).
+    // It still gets a raw-HTML shell like every other route so the
+    // noindex directive is visible to any crawler before JavaScript runs,
+    // rather than only existing client-side.
+    path: "/request-professional-help",
+    lastmod: "2026-09-25",
+    priority: "0.1",
+    changefreq: "monthly",
+    title: "Get Professional Tax, Accounting & Business Help | Acapolite Consulting",
+    description: "Request professional tax, SARS, accounting, bookkeeping, CIPC and business support through Acapolite Consulting across South Africa.",
+    robots: "noindex, follow",
+    excludeFromSitemap: true,
+  },
+  {
     path: "/how-acapolite-works",
     lastmod: "2026-09-24",
     priority: "0.7",

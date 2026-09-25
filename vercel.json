@@ -262,7 +262,7 @@
     },
     {
       "source": "/request-professional-help",
-      "destination": "/index.html"
+      "destination": "/request-professional-help/index.html"
     },
     {
       "source": "/dashboard",
