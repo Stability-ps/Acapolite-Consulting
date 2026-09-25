@@ -72,6 +72,7 @@ export const configs: Record<string, LandingPageConfig> = {
       "Personal and company tax returns",
       "Tax compliance status support",
       "Provisional tax and IRP6 assistance",
+      "Voluntary Disclosure Programme (VDP) assistance",
       "Review of SARS notices, letters and account issues",
     ],
     whyItMatters:
@@ -89,6 +90,7 @@ export const configs: Record<string, LandingPageConfig> = {
       { label: "SARS Audit & Verification", href: "/sars-audit-verification" },
       { label: "PAYE, UIF & SDL", href: "/paye-uif-sdl-services" },
       { label: "Provisional Tax & IRP6", href: "/provisional-tax" },
+      { label: "Voluntary Disclosure Programme", href: "/sars-voluntary-disclosure" },
     ],
   },
   vat: {

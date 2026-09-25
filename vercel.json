@@ -122,6 +122,10 @@
       "destination": "/sars-objections/index.html"
     },
     {
+      "source": "/sars-voluntary-disclosure",
+      "destination": "/sars-voluntary-disclosure/index.html"
+    },
+    {
       "source": "/paye-uif-sdl-services",
       "destination": "/paye-uif-sdl-services/index.html"
     },
@@ -232,6 +236,10 @@
     {
       "source": "/tax-guides/provisional-tax-irp6-guide",
       "destination": "/tax-guides/provisional-tax-irp6-guide/index.html"
+    },
+    {
+      "source": "/tax-guides/sars-voluntary-disclosure-guide",
+      "destination": "/tax-guides/sars-voluntary-disclosure-guide/index.html"
     },
     {
       "source": "/tax-consultant-pretoria",

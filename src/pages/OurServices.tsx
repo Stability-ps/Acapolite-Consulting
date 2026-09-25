@@ -72,6 +72,12 @@ const categories: ServiceCategory[] = [
     href: "/provisional-tax",
     linkLabel: "View Provisional Tax & IRP6",
   },
+  {
+    title: "Voluntary Disclosure Programme",
+    body: "Get confidential professional help assessing whether SARS's Voluntary Disclosure Programme applies to your situation and preparing an accurate VDP01 application.",
+    href: "/sars-voluntary-disclosure",
+    linkLabel: "View VDP Assistance",
+  },
 ];
 
 /** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */

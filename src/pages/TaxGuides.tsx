@@ -462,6 +462,63 @@ export const guides: Guide[] = [
       { label: "SARS — Guide to Provisional Tax", href: "https://www.sars.gov.za/guide-to-provisional-tax/" },
       { label: "SARS — How to eFile Your Provisional Tax Return", href: "https://www.sars.gov.za/how-to-efile-your-provisional-tax-return/" }
     ]
+  },
+  {
+    slug: "sars-voluntary-disclosure-guide",
+    title: "SARS Voluntary Disclosure Programme: What VDP Actually Covers (and What It Doesn't)",
+    description: "An accurate explanation of who may apply for SARS's Voluntary Disclosure Programme, the qualifying requirements, the penalty and administrative relief it does and doesn't provide, and how it differs from a SARS debt compromise or an objection.",
+    intro: "The Voluntary Disclosure Programme (VDP) is a defined, legislated process for regularising a tax default SARS does not yet know about. It is not a negotiation over an already-assessed debt, and it does not guarantee acceptance, a specific penalty outcome, or immunity beyond the disclosed default itself - what follows explains exactly what SARS's own published guidance says VDP covers, and where it draws the line.",
+    relatedServices: [{ label: "Get confidential help assessing a VDP application", href: "/sars-voluntary-disclosure" }],
+    sections: [
+      {
+        heading: "Who may apply, and what SARS requires",
+        paragraphs: [
+          "Any person, acting in a personal, representative, withholding or other capacity, may apply for VDP relief. SARS requires the disclosure to be voluntary, full and complete in all material respects, made in the prescribed form (VDP01), not result in a refund due by SARS, and involve a default not previously disclosed by the applicant or a related person within the preceding five years."
+        ]
+      },
+      {
+        heading: "What breaks \"voluntary\"",
+        paragraphs: [
+          "A disclosure is generally not treated as voluntary once SARS has already given the applicant notice of the commencement of an audit or criminal investigation into that specific default. The one exception is where a senior SARS official is satisfied the default would likely not otherwise have been detected. Whether this exception could apply depends on the actual facts and timeline, not an assumption either way."
+        ]
+      },
+      {
+        heading: "Which tax types VDP covers",
+        paragraphs: [
+          "VDP can cover income tax, PAYE, VAT and the other taxes SARS administers. It specifically excludes duties and levies charged under the Customs and Excise Act."
+        ]
+      },
+      {
+        heading: "What penalty relief VDP actually provides",
+        paragraphs: [
+          "SARS applies VDP relief against the understatement-penalty percentage table in section 223 of the Tax Administration Act. SARS's own published guidance does not state a fixed percentage anywhere - the reduction depends on the applicant's circumstances measured against that table, not a rate that can be promised in advance.",
+          "VDP separately provides 100% relief from administrative non-compliance penalties, with one exception: it does not relieve a penalty for the late submission of a return."
+        ]
+      },
+      {
+        heading: "What VDP does not do",
+        paragraphs: [
+          "VDP does not address interest on the underpaid tax - SARS's guidance does not provide for interest relief, so interest remains payable on the full amount. A concluded VDP agreement, together with its assessment, is final and binding: there is no right of objection or appeal against it, unlike an ordinary SARS assessment. Criminal-prosecution protection under a valid VDP agreement is scoped to the specific disclosed default - it is not a general immunity for unrelated matters."
+        ]
+      },
+      {
+        heading: "VDP compared with a compromise or an objection",
+        paragraphs: [
+          "SARS itself describes the VDP as \"a self-contained programme with defined legislated relief which does not include a request for a compromise.\" A compromise, under sections 200 to 202 of the Tax Administration Act, addresses tax debt SARS has already assessed where the taxpayer genuinely cannot pay it - a different situation from an undisclosed default.",
+          "An objection or dispute, in turn, challenges an assessment or SARS decision that already exists. VDP addresses the opposite scenario: a default SARS does not yet know about at all. Applying the wrong process to the wrong situation can waste the narrow window in which a disclosure still counts as voluntary."
+        ]
+      },
+      {
+        heading: "The VDP01 process",
+        paragraphs: [
+          "An application is made in the prescribed VDP01 form via eFiling. SARS assesses it against the qualifying requirements before concluding a VDP agreement. Because that agreement and its assessment are final and binding, getting the disclosure complete and accurate before submitting matters - there is no later opportunity to dispute the outcome."
+        ]
+      }
+    ],
+    sources: [
+      { label: "SARS — Voluntary Disclosure Programme (VDP)", href: "https://www.sars.gov.za/legal-counsel/voluntary-disclosure-programme-vdp/" },
+      { label: "SARS — Guide to Voluntary Disclosure Programme", href: "https://www.sars.gov.za/guide-to-voluntary-disclosure-programme/" }
+    ]
   }
 ];
 
@@ -642,3 +699,4 @@ export function SarsRequestForReasonsGuide() { return <GuidePage guide={guides[6
 export function SarsObjectionDisallowedGuide() { return <GuidePage guide={guides[7]} />; }
 export function SarsVatVerificationGuide() { return <GuidePage guide={guides[8]} />; }
 export function ProvisionalTaxIrp6Guide() { return <GuidePage guide={guides[9]} />; }
+export function SarsVoluntaryDisclosureGuide() { return <GuidePage guide={guides[10]} />; }

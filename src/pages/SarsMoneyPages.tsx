@@ -567,6 +567,18 @@ export function SarsCompromisePage() {
         />
       </section>
 
+      <section className="rounded-2xl border border-border bg-background/60 p-5">
+        <h3 className="font-semibold text-foreground">Is this actually an undisclosed-income matter?</h3>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          A compromise addresses tax debt SARS has already assessed and the taxpayer genuinely cannot pay. If the
+          real issue is income, assets or a tax position never disclosed to SARS at all, the Voluntary Disclosure
+          Programme addresses a different situation and has its own separate eligibility requirements.
+        </p>
+        <Link to="/sars-voluntary-disclosure" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+          Voluntary Disclosure Programme assistance <ArrowRight className="h-4 w-4" />
+        </Link>
+      </section>
+
       <section>
         <h2 className="text-lg font-semibold text-foreground">Typical process</h2>
         <ol className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
@@ -668,6 +680,18 @@ export function SarsObjectionsPage() {
         />
       </section>
 
+      <section className="rounded-2xl border border-border bg-background/60 p-5">
+        <h3 className="font-semibold text-foreground">Disputing an assessment, or disclosing something new?</h3>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          An objection challenges an assessment or decision SARS has already made. If instead the issue is income,
+          assets or a tax position that was never disclosed to SARS at all, that is a different situation with its
+          own separate process — the Voluntary Disclosure Programme.
+        </p>
+        <Link to="/sars-voluntary-disclosure" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+          Voluntary Disclosure Programme assistance <ArrowRight className="h-4 w-4" />
+        </Link>
+      </section>
+
       <section className="rounded-[28px] border border-border bg-muted/30 p-6 sm:p-8">
         <h2 className="text-lg font-semibold text-foreground">The objection and appeal journey</h2>
         <ol className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
@@ -737,10 +761,114 @@ export function SarsObjectionsPage() {
   );
 }
 
-/** All four SARS money-page configs, keyed by path - the source of truth for both the rendered pages above and the build-time raw-HTML seeding in scripts/generate-route-html.mjs. */
+export const sarsVdpPageConfig: SarsMoneyPageConfig = {
+  path: "/sars-voluntary-disclosure",
+  eyebrow: "SARS Voluntary Disclosure Programme",
+  title: "SARS Voluntary Disclosure Programme (VDP) Assistance",
+  description: "Get confidential professional help assessing whether the Voluntary Disclosure Programme applies to your situation and preparing an accurate VDP01 application.",
+  metaDescription: "Confidential professional assistance assessing eligibility and preparing a SARS Voluntary Disclosure Programme (VDP01) application across income tax, VAT, PAYE and other tax types.",
+  crumbs: [
+    { name: "Home", path: "/" },
+    { name: "Our Services", path: "/our-services" },
+    { name: "SARS & Tax Assistance", path: "/sars-tax-assistance" },
+    { name: "Voluntary Disclosure Programme" },
+  ],
+  sources: [
+    { label: "SARS — Voluntary Disclosure Programme (VDP)", href: "https://www.sars.gov.za/legal-counsel/voluntary-disclosure-programme-vdp/" },
+    { label: "SARS — Guide to Voluntary Disclosure Programme", href: "https://www.sars.gov.za/guide-to-voluntary-disclosure-programme/" },
+  ],
+};
+
+export function SarsVoluntaryDisclosurePage() {
+  return (
+    <PageShell {...sarsVdpPageConfig}>
+      <section>
+        <h2 className="text-xl font-semibold text-foreground">What the Voluntary Disclosure Programme addresses</h2>
+        <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+          The Voluntary Disclosure Programme (VDP) lets a taxpayer proactively disclose a tax default that SARS
+          does not yet know about, before SARS starts checking it. It is aimed at regularising an undisclosed
+          matter - it is not a way to negotiate an already-assessed debt or to dispute an existing SARS decision,
+          which are different processes with their own requirements.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-foreground">Who may apply, and the requirements</h2>
+        <p className="mt-3 text-sm leading-7 text-muted-foreground">
+          Any person - acting in a personal, representative, withholding or other capacity - may apply. SARS
+          requires the disclosure to be voluntary, full and complete in all material respects, made in the
+          prescribed form, not result in a refund due by SARS, and involve a default not previously disclosed by
+          the applicant or a related person within the preceding five years.
+        </p>
+        <p className="mt-3 text-sm leading-7 text-muted-foreground">
+          A disclosure is generally not treated as voluntary once SARS has already given notice of an audit or
+          criminal investigation into that specific default, unless a senior SARS official decides the default
+          would likely have gone undetected regardless. Whether an application still qualifies as voluntary is
+          often the first thing worth having assessed properly.
+        </p>
+      </section>
+
+      <section className="rounded-[28px] border border-border bg-muted/30 p-6 sm:p-8">
+        <h2 className="text-lg font-semibold text-foreground">What VDP relief covers - and what it doesn't</h2>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          SARS applies VDP relief against the understatement-penalty percentage table in section 223 of the Tax
+          Administration Act. The reduction available depends on the applicant's own circumstances and that
+          table, not a fixed rate that can be quoted in advance. VDP also gives 100% relief from administrative
+          non-compliance penalties, though not from a penalty for the late submission of a return.
+        </p>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          Interest on the underlying tax is not addressed by the VDP relief provisions and remains payable. A VDP
+          agreement, once concluded, is final and binding - including the interest and penalty position it sets -
+          and there is no right of objection or appeal against a VDP assessment. Getting the disclosure right the
+          first time matters for exactly that reason.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-foreground">Protection from criminal prosecution</h2>
+        <p className="mt-3 text-sm leading-7 text-muted-foreground">
+          Once SARS has concluded a valid VDP agreement, SARS states it will not pursue criminal prosecution for a
+          tax offence arising from that specific disclosed default. This protection is scoped to the default
+          covered by the agreement - it is not a general immunity from prosecution for other matters.
+        </p>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <OptionCard
+          title="SARS debt compromise"
+          body={'SARS describes VDP as "a self-contained programme with defined legislated relief which does not include a request for a compromise." A compromise addresses an already-assessed tax debt the taxpayer genuinely cannot pay - a different situation to an undisclosed default.'}
+          href="/sars-compromise"
+          linkLabel="Compare with compromise"
+        />
+        <OptionCard
+          title="Objections and disputes"
+          body="An objection challenges an assessment or decision SARS has already made. VDP instead deals with a default SARS does not yet know about, so the two address opposite situations."
+          href="/sars-objections"
+          linkLabel="Compare with objections"
+        />
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-foreground">The VDP01 process</h2>
+        <p className="mt-3 text-sm leading-7 text-muted-foreground">
+          An application is made in the prescribed form (VDP01) via eFiling. SARS assesses the application against
+          the qualifying requirements before concluding a VDP agreement. Because the resulting agreement and
+          assessment are final and binding, with no right of objection or appeal, the disclosure needs to be
+          complete and accurate from the outset - which is where a confidential professional assessment before
+          submission can help.
+        </p>
+      </section>
+
+      <AssistanceCta title="Get confidential help assessing a VDP application" intent="vdp" from="/sars-voluntary-disclosure" />
+    </PageShell>
+  );
+}
+
+/** All five SARS money-page configs, keyed by path - the source of truth for both the rendered pages above and the build-time raw-HTML seeding in scripts/generate-route-html.mjs. */
 export const sarsMoneyPageConfigs: SarsMoneyPageConfig[] = [
   sarsDebtPageConfig,
   sarsPaymentArrangementsPageConfig,
   sarsCompromisePageConfig,
   sarsObjectionsPageConfig,
+  sarsVdpPageConfig,
 ];
