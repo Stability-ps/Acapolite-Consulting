@@ -35,6 +35,33 @@ export default function TrustSafety() {
         </section>
 
         <section>
+          <h2 className="text-lg font-semibold">Independently Verify a Practitioner</h2>
+          <p className="mt-2 text-muted-foreground">
+            Beyond Acapolite's own onboarding checks described above, South African law lets you confirm a tax
+            practitioner's registration directly and independently, at any time, without relying on Acapolite's
+            word for it.
+          </p>
+          <ul className="mt-3 list-disc pl-5 text-muted-foreground">
+            <li>
+              Ask the practitioner for their SARS Tax Practitioner Registration (PR) number and the name of their
+              Recognised Controlling Body (for example SAIT, SAIPA or SAICA).
+            </li>
+            <li>
+              Use SARS's own practitioner registration confirmation service, available through eFiling, to check
+              that PR number directly with SARS.
+            </li>
+            <li>
+              Contact the practitioner's Recognised Controlling Body directly to confirm their current membership
+              status — each recognised body maintains its own public member records.
+            </li>
+            <li>
+              The Tax Administration Act requires anyone who advises on tax matters or completes a tax return for
+              another person for reward to be registered with both SARS and a Recognised Controlling Body.
+            </li>
+          </ul>
+        </section>
+
+        <section>
           <h2 className="text-lg font-semibold">Client Safety</h2>
           <p className="mt-2 text-muted-foreground">
             We prioritize client safety by ensuring that only verified professionals can respond to service
