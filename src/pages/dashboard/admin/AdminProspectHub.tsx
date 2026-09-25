@@ -116,6 +116,32 @@ export default function AdminProspectHub() {
     onError: (error: any) => toast.error(error?.message ?? "Discovery sync failed"),
   });
 
+  const enrichmentRunsQuery = useQuery({
+    queryKey: ["prospect-enrichment-runs"],
+    queryFn: async () => {
+      const { data, error } = await db.from("prospect_enrichment_runs").select("*").order("started_at", { ascending: false }).limit(10);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const runEnrichment = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("prospect-web-enrichment", { body: { trigger: "manual" } });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Web enrichment failed");
+      return data;
+    },
+    onSuccess: async (data: any) => {
+      toast.success(`Enrichment complete: ${data.prospects_updated} updated, ${data.emails_found} emails, ${data.phones_found} phones`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["prospect-hub-prospects"] }),
+        queryClient.invalidateQueries({ queryKey: ["prospect-enrichment-runs"] }),
+      ]);
+    },
+    onError: (error: any) => toast.error(error?.message ?? "Web enrichment failed"),
+  });
+
   const prospectsQuery = useQuery({
     queryKey: ["prospect-hub-prospects"],
     queryFn: async () => {
