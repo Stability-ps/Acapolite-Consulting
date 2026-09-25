@@ -80,6 +80,42 @@ export default function AdminProspectHub() {
   const [campaignSubject, setCampaignSubject] = useState("");
   const [campaignBody, setCampaignBody] = useState("");
 
+  const discoveryRunsQuery = useQuery({
+    queryKey: ["prospect-discovery-runs"],
+    queryFn: async () => {
+      const { data, error } = await db.from("prospect_discovery_runs").select("*").order("started_at", { ascending: false }).limit(10);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const discoverySettingsQuery = useQuery({
+    queryKey: ["prospect-discovery-settings"],
+    queryFn: async () => {
+      const { data, error } = await db.from("prospect_discovery_settings").select("*").eq("source_name", "National Treasury eTenders OCDS").single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const runDiscovery = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("prospect-discovery-sync", { body: { trigger: "manual" } });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Discovery sync failed");
+      return data;
+    },
+    onSuccess: async (data: any) => {
+      toast.success(`Discovery complete: ${data.prospects_created} new, ${data.prospects_updated} updated`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["prospect-hub-prospects"] }),
+        queryClient.invalidateQueries({ queryKey: ["prospect-discovery-runs"] }),
+        queryClient.invalidateQueries({ queryKey: ["prospect-discovery-settings"] }),
+      ]);
+    },
+    onError: (error: any) => toast.error(error?.message ?? "Discovery sync failed"),
+  });
+
   const prospectsQuery = useQuery({
     queryKey: ["prospect-hub-prospects"],
     queryFn: async () => {
@@ -293,12 +329,35 @@ export default function AdminProspectHub() {
           </div>
         </TabsContent>
 
-        <TabsContent value="discover">
-          <div className="rounded-2xl border bg-card p-8 text-center">
-            <Target className="mx-auto h-10 w-10 text-primary" />
-            <h2 className="mt-3 text-lg font-semibold">Automated Discovery Engine</h2>
-            <p className="mx-auto mt-2 max-w-2xl text-sm text-muted-foreground">This area will run the daily collection and enrichment jobs from approved public sources, deduplicate businesses, score them and insert new prospects here automatically.</p>
-            <div className="mx-auto mt-6 grid max-w-2xl gap-3 sm:grid-cols-3"><div className="rounded-xl border p-3"><p className="font-medium">Treasury/eTenders</p><p className="text-xs text-muted-foreground">Source ingestion</p></div><div className="rounded-xl border p-3"><p className="font-medium">Public web</p><p className="text-xs text-muted-foreground">Contact enrichment</p></div><div className="rounded-xl border p-3"><p className="font-medium">Daily sync</p><p className="text-xs text-muted-foreground">Scheduled updates</p></div></div>
+        <TabsContent value="discover" className="space-y-4">
+          <div className="rounded-2xl border bg-card p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2"><Target className="h-5 w-5 text-primary" /><h2 className="text-lg font-semibold">Automated Discovery Engine</h2></div>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Official National Treasury eTenders OCDS data is scanned daily. Awarded suppliers in selected sectors are deduplicated, scored and added to Prospect Hub with public business contact details where the official record provides them.</p>
+              </div>
+              <Button onClick={() => runDiscovery.mutate()} disabled={runDiscovery.isPending}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${runDiscovery.isPending ? "animate-spin" : ""}`} />
+                {runDiscovery.isPending ? "Scanning…" : "Run Discovery Now"}
+              </Button>
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border p-3"><p className="font-medium">Official source</p><p className="text-xs text-muted-foreground">National Treasury eTenders OCDS</p></div>
+              <div className="rounded-xl border p-3"><p className="font-medium">Target area</p><p className="text-xs text-muted-foreground">{discoverySettingsQuery.data?.provinces?.join(", ") || "Gauteng"}</p></div>
+              <div className="rounded-xl border p-3"><p className="font-medium">Schedule</p><p className="text-xs text-muted-foreground">Daily at 04:15 SAST</p></div>
+            </div>
+          </div>
+          <div className="rounded-2xl border bg-card p-4">
+            <h3 className="font-semibold">Recent discovery runs</h3>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b text-left text-muted-foreground"><tr><th className="p-2">Started</th><th className="p-2">Status</th><th className="p-2">Records</th><th className="p-2">Suppliers</th><th className="p-2">New</th><th className="p-2">Updated</th><th className="p-2">Skipped</th></tr></thead>
+                <tbody>
+                  {(discoveryRunsQuery.data ?? []).map((r: any) => <tr key={r.id} className="border-b last:border-0"><td className="p-2">{new Date(r.started_at).toLocaleString()}</td><td className="p-2 capitalize">{r.status}</td><td className="p-2">{r.records_fetched}</td><td className="p-2">{r.suppliers_seen}</td><td className="p-2 font-medium">{r.prospects_created}</td><td className="p-2">{r.prospects_updated}</td><td className="p-2">{r.skipped}</td></tr>)}
+                  {!discoveryRunsQuery.data?.length ? <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No discovery run has completed yet.</td></tr> : null}
+                </tbody>
+              </table>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
