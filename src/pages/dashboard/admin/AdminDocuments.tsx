@@ -638,6 +638,7 @@ export default function AdminDocuments() {
   const openItem = async (item: UnifiedItem) => {
     if (item.sourceType === "invoice" && item.invoice) {
       openInvoicePdf({
+        invoiceId: item.invoice.id,
         invoiceNumber: item.invoice.invoice_number,
         issueDate: item.invoice.issue_date,
         dueDate: item.invoice.due_date,

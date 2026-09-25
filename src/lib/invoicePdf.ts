@@ -1,10 +1,19 @@
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Payload for the PDF generation API
- * Structured to match the requirements for template ID: dc90e595-e2ca-440a-ac11-4fe1f58efb23
+ * Payload for invoice PDF generation.
+ *
+ * This is sent to the generate-invoice-pdf Supabase Edge Function, which
+ * authenticates the caller, re-fetches the authoritative invoice row via
+ * the caller's own RLS-scoped client (that lookup is what actually
+ * authorises the request), cross-checks the financial fields below
+ * against that row, and only then talks to the external PDF provider
+ * using a server-side-only credential. The provider credential is never
+ * present in this file or in any browser-side code.
  */
 export type InvoicePdfPayload = {
+  invoiceId: string;
   invoiceNumber: string;
   issueDate: string;
   dueDate?: string | null;
@@ -49,127 +58,43 @@ type OpenInvoicePdfOptions = {
 };
 
 /**
- * Formats a date string to "DD MMMM YYYY" (e.g. 27 April 2026)
- */
-function formatDate(value?: string | null) {
-  if (!value) return "";
-  try {
-    return new Date(value).toLocaleDateString("en-ZA", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  } catch (e) {
-    return value || "";
-  }
-}
-
-/**
- * Generates and opens/downloads the invoice PDF via the external Supabase Edge Function
+ * Generates and opens/downloads the invoice PDF via Acapolite's own
+ * authenticated generate-invoice-pdf Edge Function.
  */
 export async function openInvoicePdf(
   payload: InvoicePdfPayload,
   options: OpenInvoicePdfOptions = {},
 ) {
   const shouldDownload = options.autoPrint === true;
-  const appLogoUrl = "https://acapoliteconsulting.co.za/acapolite-logo.png";
-
-  const pdfApiUrl =
-    import.meta.env.VITE_PDF_API_URL ||
-    "https://nxqtduvaaacxsxkkaopd.supabase.co/functions/v1/generate-pdf-api";
-  const pdfApiKey =
-    import.meta.env.VITE_PDF_API_KEY ||
-    "ih_live_9be7d51f616815f04121124e0a09a08ce117fc343ebb695a";
 
   const toastId = toast.loading("Generating Tax Invoice...", {
     description: "Please wait while we prepare your document.",
   });
 
-  // Calculate dynamic VAT rate if not explicitly provided
-  const calculatedVatRate =
-    payload.vatRate ??
-    (payload.vatAmount > 0 && payload.subtotal > 0
-      ? Math.round((payload.vatAmount / payload.subtotal) * 100)
-      : 0);
-
-  // Construct the notes field from client notes and payment terms
-  const notesText = [
-    payload.notesToClient || "Thank you for your business.",
-    payload.termsAndConditions || "Payment due within 7 days. Late payments may attract penalties.",
-    payload.paymentReference ? `Payment Reference: ${payload.paymentReference}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  // Construct the API payload exactly as requested
-  const apiPayload = {
-    template_id: "dc90e595-e2ca-440a-ac11-4fe1f58efb23",
-    invoice_number: payload.invoiceNumber,
-    currency: "R",
-    variable_data: {
-      accent_color: "#155bb8",
-      logo_url:
-        payload.logoUrl && payload.logoUrl.startsWith("http")
-          ? payload.logoUrl
-          : appLogoUrl,
-
-      invoice_label: "Tax Invoice",
-      invoice_number: payload.invoiceNumber,
-      invoice_date: formatDate(payload.issueDate),
-      due_date: formatDate(payload.dueDate),
-      case_reference: payload.caseReference || null,
-
-      practitioner_name: payload.practitioner.name,
-      practitioner_address: payload.practitioner.address || "",
-      practitioner_email: payload.practitioner.email || "",
-      practitioner_phone: payload.practitioner.phone || "",
-      practitioner_vat: payload.practitioner.vatNumber || "",
-
-      client_name: payload.client.name,
-      client_address: payload.client.address || "",
-      client_email: payload.client.email || "",
-      client_phone: payload.client.phone || "",
-      client_vat: payload.client.vatNumber || "",
-
-      bank_name: payload.bankName || "",
-      account_name: payload.accountName || payload.practitioner.name || "",
-      account_number: payload.accountNumber || "",
-      branch_code: payload.branchCode || "",
-      reference: payload.paymentReference || payload.invoiceNumber,
-
-      vat_rate: calculatedVatRate,
-      discount_raw: payload.discountAmount ?? 0,
-
-      notes: notesText,
-
-      footer_text:
-        "Acapolite Consulting · Professional SARS Tax Assistance · Generated electronically.",
-
-      line_items: payload.lineItems.map((item) => ({
-        description: item.serviceItem,
-        quantity: Number(item.quantity) || 1,
-        unit_price: Number(item.unitPrice) || 0,
-      })),
-    },
-  };
-
   try {
-    console.log("Requesting PDF with template ID dc90e595-e2ca-440a-ac11-4fe1f58efb23");
-    const response = await fetch(pdfApiUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${pdfApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(apiPayload),
+    const { data, error } = await supabase.functions.invoke("generate-invoice-pdf", {
+      body: payload,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API error: ${response.status} - ${errorText}`);
+    if (error) {
+      let message = error.message || "Unable to generate the invoice PDF.";
+      const context = (error as { context?: Response }).context;
+      if (context && typeof context.json === "function") {
+        try {
+          const body = await context.clone().json();
+          if (typeof body?.error === "string") message = body.error;
+        } catch {
+          // Response wasn't JSON - fall back to the generic message above.
+        }
+      }
+      throw new Error(message);
     }
 
-    const pdfBlob = await response.blob();
+    if (!(data instanceof Blob)) {
+      throw new Error("The PDF service returned an unexpected response.");
+    }
+
+    const pdfBlob = data;
 
     if (shouldDownload) {
       const downloadUrl = URL.createObjectURL(pdfBlob);
@@ -187,8 +112,9 @@ export async function openInvoicePdf(
     }
 
     toast.success("PDF generated successfully!", { id: toastId });
-  } catch (err: any) {
+  } catch (err) {
     console.error("PDF generation error:", err);
-    toast.error(`Failed to generate PDF: ${err.message}`, { id: toastId });
+    const message = err instanceof Error ? err.message : "Unable to generate the invoice PDF.";
+    toast.error(`Failed to generate PDF: ${message}`, { id: toastId });
   }
 }

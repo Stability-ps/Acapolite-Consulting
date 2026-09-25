@@ -1836,6 +1836,7 @@ export default function AdminInvoices() {
                 {/* PDF Action Buttons */}
                 {(() => {
                   const pdfPayload = {
+                    invoiceId: selectedInvoice.id,
                     invoiceNumber: selectedInvoice.invoice_number,
                     issueDate: selectedInvoice.issue_date,
                     dueDate: invoiceDueDate || selectedInvoice.due_date,

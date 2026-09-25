@@ -616,6 +616,7 @@ export default function Invoices() {
                     onClick={() =>
                       openInvoicePdf(
                         {
+                          invoiceId: selectedInvoice.id,
                           invoiceNumber: selectedInvoice.invoice_number,
                           issueDate: selectedInvoice.issue_date,
                           dueDate: selectedInvoice.due_date,
@@ -679,6 +680,7 @@ export default function Invoices() {
                     onClick={() =>
                       openInvoicePdf(
                         {
+                          invoiceId: selectedInvoice.id,
                           invoiceNumber: selectedInvoice.invoice_number,
                           issueDate: selectedInvoice.issue_date,
                           dueDate: selectedInvoice.due_date,
