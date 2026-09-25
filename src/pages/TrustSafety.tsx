@@ -92,6 +92,11 @@ export default function TrustSafety() {
           <p className="mt-2 text-muted-foreground">
             Acapolite Consulting acts as a platform that connects clients with independent practitioners. While
             we strive to maintain quality standards, services are delivered by independent professionals.
+            Acapolite Consulting is an independent professional services platform and is not affiliated with,
+            endorsed by, or acting on behalf of the South African Revenue Service (SARS) or any other government
+            body. Any SARS representation or assistance is carried out by the responding practitioner, acting
+            within the taxpayer's own authorisation and instructions, and the taxpayer remains responsible for
+            their own tax affairs and SARS obligations.
           </p>
           <ul className="mt-3 list-disc pl-5 text-muted-foreground">
             <li>Practitioners remain responsible for services they provide</li>

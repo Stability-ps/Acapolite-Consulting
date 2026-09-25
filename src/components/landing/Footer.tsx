@@ -29,7 +29,7 @@ export function Footer() {
                   <a
                     href="https://www.facebook.com/acapolite"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-background/70 transition hover:bg-white/10 hover:text-white"
                     aria-label="Facebook"
                   >
@@ -38,7 +38,7 @@ export function Footer() {
                   <a
                     href="https://www.instagram.com/acapolite"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-background/70 transition hover:bg-white/10 hover:text-white"
                     aria-label="Instagram"
                   >
@@ -47,7 +47,7 @@ export function Footer() {
                   <a
                     href="https://www.linkedin.com/company/acapolite-consulting"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-background/70 transition hover:bg-white/10 hover:text-white"
                     aria-label="LinkedIn"
                   >
@@ -56,7 +56,7 @@ export function Footer() {
                   <a
                     href="https://wa.me/27675575506"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     onClick={() => trackGoogleAdsEvent("whatsapp_click", { link_location: "footer" })}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-background/70 transition hover:bg-white/10 hover:text-white"
                     aria-label="Chat with Acapolite on WhatsApp"
@@ -77,6 +77,7 @@ export function Footer() {
               <Link to="/about-us" className="hover:text-background">About Us</Link>
               <Link to="/how-acapolite-works" className="hover:text-background">How Acapolite Works</Link>
               <Link to="/our-services" className="hover:text-background">Our Services</Link>
+              <Link to="/sars-tax-assistance" className="hover:text-background">SARS &amp; Tax Assistance</Link>
               <Link to="/tax-consultant-pretoria" className="hover:text-background">Tax Consultant Pretoria</Link>
               <Link to="/practitioners" className="hover:text-background">For Practitioners</Link>
               <Link to="/practitioner-guidelines" className="hover:text-background">Practitioner Guidelines</Link>

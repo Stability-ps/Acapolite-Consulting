@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { ArrowRight, CheckCircle2, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
@@ -5,6 +6,16 @@ import { Button } from "@/components/ui/button";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { useSeo } from "@/hooks/useSeo";
 import { buildBreadcrumbSchema, buildServiceSchema } from "@/lib/structuredData";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+
+type Crumb = { name: string; path?: string };
 
 type PageConfig = {
   path: string;
@@ -18,6 +29,7 @@ type PageConfig = {
   faqs: { question: string; answer: string }[];
   sources: { label: string; href: string }[];
   related: { label: string; href: string }[];
+  crumbs: Crumb[];
 };
 
 const configs: Record<string, PageConfig> = {
@@ -37,6 +49,7 @@ const configs: Record<string, PageConfig> = {
     ],
     sources: [{ label: "SARS — Tax Compliance Status", href: "https://www.sars.gov.za/individuals/manage-your-tax-compliance-status/" }],
     related: [{ label: "SARS Debt Help", href: "/sars-debt" }, { label: "Payment Arrangements", href: "/sars-payment-arrangements" }, { label: "Tax Returns", href: "/tax-returns" }, { label: "SARS & Tax Assistance", href: "/sars-tax-assistance" }],
+    crumbs: [{ name: "Home", path: "/" }, { name: "SARS & Tax Assistance", path: "/sars-tax-assistance" }, { name: "Tax Compliance Status" }],
   },
   audit: {
     path: "/sars-audit-verification",
@@ -54,6 +67,7 @@ const configs: Record<string, PageConfig> = {
     ],
     sources: [{ label: "SARS — Being Audited or Selected for Verification", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/being-audited-or-selected-for-verification/" }, { label: "SARS — Upload Supporting Documents", href: "https://www.sars.gov.za/faq/how-do-i-upload-submit-supporting-documents/" }],
     related: [{ label: "VAT Services", href: "/vat-services" }, { label: "VAT Verification Guide", href: "/tax-guides/sars-vat-verification-supporting-documents" }, { label: "SARS Objections", href: "/sars-objections" }, { label: "SARS & Tax Assistance", href: "/sars-tax-assistance" }],
+    crumbs: [{ name: "Home", path: "/" }, { name: "SARS & Tax Assistance", path: "/sars-tax-assistance" }, { name: "SARS Audit & Verification" }],
   },
   paye: {
     path: "/paye-uif-sdl-services",
@@ -71,15 +85,44 @@ const configs: Record<string, PageConfig> = {
     ],
     sources: [{ label: "SARS — PAYE", href: "https://www.sars.gov.za/types-of-tax/pay-as-you-earn/" }],
     related: [{ label: "Accounting Services", href: "/accounting-services" }, { label: "Bookkeeping Services", href: "/bookkeeping-services" }, { label: "SARS & Tax Assistance", href: "/sars-tax-assistance" }, { label: "Tax Compliance Status", href: "/sars-tax-compliance-status" }],
+    crumbs: [{ name: "Home", path: "/" }, { name: "SARS & Tax Assistance", path: "/sars-tax-assistance" }, { name: "PAYE, UIF & SDL" }],
   },
 };
 
+function ConfigBreadcrumbs({ items }: { items: Crumb[] }) {
+  return (
+    <Breadcrumb className="mb-8">
+      <BreadcrumbList>
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
+          return (
+            <Fragment key={item.name}>
+              <BreadcrumbItem>
+                {isLast || !item.path ? (
+                  <BreadcrumbPage>{item.name}</BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink asChild>
+                    <Link to={item.path}>{item.name}</Link>
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
+              {!isLast && <BreadcrumbSeparator />}
+            </Fragment>
+          );
+        })}
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
 function ServicePage({ config }: { config: PageConfig }) {
   useSeo({ title: `${config.title} | Acapolite Consulting`, description: config.metaDescription, path: config.path });
+  const schemaCrumbs = config.crumbs.map((crumb) => ({ name: crumb.name, path: crumb.path ?? config.path }));
   return (
-    <PublicPageLayout eyebrow={config.eyebrow} title={config.title} description={config.description} maxWidthClassName="max-w-5xl">
-      <JsonLd data={buildBreadcrumbSchema([{ name: "Home", path: "/" }, { name: "Our Services", path: "/our-services" }, { name: config.title, path: config.path }])} />
+    <PublicPageLayout eyebrow={config.eyebrow} title={config.title} description={config.description} maxWidthClassName="max-w-5xl" backHref="/sars-tax-assistance" backLabel="Back to SARS & Tax Assistance">
+      <JsonLd data={buildBreadcrumbSchema(schemaCrumbs)} />
       <JsonLd data={buildServiceSchema({ name: config.title, description: config.metaDescription, path: config.path })} />
+      <ConfigBreadcrumbs items={config.crumbs} />
       <section className="rounded-3xl border border-border bg-background p-6 sm:p-8">
         <p className="leading-7 text-muted-foreground">{config.intro}</p>
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -89,7 +132,7 @@ function ServicePage({ config }: { config: PageConfig }) {
       </section>
       <section className="mt-10"><h2 className="text-2xl font-semibold text-foreground">How we approach the matter</h2><ol className="mt-5 grid gap-4 md:grid-cols-2">{config.process.map((item, i) => <li key={item} className="rounded-2xl border border-border bg-background p-5"><span className="text-xs font-semibold text-primary">STEP {i + 1}</span><p className="mt-2 text-sm leading-6 text-muted-foreground">{item}</p></li>)}</ol></section>
       <section className="mt-10"><h2 className="text-2xl font-semibold text-foreground">Frequently asked questions</h2><div className="mt-5 space-y-4">{config.faqs.map((faq) => <details key={faq.question} className="rounded-2xl border border-border bg-background p-5"><summary className="cursor-pointer font-semibold text-foreground">{faq.question}</summary><p className="mt-3 text-sm leading-6 text-muted-foreground">{faq.answer}</p></details>)}</div></section>
-      <section className="mt-10 rounded-2xl border border-border bg-muted/30 p-6"><h2 className="text-lg font-semibold text-foreground">Official SARS sources</h2><div className="mt-3 grid gap-2">{config.sources.map((source) => <a key={source.href} href={source.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">{source.label}<ExternalLink className="h-4 w-4" /></a>)}</div></section>
+      <section className="mt-10 rounded-2xl border border-border bg-muted/30 p-6"><h2 className="text-lg font-semibold text-foreground">Official SARS sources</h2><div className="mt-3 grid gap-2">{config.sources.map((source) => <a key={source.href} href={source.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">{source.label}<ExternalLink className="h-4 w-4" /></a>)}</div></section>
       <section className="mt-8"><h2 className="text-lg font-semibold text-foreground">Related services and guidance</h2><div className="mt-4 flex flex-wrap gap-3">{config.related.map((link) => <Button key={link.href} asChild variant="outline"><Link to={link.href}>{link.label}</Link></Button>)}</div></section>
       <p className="mt-8 text-xs leading-5 text-muted-foreground">Reviewed 24 September 2026. General information only. Acapolite Consulting is independent and is not affiliated with or endorsed by SARS.</p>
     </PublicPageLayout>

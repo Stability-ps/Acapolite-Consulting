@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { ArrowRight, BookOpen, CheckCircle2, ExternalLink, FileText, Scale } from "lucide-react";
 import { Link } from "react-router-dom";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -5,23 +6,58 @@ import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 import { Button } from "@/components/ui/button";
 import { buildArticleSchema, buildBreadcrumbSchema } from "@/lib/structuredData";
 import { useSeo } from "@/hooks/useSeo";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 const REVIEWED_DATE = "24 September 2026";
 const ISO_DATE = "2026-09-24";
 
 type Source = { label: string; href: string };
 type Section = { heading: string; paragraphs?: string[]; bullets?: string[] };
+type RelatedService = { label: string; href: string };
+type Crumb = { name: string; path?: string };
 
 type Guide = {
   slug: string;
   title: string;
   description: string;
   intro: string;
-  serviceHref: string;
-  serviceLabel: string;
+  relatedServices: RelatedService[];
   sections: Section[];
   sources: Source[];
 };
+
+function GuideBreadcrumbs({ items }: { items: Crumb[] }) {
+  return (
+    <Breadcrumb className="mb-8">
+      <BreadcrumbList>
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
+          return (
+            <Fragment key={item.name}>
+              <BreadcrumbItem>
+                {isLast || !item.path ? (
+                  <BreadcrumbPage>{item.name}</BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink asChild>
+                    <Link to={item.path}>{item.name}</Link>
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
+              {!isLast && <BreadcrumbSeparator />}
+            </Fragment>
+          );
+        })}
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
 
 const guides: Guide[] = [
   {
@@ -29,8 +65,10 @@ const guides: Guide[] = [
     title: "SARS Section 164 Suspension of Payment: What a Tax Dispute Does — and Does Not — Stop",
     description: "A practitioner-reviewed guide to SARS suspension of payment under section 164, including its relationship with objections and appeals and why a dispute does not automatically stop collection.",
     intro: "A tax dispute and a request to suspend payment are related, but they are not the same process. This distinction matters when a taxpayer wants to challenge an assessment while SARS collection activity is possible.",
-    serviceHref: "/sars-objections",
-    serviceLabel: "SARS objections and dispute assistance",
+    relatedServices: [
+      { label: "SARS objections and dispute assistance", href: "/sars-objections" },
+      { label: "SARS debt assistance", href: "/sars-debt" },
+    ],
     sections: [
       {
         heading: "The key distinction",
@@ -66,8 +104,7 @@ const guides: Guide[] = [
     title: "SARS Objection Deadlines: The 80-Business-Day Rule and What to Check Before Filing",
     description: "Understand the current SARS objection period, requests for reasons, late objections and the records to review before submitting a notice of objection.",
     intro: "Objection deadlines are procedural and can materially affect a taxpayer's dispute rights. The correct starting point is the assessment or decision being challenged and the applicable dispute rules — not a generic calendar-day calculation.",
-    serviceHref: "/sars-objections",
-    serviceLabel: "Get help with a SARS objection",
+    relatedServices: [{ label: "Get help with a SARS objection", href: "/sars-objections" }],
     sections: [
       {
         heading: "The current objection period",
@@ -103,8 +140,10 @@ const guides: Guide[] = [
     title: "SARS Section 200 Compromise: A Practical Preparation Checklist",
     description: "A practical guide to preparing for a SARS tax-debt compromise request, including the statutory purpose, financial disclosure and supporting information SARS may need.",
     intro: "A compromise is a tax-debt collection mechanism, not an objection to an assessment. It may allow SARS to accept less than the full amount of an undisputed tax debt where the statutory requirements are met and the compromise provides the highest net return from recovery of the debt.",
-    serviceHref: "/sars-compromise",
-    serviceLabel: "SARS compromise assistance",
+    relatedServices: [
+      { label: "SARS compromise assistance", href: "/sars-compromise" },
+      { label: "SARS debt assistance", href: "/sars-debt" },
+    ],
     sections: [
       {
         heading: "Start with the right debt",
@@ -141,8 +180,10 @@ const guides: Guide[] = [
     title: "SARS VAT Refund Delays: What Vendors Should Check Before Escalating",
     description: "A practical guide for South African VAT vendors dealing with delayed refunds, including verification, banking details, outstanding returns, set-off and escalation checks.",
     intro: "A VAT201 return showing a refundable amount does not always mean the refund will immediately reach the vendor's bank account. SARS may first need to complete verification or audit processes and other account or compliance issues can affect payment.",
-    serviceHref: "/vat-services",
-    serviceLabel: "VAT refund and compliance assistance",
+    relatedServices: [
+      { label: "VAT refund and compliance assistance", href: "/vat-services" },
+      { label: "SARS audit & verification assistance", href: "/sars-audit-verification" },
+    ],
     sections: [
       {
         heading: "Check the refund status before escalating",
@@ -177,8 +218,10 @@ const guides: Guide[] = [
     title: "SARS Payment Arrangements: Documents and Financial Information to Prepare",
     description: "Prepare for a SARS instalment payment arrangement by understanding the statutory framework, financial information, affordability evidence and ongoing compliance considerations.",
     intro: "An instalment payment arrangement can spread payment of qualifying tax debt over an agreed period. It does not reduce the underlying debt, and SARS assesses whether the taxpayer's circumstances support deferred payment.",
-    serviceHref: "/sars-payment-arrangements",
-    serviceLabel: "SARS payment-arrangement assistance",
+    relatedServices: [
+      { label: "SARS payment-arrangement assistance", href: "/sars-payment-arrangements" },
+      { label: "SARS debt assistance", href: "/sars-debt" },
+    ],
     sections: [
       {
         heading: "What an instalment arrangement does",
@@ -214,8 +257,10 @@ const guides: Guide[] = [
     title: "SARS Final Demand and Third-Party Appointment: What Happens When Tax Debt Is Not Addressed",
     description: "Understand SARS final demands and third-party appointments under section 179, including how banks, employers or other third parties can become part of tax-debt collection.",
     intro: "A SARS final demand is a debt-collection warning that should be treated as time-sensitive. If outstanding tax debt is not addressed, SARS has statutory recovery mechanisms that can include appointing a third party that holds or owes money for the taxpayer.",
-    serviceHref: "/sars-debt",
-    serviceLabel: "SARS tax-debt assistance",
+    relatedServices: [
+      { label: "SARS tax-debt assistance", href: "/sars-debt" },
+      { label: "SARS payment arrangements", href: "/sars-payment-arrangements" },
+    ],
     sections: [
       {
         heading: "What a third-party appointment means",
@@ -251,8 +296,7 @@ const guides: Guide[] = [
     title: "SARS Request for Reasons: When It Fits Before an Objection",
     description: "A practitioner-reviewed guide to requesting reasons from SARS before an objection, including the current 30-business-day request period and how the process affects the objection timeline.",
     intro: "A Request for Reasons is intended to help a taxpayer understand the basis of an assessment sufficiently to formulate an objection. It is not a general SARS follow-up channel and it should be used for the assessment or account outcomes for which the process is available.",
-    serviceHref: "/sars-objections",
-    serviceLabel: "SARS objections and dispute assistance",
+    relatedServices: [{ label: "SARS objections and dispute assistance", href: "/sars-objections" }],
     sections: [
       {
         heading: "When reasons can help",
@@ -288,8 +332,7 @@ const guides: Guide[] = [
     title: "SARS Objection Disallowed: Appeal, ADR and the Next Procedural Step",
     description: "What to review after SARS disallows or partially allows an objection, including the 30-business-day appeal period and the role of Alternative Dispute Resolution.",
     intro: "A disallowed objection does not necessarily end a tax dispute. SARS provides an appeal process, and a valid appeal may in appropriate cases proceed through Alternative Dispute Resolution by mutual agreement.",
-    serviceHref: "/sars-objections",
-    serviceLabel: "SARS appeal and dispute assistance",
+    relatedServices: [{ label: "SARS appeal and dispute assistance", href: "/sars-objections" }],
     sections: [
       {
         heading: "Start with the objection outcome",
@@ -326,8 +369,10 @@ const guides: Guide[] = [
     title: "SARS VAT Verification: Supporting Documents and Submission Checks",
     description: "A practical guide to VAT verification supporting documents, SARS correspondence, eFiling uploads and what vendors should check before submitting relevant material.",
     intro: "VAT verification is a check of information declared in a return against supporting records and other information available to SARS. The correct document pack depends on the verification letter and the transactions SARS has asked the vendor to substantiate.",
-    serviceHref: "/vat-services",
-    serviceLabel: "VAT verification and compliance assistance",
+    relatedServices: [
+      { label: "VAT verification and compliance assistance", href: "/vat-services" },
+      { label: "SARS audit & verification assistance", href: "/sars-audit-verification" },
+    ],
     sections: [
       {
         heading: "Follow the verification letter",
@@ -381,6 +426,7 @@ export function TaxGuidesHub() {
       maxWidthClassName="max-w-6xl"
     >
       <JsonLd data={buildBreadcrumbSchema([{ name: "Home", path: "/" }, { name: "Tax Guides", path: "/tax-guides" }])} />
+      <GuideBreadcrumbs items={[{ name: "Home", path: "/" }, { name: "Tax Guides" }]} />
       <div className="grid gap-5 md:grid-cols-2">
         {guides.map((guide) => (
           <article key={guide.slug} className="rounded-2xl border border-border bg-background p-6">
@@ -437,6 +483,7 @@ function GuidePage({ guide }: { guide: Guide }) {
         datePublished: ISO_DATE,
         dateModified: ISO_DATE,
       })} />
+      <GuideBreadcrumbs items={[{ name: "Home", path: "/" }, { name: "Tax Guides", path: "/tax-guides" }, { name: guide.title }]} />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-border bg-muted/30 p-5">
@@ -478,7 +525,7 @@ function GuidePage({ guide }: { guide: Guide }) {
           </div>
           <div className="mt-4 grid gap-3">
             {guide.sources.map((source) => (
-              <a key={source.href} href={source.href} target="_blank" rel="noreferrer" className="flex items-start gap-2 text-sm font-medium text-primary hover:underline">
+              <a key={source.href} href={source.href} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 text-sm font-medium text-primary hover:underline">
                 <ExternalLink className="mt-0.5 h-4 w-4 shrink-0" />
                 {source.label}
               </a>
@@ -495,8 +542,10 @@ function GuidePage({ guide }: { guide: Guide }) {
             Your assessment, correspondence, compliance position and deadlines determine the appropriate next step. Acapolite can review the matter before a submission is prepared.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Button asChild><Link to="/request-tax-assistance?step=1">Request assistance</Link></Button>
-            <Button asChild variant="outline"><Link to={guide.serviceHref}>{guide.serviceLabel}</Link></Button>
+            <Button asChild><Link to={`/request-tax-assistance?step=1&intent=sars&from=${encodeURIComponent(path)}`}>Request assistance</Link></Button>
+            {guide.relatedServices.map((service) => (
+              <Button key={service.href} asChild variant="outline"><Link to={service.href}>{service.label}</Link></Button>
+            ))}
           </div>
         </section>
 
