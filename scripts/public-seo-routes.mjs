@@ -108,6 +108,14 @@ export const publicRoutes = [
     description: "Tax return assistance across South Africa for ITR12, ITR14, late returns and related SARS compliance support.",
   },
   {
+    path: "/provisional-tax",
+    lastmod: "2026-09-25",
+    priority: "0.9",
+    changefreq: "monthly",
+    title: "Provisional Tax & IRP6 Assistance | Acapolite Consulting",
+    description: "Professional help determining provisional taxpayer status, preparing accurate IRP6 estimates for the first and second payment periods, and avoiding SARS underestimation and late-payment penalties across South Africa.",
+  },
+  {
     path: "/vat-services",
     lastmod: "2026-09-25",
     priority: "0.9",
@@ -194,6 +202,14 @@ export const publicRoutes = [
     changefreq: "monthly",
     title: "SARS VAT Verification Supporting Documents Guide | Acapolite Consulting",
     description: "Prepare VAT verification supporting documents by following the SARS letter, checking the correct VAT period and retaining proof of submission.",
+  },
+  {
+    path: "/tax-guides/provisional-tax-irp6-guide",
+    lastmod: "2026-09-25",
+    priority: "0.8",
+    changefreq: "monthly",
+    title: "Provisional Tax and IRP6 Guide | Acapolite Consulting",
+    description: "A practical explainer of who qualifies as a provisional taxpayer, the first and second IRP6 payment periods, the voluntary third top-up payment, and how SARS's underestimation penalty actually works.",
   },
   {
     path: "/tax-consultant-pretoria",

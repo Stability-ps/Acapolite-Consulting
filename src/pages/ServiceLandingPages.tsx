@@ -48,6 +48,7 @@ const requestIntentByPath: Record<string, string> = {
   "/cipc-company-compliance": "cipc",
   "/tax-returns": "tax-returns",
   "/vat-services": "vat",
+  "/provisional-tax": "provisional-tax",
 };
 
 /** Keyed by intent, not by path - the source of truth for both the rendered pages below and the build-time raw-HTML seeding in scripts/generate-route-html.mjs. */
@@ -70,6 +71,7 @@ export const configs: Record<string, LandingPageConfig> = {
       "VAT and PAYE compliance assistance",
       "Personal and company tax returns",
       "Tax compliance status support",
+      "Provisional tax and IRP6 assistance",
       "Review of SARS notices, letters and account issues",
     ],
     whyItMatters:
@@ -86,6 +88,7 @@ export const configs: Record<string, LandingPageConfig> = {
       { label: "Tax Compliance Status", href: "/sars-tax-compliance-status" },
       { label: "SARS Audit & Verification", href: "/sars-audit-verification" },
       { label: "PAYE, UIF & SDL", href: "/paye-uif-sdl-services" },
+      { label: "Provisional Tax & IRP6", href: "/provisional-tax" },
     ],
   },
   vat: {
@@ -421,6 +424,87 @@ export const configs: Record<string, LandingPageConfig> = {
       { label: "SARS & Tax Assistance", href: "/sars-tax-assistance" },
       { label: "SARS Objections & Disputes", href: "/sars-objections" },
       { label: "Accounting Services", href: "/accounting-services" },
+      { label: "Provisional Tax & IRP6", href: "/provisional-tax" },
+    ],
+  },
+  provisionalTax: {
+    path: "/provisional-tax",
+    eyebrow: "Provisional Tax & IRP6",
+    title: "Provisional Tax & IRP6 Assistance",
+    description:
+      "Get professional help determining whether you're a provisional taxpayer, preparing accurate IRP6 estimates for both payment periods, and avoiding SARS underestimation and late-payment penalties.",
+    metaDescription:
+      "Professional help determining provisional taxpayer status, preparing accurate IRP6 estimates for the first and second payment periods, and avoiding SARS underestimation and late-payment penalties across South Africa.",
+    intro:
+      "Provisional tax is a method of paying income tax in advance rather than a separate tax - it applies to income not already taxed through PAYE, such as freelance, rental, investment or other business income, and to every company. Getting the estimate right on each IRP6 return matters, since SARS can charge a penalty where an estimate falls materially short of actual taxable income for the year.",
+    services: [
+      "Provisional taxpayer status assessment",
+      "First and second IRP6 estimate preparation",
+      "Voluntary third (top-up) payment calculations",
+      "Review of income from freelance, rental, investment and directorship sources",
+      "Correction of a missed or incorrect IRP6 submission",
+      "Underestimation and late-payment penalty risk review",
+    ],
+    whyItMatters:
+      "Provisional tax estimates are checked against actual taxable income once the annual return is assessed. Falling short of the required percentage - 90% of actual taxable income, or the escalated basic amount, whichever is lower, where actual taxable income is R1 million or less, or 80% of actual taxable income above that - can trigger a penalty of 20% of the tax on the shortfall, on top of any late-payment penalty and interest. Getting the estimate right the first time, for each period, avoids this.",
+    ctaTitle: "Get help with your provisional tax",
+    ctaBody:
+      "Tell us about your income sources and the periods involved, and a practitioner will help assess your provisional taxpayer status and prepare your IRP6 estimate.",
+    audience: [
+      "Freelancers, consultants and sole proprietors earning income without PAYE withheld",
+      "Landlords and anyone earning rental income",
+      "Individuals with material investment or other non-remuneration income",
+      "Directors who separately earn non-remuneration business income",
+      "Companies, which are automatically provisional taxpayers",
+    ],
+    process: [
+      "Confirm whether the taxpayer meets SARS's current provisional-taxpayer criteria, or falls within an exclusion.",
+      "Review the income sources and prior assessments needed to prepare an accurate estimate.",
+      "Prepare and submit the IRP6 for the applicable period via eFiling.",
+      "Where useful, calculate a voluntary third top-up payment once actual figures are known, to limit interest before the annual return is assessed.",
+    ],
+    faqs: [
+      {
+        question: "Who has to pay provisional tax?",
+        answer:
+          "SARS treats as a provisional taxpayer any person, other than a company, who earns income other than remuneration or an allowance or advance under section 8(1), or remuneration from an employer not registered for employees' tax; every company; anyone SARS has directly notified; and certain labour brokers. Freelance, rental, investment and other non-PAYE income commonly trigger provisional status.",
+      },
+      {
+        question: "Who is excluded from provisional tax?",
+        answer:
+          "A natural person is excluded if their taxable income from interest, dividends, rental and non-PAYE-employer remuneration doesn't exceed R30,000 for the year, or if their total taxable income doesn't exceed the tax threshold for their age group for the relevant year of assessment. Approved public benefit organisations, certain exempt bodies and deceased estates are also excluded.",
+      },
+      {
+        question: "When are the first and second provisional tax payments due?",
+        answer:
+          "The first payment is due within six months of the start of the taxpayer's year of assessment, and the second no later than the last day of that year of assessment. These dates always follow the taxpayer's own year of assessment rather than a universal calendar date - for the common February year-end, used here only as an example, that works out to roughly end-August and end-February.",
+      },
+      {
+        question: "What is the voluntary third (\"top-up\") payment?",
+        answer:
+          "It's an optional payment made after year-end, once actual figures are known but before the annual return is assessed, to correct an earlier estimate that turned out too low and reduce the interest that would otherwise accrue. It isn't itself a compliance requirement.",
+      },
+      {
+        question: "What happens if a provisional tax estimate is too low?",
+        answer:
+          "Where actual taxable income is R1 million or less, the estimate must reach at least 90% of actual taxable income, or the escalated basic amount if lower, to avoid a penalty. Above R1 million, the threshold is 80% of actual taxable income. Falling short can trigger a penalty of 20% of the tax on the shortfall.",
+      },
+      {
+        question: "What if a provisional tax payment is late?",
+        answer:
+          "A late first or second-period payment can attract a 10% late-payment penalty, in addition to interest at SARS's currently-prescribed rate on the outstanding amount.",
+      },
+    ],
+    officialSources: [
+      { label: "SARS — Provisional Tax", href: "https://www.sars.gov.za/types-of-tax/provisional-tax/" },
+      { label: "SARS — Guide to Provisional Tax", href: "https://www.sars.gov.za/guide-to-provisional-tax/" },
+      { label: "SARS — How to eFile Your Provisional Tax Return", href: "https://www.sars.gov.za/how-to-efile-your-provisional-tax-return/" },
+    ],
+    reviewedDate: "25 September 2026",
+    relatedLinks: [
+      { label: "SARS & Tax Assistance", href: "/sars-tax-assistance" },
+      { label: "Tax Returns", href: "/tax-returns" },
+      { label: "Provisional Tax & IRP6 Guide", href: "/tax-guides/provisional-tax-irp6-guide" },
     ],
   },
   help: {
@@ -717,4 +801,8 @@ export function TaxReturnsLandingPage() {
 
 export function ProfessionalHelpLandingPage() {
   return <ServiceLandingPage config={configs.help} />;
+}
+
+export function ProvisionalTaxLandingPage() {
+  return <ServiceLandingPage config={configs.provisionalTax} />;
 }

@@ -154,6 +154,10 @@
       "destination": "/vat-services/index.html"
     },
     {
+      "source": "/provisional-tax",
+      "destination": "/provisional-tax/index.html"
+    },
+    {
       "source": "/how-acapolite-works",
       "destination": "/how-acapolite-works/index.html"
     },
@@ -224,6 +228,10 @@
     {
       "source": "/tax-guides/sars-vat-verification-supporting-documents",
       "destination": "/tax-guides/sars-vat-verification-supporting-documents/index.html"
+    },
+    {
+      "source": "/tax-guides/provisional-tax-irp6-guide",
+      "destination": "/tax-guides/provisional-tax-irp6-guide/index.html"
     },
     {
       "source": "/tax-consultant-pretoria",

@@ -408,6 +408,60 @@ export const guides: Guide[] = [
       { label: "SARS — Being Audited or Selected for Verification", href: "https://www.sars.gov.za/individuals/what-if-i-do-not-agree/being-audited-or-selected-for-verification/" },
       { label: "SARS — Upload Supporting Documents", href: "https://www.sars.gov.za/faq/how-do-i-upload-submit-supporting-documents/" }
     ]
+  },
+  {
+    slug: "provisional-tax-irp6-guide",
+    title: "Provisional Tax and IRP6: Who Must Pay, When, and How Estimates Are Penalised",
+    description: "A practical explainer of who qualifies as a provisional taxpayer, the first and second IRP6 payment periods, the voluntary third top-up payment, and how SARS's underestimation penalty actually works.",
+    intro: "Provisional tax is a method of paying income tax in two, sometimes three, instalments during the year, rather than a separate tax in its own right. The rules turn on the taxpayer's own year of assessment and actual income, not a fixed calendar date or headline figure, so the starting point is confirming provisional-taxpayer status itself.",
+    relatedServices: [{ label: "Get help with provisional tax and IRP6", href: "/provisional-tax" }],
+    sections: [
+      {
+        heading: "Who is a provisional taxpayer",
+        paragraphs: [
+          "SARS treats as a provisional taxpayer any person, other than a company, who earns income other than remuneration or an allowance or advance under section 8(1), or remuneration from an employer not registered for employees' tax. Every company is automatically a provisional taxpayer. A person SARS has directly notified, and certain labour brokers without an exemption certificate, are also included.",
+          "In practice this commonly covers freelancers, consultants and sole proprietors, landlords earning rental income, people with material investment income, and directors who separately earn non-remuneration business income - directorship alone does not make someone a provisional taxpayer."
+        ]
+      },
+      {
+        heading: "Who is excluded",
+        bullets: [
+          "Natural persons whose taxable income from interest, dividends, foreign dividends, rental from letting fixed property and non-PAYE-employer remuneration does not exceed R30,000 for the year.",
+          "Natural persons whose total taxable income does not exceed the tax threshold for their age group for the relevant year of assessment.",
+          "Approved public benefit organisations, certain exempt recreational clubs and body corporates, small business funding entities, and deceased estates."
+        ]
+      },
+      {
+        heading: "The first and second payment periods",
+        paragraphs: [
+          "The first provisional payment is due within six months of the start of the taxpayer's year of assessment. The second is due no later than the last day of that year of assessment. Both dates run from the taxpayer's own year of assessment, not a universal calendar date - for the common February year-end, used here only as an illustrative example, that works out to roughly end-August and end-February, but a taxpayer with a different year-end has different actual dates."
+        ]
+      },
+      {
+        heading: "The voluntary third (top-up) payment",
+        paragraphs: [
+          "A third payment is entirely voluntary. It is made after year-end, once actual figures for the year are known, but before the annual income tax return is assessed. Its purpose is to correct an estimate that turned out too low and limit the interest that would otherwise accrue - it is not itself a compliance requirement."
+        ]
+      },
+      {
+        heading: "How the underestimation penalty works",
+        paragraphs: [
+          "SARS checks the second-period estimate against the taxpayer's actual taxable income once the annual return is assessed. Where actual taxable income is R1 million or less, the estimate must reach at least 90% of actual taxable income, or the escalated \"basic amount\" (broadly, the taxpayer's last assessed taxable income), whichever gives the lower required amount. Where actual taxable income exceeds R1 million, the required threshold is 80% of actual taxable income, and the basic-amount alternative is not available.",
+          "Falling short of the applicable percentage triggers a penalty under paragraph 20 of the Fourth Schedule: 20% of the difference between the tax calculated on the required percentage of actual taxable income and the tax actually paid on the estimate submitted."
+        ]
+      },
+      {
+        heading: "Late payment and non-submission",
+        paragraphs: [
+          "A late first or second-period payment can attract a 10% late-payment penalty, plus interest at SARS's currently-prescribed rate on the outstanding amount. Not submitting a required IRP6 return does not avoid this - SARS states that interest and/or penalties are still charged once the income tax return is assessed."
+        ]
+      }
+    ],
+    sources: [
+      { label: "SARS — Provisional Tax", href: "https://www.sars.gov.za/types-of-tax/provisional-tax/" },
+      { label: "SARS — Guide to Provisional Tax", href: "https://www.sars.gov.za/guide-to-provisional-tax/" },
+      { label: "SARS — How to eFile Your Provisional Tax Return", href: "https://www.sars.gov.za/how-to-efile-your-provisional-tax-return/" }
+    ]
   }
 ];
 
@@ -587,3 +641,4 @@ export function SarsFinalDemandGuide() { return <GuidePage guide={guides[5]} />;
 export function SarsRequestForReasonsGuide() { return <GuidePage guide={guides[6]} />; }
 export function SarsObjectionDisallowedGuide() { return <GuidePage guide={guides[7]} />; }
 export function SarsVatVerificationGuide() { return <GuidePage guide={guides[8]} />; }
+export function ProvisionalTaxIrp6Guide() { return <GuidePage guide={guides[9]} />; }
