@@ -262,7 +262,7 @@ export default function AdminActivityLog() {
         case "invoice": {
           const { data } = await supabase
             .from("invoices")
-            .select("invoice_number, title, clients(company_name, first_name, last_name, client_code)")
+            .select("invoice_number, title, clients!invoices_client_id_fkey(company_name, first_name, last_name, client_code)")
             .eq("id", selectedLog.target_id)
             .maybeSingle();
           if (!data) return null;
