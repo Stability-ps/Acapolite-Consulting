@@ -11,7 +11,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "mobile:setup": "bash scripts/setup-mobile.sh",
+    "mobile:ios": "bash scripts/setup-mobile.sh ios",
+    "mobile:android": "bash scripts/setup-mobile.sh android"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
