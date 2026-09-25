@@ -3820,6 +3820,9 @@ export type Database = {
       }
       staff_permissions: {
         Row: {
+          can_view_prospect_hub: boolean
+          can_manage_prospect_hub: boolean
+          can_send_prospect_campaigns: boolean
           assigned_clients_only: boolean
           can_approve_sars_correspondence: boolean
           can_export_clients: boolean
@@ -3843,6 +3846,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          can_view_prospect_hub?: boolean
+          can_manage_prospect_hub?: boolean
+          can_send_prospect_campaigns?: boolean
           assigned_clients_only?: boolean
           can_approve_sars_correspondence?: boolean
           can_export_clients?: boolean
@@ -3866,6 +3872,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          can_view_prospect_hub?: boolean
+          can_manage_prospect_hub?: boolean
+          can_send_prospect_campaigns?: boolean
           assigned_clients_only?: boolean
           can_approve_sars_correspondence?: boolean
           can_export_clients?: boolean
