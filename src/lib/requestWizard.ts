@@ -179,7 +179,8 @@ export type ServiceIntentKey =
   | "tax-returns"
   | "accounting"
   | "bookkeeping"
-  | "cipc";
+  | "cipc"
+  | "provisional-tax";
 
 type ServiceIntentConfig = {
   label: string;
@@ -257,6 +258,22 @@ const serviceIntentConfigs: Record<ServiceIntentKey, ServiceIntentConfig> = {
             ? "npo_organisation_services"
             : "business_tax",
   },
+  "provisional-tax": {
+    label: "Provisional Tax & IRP6",
+    // Reuses the same category mapping as every other SARS/income-tax
+    // intent above (sars, sars-debt, payment-arrangement, compromise,
+    // objections, tax-returns) - provisional tax applies across
+    // individuals, companies and trusts, so it belongs in the same
+    // general tax category as those, not a new dedicated one.
+    categoryForEntity: (entityType) =>
+      entityType === "individual"
+        ? "individual_tax"
+        : entityType === "trust"
+          ? "trust_services"
+          : entityType === "npo_organisation"
+            ? "npo_organisation_services"
+            : "business_tax",
+  },
   accounting: {
     label: "Accounting Services",
     categoryForEntity: () => "accounting",
@@ -295,6 +312,7 @@ const publicRequestSourceLabels: Record<string, string> = {
   "/accounting-services": "Accounting Services",
   "/bookkeeping-services": "Bookkeeping Services",
   "/cipc-company-compliance": "CIPC & Company Compliance",
+  "/provisional-tax": "Provisional Tax & IRP6",
 };
 
 export function getRequestSource(value?: string | null) {
