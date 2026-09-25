@@ -75,6 +75,7 @@ const TaxCoachAIStaff = lazy(() => import("./pages/dashboard/admin/TaxCoachAISta
 const AdminWhatsAppQA = lazy(() => import("./pages/dashboard/admin/AdminWhatsAppQA"));
 const AdminSocialMedia = lazy(() => import("./pages/dashboard/admin/AdminSocialMedia"));
 const AdminAiKnowledge = lazy(() => import("./pages/dashboard/admin/AdminAiKnowledge"));
+const AdminProspectHub = lazy(() => import("./pages/dashboard/admin/AdminProspectHub"));
 
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SarsDebtPage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsDebtPage })));
@@ -307,6 +308,7 @@ function AppRoutes() {
                 <Route path="staff/whatsapp-qa" element={<AdminWhatsAppQA />} />
                 <Route path="staff/social-media" element={<AdminSocialMedia />} />
                 <Route path="staff/ai-knowledge" element={<AdminAiKnowledge />} />
+                <Route path="staff/prospect-hub" element={<AdminProspectHub />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />
