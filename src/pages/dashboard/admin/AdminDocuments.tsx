@@ -447,7 +447,7 @@ export default function AdminDocuments() {
       let query = supabase
         .from("invoices")
         .select(
-          "id, invoice_number, title, description, subtotal, tax_amount, total_amount, issue_date, due_date, status, practitioner_bank_details, proof_of_payment_document_id, client_id, case_id, clients(id, company_name, first_name, last_name, client_code, assigned_consultant_id, profile_id, profiles!clients_profile_id_fkey(full_name, email)), linked_case:cases!invoices_case_id_fkey(id, case_title, case_number, assigned_consultant_id)",
+          "id, invoice_number, title, description, subtotal, tax_amount, total_amount, issue_date, due_date, status, practitioner_bank_details, proof_of_payment_document_id, client_id, case_id, clients!invoices_client_id_fkey(id, company_name, first_name, last_name, client_code, assigned_consultant_id, profile_id, profiles!clients_profile_id_fkey(full_name, email)), linked_case:cases!invoices_case_id_fkey(id, case_title, case_number, assigned_consultant_id)",
         )
         .order("created_at", { ascending: false });
 
