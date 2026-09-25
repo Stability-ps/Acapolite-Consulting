@@ -151,7 +151,7 @@ const configs: Record<string, LandingPageConfig> = {
       { label: "SARS — VAT Refunds for Vendors", href: "https://www.sars.gov.za/types-of-tax/value-added-tax/vat-refunds-for-vendors/" },
       { label: "SARS — Value-Added Tax", href: "https://www.sars.gov.za/types-of-tax/value-added-tax/" },
     ],
-    reviewedDate: "23 September 2026",
+    reviewedDate: "25 September 2026",
     relatedLinks: [
       { label: "SARS & Tax Assistance", href: "/sars-tax-assistance" },
       { label: "Accounting Services", href: "/accounting-services" },
@@ -302,7 +302,7 @@ const configs: Record<string, LandingPageConfig> = {
       "General company administration support",
     ],
     whyItMatters:
-      "Keeping company information current helps reduce administrative delays and supports broader tax and business compliance. The required process depends on the specific CIPC filing or company change involved.",
+      "CIPC requires companies and close corporations to keep annual-return and beneficial-ownership filings current. Its current process links beneficial ownership and AFS/FAS compliance to annual-return filing, and non-compliance can lead to penalties, enforcement action or deregistration. The required process depends on the entity and the specific filing or company change involved.",
     ctaTitle: "Request CIPC or company compliance help",
     ctaBody:
       "Submit your request and select the company or business-support service that applies.",
@@ -322,12 +322,12 @@ const configs: Record<string, LandingPageConfig> = {
       {
         question: "Do companies and close corporations need to file annual returns?",
         answer:
-          "Yes. CIPC states that companies and close corporations must file annual returns within the applicable annual filing period.",
+          "Yes. CIPC requires annual returns every year. For companies, CIPC states that annual returns must be filed within 30 business days after the anniversary date; close corporations follow the applicable annual-return filing period.",
       },
       {
         question: "How does beneficial ownership affect annual returns?",
         answer:
-          "CIPC currently requires beneficial ownership information to be submitted and up to date as part of the annual-return process. Its annual-return system includes beneficial ownership filing before the annual return is completed.",
+          "CIPC currently requires the latest beneficial ownership declaration to be submitted and up to date before the annual return can be completed. CIPC also requires the applicable AFS or FAS with the annual-return process.",
       },
       {
         question: "Can Acapolite help with more than one CIPC issue at once?",
@@ -337,9 +337,10 @@ const configs: Record<string, LandingPageConfig> = {
     ],
     officialSources: [
       { label: "CIPC — Annual Return Filing System", href: "https://annualreturns.cipc.co.za/" },
-      { label: "CIPC — Beneficial Ownership and Annual Returns", href: "https://www.cipc.co.za/?p=20728" },
+      { label: "CIPC — Beneficial Ownership", href: "https://www.cipc.co.za/?page_id=16055" },
+      { label: "CIPC — Annual Returns & Beneficial Ownership Compliance", href: "https://www.cipc.co.za/?p=22211" },
     ],
-    reviewedDate: "23 September 2026",
+    reviewedDate: "25 September 2026",
     relatedLinks: [
       { label: "Accounting Services", href: "/accounting-services" },
       { label: "Tax Returns", href: "/tax-returns" },
