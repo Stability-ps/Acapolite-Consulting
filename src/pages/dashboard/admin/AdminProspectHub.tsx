@@ -116,6 +116,32 @@ export default function AdminProspectHub() {
     onError: (error: any) => toast.error(error?.message ?? "Discovery sync failed"),
   });
 
+  const enrichmentRunsQuery = useQuery({
+    queryKey: ["prospect-enrichment-runs"],
+    queryFn: async () => {
+      const { data, error } = await db.from("prospect_enrichment_runs").select("*").order("started_at", { ascending: false }).limit(10);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const runEnrichment = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("prospect-web-enrichment", { body: { trigger: "manual" } });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Web enrichment failed");
+      return data;
+    },
+    onSuccess: async (data: any) => {
+      toast.success(`Enrichment complete: ${data.prospects_checked} checked, ${data.prospects_updated} updated, ${data.emails_found} emails, ${data.phones_found} phones, ${data.failed ?? 0} failed`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["prospect-hub-prospects"] }),
+        queryClient.invalidateQueries({ queryKey: ["prospect-enrichment-runs"] }),
+      ]);
+    },
+    onError: (error: any) => toast.error(error?.message ?? "Web enrichment failed"),
+  });
+
   const prospectsQuery = useQuery({
     queryKey: ["prospect-hub-prospects"],
     queryFn: async () => {
@@ -336,10 +362,16 @@ export default function AdminProspectHub() {
                 <div className="flex items-center gap-2"><Target className="h-5 w-5 text-primary" /><h2 className="text-lg font-semibold">Automated Discovery Engine</h2></div>
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Official National Treasury eTenders OCDS data is scanned daily. Awarded suppliers in selected sectors are deduplicated, scored and added to Prospect Hub with public business contact details where the official record provides them.</p>
               </div>
-              <Button onClick={() => runDiscovery.mutate()} disabled={runDiscovery.isPending}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${runDiscovery.isPending ? "animate-spin" : ""}`} />
-                {runDiscovery.isPending ? "Scanning…" : "Run Discovery Now"}
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button onClick={() => runDiscovery.mutate()} disabled={runDiscovery.isPending}>
+                  <RefreshCw className={`mr-2 h-4 w-4 ${runDiscovery.isPending ? "animate-spin" : ""}`} />
+                  {runDiscovery.isPending ? "Scanning…" : "Run Discovery Now"}
+                </Button>
+                <Button variant="outline" onClick={() => runEnrichment.mutate()} disabled={runEnrichment.isPending}>
+                  <Search className={`mr-2 h-4 w-4 ${runEnrichment.isPending ? "animate-pulse" : ""}`} />
+                  {runEnrichment.isPending ? "Enriching…" : "Enrich Contacts Now"}
+                </Button>
+              </div>
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border p-3"><p className="font-medium">Official source</p><p className="text-xs text-muted-foreground">National Treasury eTenders OCDS</p></div>
@@ -355,6 +387,19 @@ export default function AdminProspectHub() {
                 <tbody>
                   {(discoveryRunsQuery.data ?? []).map((r: any) => <tr key={r.id} className="border-b last:border-0"><td className="p-2">{new Date(r.started_at).toLocaleString()}</td><td className="p-2 capitalize">{r.status}</td><td className="p-2">{r.records_fetched}</td><td className="p-2">{r.suppliers_seen}</td><td className="p-2 font-medium">{r.prospects_created}</td><td className="p-2">{r.prospects_updated}</td><td className="p-2">{r.skipped}</td></tr>)}
                   {!discoveryRunsQuery.data?.length ? <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No discovery run has completed yet.</td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="rounded-2xl border bg-card p-4">
+            <h3 className="font-semibold">Recent enrichment runs</h3>
+            <p className="text-xs text-muted-foreground">Public company websites are checked daily at 04:45 SAST. Only contact details published on the company's own website are saved; existing details are never overwritten.</p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b text-left text-muted-foreground"><tr><th className="p-2">Started</th><th className="p-2">Type</th><th className="p-2">Status</th><th className="p-2">Checked</th><th className="p-2">Sites fetched</th><th className="p-2">Emails</th><th className="p-2">Phones</th><th className="p-2">Updated</th><th className="p-2">Skipped</th><th className="p-2">Failed</th></tr></thead>
+                <tbody>
+                  {(enrichmentRunsQuery.data ?? []).map((r: any) => <tr key={r.id} className="border-b last:border-0"><td className="p-2">{new Date(r.started_at).toLocaleString()}</td><td className="p-2 capitalize">{r.run_type}</td><td className="p-2 capitalize">{r.status}</td><td className="p-2">{r.prospects_checked}</td><td className="p-2">{r.websites_fetched}</td><td className="p-2">{r.emails_found}</td><td className="p-2">{r.phones_found}</td><td className="p-2 font-medium">{r.prospects_updated}</td><td className="p-2">{r.skipped}</td><td className="p-2">{r.metadata?.failed ?? "—"}</td></tr>)}
+                  {!enrichmentRunsQuery.data?.length ? <tr><td colSpan={10} className="p-8 text-center text-muted-foreground">No enrichment run yet.</td></tr> : null}
                 </tbody>
               </table>
             </div>
