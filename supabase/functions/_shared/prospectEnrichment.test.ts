@@ -97,6 +97,13 @@ Deno.test("extractContacts decodes obfuscated @ and ignores numbers inside scrip
   assertEquals(c.phone, "+27116444000");
 });
 
+Deno.test("extractContacts reads telephone from schema.org JSON-LD", () => {
+  const html = `<script type="application/ld+json">{"@type":"Organization","contactPoint":{"telephone":"+27102886912","email":"support@acapoliteconsulting.co.za"}}</script>`;
+  const c = extractContacts(html, "https://acapoliteconsulting.co.za/");
+  assertEquals(c.phone, "+27102886912");
+  assertEquals(c.email, "support@acapoliteconsulting.co.za");
+});
+
 Deno.test("contactLinks returns same-host contact/about pages only", () => {
   const html = `<a href="/contact-us">Contact</a><a href="https://other.com/contact">x</a><a href="/about#team">About</a><a href="/services">s</a>`;
   assertEquals(contactLinks(html, "https://mahika.co.za/"), ["https://mahika.co.za/contact-us", "https://mahika.co.za/about"]);

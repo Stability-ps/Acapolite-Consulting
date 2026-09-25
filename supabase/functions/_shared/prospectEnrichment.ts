@@ -208,9 +208,21 @@ export function extractContacts(html: string, websiteUrl: string): ExtractedCont
   const inlinePhones = [...textOnlyForPhones(decoded).matchAll(/(?:(?:\+27|\b0027)[\s.-]*(?:\(0\)[\s.-]*)?|\(?\b0)[\s().-]*[1-8](?:[\s().-]*\d){8}\b/g)]
     .map((m) => normalizeSaPhone(m[0]))
     .filter(Boolean) as string[];
-  const phone = telLinks[0] ?? inlinePhones[0] ?? null;
+  const phone = telLinks[0] ?? jsonLdPhones(decoded)[0] ?? inlinePhones[0] ?? null;
 
   return { email, emailConfidence, phone, phoneFromTelLink: Boolean(telLinks[0]) };
+}
+
+/** Telephone numbers from schema.org JSON-LD blocks the site publishes. */
+function jsonLdPhones(html: string) {
+  const out: string[] = [];
+  for (const block of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    for (const m of block[1].matchAll(/"telephone"\s*:\s*"([^"]+)"/gi)) {
+      const phone = normalizeSaPhone(m[1]);
+      if (phone) out.push(phone);
+    }
+  }
+  return out;
 }
 
 function textOnlyForPhones(html: string) {
