@@ -870,60 +870,63 @@ export default function AdminOverview() {
         ))}
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
-        <div className="mb-5 flex items-center gap-3">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          <div>
-            <h2 className="font-display text-xl font-semibold text-foreground">
-              Reporting Overview
-            </h2>
-            <p className="text-sm text-muted-foreground font-body">
-              Business performance metrics for scaling decisions.
-            </p>
+      {!isAdmin ? (
+        <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
+          <div className="mb-5 flex items-center gap-3">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="font-display text-xl font-semibold text-foreground">
+                Reporting Overview
+              </h2>
+              <p className="text-sm text-muted-foreground font-body">
+                Business performance metrics for scaling decisions.
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <button
-            type="button"
-            className="rounded-2xl border border-border bg-accent/30 p-5 text-left transition-shadow hover:shadow-card"
-            onClick={() => setIsRevenueHistoryOpen(true)}
-          >
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
-              Monthly Revenue
-            </p>
-            <p className="font-display text-2xl text-foreground">
-              {formatCurrency(reportingSnapshot.monthlyRevenue)}
-            </p>
-            <p className="mt-3 text-xs text-muted-foreground font-body">
-              Click to view full revenue history
-            </p>
-          </button>
-          <div className="rounded-2xl border border-border bg-accent/30 p-5">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
-              Cases Completed
-            </p>
-            <p className="font-display text-2xl text-foreground">
-              {reportingSnapshot.completedCasesThisMonth}
-            </p>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <button
+              type="button"
+              className="rounded-2xl border border-border bg-accent/30 p-5 text-left transition-shadow hover:shadow-card"
+              onClick={() => setIsRevenueHistoryOpen(true)}
+            >
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+                Monthly Revenue
+              </p>
+              <p className="font-display text-2xl text-foreground">
+                {formatCurrency(reportingSnapshot.monthlyRevenue)}
+              </p>
+              <p className="mt-3 text-xs text-muted-foreground font-body">
+                Click to view full revenue history
+              </p>
+            </button>
+            <div className="rounded-2xl border border-border bg-accent/30 p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+                Cases Completed
+              </p>
+              <p className="font-display text-2xl text-foreground">
+                {reportingSnapshot.completedCasesThisMonth}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-accent/30 p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+                Client Growth
+              </p>
+              <p className="font-display text-2xl text-foreground">
+                {reportingSnapshot.clientGrowth}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-accent/30 p-5">
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
+                Outstanding Invoices
+              </p>
+              <p className="font-display text-2xl text-foreground">
+                {reportingSnapshot.outstandingInvoices}
+              </p>
+            </div>
           </div>
-          <div className="rounded-2xl border border-border bg-accent/30 p-5">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
-              Client Growth
-            </p>
-            <p className="font-display text-2xl text-foreground">
-              {reportingSnapshot.clientGrowth}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-border bg-accent/30 p-5">
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground font-body">
-              Outstanding Invoices
-            </p>
-            <p className="font-display text-2xl text-foreground">
-              {reportingSnapshot.outstandingInvoices}
-            </p>
-          </div>
-        </div>
-      </section>
+        </section>
+
+      ) : null}
 
       {isAdmin ? <AdminBusinessAnalytics /> : null}
 
