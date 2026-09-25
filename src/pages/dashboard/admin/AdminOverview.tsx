@@ -20,7 +20,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
 import { Button } from "@/components/ui/button";
-import { getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";\nimport { AdminBusinessAnalytics } from "@/components/dashboard/admin/AdminBusinessAnalytics";
+import { getClientTypeLabel, getClientWarningSummary } from "@/lib/clientRisk";
+import { AdminBusinessAnalytics } from "@/components/dashboard/admin/AdminBusinessAnalytics";
 
 type CaseStatusRow = {
   status: string;
@@ -924,7 +925,9 @@ export default function AdminOverview() {
         </div>
       </section>
 
-      {isAdmin ? <AdminBusinessAnalytics /> : null}\n\n      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      {isAdmin ? <AdminBusinessAnalytics /> : null}
+
+      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         {isAdmin || hasStaffPermission("can_view_cases") ? (
           <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
             <div className="mb-5 flex items-center gap-3">
