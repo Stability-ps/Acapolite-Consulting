@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - mobile/capacitor-shell
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
