@@ -236,7 +236,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("invoices")
-        .select("*, created_by, client_vat_number, practitioner_vat_number, clients(profile_id, client_type, company_name, first_name, last_name, client_code, vat_number, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
+        .select("*, created_by, client_vat_number, practitioner_vat_number, clients(profile_id, client_type, company_name, first_name, last_name, client_code, tax_number, sars_reference_number, vat_number, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
