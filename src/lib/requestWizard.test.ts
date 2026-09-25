@@ -9,6 +9,7 @@ describe("request wizard service intent", () => {
     expect(getServiceIntent("objections")?.label).toBe("SARS Objection or Dispute");
     expect(getServiceIntent("vat")?.label).toBe("VAT Services");
     expect(getServiceIntent("accounting")?.label).toBe("Accounting Services");
+    expect(getServiceIntent("provisional-tax")?.label).toBe("Provisional Tax & IRP6");
   });
 
   it("routes intent to an appropriate category for the selected entity", () => {
@@ -18,6 +19,9 @@ describe("request wizard service intent", () => {
     expect(getServiceIntent("vat")?.categoryForEntity("company")).toBe("business_tax");
     expect(getServiceIntent("bookkeeping")?.categoryForEntity("company")).toBe("accounting");
     expect(getServiceIntent("cipc")?.categoryForEntity("company")).toBe("business_support");
+    expect(getServiceIntent("provisional-tax")?.categoryForEntity("individual")).toBe("individual_tax");
+    expect(getServiceIntent("provisional-tax")?.categoryForEntity("company")).toBe("business_tax");
+    expect(getServiceIntent("provisional-tax")?.categoryForEntity("trust")).toBe("trust_services");
   });
 
   it("ignores unknown or missing intent values", () => {
@@ -31,5 +35,6 @@ describe("request wizard service intent", () => {
     expect(getRequestSource("//example.com")).toBeNull();
     expect(getRequestSource("/dashboard/staff")).toBeNull();
     expect(getRequestSource("/unknown-page")).toBeNull();
+    expect(getRequestSource("/provisional-tax")).toEqual({ path: "/provisional-tax", label: "Provisional Tax & IRP6" });
   });
 });
