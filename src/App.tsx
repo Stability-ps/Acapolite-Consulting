@@ -43,6 +43,7 @@ const ProfessionalHelpLandingPage = lazy(() => import("./pages/ServiceLandingPag
 const SarsTaxAssistanceLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.SarsTaxAssistanceLandingPage })));
 const TaxReturnsLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.TaxReturnsLandingPage })));
 const VatServicesLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.VatServicesLandingPage })));
+const ProvisionalTaxLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.ProvisionalTaxLandingPage })));
 const StaffOverviewRouter = lazy(() => import("@/components/auth/StaffOverviewRouter").then((module) => ({ default: module.StaffOverviewRouter })));
 const StaffExternalToolsRouter = lazy(() => import("@/components/auth/StaffExternalToolsRouter").then((module) => ({ default: module.StaffExternalToolsRouter })));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -90,6 +91,7 @@ const SarsFinalDemandGuide = lazy(() => import("./pages/TaxGuides").then((m) => 
 const SarsRequestForReasonsGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsRequestForReasonsGuide })));
 const SarsObjectionDisallowedGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsObjectionDisallowedGuide })));
 const SarsVatVerificationGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsVatVerificationGuide })));
+const ProvisionalTaxIrp6Guide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.ProvisionalTaxIrp6Guide })));
 
 
 const queryClient = new QueryClient({
@@ -151,6 +153,7 @@ function AppRoutes() {
             <Route path="/tax-guides/sars-request-for-reasons" element={<SarsRequestForReasonsGuide />} />
             <Route path="/tax-guides/sars-objection-disallowed-appeal-adr" element={<SarsObjectionDisallowedGuide />} />
             <Route path="/tax-guides/sars-vat-verification-supporting-documents" element={<SarsVatVerificationGuide />} />
+            <Route path="/tax-guides/provisional-tax-irp6-guide" element={<ProvisionalTaxIrp6Guide />} />
             <Route path="/sars-tax-assistance" element={<SarsTaxAssistanceLandingPage />} />
             <Route path="/sars-debt" element={<SarsDebtPage />} />
             <Route path="/sars-payment-arrangements" element={<SarsPaymentArrangementsPage />} />
@@ -164,6 +167,7 @@ function AppRoutes() {
             <Route path="/cipc-company-compliance" element={<CipcComplianceLandingPage />} />
             <Route path="/tax-returns" element={<TaxReturnsLandingPage />} />
             <Route path="/vat-services" element={<VatServicesLandingPage />} />
+            <Route path="/provisional-tax" element={<ProvisionalTaxLandingPage />} />
             <Route path="/request-professional-help" element={<ProfessionalHelpLandingPage />} />
             <Route
               path="/request-tax-assistance"
