@@ -45,6 +45,14 @@ export const publicRoutes = [
     description: "Professional SARS Section 200 compromise assistance in South Africa. Understand the statutory test, supporting financial records, offer and tax debt compromise process.",
   },
   {
+    path: "/sars-voluntary-disclosure",
+    lastmod: "2026-09-25",
+    priority: "0.9",
+    changefreq: "monthly",
+    title: "SARS Voluntary Disclosure Programme (VDP) Assistance | Acapolite Consulting",
+    description: "Confidential professional assistance assessing eligibility and preparing a SARS Voluntary Disclosure Programme (VDP01) application across income tax, VAT, PAYE and other tax types.",
+  },
+  {
     path: "/sars-objections",
     lastmod: "2026-09-24",
     priority: "0.9",
@@ -210,6 +218,14 @@ export const publicRoutes = [
     changefreq: "monthly",
     title: "Provisional Tax and IRP6 Guide | Acapolite Consulting",
     description: "A practical explainer of who qualifies as a provisional taxpayer, the first and second IRP6 payment periods, the voluntary third top-up payment, and how SARS's underestimation penalty actually works.",
+  },
+  {
+    path: "/tax-guides/sars-voluntary-disclosure-guide",
+    lastmod: "2026-09-25",
+    priority: "0.8",
+    changefreq: "monthly",
+    title: "SARS Voluntary Disclosure Programme Guide | Acapolite Consulting",
+    description: "An accurate explanation of who may apply for SARS's Voluntary Disclosure Programme, the qualifying requirements, the penalty and administrative relief it does and doesn't provide, and how it differs from a SARS debt compromise or an objection.",
   },
   {
     path: "/tax-consultant-pretoria",

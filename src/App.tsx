@@ -81,6 +81,7 @@ const SarsDebtPage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ 
 const SarsPaymentArrangementsPage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsPaymentArrangementsPage })));
 const SarsCompromisePage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsCompromisePage })));
 const SarsObjectionsPage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsObjectionsPage })));
+const SarsVoluntaryDisclosurePage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsVoluntaryDisclosurePage })));
 const TaxGuidesHub = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.TaxGuidesHub })));
 const SarsSuspensionPaymentGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsSuspensionPaymentGuide })));
 const SarsObjectionDeadlineGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsObjectionDeadlineGuide })));
@@ -92,6 +93,7 @@ const SarsRequestForReasonsGuide = lazy(() => import("./pages/TaxGuides").then((
 const SarsObjectionDisallowedGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsObjectionDisallowedGuide })));
 const SarsVatVerificationGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsVatVerificationGuide })));
 const ProvisionalTaxIrp6Guide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.ProvisionalTaxIrp6Guide })));
+const SarsVoluntaryDisclosureGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsVoluntaryDisclosureGuide })));
 
 
 const queryClient = new QueryClient({
@@ -154,11 +156,13 @@ function AppRoutes() {
             <Route path="/tax-guides/sars-objection-disallowed-appeal-adr" element={<SarsObjectionDisallowedGuide />} />
             <Route path="/tax-guides/sars-vat-verification-supporting-documents" element={<SarsVatVerificationGuide />} />
             <Route path="/tax-guides/provisional-tax-irp6-guide" element={<ProvisionalTaxIrp6Guide />} />
+            <Route path="/tax-guides/sars-voluntary-disclosure-guide" element={<SarsVoluntaryDisclosureGuide />} />
             <Route path="/sars-tax-assistance" element={<SarsTaxAssistanceLandingPage />} />
             <Route path="/sars-debt" element={<SarsDebtPage />} />
             <Route path="/sars-payment-arrangements" element={<SarsPaymentArrangementsPage />} />
             <Route path="/sars-compromise" element={<SarsCompromisePage />} />
             <Route path="/sars-objections" element={<SarsObjectionsPage />} />
+            <Route path="/sars-voluntary-disclosure" element={<SarsVoluntaryDisclosurePage />} />
             <Route path="/sars-tax-compliance-status" element={<SarsTaxComplianceStatusPage />} />
             <Route path="/sars-audit-verification" element={<SarsAuditVerificationPage />} />
             <Route path="/paye-uif-sdl-services" element={<PayeUifSdlServicesPage />} />
