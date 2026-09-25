@@ -1,6 +1,9 @@
 import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 
+/** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const HOW_ACAPOLITE_WORKS_H1 = "How Acapolite Works";
+
 export default function HowAcapoliteWorks() {
   return (
     <>
@@ -11,7 +14,7 @@ export default function HowAcapoliteWorks() {
     />
     <PublicPageLayout
       eyebrow="Company"
-      title="How Acapolite Works"
+      title={HOW_ACAPOLITE_WORKS_H1}
       description="Acapolite Consulting is a professional digital platform designed to connect individuals, businesses, and organizations with qualified tax practitioners. Our goal is to simplify access to trusted financial and tax services while ensuring secure communication, document handling, and case tracking."
     >
       <div className="space-y-8 text-sm text-foreground font-body">

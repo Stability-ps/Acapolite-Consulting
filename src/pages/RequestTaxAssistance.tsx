@@ -379,6 +379,17 @@ async function sendRequestEmails(
   ]);
 }
 
+/**
+ * The wizard's stable, purpose-representing H1 - the same sr-only heading
+ * shown unconditionally on first load (before any step or submission
+ * state). Shared with the build-time raw-HTML seeding in
+ * scripts/generate-route-html.mjs. Deliberately NOT the "Request Submitted
+ * Successfully" heading shown after submission - that state depends on
+ * what the visitor just submitted and must never be seeded into a static,
+ * shared file.
+ */
+export const REQUEST_TAX_ASSISTANCE_H1 = "Request SARS & Tax Assistance — Acapolite Consulting";
+
 export default function RequestTaxAssistance() {
   const { user, profile, dashboardPath } = useAuth();
   const navigate = useNavigate();
@@ -1057,7 +1068,7 @@ export default function RequestTaxAssistance() {
   return (
     <div className="min-h-screen bg-[#FAFAF6] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <h1 className="sr-only">Request SARS &amp; Tax Assistance — Acapolite Consulting</h1>
+        <h1 className="sr-only">{REQUEST_TAX_ASSISTANCE_H1}</h1>
         <div className="flex flex-wrap items-center justify-between gap-4">
           {renderBackControl()}
           <AcapoliteLogo className="h-11" />

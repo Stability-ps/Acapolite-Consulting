@@ -75,6 +75,9 @@ const subscriptionPlanStyles = {
   },
 } as const;
 
+/** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const PRACTITIONERS_H1 = "Get Clients and Grow Your Practice With Acapolite";
+
 export default function Practitioners() {
   const lowestExtraCreditPrice = Math.min(...CREDIT_PACKAGES.map((pkg) => pkg.priceZar));
 
@@ -100,7 +103,7 @@ export default function Practitioners() {
                   For Practitioners
                 </Badge>
                 <h1 className="mt-5 font-display text-4xl leading-tight text-white sm:text-5xl lg:text-6xl">
-                  Get Clients and Grow Your Practice With Acapolite
+                  {PRACTITIONERS_H1}
                 </h1>
                 <p className="mt-5 max-w-2xl text-base leading-7 text-sky-50/80 sm:text-lg">
                   Receive verified client requests, build trusted visibility, and manage secure client work through one professional platform built for South African practitioners.

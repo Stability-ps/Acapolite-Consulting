@@ -2,6 +2,9 @@ import { Link } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 
+/** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const HELP_CENTER_H1 = "Help Center";
+
 export default function HelpCenter() {
   return (
     <>
@@ -12,7 +15,7 @@ export default function HelpCenter() {
     />
     <PublicPageLayout
       eyebrow="Support"
-      title="Help Center"
+      title={HELP_CENTER_H1}
       description="Find answers quickly or reach the Acapolite team directly. We recommend reviewing the FAQs and Trust & Safety policies before submitting a request."
       maxWidthClassName="max-w-4xl"
     >

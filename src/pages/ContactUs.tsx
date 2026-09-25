@@ -22,6 +22,9 @@ const requestTypeOptions = [
 
 const priorityOptions = ["Normal", "Urgent", "Critical"];
 
+/** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const CONTACT_US_H1 = "Contact Us";
+
 export default function ContactUs() {
   const [form, setForm] = useState({
     fullName: "",
@@ -47,7 +50,7 @@ export default function ContactUs() {
     />
     <PublicPageLayout
       eyebrow="Support"
-      title="Contact Us"
+      title={CONTACT_US_H1}
       description="Send your request and the Acapolite team will assist you. All support requests use this unified form so we can route you to the right specialist faster."
       maxWidthClassName="max-w-4xl"
     >

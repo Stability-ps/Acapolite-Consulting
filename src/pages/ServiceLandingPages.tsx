@@ -14,7 +14,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-type LandingPageConfig = {
+export type LandingPageConfig = {
   path: string;
   eyebrow: string;
   title: string;
@@ -50,7 +50,8 @@ const requestIntentByPath: Record<string, string> = {
   "/vat-services": "vat",
 };
 
-const configs: Record<string, LandingPageConfig> = {
+/** Keyed by intent, not by path - the source of truth for both the rendered pages below and the build-time raw-HTML seeding in scripts/generate-route-html.mjs. */
+export const configs: Record<string, LandingPageConfig> = {
   sars: {
     path: "/sars-tax-assistance",
     eyebrow: "SARS & Tax Assistance",
@@ -455,6 +456,27 @@ const configs: Record<string, LandingPageConfig> = {
   },
 };
 
+/**
+ * The exact Service + BreadcrumbList schema a service landing page renders.
+ * Exported so the build-time raw-HTML seeding step (scripts/generate-route-html.mjs)
+ * calls the same function with the same config, rather than re-deriving the
+ * schema from scratch - the two can never drift apart.
+ */
+export function buildServiceLandingPageSchemas(config: LandingPageConfig) {
+  return [
+    buildServiceSchema({
+      name: config.title,
+      description: config.metaDescription,
+      path: config.path,
+    }),
+    buildBreadcrumbSchema([
+      { name: "Home", path: "/" },
+      { name: "Our Services", path: "/our-services" },
+      { name: config.eyebrow, path: config.path },
+    ]),
+  ];
+}
+
 function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
   useSeo({
     title: `${config.title} | Acapolite Consulting`,
@@ -463,22 +485,13 @@ function ServiceLandingPage({ config }: { config: LandingPageConfig }) {
     ...(config.robots ? { robots: config.robots } : {}),
   });
 
+  const schemas = buildServiceLandingPageSchemas(config);
+
   return (
     <>
-    <JsonLd
-      data={buildServiceSchema({
-        name: config.title,
-        description: config.metaDescription,
-        path: config.path,
-      })}
-    />
-    <JsonLd
-      data={buildBreadcrumbSchema([
-        { name: "Home", path: "/" },
-        { name: "Our Services", path: "/our-services" },
-        { name: config.eyebrow, path: config.path },
-      ])}
-    />
+    {schemas.map((data, index) => (
+      <JsonLd key={index} data={data} />
+    ))}
     <PublicPageLayout
       eyebrow={config.eyebrow}
       title={config.title}

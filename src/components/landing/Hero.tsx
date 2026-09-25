@@ -95,6 +95,9 @@ function EntityLabel({ value }: { value: WizardEntityType }) {
   return <p className="text-center text-sm font-semibold text-[#102B46]">{label}</p>;
 }
 
+/** The homepage's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const HOMEPAGE_H1 = "Tax, Accounting, SARS & Business Support Across South Africa";
+
 export function Hero() {
   const navigate = useNavigate();
   const [selectedEntity, setSelectedEntity] = useState<WizardEntityType | "">("individual");
@@ -159,7 +162,7 @@ export function Hero() {
                   ACAPOLITE CONSULTING
                 </p>
                 <h1 className="mt-2 text-[1.5rem] font-black leading-[1.15] tracking-[-0.03em] text-[#102B46]">
-                  Tax, Accounting, SARS &amp; Business Support Across South Africa
+                  {HOMEPAGE_H1}
                 </h1>
                 <p className="mt-2 text-[12px] leading-5 text-[#5F6C7B]">
                   Access trusted tax, accounting and business professionals for SARS matters, bookkeeping, CIPC, company compliance and business support, all through one professional platform across South Africa.
@@ -180,7 +183,7 @@ export function Hero() {
             </p>
 
             <h1 className="mt-4 hidden text-[2.15rem] font-black leading-[1.08] tracking-[-0.03em] text-[#102B46] sm:text-[2.65rem] lg:block xl:text-[3rem]">
-              Tax, Accounting, SARS &amp; Business Support Across South Africa
+              {HOMEPAGE_H1}
             </h1>
 
             <p className="mt-4 hidden text-[15px] leading-7 text-[#5F6C7B] lg:block">

@@ -1,6 +1,9 @@
 import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 
+/** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const FAQ_H1 = "Frequently Asked Questions (FAQ) — Acapolite Consulting";
+
 export default function Faq() {
   return (
     <>
@@ -11,7 +14,7 @@ export default function Faq() {
     />
     <PublicPageLayout
       eyebrow="Support"
-      title="Frequently Asked Questions (FAQ) — Acapolite Consulting"
+      title={FAQ_H1}
       description="Quick answers to the most common questions from clients and practitioners using the Acapolite platform."
       maxWidthClassName="max-w-4xl"
     >

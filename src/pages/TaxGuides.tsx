@@ -16,14 +16,17 @@ import {
 } from "@/components/ui/breadcrumb";
 
 const REVIEWED_DATE = "24 September 2026";
-const ISO_DATE = "2026-09-24";
+export const ISO_DATE = "2026-09-24";
+
+/** Fixed hub-page copy shared between the rendered TaxGuidesHub below and the build-time raw-HTML seeding in scripts/generate-route-html.mjs. */
+export const TAX_GUIDES_HUB_H1 = "SARS & Tax Guides";
 
 type Source = { label: string; href: string };
 type Section = { heading: string; paragraphs?: string[]; bullets?: string[] };
 type RelatedService = { label: string; href: string };
 type Crumb = { name: string; path?: string };
 
-type Guide = {
+export type Guide = {
   slug: string;
   title: string;
   description: string;
@@ -59,7 +62,8 @@ function GuideBreadcrumbs({ items }: { items: Crumb[] }) {
   );
 }
 
-const guides: Guide[] = [
+/** The source of truth for every guide's content, both rendered below and seeded into raw HTML by scripts/generate-route-html.mjs. */
+export const guides: Guide[] = [
   {
     slug: "sars-suspension-of-payment-section-164",
     title: "SARS Section 164 Suspension of Payment: What a Tax Dispute Does — and Does Not — Stop",
@@ -409,6 +413,11 @@ const guides: Guide[] = [
 
 export const guidePaths = guides.map((guide) => `/tax-guides/${guide.slug}`);
 
+/** Exported so scripts/generate-route-html.mjs seeds the identical hub breadcrumb schema. */
+export function buildTaxGuidesHubSchemas() {
+  return [buildBreadcrumbSchema([{ name: "Home", path: "/" }, { name: "Tax Guides", path: "/tax-guides" }])];
+}
+
 export function TaxGuidesHub() {
   useSeo({
     title: "SARS & Tax Guides South Africa | Acapolite Consulting",
@@ -419,13 +428,15 @@ export function TaxGuidesHub() {
   return (
     <PublicPageLayout
       eyebrow="Tax knowledge"
-      title="SARS & Tax Guides"
+      title={TAX_GUIDES_HUB_H1}
       description="Practical, source-backed guidance for South African taxpayers and businesses. Each guide is reviewed by a Registered Tax Practitioner (SA)™ and links to the primary SARS or legislative material used."
       backHref="/sars-tax-assistance"
       backLabel="SARS & Tax Assistance"
       maxWidthClassName="max-w-6xl"
     >
-      <JsonLd data={buildBreadcrumbSchema([{ name: "Home", path: "/" }, { name: "Tax Guides", path: "/tax-guides" }])} />
+      {buildTaxGuidesHubSchemas().map((data, index) => (
+        <JsonLd key={index} data={data} />
+      ))}
       <GuideBreadcrumbs items={[{ name: "Home", path: "/" }, { name: "Tax Guides" }]} />
       <div className="grid gap-5 md:grid-cols-2">
         {guides.map((guide) => (
@@ -459,6 +470,25 @@ export function TaxGuidesHub() {
   );
 }
 
+/** Exported so scripts/generate-route-html.mjs seeds the identical per-guide breadcrumb + Article schema. */
+export function buildGuidePageSchemas(guide: Guide) {
+  const path = `/tax-guides/${guide.slug}`;
+  return [
+    buildBreadcrumbSchema([
+      { name: "Home", path: "/" },
+      { name: "Tax Guides", path: "/tax-guides" },
+      { name: guide.title, path },
+    ]),
+    buildArticleSchema({
+      headline: guide.title,
+      description: guide.description,
+      path,
+      datePublished: ISO_DATE,
+      dateModified: ISO_DATE,
+    }),
+  ];
+}
+
 function GuidePage({ guide }: { guide: Guide }) {
   const path = `/tax-guides/${guide.slug}`;
   useSeo({ title: `${guide.title} | Acapolite Consulting`, description: guide.description, path });
@@ -471,18 +501,9 @@ function GuidePage({ guide }: { guide: Guide }) {
       backLabel="All Tax Guides"
       maxWidthClassName="max-w-4xl"
     >
-      <JsonLd data={buildBreadcrumbSchema([
-        { name: "Home", path: "/" },
-        { name: "Tax Guides", path: "/tax-guides" },
-        { name: guide.title, path },
-      ])} />
-      <JsonLd data={buildArticleSchema({
-        headline: guide.title,
-        description: guide.description,
-        path,
-        datePublished: ISO_DATE,
-        dateModified: ISO_DATE,
-      })} />
+      {buildGuidePageSchemas(guide).map((data, index) => (
+        <JsonLd key={index} data={data} />
+      ))}
       <GuideBreadcrumbs items={[{ name: "Home", path: "/" }, { name: "Tax Guides", path: "/tax-guides" }, { name: guide.title }]} />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2">

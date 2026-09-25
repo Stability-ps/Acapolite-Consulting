@@ -18,6 +18,16 @@ import {
 type Crumb = { name: string; path?: string };
 type Source = { label: string; href: string };
 
+export type SarsMoneyPageConfig = {
+  path: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  metaDescription: string;
+  crumbs: Crumb[];
+  sources: Source[];
+};
+
 const REVIEWED_DATE = "23 September 2026";
 
 const sources = {
@@ -169,6 +179,28 @@ function Checklist({ items }: { items: string[] }) {
   );
 }
 
+/**
+ * The exact Service + BreadcrumbList schema a SARS money page renders.
+ * Exported so the build-time raw-HTML seeding step (scripts/generate-route-html.mjs)
+ * calls the same function with the same config, rather than re-deriving the
+ * schema from scratch - the two can never drift apart.
+ */
+export function buildSarsMoneyPageSchemas({
+  path,
+  title,
+  metaDescription,
+  crumbs,
+}: Pick<SarsMoneyPageConfig, "path" | "title" | "metaDescription" | "crumbs">) {
+  const schemaCrumbs = crumbs.map((crumb) => ({
+    name: crumb.name,
+    path: crumb.path ?? path,
+  }));
+  return [
+    buildServiceSchema({ name: title, description: metaDescription, path }),
+    buildBreadcrumbSchema(schemaCrumbs),
+  ];
+}
+
 function PageShell({
   path,
   title,
@@ -194,15 +226,13 @@ function PageShell({
     path,
   });
 
-  const schemaCrumbs = crumbs.map((crumb) => ({
-    name: crumb.name,
-    path: crumb.path ?? path,
-  }));
+  const schemas = buildSarsMoneyPageSchemas({ path, title, metaDescription, crumbs });
 
   return (
     <>
-      <JsonLd data={buildServiceSchema({ name: title, description: metaDescription, path })} />
-      <JsonLd data={buildBreadcrumbSchema(schemaCrumbs)} />
+      {schemas.map((data, index) => (
+        <JsonLd key={index} data={data} />
+      ))}
       <PublicPageLayout
         eyebrow={eyebrow}
         title={title}
@@ -244,25 +274,24 @@ function PageShell({
   );
 }
 
-export function SarsDebtPage() {
-  const path = "/sars-debt";
-  const crumbs: Crumb[] = [
+export const sarsDebtPageConfig: SarsMoneyPageConfig = {
+  path: "/sars-debt",
+  eyebrow: "SARS Debt Assistance",
+  title: "SARS Debt Help & Tax Debt Assistance",
+  description: "Understand the main SARS debt-resolution routes and get professional help assessing whether payment, an arrangement, compromise or a dispute process fits your situation.",
+  metaDescription: "Get SARS debt help in South Africa. Understand payment arrangements, Section 200 compromise, disputes and professional tax debt assistance through Acapolite Consulting.",
+  crumbs: [
     { name: "Home", path: "/" },
     { name: "Our Services", path: "/our-services" },
     { name: "SARS & Tax Assistance", path: "/sars-tax-assistance" },
     { name: "SARS Debt" },
-  ];
+  ],
+  sources: [sources.debt, sources.taa],
+};
 
+export function SarsDebtPage() {
   return (
-    <PageShell
-      path={path}
-      eyebrow="SARS Debt Assistance"
-      title="SARS Debt Help & Tax Debt Assistance"
-      description="Understand the main SARS debt-resolution routes and get professional help assessing whether payment, an arrangement, compromise or a dispute process fits your situation."
-      metaDescription="Get SARS debt help in South Africa. Understand payment arrangements, Section 200 compromise, disputes and professional tax debt assistance through Acapolite Consulting."
-      crumbs={crumbs}
-      sources={[sources.debt, sources.taa]}
-    >
+    <PageShell {...sarsDebtPageConfig}>
       <section>
         <h2 className="text-xl font-semibold text-foreground">If you owe SARS money, the right route depends on why</h2>
         <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
@@ -356,26 +385,25 @@ export function SarsDebtPage() {
   );
 }
 
-export function SarsPaymentArrangementsPage() {
-  const path = "/sars-payment-arrangements";
-  const crumbs: Crumb[] = [
+export const sarsPaymentArrangementsPageConfig: SarsMoneyPageConfig = {
+  path: "/sars-payment-arrangements",
+  eyebrow: "SARS Payment Arrangements",
+  title: "SARS Payment Arrangements & Instalment Plans",
+  description: "Get professional help preparing a SARS deferred-payment or instalment-arrangement request and the financial information that may be needed to support it.",
+  metaDescription: "Need a SARS payment arrangement? Learn how SARS instalment plans work, current eFiling requirements, supporting documents, interest and professional assistance.",
+  crumbs: [
     { name: "Home", path: "/" },
     { name: "Our Services", path: "/our-services" },
     { name: "SARS & Tax Assistance", path: "/sars-tax-assistance" },
     { name: "SARS Debt", path: "/sars-debt" },
     { name: "Payment Arrangements" },
-  ];
+  ],
+  sources: [sources.arrangementsFaq, sources.arrangements, sources.debt, sources.taa],
+};
 
+export function SarsPaymentArrangementsPage() {
   return (
-    <PageShell
-      path={path}
-      eyebrow="SARS Payment Arrangements"
-      title="SARS Payment Arrangements & Instalment Plans"
-      description="Get professional help preparing a SARS deferred-payment or instalment-arrangement request and the financial information that may be needed to support it."
-      metaDescription="Need a SARS payment arrangement? Learn how SARS instalment plans work, current eFiling requirements, supporting documents, interest and professional assistance."
-      crumbs={crumbs}
-      sources={[sources.arrangementsFaq, sources.arrangements, sources.debt, sources.taa]}
-    >
+    <PageShell {...sarsPaymentArrangementsPageConfig}>
       <section>
         <h2 className="text-xl font-semibold text-foreground">What is a SARS payment arrangement?</h2>
         <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
@@ -466,26 +494,25 @@ export function SarsPaymentArrangementsPage() {
   );
 }
 
-export function SarsCompromisePage() {
-  const path = "/sars-compromise";
-  const crumbs: Crumb[] = [
+export const sarsCompromisePageConfig: SarsMoneyPageConfig = {
+  path: "/sars-compromise",
+  eyebrow: "Section 200 Tax Debt Compromise",
+  title: "SARS Section 200 Compromise Assistance",
+  description: "Understand the SARS tax-debt compromise process and get professional help preparing the financial disclosure, motivation and offer required for a Section 200 request.",
+  metaDescription: "Professional SARS Section 200 compromise assistance in South Africa. Understand the statutory test, supporting financial records, offer and tax debt compromise process.",
+  crumbs: [
     { name: "Home", path: "/" },
     { name: "Our Services", path: "/our-services" },
     { name: "SARS & Tax Assistance", path: "/sars-tax-assistance" },
     { name: "SARS Debt", path: "/sars-debt" },
     { name: "Section 200 Compromise" },
-  ];
+  ],
+  sources: [sources.debt, sources.taa],
+};
 
+export function SarsCompromisePage() {
   return (
-    <PageShell
-      path={path}
-      eyebrow="Section 200 Tax Debt Compromise"
-      title="SARS Section 200 Compromise Assistance"
-      description="Understand the SARS tax-debt compromise process and get professional help preparing the financial disclosure, motivation and offer required for a Section 200 request."
-      metaDescription="Professional SARS Section 200 compromise assistance in South Africa. Understand the statutory test, supporting financial records, offer and tax debt compromise process."
-      crumbs={crumbs}
-      sources={[sources.debt, sources.taa]}
-    >
+    <PageShell {...sarsCompromisePageConfig}>
       <section>
         <h2 className="text-xl font-semibold text-foreground">What is a compromise of tax debt?</h2>
         <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
@@ -590,33 +617,32 @@ export function SarsCompromisePage() {
   );
 }
 
-export function SarsObjectionsPage() {
-  const path = "/sars-objections";
-  const crumbs: Crumb[] = [
+export const sarsObjectionsPageConfig: SarsMoneyPageConfig = {
+  path: "/sars-objections",
+  eyebrow: "SARS Objections, Appeals & ADR",
+  title: "SARS Objections, Appeals & Dispute Assistance",
+  description: "Get professional help assessing a SARS assessment or decision, preparing an objection, handling an appeal or ADR process, and considering suspension of payment where appropriate.",
+  metaDescription: "Need help objecting to SARS? Understand the current objection deadline, appeals, ADR, Request for Reasons, Request for Correction and suspension of payment.",
+  crumbs: [
     { name: "Home", path: "/" },
     { name: "Our Services", path: "/our-services" },
     { name: "SARS & Tax Assistance", path: "/sars-tax-assistance" },
     { name: "SARS Objections & Disputes" },
-  ];
+  ],
+  sources: [
+    sources.objections,
+    sources.appeals,
+    sources.disputeGuide,
+    sources.reasons,
+    sources.correction,
+    sources.debt,
+    sources.taa,
+  ],
+};
 
+export function SarsObjectionsPage() {
   return (
-    <PageShell
-      path={path}
-      eyebrow="SARS Objections, Appeals & ADR"
-      title="SARS Objections, Appeals & Dispute Assistance"
-      description="Get professional help assessing a SARS assessment or decision, preparing an objection, handling an appeal or ADR process, and considering suspension of payment where appropriate."
-      metaDescription="Need help objecting to SARS? Understand the current objection deadline, appeals, ADR, Request for Reasons, Request for Correction and suspension of payment."
-      crumbs={crumbs}
-      sources={[
-        sources.objections,
-        sources.appeals,
-        sources.disputeGuide,
-        sources.reasons,
-        sources.correction,
-        sources.debt,
-        sources.taa,
-      ]}
-    >
+    <PageShell {...sarsObjectionsPageConfig}>
       <section>
         <h2 className="text-xl font-semibold text-foreground">Start by identifying what is actually wrong</h2>
         <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
@@ -710,3 +736,11 @@ export function SarsObjectionsPage() {
     </PageShell>
   );
 }
+
+/** All four SARS money-page configs, keyed by path - the source of truth for both the rendered pages above and the build-time raw-HTML seeding in scripts/generate-route-html.mjs. */
+export const sarsMoneyPageConfigs: SarsMoneyPageConfig[] = [
+  sarsDebtPageConfig,
+  sarsPaymentArrangementsPageConfig,
+  sarsCompromisePageConfig,
+  sarsObjectionsPageConfig,
+];
