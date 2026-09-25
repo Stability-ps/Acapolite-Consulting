@@ -75,7 +75,20 @@ const TaxCoachAIStaff = lazy(() => import("./pages/dashboard/admin/TaxCoachAISta
 const AdminWhatsAppQA = lazy(() => import("./pages/dashboard/admin/AdminWhatsAppQA"));
 const AdminSocialMedia = lazy(() => import("./pages/dashboard/admin/AdminSocialMedia"));
 const AdminAiKnowledge = lazy(() => import("./pages/dashboard/admin/AdminAiKnowledge"));
-const AdminProspectHub = lazy(() => import("./pages/dashboard/admin/AdminProspectHub"));
+const ProspectHubLayout = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectHubLayout"));
+const ProspectDashboard = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectDashboard"));
+const ProspectDiscover = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectDiscover"));
+const ProspectList = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectList"));
+const ProspectProfile = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectProfile"));
+const ProspectFollowUps = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectFollowUps"));
+const ProspectCampaigns = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectCampaigns"));
+const ProspectCampaignNew = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectCampaignNew"));
+const ProspectCampaignDetail = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectCampaignDetail"));
+const ProspectTemplates = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectTemplates"));
+const ProspectSources = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectSources"));
+const ProspectAnalytics = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectAnalytics"));
+const ProspectSettings = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectSettings"));
+const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
 
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SarsDebtPage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsDebtPage })));
@@ -121,6 +134,7 @@ function AppRoutes() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/data-deletion" element={<DataDeletion />} />
             <Route path="/refund-policy" element={<RefundPolicy />} />
@@ -207,6 +221,25 @@ function AppRoutes() {
                   element={<RequireStaffPermission permission="can_use_tax_coach_ai" />}
                 >
                   <Route path="staff/tax-coach-ai" element={<TaxCoachAIStaff />} />
+                </Route>
+                <Route
+                  element={<RequireStaffPermission permission="can_view_prospect_hub" />}
+                >
+                  <Route path="staff/prospect-hub" element={<ProspectHubLayout />}>
+                    <Route index element={<ProspectDashboard />} />
+                    <Route path="discover" element={<ProspectDiscover />} />
+                    <Route path="prospects" element={<ProspectList mode="prospects" />} />
+                    <Route path="prospects/:id" element={<ProspectProfile />} />
+                    <Route path="leads" element={<ProspectList mode="leads" />} />
+                    <Route path="follow-ups" element={<ProspectFollowUps />} />
+                    <Route path="campaigns" element={<ProspectCampaigns />} />
+                    <Route path="campaigns/new" element={<ProspectCampaignNew />} />
+                    <Route path="campaigns/:id" element={<ProspectCampaignDetail />} />
+                    <Route path="templates" element={<ProspectTemplates />} />
+                    <Route path="sources" element={<ProspectSources />} />
+                    <Route path="analytics" element={<ProspectAnalytics />} />
+                    <Route path="settings" element={<ProspectSettings />} />
+                  </Route>
                 </Route>
                 <Route
                   element={<RequireStaffPermission permission="can_view_overview" />}
@@ -308,7 +341,6 @@ function AppRoutes() {
                 <Route path="staff/whatsapp-qa" element={<AdminWhatsAppQA />} />
                 <Route path="staff/social-media" element={<AdminSocialMedia />} />
                 <Route path="staff/ai-knowledge" element={<AdminAiKnowledge />} />
-                <Route path="staff/prospect-hub" element={<AdminProspectHub />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />

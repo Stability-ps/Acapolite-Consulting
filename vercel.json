@@ -69,6 +69,15 @@
       ]
     },
     {
+      "source": "/unsubscribe",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
       "source": "/dashboard",
       "headers": [
         {
@@ -255,6 +264,10 @@
     },
     {
       "source": "/reset-password",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/unsubscribe",
       "destination": "/index.html"
     },
     {
