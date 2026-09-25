@@ -87,6 +87,14 @@ function startOfDay(value: Date) {
   return date;
 }
 
+function localDayKey(value: Date | string) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function getRangeBounds(range: AnalyticsRange) {
   const now = new Date();
   let start: Date;
@@ -276,6 +284,7 @@ export function AdminBusinessAnalytics() {
         previous: previousRevenue,
         icon: WalletCards,
         display: formatCurrency(currentRevenue),
+        note: "Invoice-paid records; payment ledger upgrade planned",
       },
       {
         label: "Request Conversion",
@@ -283,6 +292,7 @@ export function AdminBusinessAnalytics() {
         previous: 0,
         icon: Activity,
         display: `${conversionRate}%`,
+        note: "Requests converted using the built-in Convert Request to Case action",
         hideTrend: true,
       },
       {
@@ -299,7 +309,7 @@ export function AdminBusinessAnalytics() {
     const cursor = startOfDay(start);
     const finalDay = startOfDay(end);
     while (cursor <= finalDay) {
-      const key = cursor.toISOString().slice(0, 10);
+      const key = localDayKey(cursor);
       dayMap.set(key, {
         date: cursor.toLocaleDateString("en-ZA", { day: "numeric", month: "short" }),
         clients: 0,
@@ -311,7 +321,7 @@ export function AdminBusinessAnalytics() {
 
     const addToDay = (createdAt: string, key: "clients" | "practitioners" | "requests") => {
       if (!inRange(createdAt, start, end)) return;
-      const dayKey = new Date(createdAt).toISOString().slice(0, 10);
+      const dayKey = localDayKey(createdAt);
       const bucket = dayMap.get(dayKey);
       if (bucket) bucket[key] += 1;
     };
@@ -400,9 +410,9 @@ export function AdminBusinessAnalytics() {
               <p className="mt-4 text-xs uppercase tracking-[0.14em] text-muted-foreground">{metric.label}</p>
               <p className="mt-2 font-display text-3xl font-semibold text-foreground">{isLoading ? "—" : metric.display}</p>
               {!metric.hideTrend ? (
-                <p className="mt-2 text-xs text-muted-foreground">vs previous equivalent period</p>
+                <p className="mt-2 text-xs text-muted-foreground">{metric.note || "vs previous equivalent period"}</p>
               ) : (
-                <p className="mt-2 text-xs text-muted-foreground">current operational position</p>
+                <p className="mt-2 text-xs text-muted-foreground">{metric.note || "current operational position"}</p>
               )}
             </div>
           );
@@ -428,9 +438,9 @@ export function AdminBusinessAnalytics() {
               <XAxis dataKey="date" tickLine={false} axisLine={false} minTickGap={24} />
               <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} />
               <ChartTooltip content={<ChartTooltipContent />} />
-              <Line type="monotone" dataKey="clients" stroke="var(--color-clients)" strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="practitioners" stroke="var(--color-practitioners)" strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="requests" stroke="var(--color-requests)" strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="clients" stroke="hsl(var(--chart-1))" strokeWidth={2.5} dot={{ r: 2 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="practitioners" stroke="hsl(var(--chart-2))" strokeWidth={2.5} dot={{ r: 2 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="requests" stroke="hsl(var(--chart-3))" strokeWidth={2.5} dot={{ r: 2 }} activeDot={{ r: 5 }} />
             </LineChart>
           </ChartContainer>
         </div>
@@ -450,7 +460,7 @@ export function AdminBusinessAnalytics() {
                 <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
                 <YAxis type="category" dataKey="category" width={115} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="count" fill="var(--color-count)" radius={6} />
+                <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={6} />
               </BarChart>
             </ChartContainer>
           ) : (
@@ -463,19 +473,19 @@ export function AdminBusinessAnalytics() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-border bg-background/60 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">All Clients</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Lifetime Clients</p>
           <p className="mt-2 font-display text-2xl text-foreground">{analytics.totalClients}</p>
         </div>
         <div className="rounded-2xl border border-border bg-background/60 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">All Practitioners</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Lifetime Practitioners</p>
           <p className="mt-2 font-display text-2xl text-foreground">{analytics.totalPractitioners}</p>
         </div>
         <div className="rounded-2xl border border-border bg-background/60 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Verified Practitioners</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Lifetime Verified Practitioners</p>
           <p className="mt-2 font-display text-2xl text-foreground">{analytics.verifiedPractitioners}</p>
         </div>
         <div className="rounded-2xl border border-border bg-background/60 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">All Requests</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Lifetime Requests</p>
           <p className="mt-2 font-display text-2xl text-foreground">{analytics.totalRequests}</p>
         </div>
       </div>
