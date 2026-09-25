@@ -58,7 +58,7 @@ export const publicRoutes = [
     priority: "0.9",
     changefreq: "monthly",
     title: "SARS Tax Compliance Status & TCS Assistance | Acapolite Consulting",
-    description: "Get help with SARS Tax Compliance Status (TCS), outstanding returns, debt and compliance issues affecting your South African tax status.",
+    description: "Get help with SARS Tax Compliance Status (TCS), Good Standing PINs for tenders and procurement, outstanding returns, debt and compliance issues affecting your South African tax status.",
   },
   {
     path: "/sars-audit-verification",
