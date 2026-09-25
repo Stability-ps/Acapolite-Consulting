@@ -25,7 +25,7 @@ const SOURCE_KEY = "etenders_ocds";
 const SOURCE_NAME = "National Treasury eTenders OCDS";
 const RUN_BUDGET_MS = 115_000;
 const REQUEST_TIMEOUT_MS = 40_000;
-const MAX_PAGES_PER_WINDOW = 15;
+const MAX_PAGES_PER_WINDOW = 400;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -34,7 +34,7 @@ function sleep(ms: number) {
 async function fetchPage(from: string, to: string, page: number, pageSize: number, deadline: number) {
   const url = `${ETENDERS_API}?PageNumber=${page}&PageSize=${pageSize}&dateFrom=${from}&dateTo=${to}`;
   let lastError = "";
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 4; attempt++) {
     if (Date.now() + 5_000 > deadline) break;
     try {
       const response = await fetch(url, {
@@ -76,6 +76,14 @@ Deno.serve(async (req: Request) => {
     if (caller.kind === "cron" && (!settings.enabled || !source.enabled)) {
       return jsonResponse(req, { ok: true, skipped: true, reason: "source_disabled" });
     }
+    const today = new Date().toISOString().slice(0, 10);
+    const lookback = Number(settings.lookback_days || 30);
+    const cursor: string = settings.window_cursor ?? addDays(today, -lookback);
+    // Caught up: every completed day up to yesterday has been scanned. Exit
+    // without logging a run so frequent schedules stay quiet.
+    if (cursor >= today) {
+      return jsonResponse(req, { ok: true, skipped: true, reason: "caught_up", next_cursor: cursor });
+    }
 
     const { data: run, error: runError } = await sb.from("prospect_discovery_runs")
       .insert({ source_name: SOURCE_NAME, source_id: sourceId, run_type: caller.kind === "cron" ? "scheduled" : "manual", triggered_by: caller.userId })
@@ -84,27 +92,26 @@ Deno.serve(async (req: Request) => {
     runId = run.id;
     await sb.from("prospect_sources").update({ last_attempt_at: new Date().toISOString() }).eq("id", sourceId);
 
-    const today = new Date().toISOString().slice(0, 10);
-    const yesterday = addDays(today, -1);
-    const lookback = Number(settings.lookback_days || 30);
-    let cursor: string = settings.window_cursor ?? addDays(today, -lookback);
-    // Once caught up, keep re-scanning yesterday so late-published awards are picked up.
-    if (cursor > yesterday) cursor = yesterday;
     const windows = dayWindows(cursor, today, Number(settings.windows_per_run || 3));
+    // Page within the first window to resume from (a busy day can span many runs).
+    let startPage = Math.max(1, Number(settings.next_page || 1));
 
     const provinces: string[] = settings.provinces ?? [];
     const targets: string[] = settings.target_sectors ?? [];
     const pageSize = Math.min(100, Math.max(5, Number(settings.page_size || 20)));
     const maxNew = Number(settings.max_new_per_run || 100);
-    const stats = { records: 0, suppliers: 0, created: 0, updated: 0, skipped: 0, outOfScope: 0, windowsCompleted: 0, failedWindow: null as string | null, error: null as string | null };
+    const stats = { records: 0, pages: 0, suppliers: 0, created: 0, updated: 0, skipped: 0, outOfScope: 0, windowsCompleted: 0, budgetReached: false, failedWindow: null as string | null, error: null as string | null };
     let nextCursor = cursor;
+    let nextPage = startPage;
 
     windowLoop:
     for (const window of windows) {
-      for (let page = 1; page <= MAX_PAGES_PER_WINDOW; page++) {
-        if (Date.now() > deadline) { stats.error = "time budget reached"; break windowLoop; }
+      for (let page = startPage; page <= MAX_PAGES_PER_WINDOW; page++) {
+        nextPage = page;
+        if (Date.now() + 25_000 > deadline) { stats.budgetReached = true; break windowLoop; }
         const result = await fetchPage(window.from, window.to, page, pageSize, deadline);
         if (!result.ok) { stats.failedWindow = window.from; stats.error = result.error; break windowLoop; }
+        stats.pages++;
         stats.records += result.releases.length;
         for (const release of result.releases) {
           for (const supplier of awardedSuppliers(release)) {
@@ -112,7 +119,8 @@ Deno.serve(async (req: Request) => {
             if (provinces.length && supplier.province && !provinces.includes(supplier.province)) { stats.outOfScope++; continue; }
             if (provinces.length && !supplier.province) { stats.outOfScope++; continue; }
             if (targets.length && (!supplier.sector || !targets.includes(supplier.sector))) { stats.outOfScope++; continue; }
-            if (stats.created >= maxNew) { stats.skipped++; continue; }
+            // Daily cap reached: stop and re-read this page next run (idempotent).
+            if (stats.created >= maxNew) { stats.budgetReached = true; break windowLoop; }
             const { data, error } = await sb.rpc("upsert_discovered_prospect", {
               p_source_key: SOURCE_KEY,
               p_prospect: {
@@ -150,15 +158,19 @@ Deno.serve(async (req: Request) => {
             else stats.skipped++;
           }
         }
+        nextPage = page + 1;
         if (result.releases.length < pageSize) break;
       }
       stats.windowsCompleted++;
       nextCursor = window.to;
+      nextPage = 1;
+      startPage = 1;
     }
 
     const finishedAt = new Date().toISOString();
-    const failed = stats.windowsCompleted === 0 && windows.length > 0;
-    const runStatus = failed ? "failed" : stats.failedWindow || stats.error ? "partial" : "completed";
+    // A run that fetched at least one page made progress (the cursor moved).
+    const failed = stats.pages === 0 && !!stats.error;
+    const runStatus = failed ? "failed" : stats.error ? "partial" : "completed";
     const consecutive = failed ? Number(source.consecutive_failures || 0) + 1 : 0;
 
     await sb.from("prospect_discovery_runs").update({
@@ -170,10 +182,11 @@ Deno.serve(async (req: Request) => {
       prospects_updated: stats.updated,
       skipped: stats.skipped + stats.outOfScope,
       error_message: stats.error,
-      metadata: { windows: windows.map((w) => w.from), windows_completed: stats.windowsCompleted, failed_window: stats.failedWindow, out_of_scope: stats.outOfScope, next_cursor: nextCursor },
+      metadata: { windows: windows.map((w) => w.from), windows_completed: stats.windowsCompleted, pages: stats.pages, failed_window: stats.failedWindow, out_of_scope: stats.outOfScope, next_cursor: nextCursor, next_page: nextPage, budget_reached: stats.budgetReached },
     }).eq("id", runId);
     await sb.from("prospect_discovery_settings").update({
       window_cursor: nextCursor,
+      next_page: nextPage,
       last_run_at: finishedAt,
       ...(failed ? { last_error: stats.error } : { last_success_at: finishedAt, last_error: stats.error }),
     }).eq("id", settings.id);
@@ -199,7 +212,9 @@ Deno.serve(async (req: Request) => {
       prospects_updated: stats.updated,
       out_of_scope: stats.outOfScope,
       skipped: stats.skipped,
+      pages_fetched: stats.pages,
       next_cursor: nextCursor,
+      next_page: nextPage,
       error: stats.error,
     }, failed ? 502 : 200);
   } catch (error) {
