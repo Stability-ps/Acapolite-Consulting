@@ -9,37 +9,40 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { RequireRole } from "@/components/auth/RequireRole";
 import { RequireStaffPermission } from "@/components/auth/RequireStaffPermission";
 import { DashboardIndexRedirect } from "@/components/auth/DashboardIndexRedirect";
-import Index from "./pages/Index";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ResetPassword from "./pages/ResetPassword";
-import RequestTaxAssistance from "./pages/RequestTaxAssistance";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import DataDeletion from "./pages/DataDeletion";
-import RefundPolicy from "./pages/RefundPolicy";
-import Disclaimer from "./pages/Disclaimer";
-import PractitionerGuidelines from "./pages/PractitionerGuidelines";
-import CookiePolicy from "./pages/CookiePolicy";
-import TermsAndConditions from "./pages/TermsAndConditions";
-import Faq from "./pages/Faq";
-import TrustSafety from "./pages/TrustSafety";
-import OurServices from "./pages/OurServices";
-import HowAcapoliteWorks from "./pages/HowAcapoliteWorks";
-import Practitioners from "./pages/Practitioners";
-import ContactUs from "./pages/ContactUs";
-import HelpCenter from "./pages/HelpCenter";
-import AboutUs from "./pages/AboutUs";
-import { SarsTaxComplianceStatusPage, SarsAuditVerificationPage, PayeUifSdlServicesPage } from "./pages/AdditionalTaxServicePages";
-import TaxConsultantPretoria from "./pages/TaxConsultantPretoria";
-import {
-  AccountingServicesLandingPage,
-  BookkeepingServicesLandingPage,
-  CipcComplianceLandingPage,
-  ProfessionalHelpLandingPage,
-  SarsTaxAssistanceLandingPage,
-  TaxReturnsLandingPage,
-  VatServicesLandingPage,
-} from "./pages/ServiceLandingPages";
+// Public marketing/content pages are route-level code-split, same pattern as
+// the dashboard routes below, so the main bundle doesn't ship every public
+// page's code to every visitor (SEO audit finding M6).
+const Index = lazy(() => import("./pages/Index"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const RequestTaxAssistance = lazy(() => import("./pages/RequestTaxAssistance"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const DataDeletion = lazy(() => import("./pages/DataDeletion"));
+const RefundPolicy = lazy(() => import("./pages/RefundPolicy"));
+const Disclaimer = lazy(() => import("./pages/Disclaimer"));
+const PractitionerGuidelines = lazy(() => import("./pages/PractitionerGuidelines"));
+const CookiePolicy = lazy(() => import("./pages/CookiePolicy"));
+const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"));
+const Faq = lazy(() => import("./pages/Faq"));
+const TrustSafety = lazy(() => import("./pages/TrustSafety"));
+const OurServices = lazy(() => import("./pages/OurServices"));
+const HowAcapoliteWorks = lazy(() => import("./pages/HowAcapoliteWorks"));
+const Practitioners = lazy(() => import("./pages/Practitioners"));
+const ContactUs = lazy(() => import("./pages/ContactUs"));
+const HelpCenter = lazy(() => import("./pages/HelpCenter"));
+const AboutUs = lazy(() => import("./pages/AboutUs"));
+const SarsTaxComplianceStatusPage = lazy(() => import("./pages/AdditionalTaxServicePages").then((m) => ({ default: m.SarsTaxComplianceStatusPage })));
+const SarsAuditVerificationPage = lazy(() => import("./pages/AdditionalTaxServicePages").then((m) => ({ default: m.SarsAuditVerificationPage })));
+const PayeUifSdlServicesPage = lazy(() => import("./pages/AdditionalTaxServicePages").then((m) => ({ default: m.PayeUifSdlServicesPage })));
+const TaxConsultantPretoria = lazy(() => import("./pages/TaxConsultantPretoria"));
+const AccountingServicesLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.AccountingServicesLandingPage })));
+const BookkeepingServicesLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.BookkeepingServicesLandingPage })));
+const CipcComplianceLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.CipcComplianceLandingPage })));
+const ProfessionalHelpLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.ProfessionalHelpLandingPage })));
+const SarsTaxAssistanceLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.SarsTaxAssistanceLandingPage })));
+const TaxReturnsLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.TaxReturnsLandingPage })));
+const VatServicesLandingPage = lazy(() => import("./pages/ServiceLandingPages").then((m) => ({ default: m.VatServicesLandingPage })));
 const StaffOverviewRouter = lazy(() => import("@/components/auth/StaffOverviewRouter").then((module) => ({ default: module.StaffOverviewRouter })));
 const StaffExternalToolsRouter = lazy(() => import("@/components/auth/StaffExternalToolsRouter").then((module) => ({ default: module.StaffExternalToolsRouter })));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -72,20 +75,21 @@ const AdminWhatsAppQA = lazy(() => import("./pages/dashboard/admin/AdminWhatsApp
 const AdminSocialMedia = lazy(() => import("./pages/dashboard/admin/AdminSocialMedia"));
 const AdminAiKnowledge = lazy(() => import("./pages/dashboard/admin/AdminAiKnowledge"));
 
-import NotFound from "./pages/NotFound";
-import { SarsDebtPage, SarsPaymentArrangementsPage, SarsCompromisePage, SarsObjectionsPage } from "./pages/SarsMoneyPages";
-import {
-  TaxGuidesHub,
-  SarsSuspensionPaymentGuide,
-  SarsObjectionDeadlineGuide,
-  SarsCompromiseChecklistGuide,
-  SarsVatRefundDelayGuide,
-  SarsPaymentArrangementDocumentsGuide,
-  SarsFinalDemandGuide,
-  SarsRequestForReasonsGuide,
-  SarsObjectionDisallowedGuide,
-  SarsVatVerificationGuide,
-} from "./pages/TaxGuides";
+const NotFound = lazy(() => import("./pages/NotFound"));
+const SarsDebtPage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsDebtPage })));
+const SarsPaymentArrangementsPage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsPaymentArrangementsPage })));
+const SarsCompromisePage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsCompromisePage })));
+const SarsObjectionsPage = lazy(() => import("./pages/SarsMoneyPages").then((m) => ({ default: m.SarsObjectionsPage })));
+const TaxGuidesHub = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.TaxGuidesHub })));
+const SarsSuspensionPaymentGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsSuspensionPaymentGuide })));
+const SarsObjectionDeadlineGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsObjectionDeadlineGuide })));
+const SarsCompromiseChecklistGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsCompromiseChecklistGuide })));
+const SarsVatRefundDelayGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsVatRefundDelayGuide })));
+const SarsPaymentArrangementDocumentsGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsPaymentArrangementDocumentsGuide })));
+const SarsFinalDemandGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsFinalDemandGuide })));
+const SarsRequestForReasonsGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsRequestForReasonsGuide })));
+const SarsObjectionDisallowedGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsObjectionDisallowedGuide })));
+const SarsVatVerificationGuide = lazy(() => import("./pages/TaxGuides").then((m) => ({ default: m.SarsVatVerificationGuide })));
 
 
 const queryClient = new QueryClient({
