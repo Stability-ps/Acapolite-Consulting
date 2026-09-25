@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { SearchableClientSelect } from "@/components/dashboard/SearchableClientSelect";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import type { Enums, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
@@ -1462,25 +1463,26 @@ export default function AdminClientWorkspace() {
           </div>
           <div className="w-full max-w-md">
             <label className="mb-2 block text-sm font-semibold text-foreground font-body">Choose Client</label>
-            <Select
+            <SearchableClientSelect
               value={selectedClientId}
               onValueChange={(value) => {
                 setSelectedConversation("");
                 setIsMobileConversationOpen(false);
                 setSearchParams({ clientId: value });
               }}
-            >
-              <SelectTrigger className="w-full rounded-xl">
-                <SelectValue placeholder="Select a client" />
-              </SelectTrigger>
-              <SelectContent>
-                {(clients ?? []).map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {getClientName(client)}{client.client_code ? ` (${client.client_code})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={(clients ?? []).map((client) => ({
+                id: client.id,
+                label: getClientName(client),
+                clientCode: client.client_code,
+                searchText: [
+                  client.profiles?.email,
+                  client.profiles?.phone,
+                  client.tax_number,
+                  client.sars_reference_number,
+                  client.vat_number,
+                ].filter(Boolean).join(" "),
+              }))}
+            />
           </div>
         </div>
       </section>
