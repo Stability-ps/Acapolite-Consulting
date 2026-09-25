@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       activity_logs: {
@@ -50,9 +25,6 @@ export type Database = {
           entity_id: string | null
           entity_type: string | null
           id: string
-          is_archived: boolean
-          archived_at: string | null
-          archived_by: string | null
         }
         Insert: {
           action: string
@@ -64,9 +36,6 @@ export type Database = {
           entity_id?: string | null
           entity_type?: string | null
           id?: string
-          is_archived?: boolean
-          archived_at?: string | null
-          archived_by?: string | null
         }
         Update: {
           action?: string
@@ -78,9 +47,6 @@ export type Database = {
           entity_id?: string | null
           entity_type?: string | null
           id?: string
-          is_archived?: boolean
-          archived_at?: string | null
-          archived_by?: string | null
         }
         Relationships: [
           {
@@ -864,12 +830,6 @@ export type Database = {
       }
       correspondence_templates: {
         Row: {
-          source_file_name: string | null
-          source_file_path: string | null
-          source_file_size: number | null
-          source_mime_type: string | null
-          source_checksum_sha256: string | null
-
           approved: boolean
           body_structure: string | null
           case_type: string | null
@@ -879,6 +839,11 @@ export type Database = {
           id: string
           name: string
           purpose: string | null
+          source_checksum_sha256: string | null
+          source_file_name: string | null
+          source_file_path: string | null
+          source_file_size: number | null
+          source_mime_type: string | null
           status: Database["public"]["Enums"]["correspondence_template_status"]
           tax_type: string | null
           updated_at: string
@@ -886,12 +851,6 @@ export type Database = {
           version: number
         }
         Insert: {
-          source_file_name?: string | null
-          source_file_path?: string | null
-          source_file_size?: number | null
-          source_mime_type?: string | null
-          source_checksum_sha256?: string | null
-
           approved?: boolean
           body_structure?: string | null
           case_type?: string | null
@@ -901,6 +860,11 @@ export type Database = {
           id?: string
           name: string
           purpose?: string | null
+          source_checksum_sha256?: string | null
+          source_file_name?: string | null
+          source_file_path?: string | null
+          source_file_size?: number | null
+          source_mime_type?: string | null
           status?: Database["public"]["Enums"]["correspondence_template_status"]
           tax_type?: string | null
           updated_at?: string
@@ -908,12 +872,6 @@ export type Database = {
           version?: number
         }
         Update: {
-          source_file_name?: string | null
-          source_file_path?: string | null
-          source_file_size?: number | null
-          source_mime_type?: string | null
-          source_checksum_sha256?: string | null
-
           approved?: boolean
           body_structure?: string | null
           case_type?: string | null
@@ -923,6 +881,11 @@ export type Database = {
           id?: string
           name?: string
           purpose?: string | null
+          source_checksum_sha256?: string | null
+          source_file_name?: string | null
+          source_file_path?: string | null
+          source_file_size?: number | null
+          source_mime_type?: string | null
           status?: Database["public"]["Enums"]["correspondence_template_status"]
           tax_type?: string | null
           updated_at?: string
@@ -1026,6 +989,7 @@ export type Database = {
       documents: {
         Row: {
           ai_index_error: string | null
+          ai_index_started_at: string | null
           ai_index_status: Database["public"]["Enums"]["ai_index_status"]
           ai_indexed_at: string | null
           assessment_reference: string | null
@@ -1061,6 +1025,7 @@ export type Database = {
         }
         Insert: {
           ai_index_error?: string | null
+          ai_index_started_at?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
           ai_indexed_at?: string | null
           assessment_reference?: string | null
@@ -1096,6 +1061,7 @@ export type Database = {
         }
         Update: {
           ai_index_error?: string | null
+          ai_index_started_at?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
           ai_indexed_at?: string | null
           assessment_reference?: string | null
@@ -1226,6 +1192,45 @@ export type Database = {
           },
         ]
       }
+      institutional_knowledge_delete_audit: {
+        Row: {
+          actor_db_user: string
+          auth_user_id: string | null
+          checksum_sha256: string | null
+          deleted_at: string
+          file_path: string | null
+          id: string
+          metadata: Json
+          table_name: string
+          target_id: string
+          title: string | null
+        }
+        Insert: {
+          actor_db_user: string
+          auth_user_id?: string | null
+          checksum_sha256?: string | null
+          deleted_at?: string
+          file_path?: string | null
+          id?: string
+          metadata?: Json
+          table_name: string
+          target_id: string
+          title?: string | null
+        }
+        Update: {
+          actor_db_user?: string
+          auth_user_id?: string | null
+          checksum_sha256?: string | null
+          deleted_at?: string
+          file_path?: string | null
+          id?: string
+          metadata?: Json
+          table_name?: string
+          target_id?: string
+          title?: string | null
+        }
+        Relationships: []
+      }
       invoice_attachments: {
         Row: {
           attachment_type: string
@@ -1318,6 +1323,14 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          delivery_cc_emails: string[]
+          delivery_client_id: string | null
+          delivery_mode: string
+          delivery_recipient_client_id: string | null
+          delivery_recipient_email: string | null
+          delivery_recipient_mode: string
+          delivery_recipient_name: string | null
+          delivery_recipient_profile_id: string | null
           description: string | null
           discount_amount: number
           due_date: string | null
@@ -1363,6 +1376,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          delivery_cc_emails?: string[]
+          delivery_client_id?: string | null
+          delivery_mode?: string
+          delivery_recipient_client_id?: string | null
+          delivery_recipient_email?: string | null
+          delivery_recipient_mode?: string
+          delivery_recipient_name?: string | null
+          delivery_recipient_profile_id?: string | null
           description?: string | null
           discount_amount?: number
           due_date?: string | null
@@ -1408,6 +1429,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          delivery_cc_emails?: string[]
+          delivery_client_id?: string | null
+          delivery_mode?: string
+          delivery_recipient_client_id?: string | null
+          delivery_recipient_email?: string | null
+          delivery_recipient_mode?: string
+          delivery_recipient_name?: string | null
+          delivery_recipient_profile_id?: string | null
           description?: string | null
           discount_amount?: number
           due_date?: string | null
@@ -1464,6 +1493,41 @@ export type Database = {
           {
             foreignKeyName: "invoices_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_delivery_client_id_fkey"
+            columns: ["delivery_client_id"]
+            isOneToOne: false
+            referencedRelation: "client_dashboard_summary"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "invoices_delivery_client_id_fkey"
+            columns: ["delivery_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_delivery_recipient_client_id_fkey"
+            columns: ["delivery_recipient_client_id"]
+            isOneToOne: false
+            referencedRelation: "client_dashboard_summary"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "invoices_delivery_recipient_client_id_fkey"
+            columns: ["delivery_recipient_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_delivery_recipient_profile_id_fkey"
+            columns: ["delivery_recipient_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1607,6 +1671,7 @@ export type Database = {
       past_case_documents: {
         Row: {
           ai_index_error: string | null
+          ai_index_started_at: string | null
           ai_index_status: Database["public"]["Enums"]["ai_index_status"]
           ai_indexed_at: string | null
           category: string | null
@@ -1623,6 +1688,7 @@ export type Database = {
         }
         Insert: {
           ai_index_error?: string | null
+          ai_index_started_at?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
           ai_indexed_at?: string | null
           category?: string | null
@@ -1639,6 +1705,7 @@ export type Database = {
         }
         Update: {
           ai_index_error?: string | null
+          ai_index_started_at?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
           ai_indexed_at?: string | null
           category?: string | null
@@ -1674,12 +1741,15 @@ export type Database = {
         Row: {
           anonymisation_status: Database["public"]["Enums"]["past_case_anonymisation_status"]
           approved_for_ai_use: boolean
+          archived_at: string | null
+          archived_by: string | null
           case_type: string | null
           closed_date: string | null
           created_at: string
           created_by: string | null
           facts_summary: string | null
           id: string
+          is_archived: boolean
           issue: string | null
           key_arguments: string | null
           lessons_learned: string | null
@@ -1697,12 +1767,15 @@ export type Database = {
         Insert: {
           anonymisation_status?: Database["public"]["Enums"]["past_case_anonymisation_status"]
           approved_for_ai_use?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           case_type?: string | null
           closed_date?: string | null
           created_at?: string
           created_by?: string | null
           facts_summary?: string | null
           id?: string
+          is_archived?: boolean
           issue?: string | null
           key_arguments?: string | null
           lessons_learned?: string | null
@@ -1720,12 +1793,15 @@ export type Database = {
         Update: {
           anonymisation_status?: Database["public"]["Enums"]["past_case_anonymisation_status"]
           approved_for_ai_use?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
           case_type?: string | null
           closed_date?: string | null
           created_at?: string
           created_by?: string | null
           facts_summary?: string | null
           id?: string
+          is_archived?: boolean
           issue?: string | null
           key_arguments?: string | null
           lessons_learned?: string | null
@@ -1741,6 +1817,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "past_cases_archived_by_fkey"
+            columns: ["archived_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "past_cases_created_by_fkey"
             columns: ["created_by"]
@@ -3942,6 +4025,7 @@ export type Database = {
       tax_knowledge_library: {
         Row: {
           ai_index_error: string | null
+          ai_index_started_at: string | null
           ai_index_status: Database["public"]["Enums"]["ai_index_status"]
           ai_indexed_at: string | null
           approved_for_ai_use: boolean
@@ -3974,6 +4058,7 @@ export type Database = {
         }
         Insert: {
           ai_index_error?: string | null
+          ai_index_started_at?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
           ai_indexed_at?: string | null
           approved_for_ai_use?: boolean
@@ -4006,6 +4091,7 @@ export type Database = {
         }
         Update: {
           ai_index_error?: string | null
+          ai_index_started_at?: string | null
           ai_index_status?: Database["public"]["Enums"]["ai_index_status"]
           ai_indexed_at?: string | null
           approved_for_ai_use?: boolean
@@ -4646,6 +4732,7 @@ export type Database = {
         Args: { p_profile_id: string; p_request_id: string }
         Returns: boolean
       }
+      can_view_client_import_history: { Args: never; Returns: boolean }
       cancel_practitioner_subscription: {
         Args: { p_subscription_id: string }
         Returns: boolean
@@ -5262,9 +5349,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       ai_index_status: [

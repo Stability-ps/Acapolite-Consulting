@@ -72,6 +72,11 @@ type StaffInvoice = {
   client_address?: string | null;
   client_vat_number?: string | null;
   practitioner_vat_number?: string | null;
+  delivery_recipient_mode?: "client" | "existing_client" | "custom" | null;
+  delivery_recipient_client_id?: string | null;
+  delivery_recipient_name?: string | null;
+  delivery_recipient_email?: string | null;
+  delivery_cc_emails?: string[] | null;
   created_by: string;
   clients?: {
     profile_id?: string | null;
@@ -79,6 +84,7 @@ type StaffInvoice = {
     first_name?: string | null;
     last_name?: string | null;
     client_code?: string | null;
+    email?: string | null;
     phone?: string | null;
     address_line_1?: string | null;
     address_line_2?: string | null;
@@ -223,6 +229,11 @@ export default function AdminInvoices() {
   const [resendingInvoice, setResendingInvoice] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [clientsFormValue, setClientsFormValue] = useState("");
+  const [deliveryRecipientMode, setDeliveryRecipientMode] = useState<"client" | "existing_client" | "custom">("client");
+  const [deliveryRecipientClientId, setDeliveryRecipientClientId] = useState("");
+  const [deliveryRecipientName, setDeliveryRecipientName] = useState("");
+  const [deliveryRecipientEmail, setDeliveryRecipientEmail] = useState("");
+  const [deliveryCcEmails, setDeliveryCcEmails] = useState("");
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageInvoices = hasStaffPermission("can_manage_invoices");
@@ -258,7 +269,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("clients")
-        .select("id, profile_id, client_type, company_name, first_name, last_name, client_code, vat_number, address_line_1, address_line_2, city, province, postal_code, country, assigned_consultant_id, profiles!clients_profile_id_fkey(full_name, email, phone)")
+        .select("id, profile_id, client_type, company_name, first_name, last_name, client_code, email, phone, vat_number, address_line_1, address_line_2, city, province, postal_code, country, assigned_consultant_id, profiles!clients_profile_id_fkey(full_name, email, phone)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -425,6 +436,11 @@ export default function AdminInvoices() {
       setInvoiceNotesToClient(selectedInvoice.notes_to_client || "");
       setInvoiceTermsAndConditions(selectedInvoice.terms_and_conditions || defaultInvoiceTerms);
       setInvoiceCaseId(selectedInvoice.case_id ?? null);
+      setDeliveryRecipientMode(selectedInvoice.delivery_recipient_mode || "client");
+      setDeliveryRecipientClientId(selectedInvoice.delivery_recipient_client_id || "");
+      setDeliveryRecipientName(selectedInvoice.delivery_recipient_name || "");
+      setDeliveryRecipientEmail(selectedInvoice.delivery_recipient_email || "");
+      setDeliveryCcEmails((selectedInvoice.delivery_cc_emails || []).join(", "));
       setPendingAttachments([]);
     }
   }, [selectedInvoice]);
@@ -470,6 +486,11 @@ export default function AdminInvoices() {
     setInvoiceTermsAndConditions(defaultInvoiceTerms);
     setInvoiceCaseId(null);
     setSelectedStatus("draft");
+    setDeliveryRecipientMode("client");
+    setDeliveryRecipientClientId("");
+    setDeliveryRecipientName("");
+    setDeliveryRecipientEmail("");
+    setDeliveryCcEmails("");
     setInvoiceLineItems([createEmptyInvoiceLineItem()]);
     setPendingAttachments([]);
     setSelectedAttachmentType("supporting_document");
@@ -793,6 +814,22 @@ export default function AdminInvoices() {
     const totalAmount = computedFinalTotal;
     const nowIso = new Date().toISOString();
     const snapshot = buildInvoiceSnapshot(selectedInvoice.client_id, invoiceCaseId || null);
+    const billedClient = (clients ?? []).find((client: any) => client.id === selectedInvoice.client_id);
+    const deliveryRecipient = resolveDeliveryRecipient(billedClient);
+    const ccEmails = parseCcEmails(deliveryCcEmails);
+
+    if (deliveryRecipientMode === "existing_client" && !deliveryRecipientClientId) {
+      toast.error("Select the client or contact who should receive the invoice.");
+      setSavingStatus(false);
+      return;
+    }
+
+    if (!deliveryRecipient.email) {
+      toast.error("Enter a valid invoice delivery email address.");
+      setSavingStatus(false);
+      return;
+    }
+
     const updates: TablesUpdate<"invoices"> = {
       status: selectedStatus,
       title: invoiceTitle.trim() || null,
@@ -805,6 +842,11 @@ export default function AdminInvoices() {
       case_id: invoiceCaseId || null,
       notes_to_client: invoiceNotesToClient.trim() || null,
       terms_and_conditions: invoiceTermsAndConditions.trim() || null,
+      delivery_recipient_mode: deliveryRecipient.mode,
+      delivery_recipient_client_id: deliveryRecipient.clientId,
+      delivery_recipient_name: deliveryRecipient.name,
+      delivery_recipient_email: deliveryRecipient.email,
+      delivery_cc_emails: ccEmails,
       ...snapshot,
     };
 
@@ -883,6 +925,53 @@ export default function AdminInvoices() {
     ]);
   };
 
+  const getClientDisplayName = (client: any) =>
+    client?.company_name
+    || client?.profiles?.full_name
+    || [client?.first_name, client?.last_name].filter(Boolean).join(" ")
+    || client?.client_code
+    || "Client";
+
+  const getClientEmail = (client: any) =>
+    client?.email || client?.profiles?.email || "";
+
+  const parseCcEmails = (value: string) =>
+    value
+      .split(/[;,\n]/)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+
+  const resolveDeliveryRecipient = (billedClient: any) => {
+    if (deliveryRecipientMode === "existing_client") {
+      const recipientClient = (clients ?? []).find((client: any) => client.id === deliveryRecipientClientId);
+      return {
+        mode: "existing_client" as const,
+        clientId: recipientClient?.id || null,
+        profileId: recipientClient?.profile_id || null,
+        name: getClientDisplayName(recipientClient),
+        email: getClientEmail(recipientClient),
+      };
+    }
+
+    if (deliveryRecipientMode === "custom") {
+      return {
+        mode: "custom" as const,
+        clientId: null,
+        profileId: null,
+        name: deliveryRecipientName.trim() || "Accounts",
+        email: deliveryRecipientEmail.trim().toLowerCase(),
+      };
+    }
+
+    return {
+      mode: "client" as const,
+      clientId: billedClient?.id || null,
+      profileId: billedClient?.profile_id || null,
+      name: getClientDisplayName(billedClient),
+      email: getClientEmail(billedClient),
+    };
+  };
+
   const resendInvoice = async () => {
     if (!selectedInvoice) return;
     if (!canManageInvoices) {
@@ -910,11 +999,13 @@ export default function AdminInvoices() {
       }
     }
 
-    const clientProfileId = selectedInvoice.clients?.profile_id;
-    const clientEmail = selectedInvoice.clients?.profiles?.email;
+    const clientProfileId = selectedInvoice.clients?.profile_id || null;
+    const clientEmail = selectedInvoice.client_email || selectedInvoice.clients?.email || selectedInvoice.clients?.profiles?.email || null;
+    const recipientEmail = selectedInvoice.delivery_recipient_email || clientEmail;
+    const recipientName = selectedInvoice.delivery_recipient_name || getClientName(selectedInvoice);
 
-    if (!clientProfileId || !clientEmail) {
-      toast.error("This invoice cannot be emailed because the client does not have a valid portal profile and email.");
+    if (!recipientEmail) {
+      toast.error("This invoice does not have a delivery email address.");
       return;
     }
 
@@ -926,6 +1017,11 @@ export default function AdminInvoices() {
       clientProfileId,
       clientEmail,
       clientName: getClientName(selectedInvoice),
+      recipientEmail,
+      recipientName,
+      billedClientName: getClientName(selectedInvoice),
+      deliveryMode: selectedInvoice.delivery_recipient_mode || "client",
+      ccEmails: selectedInvoice.delivery_cc_emails || [],
       serviceDescription: invoiceTitle.trim() || invoiceDescription.trim() || selectedInvoice.title || selectedInvoice.description || "Professional tax services",
       amount: Number(selectedInvoice.balance_due ?? computedFinalTotal ?? selectedInvoice.total_amount ?? 0),
       dueDate: invoiceDueDate || selectedInvoice.due_date,
@@ -955,7 +1051,7 @@ export default function AdminInvoices() {
       }
     }
 
-    toast.success(notification.skipped ? "Invoice email was not resent because this delivery was already logged." : "Invoice email resent to the client.");
+    toast.success(notification.skipped ? "Invoice email was not resent because this delivery was already logged." : `Invoice email resent to ${recipientEmail}.`);
     if (user && role) {
       await logSystemActivity({
         actorProfileId: user.id,
@@ -1028,6 +1124,20 @@ export default function AdminInvoices() {
       return;
     }
 
+    const billedClient = resolveCurrentClient();
+    const deliveryRecipient = resolveDeliveryRecipient(billedClient);
+    const ccEmails = parseCcEmails(deliveryCcEmails);
+
+    if (deliveryRecipientMode === "existing_client" && !deliveryRecipientClientId) {
+      toast.error("Select the client or contact who should receive the invoice.");
+      return;
+    }
+
+    if (!deliveryRecipient.email) {
+      toast.error("Enter a valid invoice delivery email address.");
+      return;
+    }
+
     setCreatingInvoice(true);
 
     // Auto-generate sequential invoice number like INV-2026-0001
@@ -1074,6 +1184,11 @@ export default function AdminInvoices() {
       practitioner_bank_details: formatBankDetails(bankProfile),
       notes_to_client: invoiceNotesToClient.trim() || null,
       terms_and_conditions: invoiceTermsAndConditions.trim() || null,
+      delivery_recipient_mode: deliveryRecipient.mode,
+      delivery_recipient_client_id: deliveryRecipient.clientId,
+      delivery_recipient_name: deliveryRecipient.name,
+      delivery_recipient_email: deliveryRecipient.email,
+      delivery_cc_emails: ccEmails,
       ...snapshot,
     };
 
@@ -1099,7 +1214,7 @@ export default function AdminInvoices() {
       return;
     }
 
-    const selectedClient = resolveCurrentClient();
+    const selectedClient = billedClient;
 
     try {
       await saveInvoiceItems(data.id);
@@ -1115,18 +1230,18 @@ export default function AdminInvoices() {
 
     let notified = false;
 
-    if (selectedClient?.profile_id && data?.id) {
+    if (deliveryRecipient.email && data?.id && selectedStatus !== "draft") {
       const notification = await sendInvoiceCreatedNotification({
         invoiceId: data.id,
         invoiceNumber: data.invoice_number,
-        clientProfileId: selectedClient.profile_id,
-        clientEmail: selectedClient.profiles?.email,
-        clientName:
-          selectedClient.company_name
-          || selectedClient.profiles?.full_name
-          || [selectedClient.first_name, selectedClient.last_name].filter(Boolean).join(" ")
-          || selectedClient.client_code
-          || "Client",
+        clientProfileId: selectedClient?.profile_id || null,
+        clientEmail: getClientEmail(selectedClient) || null,
+        clientName: getClientDisplayName(selectedClient),
+        recipientEmail: deliveryRecipient.email,
+        recipientName: deliveryRecipient.name,
+        billedClientName: getClientDisplayName(selectedClient),
+        deliveryMode: deliveryRecipient.mode,
+        ccEmails,
         serviceDescription: invoiceTitle.trim() || invoiceDescription.trim() || "Professional tax services",
         amount: totalAmount,
         dueDate: data.due_date,
@@ -1142,10 +1257,8 @@ export default function AdminInvoices() {
       }
     }
 
-    if (!selectedClient?.profile_id) {
-      toast.success("Invoice created");
-    } else if (notified) {
-      toast.success("Invoice created and client notified");
+    if (notified) {
+      toast.success(`Invoice created and emailed to ${deliveryRecipient.email}`);
     } else {
       toast.success("Invoice created");
     }
@@ -1951,6 +2064,87 @@ export default function AdminInvoices() {
                 ].filter(Boolean).join(" "),
               }))}
             />
+          </div>
+
+          <div className="rounded-2xl border border-border bg-accent/10 p-4 space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground font-body">Send Invoice To</p>
+              <p className="text-xs text-muted-foreground font-body">
+                The invoice remains billed to the client selected above. Choose only who should receive the email.
+              </p>
+            </div>
+            <Select
+              value={deliveryRecipientMode}
+              onValueChange={(value) => {
+                setDeliveryRecipientMode(value as "client" | "existing_client" | "custom");
+                if (value !== "existing_client") setDeliveryRecipientClientId("");
+                if (value !== "custom") {
+                  setDeliveryRecipientName("");
+                  setDeliveryRecipientEmail("");
+                }
+              }}
+            >
+              <SelectTrigger className="w-full rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="client">Same as billed client</SelectItem>
+                <SelectItem value="existing_client">Another existing client/contact</SelectItem>
+                <SelectItem value="custom">Other email address</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {deliveryRecipientMode === "existing_client" ? (
+              <div>
+                <label className="block text-sm font-semibold text-foreground font-body mb-2">Existing Client / Contact</label>
+                <SearchableClientSelect
+                  value={deliveryRecipientClientId}
+                  onValueChange={setDeliveryRecipientClientId}
+                  options={(clients ?? []).map((client: any) => ({
+                    id: client.id,
+                    label: getClientDisplayName(client),
+                    clientCode: client.client_code,
+                    searchText: [getClientEmail(client), client.phone, client.tax_number, client.vat_number].filter(Boolean).join(" "),
+                  }))}
+                  placeholder="Select invoice recipient"
+                />
+              </div>
+            ) : null}
+
+            {deliveryRecipientMode === "custom" ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-semibold text-foreground font-body mb-2">Recipient Name</label>
+                  <Input
+                    value={deliveryRecipientName}
+                    onChange={(event) => setDeliveryRecipientName(event.target.value)}
+                    placeholder="Example: Accounts Department"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-foreground font-body mb-2">Recipient Email</label>
+                  <Input
+                    type="email"
+                    value={deliveryRecipientEmail}
+                    onChange={(event) => setDeliveryRecipientEmail(event.target.value)}
+                    placeholder="accounts@example.com"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">CC Emails (Optional)</label>
+              <Input
+                value={deliveryCcEmails}
+                onChange={(event) => setDeliveryCcEmails(event.target.value)}
+                placeholder="accountant@example.com, director@example.com"
+                className="rounded-xl"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Separate multiple addresses with commas.</p>
+            </div>
           </div>
 
           <div>

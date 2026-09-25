@@ -68,6 +68,11 @@ type InvoiceCreatedPayload = {
   clientProfileId?: string;
   clientEmail?: string;
   clientName?: string;
+  recipientEmail?: string;
+  recipientName?: string;
+  billedClientName?: string;
+  deliveryMode?: "client" | "existing_client" | "custom";
+  ccEmails?: string[];
   caseNumber?: string;
   serviceDescription?: string;
   amount?: string;
@@ -217,6 +222,7 @@ type MailtrapMessage = {
   text: string;
   html: string;
   replyTo?: { email: string; name?: string };
+  ccEmails?: string[];
   category: string;
   fromEmail?: string;
   fromName?: string;
@@ -587,6 +593,9 @@ async function sendMailtrapEmail(params: {
         name: params.message.fromName ?? params.fromName,
       },
       to: [{ email: params.message.toEmail }],
+      ...(params.message.ccEmails?.length
+        ? { cc: params.message.ccEmails.map((email) => ({ email })) }
+        : {}),
       subject: params.message.subject,
       text: params.message.text,
       html: params.message.html,
@@ -871,21 +880,40 @@ async function authorizeEmailRequest(params: {
       const invoiceId = trimString(payload.invoiceId);
       const clientProfileId = trimString(payload.clientProfileId);
 
-      if (!invoiceId || !clientProfileId) {
+      if (!invoiceId) {
         return {
-          error: jsonResponse(request, { error: "Invoice ID and client profile ID are required." }, 400),
+          error: jsonResponse(request, { error: "Invoice ID is required." }, 400),
         };
       }
 
       const { data: invoiceRow, error: invoiceError } = await adminClient
         .from("invoices")
-        .select("id, client_id")
+        .select("id, client_id, created_by, delivery_recipient_email")
         .eq("id", invoiceId)
         .maybeSingle();
 
       if (invoiceError || !invoiceRow?.client_id) {
         return {
           error: jsonResponse(request, { error: "Unable to validate this invoice notification request." }, 403),
+        };
+      }
+
+      if (payload.type === "invoice_created") {
+        const recipientEmail = normalizeEmail(payload.recipientEmail || payload.clientEmail);
+        if (!recipientEmail || recipientEmail !== normalizeEmail(invoiceRow.delivery_recipient_email)) {
+          return {
+            error: jsonResponse(request, { error: "Unable to validate this invoice recipient." }, 403),
+          };
+        }
+
+        // The authenticated sender may deliver to the persisted invoice recipient.
+        // Portal profile validation remains optional so non-portal contacts can receive invoices.
+        return { error: null };
+      }
+
+      if (!clientProfileId) {
+        return {
+          error: jsonResponse(request, { error: "Client profile ID is required." }, 400),
         };
       }
 
@@ -899,20 +927,6 @@ async function authorizeEmailRequest(params: {
         return {
           error: jsonResponse(request, { error: "Unable to validate this invoice notification request." }, 403),
         };
-      }
-
-      if (payload.type === "invoice_created") {
-        const { profile } = await validateProfileEmail({
-          adminClient,
-          profileId: clientProfileId,
-          email: normalizeEmail(payload.clientEmail),
-        });
-
-        if (!profile) {
-          return {
-            error: jsonResponse(request, { error: "Unable to validate this invoice notification request." }, 403),
-          };
-        }
       }
 
       return { error: null };
@@ -1778,7 +1792,14 @@ function buildEmailContent(params: {
     const caseNumber = trimString(payload.caseNumber) || caseId;
     const clientProfileId = trimString(payload.clientProfileId);
     const clientEmail = normalizeEmail(payload.clientEmail);
-    const clientName = trimString(payload.clientName) || "Client";
+    const recipientEmail = normalizeEmail(payload.recipientEmail || payload.clientEmail);
+    const recipientName = trimString(payload.recipientName) || trimString(payload.clientName) || "Client";
+    const billedClientName = trimString(payload.billedClientName) || trimString(payload.clientName) || "Client";
+    const deliveryMode = trimString(payload.deliveryMode) || "client";
+    const ccEmails = Array.isArray(payload.ccEmails)
+      ? payload.ccEmails.map((email) => normalizeEmail(email)).filter((email) => email && email !== recipientEmail)
+      : [];
+    const clientName = recipientName;
     const createdDate = trimString(payload.createdDate) || new Date().toLocaleDateString("en-ZA");
 
     if (!caseId || !clientProfileId || !clientEmail) {
@@ -1910,9 +1931,9 @@ function buildEmailContent(params: {
       } satisfies MailtrapMessage,
       log: {
         notificationType: "case_created",
-        recipientEmail: clientEmail,
-        profileId: clientProfileId,
-        contactEmail: clientEmail,
+        recipientEmail,
+        profileId: deliveryMode === "client" ? clientProfileId || undefined : undefined,
+        contactEmail: recipientEmail,
         metadata: {
           case_id: caseId,
           case_number: caseNumber,
@@ -2234,8 +2255,8 @@ function buildEmailContent(params: {
     const dueDate = trimString(payload.dueDate) || "Not set";
     const status = trimString(payload.status) || "Unpaid";
 
-    if (!invoiceId || !invoiceNumber || !clientProfileId || !clientEmail) {
-      throw new Error("Invoice ID, invoice number, client profile ID, and client email are required.");
+    if (!invoiceId || !invoiceNumber || !recipientEmail) {
+      throw new Error("Invoice ID, invoice number, and recipient email are required.");
     }
 
     const safeInvoiceNumber = escapeHtml(invoiceNumber);
@@ -2250,12 +2271,15 @@ function buildEmailContent(params: {
     return {
       requiresAuth: true,
       mail: {
-        toEmail: clientEmail,
+        toEmail: recipientEmail,
+        ccEmails,
         subject: `New Invoice #${invoiceNumber} - Acapolite Consulting`,
         text: [
           `Dear ${clientName},`,
           "",
-          "A new invoice has been issued for services rendered. Please review the details below and upload your proof of payment through the portal once payment has been made.",
+          deliveryMode === "client"
+            ? "A new invoice has been issued for services rendered. Please review the details below."
+            : `An invoice billed to ${billedClientName} has been sent to you for review.`,
           "",
           `Invoice #: ${invoiceNumber}`,
           `Case Number: #${caseNumber}`,
@@ -2264,9 +2288,9 @@ function buildEmailContent(params: {
           `Due Date: ${dueDate}`,
           `Status: ${status}`,
           "",
-          "After payment, upload your proof of payment in the portal under your case. Do not email attachments.",
-          "",
-          `View Invoice and Pay: ${portalUrl}/dashboard/client/invoices?invoiceId=${invoiceId}`,
+          ...(deliveryMode === "client"
+            ? ["After payment, you can upload proof of payment through the client portal.", "", `View Invoice and Pay: ${portalUrl}/dashboard/client/invoices?invoiceId=${invoiceId}`]
+            : ["Please contact Acapolite Consulting if you require a copy of the invoice or payment assistance."]),
           "",
           "The Acapolite Consulting Team",
           `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
@@ -2308,7 +2332,9 @@ function buildEmailContent(params: {
                       <tr>
                         <td style="background:#fff;padding:32px 36px">
                           <p style="font-size:15px;font-weight:bold;color:#1a3a5c;margin:0 0 12px">Dear ${safeClientName},</p>
-                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 20px">A new invoice has been issued for services rendered. Please review the details below and upload your proof of payment through the portal once payment has been made.</p>
+                          <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 20px">${deliveryMode === "client"
+                            ? "A new invoice has been issued for services rendered. Please review the details below."
+                            : `An invoice billed to ${escapeHtml(billedClientName)} has been sent to you for review.`}</p>
                           <table width="100%" cellpadding="0" cellspacing="0" style="background:#fdf8ef;border-left:4px solid #c8a84b;border-radius:0 8px 8px 0;margin-bottom:20px">
                             <tr>
                               <td style="padding:16px">
