@@ -749,8 +749,9 @@ export default function AdminInvoices() {
       return;
     }
 
-    // Validate banking details when updating to non-draft status
-    if (selectedStatus !== "draft") {
+    // Practitioner banking verification is a consultant safeguard.
+    // Admins must retain full billing control and are not blocked by practitioner verification.
+    if (role === "consultant" && selectedStatus !== "draft") {
       const bankProfile = resolveBankProfile();
       const accountHolderName = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
       const hasCompleteBanking = Boolean(
@@ -888,26 +889,24 @@ export default function AdminInvoices() {
       return;
     }
 
-    // Validate banking details before resending invoice
-    const bankProfile = resolveBankProfile();
-    const accountHolderName = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
-    const hasCompleteBanking = Boolean(
-      accountHolderName.trim()
-      && bankProfile?.bank_name?.trim()
-      && bankProfile?.bank_branch_name?.trim()
-      && bankProfile?.bank_branch_code?.trim()
-      && bankProfile?.bank_account_number?.trim()
-      && bankProfile?.bank_account_type?.trim(),
-    );
+    // Practitioner banking verification is enforced for consultants only.
+    // Admins can resend invoices even when no practitioner banking profile is assigned or verified.
+    if (role === "consultant") {
+      const bankProfile = resolveBankProfile();
+      const accountHolderName = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
+      const hasCompleteBanking = Boolean(
+        accountHolderName.trim()
+        && bankProfile?.bank_name?.trim()
+        && bankProfile?.bank_branch_name?.trim()
+        && bankProfile?.bank_branch_code?.trim()
+        && bankProfile?.bank_account_number?.trim()
+        && bankProfile?.bank_account_type?.trim(),
+      );
 
-    if (!bankProfile || !hasCompleteBanking) {
-      toast.error("Please complete and verify your banking details before generating or sending invoices.");
-      return;
-    }
-
-    if (bankProfile.banking_verification_status !== "verified") {
-      toast.error("Please complete and verify your banking details before generating or sending invoices.");
-      return;
+      if (!bankProfile || !hasCompleteBanking || bankProfile.banking_verification_status !== "verified") {
+        toast.error("Please complete and verify your banking details before generating or sending invoices.");
+        return;
+      }
     }
 
     const clientProfileId = selectedInvoice.clients?.profile_id;
@@ -980,27 +979,29 @@ export default function AdminInvoices() {
       return;
     }
 
-    const bankProfile = resolveBankProfile();
-    const accountHolderName = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
-    const hasCompleteBanking = Boolean(
-      accountHolderName.trim()
-      && bankProfile?.bank_name?.trim()
-      && bankProfile?.bank_branch_name?.trim()
-      && bankProfile?.bank_branch_code?.trim()
-      && bankProfile?.bank_account_number?.trim()
-      && bankProfile?.bank_account_type?.trim(),
-    );
+    // Banking verification is a practitioner/consultant control, not an admin control.
+    // Admins can create invoices regardless of whether a practitioner profile is assigned or verified.
+    if (role === "consultant") {
+      const bankProfile = resolveBankProfile();
+      const accountHolderName = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
+      const hasCompleteBanking = Boolean(
+        accountHolderName.trim()
+        && bankProfile?.bank_name?.trim()
+        && bankProfile?.bank_branch_name?.trim()
+        && bankProfile?.bank_branch_code?.trim()
+        && bankProfile?.bank_account_number?.trim()
+        && bankProfile?.bank_account_type?.trim(),
+      );
 
-    // Block invoice creation if banking details are incomplete
-    if (!bankProfile || !hasCompleteBanking) {
-      toast.error("Please complete and verify your banking details before generating or sending invoices.");
-      return;
-    }
+      if (!bankProfile || !hasCompleteBanking) {
+        toast.error("Please complete and verify your banking details before generating or sending invoices.");
+        return;
+      }
 
-    // Block non-draft invoices if banking details are not verified
-    if (selectedStatus !== "draft" && bankProfile.banking_verification_status !== "verified") {
-      toast.error("Please complete and verify your banking details before generating or sending invoices.");
-      return;
+      if (selectedStatus !== "draft" && bankProfile.banking_verification_status !== "verified") {
+        toast.error("Please complete and verify your banking details before generating or sending invoices.");
+        return;
+      }
     }
 
     const cleanedLineItems = invoiceLineItems.filter(
