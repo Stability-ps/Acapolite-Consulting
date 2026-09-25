@@ -3,6 +3,10 @@ import App from "./App.tsx";
 import "./index.css";
 import { captureAdAttribution } from "@/lib/googleAds";
 
+const isNativeApp = () =>
+  typeof window !== "undefined" &&
+  Boolean((window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+
 const CLARITY_PROJECT_ID = "w7lukcm2zs";
 
 function initializeMicrosoftClarity(projectId: string) {
@@ -34,7 +38,12 @@ function initializeMicrosoftClarity(projectId: string) {
   document.head.appendChild(script);
 }
 
-initializeMicrosoftClarity(CLARITY_PROJECT_ID);
-captureAdAttribution();
+if (isNativeApp()) {
+  document.documentElement.classList.add("capacitor-native");
+  document.documentElement.classList.add(`capacitor-${(window as Window & { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.() || "native"}`);
+} else {
+  initializeMicrosoftClarity(CLARITY_PROJECT_ID);
+  captureAdAttribution();
+}
 
 createRoot(document.getElementById("root")!).render(<App />);
