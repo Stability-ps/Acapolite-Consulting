@@ -42,7 +42,7 @@ function scoreProspect(p: {email:string|null;phone:string|null;province:string|n
   return Math.min(100,s);
 }
 function isCron(req: Request) {
-  const expected=Deno.env.get("PROSPECT_SYNC_CRON_SECRET")?.trim() || "";
+  const expected=(Deno.env.get("PROSPECT_SYNC_CRON_SECRET") || Deno.env.get("SOCIAL_CRON_SECRET"))?.trim() || "";
   const got=req.headers.get("x-cron-secret") || "";
   if(!expected || got.length!==expected.length) return false;
   let diff=0; for(let i=0;i<got.length;i++) diff |= got.charCodeAt(i)^expected.charCodeAt(i);
