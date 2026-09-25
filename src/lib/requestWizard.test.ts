@@ -10,6 +10,7 @@ describe("request wizard service intent", () => {
     expect(getServiceIntent("vat")?.label).toBe("VAT Services");
     expect(getServiceIntent("accounting")?.label).toBe("Accounting Services");
     expect(getServiceIntent("provisional-tax")?.label).toBe("Provisional Tax & IRP6");
+    expect(getServiceIntent("vdp")?.label).toBe("Voluntary Disclosure Programme");
   });
 
   it("routes intent to an appropriate category for the selected entity", () => {
@@ -22,6 +23,10 @@ describe("request wizard service intent", () => {
     expect(getServiceIntent("provisional-tax")?.categoryForEntity("individual")).toBe("individual_tax");
     expect(getServiceIntent("provisional-tax")?.categoryForEntity("company")).toBe("business_tax");
     expect(getServiceIntent("provisional-tax")?.categoryForEntity("trust")).toBe("trust_services");
+    expect(getServiceIntent("vdp")?.categoryForEntity("individual")).toBe("individual_tax");
+    expect(getServiceIntent("vdp")?.categoryForEntity("company")).toBe("business_tax");
+    expect(getServiceIntent("vdp")?.categoryForEntity("trust")).toBe("trust_services");
+    expect(getServiceIntent("vdp")?.categoryForEntity("npo_organisation")).toBe("npo_organisation_services");
   });
 
   it("ignores unknown or missing intent values", () => {
