@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.social-scheduler-settings]
 verify_jwt = false
+
+[functions.prospect-discovery-sync]
+verify_jwt = false
