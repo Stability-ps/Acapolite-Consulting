@@ -465,7 +465,7 @@ function buildWebPushContent(params: {
       return {
         title: "New invoice available",
         body: trimNotificationText(`Invoice ${trimString(payload.invoiceNumber) || ""} is ready${trimString(payload.amount) ? ` for ${trimString(payload.amount)}` : ""}.`.trim()),
-        url: buildPortalLink(portalUrl, "/dashboard/client/invoices"),
+        url: buildPortalLink(portalUrl, `/dashboard/client/invoices?invoiceId=${trimString(payload.invoiceId)}`),
         tag: `invoice-created:${trimString(payload.invoiceId)}`,
       } satisfies WebPushMessage;
 
@@ -2250,13 +2250,13 @@ function buildEmailContent(params: {
       requiresAuth: true,
       mail: {
         toEmail: clientEmail,
-        subject: `New Invoice #INV-${invoiceNumber} - Acapolite Consulting`,
+        subject: `New Invoice #${invoiceNumber} - Acapolite Consulting`,
         text: [
           `Dear ${clientName},`,
           "",
           "A new invoice has been issued for services rendered. Please review the details below and upload your proof of payment through the portal once payment has been made.",
           "",
-          `Invoice #: INV-${invoiceNumber}`,
+          `Invoice #: ${invoiceNumber}`,
           `Case Number: #${caseNumber}`,
           `Service: ${serviceDescription}`,
           `Amount Due: ${amount}`,
@@ -2265,7 +2265,7 @@ function buildEmailContent(params: {
           "",
           "After payment, upload your proof of payment in the portal under your case. Do not email attachments.",
           "",
-          `View Invoice and Pay: ${portalUrl}/dashboard/invoices`,
+          `View Invoice and Pay: ${portalUrl}/dashboard/client/invoices?invoiceId=${invoiceId}`,
           "",
           "The Acapolite Consulting Team",
           `${supportEmail} | ${officePhone} | ${supportWhatsapp}`,
@@ -2300,7 +2300,7 @@ function buildEmailContent(params: {
                               </td>
                             </tr>
                           </table>
-                          <h1 style="color:#fff;font-size:22px;margin:24px 0 6px;font-family:Georgia,serif;font-weight:normal">Invoice #INV-${safeInvoiceNumber}</h1>
+                          <h1 style="color:#fff;font-size:22px;margin:24px 0 6px;font-family:Georgia,serif;font-weight:normal">Invoice #${safeInvoiceNumber}</h1>
                           <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:0">Case #${safeCaseNumber}</p>
                         </td>
                       </tr>
@@ -2314,7 +2314,7 @@ function buildEmailContent(params: {
                                 <table width="100%" cellpadding="0" cellspacing="0">
                                   <tr>
                                     <td style="font-size:13px;font-weight:bold;color:#1a3a5c;width:120px;padding:4px 0">Invoice #</td>
-                                    <td style="font-size:13px;color:#333;padding:4px 0">INV-${safeInvoiceNumber}</td>
+                                    <td style="font-size:13px;color:#333;padding:4px 0">${safeInvoiceNumber}</td>
                                   </tr>
                                   <tr>
                                     <td style="font-size:13px;font-weight:bold;color:#1a3a5c;padding:4px 0">Case Number</td>
@@ -2344,7 +2344,7 @@ function buildEmailContent(params: {
                           <table cellpadding="0" cellspacing="0">
                             <tr>
                               <td style="background:#c8a84b;border-radius:6px">
-                                <a href="${portalUrl}/dashboard/invoices" style="display:inline-block;padding:12px 28px;color:#fff;font-size:14px;font-weight:bold;text-decoration:none">View Invoice and Pay</a>
+                                <a href="${portalUrl}/dashboard/client/invoices?invoiceId=${invoiceId}" style="display:inline-block;padding:12px 28px;color:#fff;font-size:14px;font-weight:bold;text-decoration:none">View Invoice and Pay</a>
                               </td>
                             </tr>
                           </table>
