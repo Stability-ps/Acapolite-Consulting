@@ -68,6 +68,9 @@ const categories: ServiceCategory[] = [
   },
 ];
 
+/** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const OUR_SERVICES_H1 = "Our Services — Acapolite Consulting";
+
 export default function OurServices() {
   return (
     <>
@@ -78,7 +81,7 @@ export default function OurServices() {
       />
       <PublicPageLayout
         eyebrow="Company"
-        title="Our Services — Acapolite Consulting"
+        title={OUR_SERVICES_H1}
         description="Acapolite Consulting connects individuals and businesses with qualified tax practitioners and accounting professionals. Browse the categories below and go to the specialist page for the service you need, or submit a request and let a professional confirm the best fit."
       >
         <div className="space-y-10 text-sm text-foreground font-body">

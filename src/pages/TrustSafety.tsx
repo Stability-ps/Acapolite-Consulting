@@ -1,6 +1,9 @@
 import { SEO } from "@/components/seo/SEO";
 import { PublicPageLayout } from "@/components/layout/PublicPageLayout";
 
+/** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const TRUST_SAFETY_H1 = "Trust & Safety — Acapolite Consulting";
+
 export default function TrustSafety() {
   return (
     <>
@@ -11,7 +14,7 @@ export default function TrustSafety() {
     />
     <PublicPageLayout
       eyebrow="Trust & Safety"
-      title="Trust & Safety — Acapolite Consulting"
+      title={TRUST_SAFETY_H1}
       description="Acapolite Consulting is committed to providing a secure and trusted environment for clients and practitioners. Our Trust & Safety policies are designed to protect user data, ensure professional conduct, and maintain the integrity of the platform."
       maxWidthClassName="max-w-4xl"
     >

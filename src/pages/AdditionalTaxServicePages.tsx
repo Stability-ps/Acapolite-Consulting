@@ -15,9 +15,9 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-type Crumb = { name: string; path?: string };
+export type Crumb = { name: string; path?: string };
 
-type PageConfig = {
+export type PageConfig = {
   path: string;
   eyebrow: string;
   title: string;
@@ -32,7 +32,8 @@ type PageConfig = {
   crumbs: Crumb[];
 };
 
-const configs: Record<string, PageConfig> = {
+/** Keyed by intent, not by path - the source of truth for both the rendered pages below and the build-time raw-HTML seeding in scripts/generate-route-html.mjs. */
+export const configs: Record<string, PageConfig> = {
   compliance: {
     path: "/sars-tax-compliance-status",
     eyebrow: "SARS Tax Compliance",
@@ -115,13 +116,28 @@ function ConfigBreadcrumbs({ items }: { items: Crumb[] }) {
   );
 }
 
+/**
+ * The exact BreadcrumbList + Service schema one of these pages renders.
+ * Exported so the build-time raw-HTML seeding step (scripts/generate-route-html.mjs)
+ * calls the same function with the same config, rather than re-deriving the
+ * schema from scratch - the two can never drift apart.
+ */
+export function buildAdditionalTaxServiceSchemas(config: PageConfig) {
+  const schemaCrumbs = config.crumbs.map((crumb) => ({ name: crumb.name, path: crumb.path ?? config.path }));
+  return [
+    buildBreadcrumbSchema(schemaCrumbs),
+    buildServiceSchema({ name: config.title, description: config.metaDescription, path: config.path }),
+  ];
+}
+
 function ServicePage({ config }: { config: PageConfig }) {
   useSeo({ title: `${config.title} | Acapolite Consulting`, description: config.metaDescription, path: config.path });
-  const schemaCrumbs = config.crumbs.map((crumb) => ({ name: crumb.name, path: crumb.path ?? config.path }));
+  const schemas = buildAdditionalTaxServiceSchemas(config);
   return (
     <PublicPageLayout eyebrow={config.eyebrow} title={config.title} description={config.description} maxWidthClassName="max-w-5xl" backHref="/sars-tax-assistance" backLabel="Back to SARS & Tax Assistance">
-      <JsonLd data={buildBreadcrumbSchema(schemaCrumbs)} />
-      <JsonLd data={buildServiceSchema({ name: config.title, description: config.metaDescription, path: config.path })} />
+      {schemas.map((data, index) => (
+        <JsonLd key={index} data={data} />
+      ))}
       <ConfigBreadcrumbs items={config.crumbs} />
       <section className="rounded-3xl border border-border bg-background p-6 sm:p-8">
         <p className="leading-7 text-muted-foreground">{config.intro}</p>

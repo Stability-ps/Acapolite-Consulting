@@ -36,6 +36,19 @@ const faqs = [
   },
 ];
 
+/** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const TAX_CONSULTANT_PRETORIA_H1 = "Tax Consultant Pretoria";
+
+/** Exported so scripts/generate-route-html.mjs seeds the identical breadcrumb schema. */
+export function buildTaxConsultantPretoriaSchemas() {
+  return [
+    buildBreadcrumbSchema([
+      { name: "Home", path: "/" },
+      { name: "Tax Consultant Pretoria", path: "/tax-consultant-pretoria" },
+    ]),
+  ];
+}
+
 export default function TaxConsultantPretoria() {
   useSeo({
     title: "Tax Consultant Pretoria | SARS, Tax & Accounting Support | Acapolite",
@@ -46,14 +59,13 @@ export default function TaxConsultantPretoria() {
   return (
     <PublicPageLayout
       eyebrow="Pretoria tax support"
-      title="Tax Consultant Pretoria"
+      title={TAX_CONSULTANT_PRETORIA_H1}
       description="Professional tax, SARS and accounting support for individuals and businesses in Pretoria, with secure remote service available across South Africa."
       maxWidthClassName="max-w-5xl"
     >
-      <JsonLd data={buildBreadcrumbSchema([
-        { name: "Home", path: "/" },
-        { name: "Tax Consultant Pretoria", path: "/tax-consultant-pretoria" },
-      ])} />
+      {buildTaxConsultantPretoriaSchemas().map((data, index) => (
+        <JsonLd key={index} data={data} />
+      ))}
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
         <div className="rounded-3xl border border-border bg-background p-6 sm:p-8">

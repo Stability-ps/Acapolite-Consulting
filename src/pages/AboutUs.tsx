@@ -2,6 +2,9 @@ import { Link } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 
+/** The page's real H1 text - shared with the build-time raw-HTML seeding in scripts/generate-route-html.mjs so the two can never drift apart. */
+export const ABOUT_US_H1 = "About Us — Acapolite Consulting";
+
 export default function AboutUs() {
   return (
     <>
@@ -15,7 +18,7 @@ export default function AboutUs() {
         <div className="rounded-[32px] border border-border bg-card p-6 shadow-elevated sm:p-10">
           <AcapoliteLogo className="mb-6 h-12" />
           <p className="text-xs uppercase tracking-[0.2em] text-primary/70 font-body">Company</p>
-          <h1 className="mt-2 font-display text-3xl text-foreground sm:text-4xl">About Us — Acapolite Consulting</h1>
+          <h1 className="mt-2 font-display text-3xl text-foreground sm:text-4xl">{ABOUT_US_H1}</h1>
           <p className="mt-4 text-sm leading-6 text-muted-foreground font-body sm:text-base">
             Acapolite Consulting is a professional digital platform that connects individuals and businesses with
             qualified tax practitioners, accountants, and compliance professionals across South Africa. Our mission
