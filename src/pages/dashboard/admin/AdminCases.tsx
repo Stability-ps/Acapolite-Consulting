@@ -14,6 +14,7 @@ import type { Enums, Tables, TablesInsert } from "@/integrations/supabase/types"
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { SearchableClientSelect } from "@/components/dashboard/SearchableClientSelect";
 import { TaxAIChat } from "@/components/dashboard/TaxAIChat";
 import { CaseCorrespondenceSection } from "@/components/dashboard/admin/CaseCorrespondenceSection";
 import { getClientWarningSummary } from "@/lib/clientRisk";
@@ -1420,18 +1421,15 @@ export default function AdminCases() {
         <div className="space-y-5">
           <div>
             <label className="block text-sm font-semibold text-foreground font-body mb-2">Client</label>
-            <Select value={form.client_id} onValueChange={(value) => setForm((current) => ({ ...current, client_id: value }))}>
-              <SelectTrigger className="w-full rounded-xl">
-                <SelectValue placeholder="Select a client" />
-              </SelectTrigger>
-              <SelectContent>
-                {clientOptions.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.label}{client.clientCode ? ` (${client.clientCode})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableClientSelect
+              value={form.client_id}
+              onValueChange={(value) => setForm((current) => ({ ...current, client_id: value }))}
+              options={clientOptions.map((client) => ({
+                id: client.id,
+                label: client.label,
+                clientCode: client.clientCode,
+              }))}
+            />
           </div>
 
           <div>
