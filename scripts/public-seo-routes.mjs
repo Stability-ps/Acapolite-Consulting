@@ -54,7 +54,7 @@ export const publicRoutes = [
   },
   {
     path: "/sars-tax-compliance-status",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.9",
     changefreq: "monthly",
     title: "SARS Tax Compliance Status & TCS Assistance | Acapolite Consulting",
@@ -62,7 +62,7 @@ export const publicRoutes = [
   },
   {
     path: "/sars-audit-verification",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.9",
     changefreq: "monthly",
     title: "SARS Audit & Verification Assistance | Acapolite Consulting",
@@ -70,7 +70,7 @@ export const publicRoutes = [
   },
   {
     path: "/paye-uif-sdl-services",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.9",
     changefreq: "monthly",
     title: "PAYE, UIF & SDL Compliance Assistance | Acapolite Consulting",
@@ -94,6 +94,7 @@ export const publicRoutes = [
   },
   {
     path: "/cipc-company-compliance",
+    lastmod: "2026-09-25",
     priority: "0.9",
     changefreq: "monthly",
     title: "CIPC & Company Compliance Support | Acapolite Consulting",
@@ -108,7 +109,7 @@ export const publicRoutes = [
   },
   {
     path: "/vat-services",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.9",
     changefreq: "monthly",
     title: "VAT Registration, Returns & SARS VAT Assistance | Acapolite Consulting",
@@ -116,7 +117,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS & Tax Guides South Africa | Acapolite Consulting",
@@ -124,7 +125,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides/sars-suspension-of-payment-section-164",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS Section 164 Suspension of Payment Guide | Acapolite Consulting",
@@ -132,7 +133,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides/sars-objection-deadline-guide",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS Objection Deadlines & 80-Business-Day Rule | Acapolite Consulting",
@@ -140,7 +141,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides/sars-section-200-compromise-checklist",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS Section 200 Compromise Preparation Checklist | Acapolite Consulting",
@@ -148,7 +149,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides/sars-vat-refund-delays",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS VAT Refund Delays: Vendor Checklist | Acapolite Consulting",
@@ -156,7 +157,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides/sars-payment-arrangement-documents",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS Payment Arrangement Documents & Preparation | Acapolite Consulting",
@@ -164,7 +165,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides/sars-final-demand-third-party-appointment",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS Final Demand & Third-Party Appointment Guide | Acapolite Consulting",
@@ -172,7 +173,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides/sars-request-for-reasons",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS Request for Reasons Before an Objection | Acapolite Consulting",
@@ -180,7 +181,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides/sars-objection-disallowed-appeal-adr",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS Objection Disallowed: Appeal & ADR Guide | Acapolite Consulting",
@@ -188,7 +189,7 @@ export const publicRoutes = [
   },
   {
     path: "/tax-guides/sars-vat-verification-supporting-documents",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.8",
     changefreq: "monthly",
     title: "SARS VAT Verification Supporting Documents Guide | Acapolite Consulting",
@@ -260,7 +261,7 @@ export const publicRoutes = [
   },
   {
     path: "/trust-safety",
-    lastmod: "2026-09-24",
+    lastmod: "2026-09-25",
     priority: "0.4",
     changefreq: "yearly",
     title: "Trust & Safety | Acapolite Consulting",

@@ -62,7 +62,7 @@ export default function ContactUs() {
             <a
               href="https://wa.me/27675575506"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               onClick={() => trackGoogleAdsEvent("whatsapp_click", { link_location: "contact_us" })}
               className="text-[#022D73] hover:underline"
             >

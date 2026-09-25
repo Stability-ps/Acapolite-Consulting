@@ -99,7 +99,7 @@ function OfficialSources({ items }: { items: Source[] }) {
             <a
               href={source.href}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
             >
               {source.label}
