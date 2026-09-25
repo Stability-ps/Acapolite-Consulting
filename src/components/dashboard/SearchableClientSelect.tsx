@@ -71,10 +71,17 @@ export function SearchableClientSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-h-[min(22rem,var(--radix-popover-content-available-height))] overflow-hidden p-0" align="start">
+      <PopoverContent
+        portalled={false}
+        className="w-[var(--radix-popover-trigger-width)] max-h-[min(22rem,var(--radix-popover-content-available-height))] overflow-hidden p-0"
+        align="start"
+      >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList className="max-h-[min(18rem,var(--radix-popover-content-available-height))] overscroll-contain">
+          <CommandList
+            className="max-h-[min(18rem,var(--radix-popover-content-available-height))] touch-pan-y overscroll-contain"
+            onWheel={(event) => event.stopPropagation()}
+          >
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => {
