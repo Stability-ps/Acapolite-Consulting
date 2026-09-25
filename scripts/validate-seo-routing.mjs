@@ -47,7 +47,7 @@ if (rewriteMap.has("/(.*)")) {
   throw new Error("SEO routing validation failed: blanket SPA rewrite would turn unknown URLs into soft 404s");
 }
 
-for (const route of ["/login", "/register", "/reset-password", "/privacy-policy", "/data-deletion", "/refund-policy", "/disclaimer", "/practitioner-guidelines", "/cookie-policy", "/terms-and-conditions", "/dashboard", "/dashboard/(.*)"]) {
+for (const route of ["/login", "/register", "/reset-password", "/dashboard", "/dashboard/(.*)"]) {
   if (rewriteMap.get(route) !== "/index.html") {
     throw new Error(`SEO routing validation failed: expected SPA deep-link rewrite for ${route}`);
   }

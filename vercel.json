@@ -243,31 +243,31 @@
     },
     {
       "source": "/privacy-policy",
-      "destination": "/index.html"
+      "destination": "/privacy-policy/index.html"
     },
     {
       "source": "/data-deletion",
-      "destination": "/index.html"
+      "destination": "/data-deletion/index.html"
     },
     {
       "source": "/refund-policy",
-      "destination": "/index.html"
+      "destination": "/refund-policy/index.html"
     },
     {
       "source": "/disclaimer",
-      "destination": "/index.html"
+      "destination": "/disclaimer/index.html"
     },
     {
       "source": "/practitioner-guidelines",
-      "destination": "/index.html"
+      "destination": "/practitioner-guidelines/index.html"
     },
     {
       "source": "/cookie-policy",
-      "destination": "/index.html"
+      "destination": "/cookie-policy/index.html"
     },
     {
       "source": "/terms-and-conditions",
-      "destination": "/index.html"
+      "destination": "/terms-and-conditions/index.html"
     },
     {
       "source": "/request-professional-help",
