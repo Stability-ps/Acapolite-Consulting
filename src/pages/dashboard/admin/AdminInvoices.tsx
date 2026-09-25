@@ -980,10 +980,13 @@ export default function AdminInvoices() {
       return;
     }
 
+    // Resolve the practitioner profile once so it remains available when building
+    // the invoice snapshot. Admins may proceed when this is null; consultants may not.
+    const bankProfile = resolveBankProfile();
+
     // Banking verification is a practitioner/consultant control, not an admin control.
     // Admins can create invoices regardless of whether a practitioner profile is assigned or verified.
     if (role === "consultant") {
-      const bankProfile = resolveBankProfile();
       const accountHolderName = bankProfile?.bank_account_holder_name || bankProfile?.profiles?.full_name || "";
       const hasCompleteBanking = Boolean(
         accountHolderName.trim()
