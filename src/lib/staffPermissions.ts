@@ -23,6 +23,9 @@ export type StaffPermissionValues = Pick<
   | "can_approve_sars_correspondence"
   | "can_export_clients"
   | "can_import_clients"
+  | "can_view_prospect_hub"
+  | "can_manage_prospect_hub"
+  | "can_send_prospect_campaigns"
 >;
 
 export type StaffPermissionKey = Exclude<keyof StaffPermissionValues, "assigned_clients_only">;
@@ -46,6 +49,9 @@ export const fullStaffPermissions: StaffPermissionValues = {
   can_approve_sars_correspondence: true,
   can_export_clients: true,
   can_import_clients: true,
+  can_view_prospect_hub: true,
+  can_manage_prospect_hub: true,
+  can_send_prospect_campaigns: true,
 };
 
 export const defaultConsultantPermissions: StaffPermissionValues = {
@@ -67,6 +73,9 @@ export const defaultConsultantPermissions: StaffPermissionValues = {
   can_approve_sars_correspondence: false,
   can_export_clients: false,
   can_import_clients: false,
+  can_view_prospect_hub: false,
+  can_manage_prospect_hub: false,
+  can_send_prospect_campaigns: false,
 };
 
 export const consultantPermissionFields: Array<{
@@ -165,6 +174,21 @@ export const consultantPermissionFields: Array<{
     description: "Allow exporting the client list or an individual client record to CSV/XLSX.",
   },
   {
+    key: "can_view_prospect_hub",
+    label: "Prospect Hub",
+    description: "Allow access to prospecting and outreach records.",
+  },
+  {
+    key: "can_manage_prospect_hub",
+    label: "Manage Prospect Hub",
+    description: "Allow adding and updating prospects, notes and follow-ups.",
+  },
+  {
+    key: "can_send_prospect_campaigns",
+    label: "Prospect Campaigns",
+    description: "Allow creating and sending prospect outreach campaigns.",
+  },
+  {
     key: "can_import_clients",
     label: "Import Clients",
     description: "Allow bulk-importing clients from an uploaded CSV/XLSX file.",
@@ -192,6 +216,15 @@ export function sanitizeStaffPermissions(values: StaffPermissionValues): StaffPe
 
   if (!next.can_view_messages) {
     next.can_reply_messages = false;
+  }
+
+  if (!next.can_view_prospect_hub) {
+    next.can_manage_prospect_hub = false;
+    next.can_send_prospect_campaigns = false;
+  }
+
+  if (next.can_manage_prospect_hub || next.can_send_prospect_campaigns) {
+    next.can_view_prospect_hub = true;
   }
 
   if (!next.can_use_tax_coach_ai) {

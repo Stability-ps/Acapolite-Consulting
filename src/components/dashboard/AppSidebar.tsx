@@ -23,6 +23,7 @@ import {
   UserRoundCheck,
   Megaphone,
   BookOpen,
+  Target,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -99,6 +100,7 @@ const adminItems = [
   { title: "Notifications", url: "/dashboard/staff/notifications", icon: Bell, permission: "can_view_overview" as StaffPermissionKey },
   { title: "Staff Users", url: "/dashboard/staff/users", icon: UserPlus },
   { title: "Clients", url: "/dashboard/staff/clients", icon: Users, permission: "can_view_clients" as StaffPermissionKey },
+  { title: "Prospect Hub", url: "/dashboard/staff/prospect-hub", icon: Target },
   { title: "Service Requests", url: "/dashboard/staff/service-requests", icon: ClipboardList, permission: "can_view_clients" as StaffPermissionKey },
   { title: "Client 360", url: "/dashboard/staff/client-workspace", icon: UserRound, permission: "can_view_client_workspace" as StaffPermissionKey },
   { title: "Cases", url: "/dashboard/staff/cases", icon: FolderOpen, permission: "can_view_cases" as StaffPermissionKey },
