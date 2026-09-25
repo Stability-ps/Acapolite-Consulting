@@ -13,19 +13,22 @@
 //   - the request-tax-assistance wizard's query-string states (the wizard
 //     always canonicalises to the bare path; only that bare path is listed)
 //   - the SPA's catch-all 404 route
-//   - /request-professional-help (SEO PR4: paid-traffic/Ads landing page,
-//     set to noindex,follow in src/pages/ServiceLandingPages.tsx — not part
-//     of the organic architecture, so it does not belong in the sitemap.
-//     The route itself, its canonical tag and its Ads/lead functionality
-//     are unchanged — only sitemap + indexation status moved.)
+//   - any route in public-seo-routes.mjs flagged excludeFromSitemap: true.
+//     /request-professional-help is the current example (SEO PR4/PR-B):
+//     it's a paid-traffic/Ads landing page, set to noindex,follow, and not
+//     part of the organic architecture — but it still gets a raw-HTML
+//     shell (see rawHtmlSeoRoutes below) so that noindex directive is
+//     visible to a crawler before any JavaScript runs, same as every
+//     other route. Only its sitemap membership is excluded.
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const SITE_URL = "https://acapoliteconsulting.co.za";
 
-import { publicRoutes as routes } from "./public-seo-routes.mjs";
+import { publicRoutes } from "./public-seo-routes.mjs";
 
+const routes = publicRoutes.filter((route) => !route.excludeFromSitemap);
 
 const urls = routes
   .map(

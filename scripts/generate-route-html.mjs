@@ -38,9 +38,15 @@ function replaceCanonical(html, href) {
 
 for (const route of rawHtmlSeoRoutes) {
   const canonical = `${SITE_URL}${route.path}`;
+  // Most routes are indexable; a route may override this (e.g. a paid-
+  // traffic-only landing page that must never be indexed but still needs
+  // its own raw-HTML shell so the noindex directive is visible to a
+  // crawler before any JavaScript runs - see the /request-professional-help
+  // entry in public-seo-routes.mjs).
+  const robots = route.robots ?? "index, follow";
   let html = replaceTitle(template, route.title);
   html = replaceMeta(html, "name", "description", route.description);
-  html = replaceMeta(html, "name", "robots", "index, follow");
+  html = replaceMeta(html, "name", "robots", robots);
   html = replaceMeta(html, "property", "og:title", route.title);
   html = replaceMeta(html, "property", "og:description", route.description);
   html = replaceMeta(html, "property", "og:url", canonical);
@@ -54,7 +60,7 @@ for (const route of rawHtmlSeoRoutes) {
     `<title>${escapeHtml(route.title)}</title>`,
     `content="${escapeHtml(route.description)}"`,
     `<link rel="canonical" href="${canonical}" />`,
-    'meta name="robots" content="index, follow"',
+    `meta name="robots" content="${robots}"`,
   ];
 
   for (const marker of expected) {
