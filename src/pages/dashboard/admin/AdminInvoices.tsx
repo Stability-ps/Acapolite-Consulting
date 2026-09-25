@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Download, Eye, Mail, Paperclip, Printer, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardItemDialog } from "@/components/dashboard/DashboardItemDialog";
+import { SearchableClientSelect } from "@/components/dashboard/SearchableClientSelect";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessibleClientIds } from "@/hooks/useAccessibleClientIds";
 import { sendInvoiceCreatedNotification } from "@/lib/invoiceNotifications";
@@ -235,7 +236,7 @@ export default function AdminInvoices() {
 
       let query = supabase
         .from("invoices")
-        .select("*, created_by, client_vat_number, practitioner_vat_number, clients(profile_id, client_type, company_name, first_name, last_name, client_code, vat_number, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
+        .select("*, created_by, client_vat_number, practitioner_vat_number, clients(profile_id, client_type, company_name, first_name, last_name, client_code, tax_number, sars_reference_number, vat_number, address_line_1, address_line_2, city, province, postal_code, country, profiles!clients_profile_id_fkey(full_name, email, phone)), created_by_profile:profiles!invoices_created_by_fkey(full_name, email)")
         .order("created_at", { ascending: false });
 
       if (hasRestrictedClientScope && accessibleClientIds?.length) {
@@ -1927,25 +1928,25 @@ export default function AdminInvoices() {
         <div className="space-y-5">
           <div>
             <label className="block text-sm font-semibold text-foreground font-body mb-2">Client</label>
-            <Select
+            <SearchableClientSelect
               value={clientsFormValue}
               onValueChange={(value) => {
                 setClientsFormValue(value);
                 setInvoiceCaseId(null);
               }}
-            >
-              <SelectTrigger className="w-full rounded-xl">
-                <SelectValue placeholder="Select a client" />
-              </SelectTrigger>
-              <SelectContent>
-                {(clients ?? []).map((client: { id: string; company_name: string | null; first_name: string | null; last_name: string | null; client_code: string | null }) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.company_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || "Client"}
-                    {client.client_code ? ` (${client.client_code})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={(clients ?? []).map((client) => ({
+                id: client.id,
+                label: client.company_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || "Client",
+                clientCode: client.client_code,
+                searchText: [
+                  client.profiles?.email,
+                  client.profiles?.phone,
+                  client.tax_number,
+                  client.sars_reference_number,
+                  client.vat_number,
+                ].filter(Boolean).join(" "),
+              }))}
+            />
           </div>
 
           <div>
