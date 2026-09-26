@@ -526,7 +526,9 @@ export default function RequestTaxAssistance() {
 
   const hardRedirect = (path: string) => {
     clearWizardDraft();
-    window.location.replace(path);
+    // Keep navigation inside React Router. window.location.replace() is unreliable
+    // inside the Capacitor WKWebView because the app is served from capacitor://localhost.
+    navigate(path, { replace: true });
   };
 
   const goHome = () => {
