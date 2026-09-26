@@ -28,6 +28,6 @@ Deno.serve(async(req)=>{
    await sb.from("prospects").update({public_signal_count:(ss||[]).length,public_signal_types:types,last_public_signal_at:dates.at(-1)||null,enrichment_status:"pending",enrichment_checked_at:null}).eq("id",p.id);
   }catch(e){stats.skipped++;stats.errors.push(String(e))}}
   await sb.from("prospect_sources").update({status:"healthy",last_success_at:new Date().toISOString(),last_attempt_at:new Date().toISOString(),last_error:null,records_discovered:Number(source.records_discovered||0)+hits.length,prospects_created:Number(source.prospects_created||0)+sourceCreated,total_runs:Number(source.total_runs||0)+1}).eq("id",source.id);
- }catch(e){stats.errors.push(String(e))}}
+ }catch(e){const message=e instanceof Error?e.message:String(e);stats.errors.push(`${cfg.key}: ${message}`);const {data:source}=await sb.from("prospect_sources").select("id,total_failures,consecutive_failures").eq("key",cfg.key).maybeSingle();if(source){await sb.from("prospect_sources").update({status:"degraded",last_attempt_at:new Date().toISOString(),last_error:message,total_failures:Number(source.total_failures||0)+1,consecutive_failures:Number(source.consecutive_failures||0)+1}).eq("id",source.id)}}}
  return jsonResponse(req,{ok:stats.errors.length===0,...stats});
 });
