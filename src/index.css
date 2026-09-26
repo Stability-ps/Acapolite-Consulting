@@ -177,12 +177,27 @@ html.capacitor-native {
 
 html.capacitor-native body {
   min-height: 100dvh;
-  padding-top: var(--app-safe-top);
-  padding-right: var(--app-safe-right);
-  padding-bottom: var(--app-safe-bottom);
-  padding-left: var(--app-safe-left);
+  padding: 0;
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+html.capacitor-native .native-safe-top {
+  padding-top: max(0px, var(--app-safe-top));
+}
+
+html.capacitor-native .native-safe-bottom {
+  padding-bottom: max(0px, var(--app-safe-bottom));
+}
+
+html.capacitor-native .native-sheet-safe {
+  padding-top: max(12px, var(--app-safe-top));
+  padding-bottom: max(12px, var(--app-safe-bottom));
+}
+
+html.capacitor-native .fixed.bottom-0,
+html.capacitor-native [data-radix-popper-content-wrapper] {
+  margin-bottom: max(0px, var(--app-safe-bottom));
 }
 
 html.capacitor-native input,
