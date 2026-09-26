@@ -36,7 +36,7 @@ export default function ProspectProfile() {
     queryKey: ["prospect-profile", id],
     enabled: !!id,
     queryFn: async () => {
-      const [p, notes, activities, followUps, records, contacts, recipients] = await Promise.all([
+      const [p, notes, activities, followUps, records, contacts, recipients, publicSignals] = await Promise.all([
         prospectDb.from("prospects").select("*").eq("id", id).single(),
         prospectDb.from("prospect_notes").select("*").eq("prospect_id", id).order("created_at", { ascending: false }),
         prospectDb.from("prospect_activities").select("*").eq("prospect_id", id).order("occurred_at", { ascending: false }).limit(200),
@@ -44,9 +44,11 @@ export default function ProspectProfile() {
         prospectDb.from("prospect_source_records").select("*").eq("prospect_id", id).order("award_date", { ascending: false, nullsFirst: false }),
         prospectDb.from("prospect_contacts").select("*").eq("prospect_id", id).order("created_at", { ascending: false }),
         prospectDb.from("prospect_campaign_recipients").select("id,campaign_id,status,sent_at,replied_at,skip_reason,prospect_campaigns(name)").eq("prospect_id", id).order("created_at", { ascending: false }),
+        prospectDb.from("prospect_public_signals").select("*").eq("prospect_id", id).order("signal_date", { ascending: false, nullsFirst: false }),
       ]);
       if (p.error) throw p.error;
-      return { prospect: p.data, notes: notes.data ?? [], activities: activities.data ?? [], followUps: followUps.data ?? [], records: records.data ?? [], contacts: contacts.data ?? [], recipients: recipients.data ?? [] };
+      for (const r of [notes, activities, followUps, records, contacts, recipients, publicSignals]) if (r.error) throw r.error;
+      return { prospect: p.data, notes: notes.data ?? [], activities: activities.data ?? [], followUps: followUps.data ?? [], records: records.data ?? [], contacts: contacts.data ?? [], recipients: recipients.data ?? [], publicSignals: publicSignals.data ?? [] };
     },
   });
   const refresh = () => { void qc.invalidateQueries({ queryKey: ["prospect-profile", id] }); void qc.invalidateQueries({ queryKey: ["prospect-list"] }); };
@@ -106,6 +108,24 @@ export default function ProspectProfile() {
   return (
     <div className="space-y-4">
       <Link to="../prospects" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" />Prospects</Link>
+
+      {data.data?.publicSignals?.length ? (
+        <Panel title="Public-record signals" description="Documented public records for review. A signal is not proof of current SARS non-compliance unless the cited source explicitly establishes that fact.">
+          <div className="space-y-3">
+            {data.data.publicSignals.map((s: any) => (
+              <div key={s.id} className="rounded-xl border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium">{s.title}</p>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{String(s.signal_type).replace(/_/g, " ")}</span>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{s.evidence_summary}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{[s.court_or_authority, s.case_number, s.signal_date].filter(Boolean).join(" · ")}</p>
+                <a className="mt-2 inline-flex items-center gap-1 text-sm text-primary underline" href={s.source_url} target="_blank" rel="noreferrer">Open source evidence <ExternalLink className="h-3 w-3" /></a>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
 
       <div className="rounded-2xl border bg-card p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
