@@ -16,6 +16,8 @@ import { VerifiedPractitioners } from "@/components/landing/VerifiedPractitioner
 import { AreasWeServe } from "@/components/landing/AreasWeServe";
 import { CTA } from "@/components/landing/CTA";
 import { Footer } from "@/components/landing/Footer";
+import { NativeHome } from "@/components/native/NativeHome";
+import { isNativeAppRuntime } from "@/lib/nativeApp";
 
 const Index = () => {
   const location = useLocation();
@@ -33,6 +35,10 @@ const Index = () => {
       });
     }
   }, [location.hash]);
+
+  if (isNativeAppRuntime()) {
+    return <NativeHome />;
+  }
 
   return (
     <div className="min-h-screen">
