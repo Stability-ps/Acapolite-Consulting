@@ -54,7 +54,7 @@ export default function ProspectSources() {
 
   return (
     <div className="space-y-4">
-      <Panel title="Source registry" description="Where prospects come from. Only legitimate public sources are used; authentication, CAPTCHAs and access restrictions are never bypassed.">
+      <Panel title="Source registry" description="Procurement, enrichment, court judgments and public insolvency/liquidation sources. Public-record signals are evidence-led: they do not imply SARS non-compliance unless the cited record explicitly establishes the tax issue. Authentication, CAPTCHAs and access restrictions are never bypassed.">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-sm">
             <thead className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="p-2">Source</th><th className="p-2">Type</th><th className="p-2">Status</th><th className="p-2">Last success</th><th className="p-2">Last attempt</th><th className="p-2">Records</th><th className="p-2">Prospects created</th><th className="p-2">Failures</th><th className="p-2">Schedule</th><th className="p-2">Enabled</th></tr></thead>
