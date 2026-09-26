@@ -35,3 +35,15 @@ verify_jwt = false
 
 [functions.prospect-discovery-sync]
 verify_jwt = false
+
+[functions.prospect-web-enrichment]
+verify_jwt = false
+
+[functions.prospect-campaign-worker]
+verify_jwt = false
+
+[functions.prospect-unsubscribe]
+verify_jwt = false
+
+[functions.prospect-email-events]
+verify_jwt = false
