@@ -223,6 +223,11 @@ export default function AdminInvoices() {
   const [resendingInvoice, setResendingInvoice] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [clientsFormValue, setClientsFormValue] = useState("");
+  const [invoiceDeliveryMode, setInvoiceDeliveryMode] = useState<"client" | "existing_client" | "custom">("client");
+  const [invoiceDeliveryClientId, setInvoiceDeliveryClientId] = useState("");
+  const [invoiceDeliveryName, setInvoiceDeliveryName] = useState("");
+  const [invoiceDeliveryEmail, setInvoiceDeliveryEmail] = useState("");
+  const [invoiceCcEmails, setInvoiceCcEmails] = useState("");
   const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("eft");
@@ -469,6 +474,11 @@ export default function AdminInvoices() {
 
   const resetCreateForm = () => {
     setClientsFormValue("");
+    setInvoiceDeliveryMode("client");
+    setInvoiceDeliveryClientId("");
+    setInvoiceDeliveryName("");
+    setInvoiceDeliveryEmail("");
+    setInvoiceCcEmails("");
     setInvoiceTitle("");
     setInvoiceDescription("");
     setInvoiceDueDate("");
@@ -815,6 +825,13 @@ export default function AdminInvoices() {
       notes_to_client: invoiceNotesToClient.trim() || null,
       terms_and_conditions: invoiceTermsAndConditions.trim() || null,
       ...snapshot,
+      delivery_mode: invoiceDeliveryMode === "client" ? "same_client" : invoiceDeliveryMode,
+      delivery_recipient_mode: invoiceDeliveryMode,
+      delivery_client_id: invoiceDeliveryMode === "existing_client" ? invoiceDeliveryClientId || null : null,
+      delivery_recipient_client_id: invoiceDeliveryMode === "existing_client" ? invoiceDeliveryClientId || null : null,
+      delivery_recipient_name: invoiceDeliveryMode === "custom" ? invoiceDeliveryName.trim() || null : null,
+      delivery_recipient_email: invoiceDeliveryMode === "custom" ? invoiceDeliveryEmail.trim().toLowerCase() || null : null,
+      delivery_cc_emails: invoiceCcEmails.split(/[,;\n]+/).map((email) => email.trim().toLowerCase()).filter(Boolean),
     };
 
     if (selectedStatus !== selectedInvoice.status) {
@@ -2053,6 +2070,38 @@ export default function AdminInvoices() {
                 ].filter(Boolean).join(" "),
               }))}
             />
+          </div>
+
+          <div className="rounded-2xl border border-border p-4 space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">Send invoice to</label>
+              <Select value={invoiceDeliveryMode} onValueChange={(value) => setInvoiceDeliveryMode(value as "client" | "existing_client" | "custom")}>
+                <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="client">Invoice client</SelectItem>
+                  <SelectItem value="existing_client">Another existing client</SelectItem>
+                  <SelectItem value="custom">Custom email recipient</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">The invoice still belongs to the client selected above. This only controls who receives the invoice email.</p>
+            </div>
+            {invoiceDeliveryMode === "existing_client" ? (
+              <div>
+                <label className="block text-sm font-semibold text-foreground font-body mb-2">Email recipient</label>
+                <SearchableClientSelect value={invoiceDeliveryClientId} onValueChange={setInvoiceDeliveryClientId} options={(clients ?? []).map((client) => ({ id: client.id, label: client.company_name || [client.first_name, client.last_name].filter(Boolean).join(" ") || "Client", clientCode: client.client_code, searchText: [client.profiles?.email, client.profiles?.phone].filter(Boolean).join(" ") }))} />
+              </div>
+            ) : null}
+            {invoiceDeliveryMode === "custom" ? (
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div><label className="block text-sm font-semibold text-foreground font-body mb-2">Recipient name</label><Input value={invoiceDeliveryName} onChange={(e) => setInvoiceDeliveryName(e.target.value)} placeholder="Accounts / Company name" className="rounded-xl" /></div>
+                <div><label className="block text-sm font-semibold text-foreground font-body mb-2">Recipient email</label><Input type="email" value={invoiceDeliveryEmail} onChange={(e) => setInvoiceDeliveryEmail(e.target.value)} placeholder="accounts@company.co.za" className="rounded-xl" /></div>
+              </div>
+            ) : null}
+            <div>
+              <label className="block text-sm font-semibold text-foreground font-body mb-2">CC recipients</label>
+              <Input value={invoiceCcEmails} onChange={(e) => setInvoiceCcEmails(e.target.value)} placeholder="finance@company.co.za, director@company.co.za" className="rounded-xl" />
+              <p className="mt-1 text-xs text-muted-foreground">Optional. Separate multiple email addresses with commas.</p>
+            </div>
           </div>
 
           <div>
