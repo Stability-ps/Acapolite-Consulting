@@ -1059,7 +1059,7 @@ export default function RequestTaxAssistance() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF6] px-4 py-8 sm:px-6 lg:px-8">
+    <div className="native-safe-top min-h-[100dvh] bg-[#FAFAF6] px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <h1 className="sr-only">{REQUEST_TAX_ASSISTANCE_H1}</h1>
         <div className="flex flex-wrap items-center justify-between gap-4">
