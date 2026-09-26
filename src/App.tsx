@@ -91,6 +91,7 @@ const ProspectSettings = lazy(() => import("./pages/dashboard/admin/prospect-hub
 const SarsOpportunityHubLayout = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityHubLayout"));
 const SarsOpportunityDashboard = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityDashboard"));
 const SarsOpportunityList = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityList"));
+const SarsOpportunityProfile = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityProfile"));
 const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
 
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -248,6 +249,7 @@ function AppRoutes() {
                   <Route path="staff/sars-opportunity-hub" element={<SarsOpportunityHubLayout />}>
                     <Route index element={<SarsOpportunityDashboard />} />
                     <Route path="opportunities" element={<SarsOpportunityList />} />
+                    <Route path="opportunities/:id" element={<SarsOpportunityProfile />} />
                   </Route>
                 </Route>
                 <Route
