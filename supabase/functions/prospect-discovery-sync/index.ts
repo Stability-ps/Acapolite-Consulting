@@ -1,167 +1,229 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// Prospect Hub discovery: National Treasury eTenders OCDS (official API).
+//
+// Invoked by pg_cron (x-cron-secret) or manually by a user with
+// can_manage_prospect_hub. The API requires dateFrom/dateTo and is slow and
+// intermittently returns HTTP 500, so the worker:
+//   - walks one-day windows forward from a stored cursor (catch-up / backfill),
+//   - requests small pages with retries and back-off,
+//   - only advances the cursor past a window after every page succeeded,
+//   - stops within a time budget and resumes on the next run.
+// Only awarded suppliers in target sectors/provinces are imported. Each
+// award is stored as evidence and attached to one prospect per company via
+// upsert_discovered_prospect (dedup by supplier id, registration number,
+// normalised name). Supplier contact details are NOT taken from this feed
+// (its contactPoint belongs to the procuring entity).
 
-const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
-const SOURCE = "National Treasury eTenders OCDS";
-const API = "https://ocds-api.etenders.gov.za/api/OCDSReleases";
+import {
+  authorizeProspectCaller,
+  createAdminClient,
+  jsonResponse,
+  preflight,
+} from "../_shared/prospectHttp.ts";
+import { addDays, awardedSuppliers, dayWindows, ETENDERS_API } from "../_shared/prospectDiscovery.ts";
 
-function json(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS }); }
-function env(name: string) { const v=Deno.env.get(name)?.trim(); if(!v) throw new Error("Missing "+name); return v; }
-function adminKey() {
-  const legacy=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
-  if(legacy) return legacy;
-  const raw=Deno.env.get("SUPABASE_SECRET_KEYS");
-  if(!raw) throw new Error("Missing Supabase admin key");
-  return JSON.parse(raw).default;
+const SOURCE_KEY = "etenders_ocds";
+const SOURCE_NAME = "National Treasury eTenders OCDS";
+const RUN_BUDGET_MS = 115_000;
+const REQUEST_TIMEOUT_MS = 40_000;
+const MAX_PAGES_PER_WINDOW = 400;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
-function safeText(v: unknown) { return typeof v === "string" && v.trim() ? v.trim() : null; }
-function norm(v: unknown) { return String(v ?? "").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
-function first<T>(v: T[] | undefined | null): T | null { return Array.isArray(v) && v.length ? v[0] : null; }
-function sectorFor(text: string, targets: string[]) {
-  const n=norm(text);
-  const aliases: Record<string,string[]> = {
-    Construction:["construction","building","civil works","infrastructure"],
-    Engineering:["engineering","engineer"],
-    Security:["security","guarding","protection"],
-    Cleaning:["cleaning","hygiene","janitorial"],
-    Transport:["transport","transportation"],
-    Logistics:["logistics","freight","courier"],
-    IT:["information technology","ict","software","computer","network"],
-    Catering:["catering","food service"],
-    Maintenance:["maintenance","repairs","facilities management"]
-  };
-  for(const target of targets) if((aliases[target]||[target.toLowerCase()]).some(k=>n.includes(k))) return target;
-  return null;
+
+async function fetchPage(from: string, to: string, page: number, pageSize: number, deadline: number) {
+  const url = `${ETENDERS_API}?PageNumber=${page}&PageSize=${pageSize}&dateFrom=${from}&dateTo=${to}`;
+  let lastError = "";
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    if (Date.now() + 5_000 > deadline) break;
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: "application/json", "User-Agent": "AcapoliteProspectHub/1.0 (+https://acapoliteconsulting.co.za)" },
+        signal: AbortSignal.timeout(Math.min(REQUEST_TIMEOUT_MS, Math.max(5_000, deadline - Date.now()))),
+      });
+      if (response.ok) {
+        const payload = await response.json();
+        return { ok: true as const, releases: Array.isArray(payload?.releases) ? payload.releases : [] };
+      }
+      lastError = `eTenders API HTTP ${response.status}`;
+      await response.body?.cancel();
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await sleep(attempt * 2_000);
+  }
+  return { ok: false as const, error: lastError || "time budget exhausted" };
 }
-function scoreProspect(p: {email:string|null;phone:string|null;province:string|null;sector:string|null;award:boolean}) {
-  let s=25;
-  if(p.award) s+=25;
-  if(p.email) s+=15;
-  if(p.phone) s+=10;
-  if(p.province==="Gauteng") s+=10;
-  if(p.sector) s+=10;
-  return Math.min(100,s);
-}
-function isCron(req: Request) {
-  const expected=(Deno.env.get("PROSPECT_SYNC_CRON_SECRET") || Deno.env.get("SOCIAL_CRON_SECRET"))?.trim() || "";
-  const got=req.headers.get("x-cron-secret") || "";
-  if(!expected || got.length!==expected.length) return false;
-  let diff=0; for(let i=0;i<got.length;i++) diff |= got.charCodeAt(i)^expected.charCodeAt(i);
-  return diff===0;
-}
-async function isAdminUser(req: Request, sbAdmin: any) {
-  const auth=req.headers.get("authorization") || "";
-  if(!auth.startsWith("Bearer ")) return false;
-  const token=auth.slice(7);
-  const { data:{user} }=await sbAdmin.auth.getUser(token);
-  if(!user) return false;
-  const { data }=await sbAdmin.from("profiles").select("role").eq("id",user.id).maybeSingle();
-  return data?.role==="admin";
-}
-function findProvince(release:any, supplier:any) {
-  const values=[
-    supplier?.address?.region,
-    supplier?.address?.locality,
-    release?.tender?.deliveryAddresses?.[0]?.region,
-    release?.buyer?.address?.region,
-    release?.planning?.budget?.projectLocation?.region
-  ].map(safeText).filter(Boolean) as string[];
-  const joined=norm(values.join(" "));
-  const provinces=["Gauteng","Western Cape","Eastern Cape","KwaZulu-Natal","Limpopo","Mpumalanga","North West","Free State","Northern Cape"];
-  return provinces.find(p=>joined.includes(norm(p))) || null;
-}
-function suppliersFromRelease(release:any) {
-  const ids=new Set<string>();
-  for(const award of release?.awards || []) for(const s of award?.suppliers || []) if(s?.id) ids.add(String(s.id));
-  const parties=(release?.parties || []).filter((p:any)=>ids.has(String(p?.id)) || (p?.roles || []).includes("supplier"));
-  return parties.map((p:any)=>({party:p,award:ids.has(String(p?.id))}));
-}
+
 Deno.serve(async (req: Request) => {
-  if(req.method==="OPTIONS") return new Response("ok",{headers:JSON_HEADERS});
-  const sb=createClient(env("SUPABASE_URL"),adminKey(),{auth:{persistSession:false,autoRefreshToken:false}});
-  const cron=isCron(req);
-  const admin=cron ? false : await isAdminUser(req,sb);
-  if(!cron && !admin) return json({error:"Forbidden"},403);
-  let runId:string|null=null;
+  if (req.method === "OPTIONS") return preflight(req);
+  if (req.method !== "POST") return jsonResponse(req, { error: "Method not allowed" }, 405);
+  const caller = await authorizeProspectCaller(req, "can_manage_prospect_hub");
+  if (!caller) return jsonResponse(req, { error: "Forbidden" }, 403);
+
+  const sb = createAdminClient();
+  const startedAt = Date.now();
+  const deadline = startedAt + RUN_BUDGET_MS;
+  let runId: string | null = null;
+  let sourceId: string | null = null;
+
   try {
-    const runType=cron ? "scheduled" : "manual";
-    const { data:settings,error:settingsError }=await sb.from("prospect_discovery_settings").select("*").eq("source_name",SOURCE).single();
-    if(settingsError) throw settingsError;
-    if(!settings.enabled && cron) return json({ok:true,skipped:true,reason:"source_disabled"});
-    const {data:run,error:runError}=await sb.from("prospect_discovery_runs").insert({source_name:SOURCE,run_type:runType}).select("id").single();
-    if(runError) throw runError; runId=run.id;
-    const provinces=(settings.provinces || []) as string[];
-    const targets=(settings.target_sectors || []) as string[];
-    const pageSize=Math.min(100,Math.max(10,settings.page_size || 100));
-    const pages=Math.min(10,Math.max(1,settings.pages_per_run || 3));
-    let page=Math.max(1,settings.next_page || 1);
-    let fetched=0,seen=0,created=0,updated=0,skipped=0;
-    for(let step=0;step<pages;step++,page++) {
-      const url=API+"?PageNumber="+page+"&PageSize="+pageSize;
-      const response=await fetch(url,{headers:{"Accept":"application/json","User-Agent":"Acapolite-Prospect-Hub/1.0"}});
-      if(!response.ok) throw new Error("eTenders API "+response.status);
-      const payload=await response.json();
-      const releases=Array.isArray(payload?.releases) ? payload.releases : [];
-      fetched += releases.length;
-      if(!releases.length) { page=1; break; }
-      for(const release of releases) {
-        const tenderText=[release?.tender?.title,release?.tender?.description,...(release?.tender?.items || []).map((i:any)=>i?.description)].filter(Boolean).join(" ");
-        const sector=sectorFor(tenderText,targets);
-        for(const entry of suppliersFromRelease(release)) {
-          seen++;
-          const p=entry.party;
-          const company=safeText(p?.name);
-          if(!company) { skipped++; continue; }
-          const province=findProvince(release,p);
-          if(provinces.length && province && !provinces.includes(province)) { skipped++; continue; }
-          if(!sector) { skipped++; continue; }
-          const contact=p?.contactPoint || {};
-          const email=safeText(contact?.email);
-          const phone=safeText(contact?.telephone);
-          const website=safeText(p?.details?.url) || safeText(p?.contactPoint?.url);
-          const sourceRecord=[release?.ocid,p?.id].filter(Boolean).join(":") || null;
-          const sourceUrl=release?.ocid ? "https://www.etenders.gov.za/Home/opportunities?id="+encodeURIComponent(release.ocid) : null;
-          const row:any={
-            company_name:company, sector, province, city:safeText(p?.address?.locality), email, phone, website,
-            contact_name:safeText(contact?.name), source_name:SOURCE, source_record_id:sourceRecord,
-            source_url:sourceUrl, source_last_seen_at:new Date().toISOString(), last_enriched_at:new Date().toISOString(),
-            score:scoreProspect({email,phone,province,sector,award:entry.award}),
-            priority:"high",
-            metadata:{ocid:release?.ocid || null,tender_title:release?.tender?.title || null,tender_status:release?.tender?.status || null,award_supplier:entry.award,official_source:true}
-          };
-          let existing:any=null;
-          if(sourceRecord) {
-            const {data}=await sb.from("prospects").select("id,status,notes,do_not_contact,email_opt_out_at").eq("source_name",SOURCE).eq("source_record_id",sourceRecord).maybeSingle();
-            existing=data;
-          }
-          if(!existing && email) {
-            const {data}=await sb.from("prospects").select("id,status,notes,do_not_contact,email_opt_out_at").ilike("email",email).limit(1).maybeSingle();
-            existing=data;
-          }
-          if(existing) {
-            delete row.status; delete row.notes; delete row.do_not_contact; delete row.email_opt_out_at;
-            const {error}=await sb.from("prospects").update(row).eq("id",existing.id);
-            if(error) throw error; updated++;
-          } else {
-            const {error}=await sb.from("prospects").insert(row);
-            if(error) {
-              if(String(error.code)==="23505") { skipped++; continue; }
-              throw error;
-            }
-            created++;
+    const { data: settings, error: settingsError } = await sb.from("prospect_discovery_settings").select("*").eq("source_name", SOURCE_NAME).single();
+    if (settingsError) throw settingsError;
+    const { data: source, error: sourceError } = await sb.from("prospect_sources").select("*").eq("key", SOURCE_KEY).single();
+    if (sourceError) throw sourceError;
+    sourceId = source.id;
+    if (caller.kind === "cron" && (!settings.enabled || !source.enabled)) {
+      return jsonResponse(req, { ok: true, skipped: true, reason: "source_disabled" });
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const lookback = Number(settings.lookback_days || 30);
+    const cursor: string = settings.window_cursor ?? addDays(today, -lookback);
+    // Caught up: every completed day up to yesterday has been scanned. Exit
+    // without logging a run so frequent schedules stay quiet.
+    if (cursor >= today) {
+      return jsonResponse(req, { ok: true, skipped: true, reason: "caught_up", next_cursor: cursor });
+    }
+
+    const { data: run, error: runError } = await sb.from("prospect_discovery_runs")
+      .insert({ source_name: SOURCE_NAME, source_id: sourceId, run_type: caller.kind === "cron" ? "scheduled" : "manual", triggered_by: caller.userId })
+      .select("id").single();
+    if (runError) throw runError;
+    runId = run.id;
+    await sb.from("prospect_sources").update({ last_attempt_at: new Date().toISOString() }).eq("id", sourceId);
+
+    const windows = dayWindows(cursor, today, Number(settings.windows_per_run || 3));
+    // Page within the first window to resume from (a busy day can span many runs).
+    let startPage = Math.max(1, Number(settings.next_page || 1));
+
+    const provinces: string[] = settings.provinces ?? [];
+    const targets: string[] = settings.target_sectors ?? [];
+    const pageSize = Math.min(100, Math.max(5, Number(settings.page_size || 20)));
+    const maxNew = Number(settings.max_new_per_run || 100);
+    const stats = { records: 0, pages: 0, suppliers: 0, created: 0, updated: 0, skipped: 0, outOfScope: 0, windowsCompleted: 0, budgetReached: false, failedWindow: null as string | null, error: null as string | null };
+    let nextCursor = cursor;
+    let nextPage = startPage;
+
+    windowLoop:
+    for (const window of windows) {
+      for (let page = startPage; page <= MAX_PAGES_PER_WINDOW; page++) {
+        nextPage = page;
+        if (Date.now() + 25_000 > deadline) { stats.budgetReached = true; break windowLoop; }
+        const result = await fetchPage(window.from, window.to, page, pageSize, deadline);
+        if (!result.ok) { stats.failedWindow = window.from; stats.error = result.error; break windowLoop; }
+        stats.pages++;
+        stats.records += result.releases.length;
+        for (const release of result.releases) {
+          for (const supplier of awardedSuppliers(release)) {
+            stats.suppliers++;
+            if (provinces.length && supplier.province && !provinces.includes(supplier.province)) { stats.outOfScope++; continue; }
+            if (provinces.length && !supplier.province) { stats.outOfScope++; continue; }
+            if (targets.length && (!supplier.sector || !targets.includes(supplier.sector))) { stats.outOfScope++; continue; }
+            // Daily cap reached: stop and re-read this page next run (idempotent).
+            if (stats.created >= maxNew) { stats.budgetReached = true; break windowLoop; }
+            const { data, error } = await sb.rpc("upsert_discovered_prospect", {
+              p_source_key: SOURCE_KEY,
+              p_prospect: {
+                company_name: supplier.companyName,
+                source_supplier_id: supplier.supplierId,
+                sector: supplier.sector,
+                province: supplier.province,
+                supplier_size: supplier.supplierSize,
+                source_url: supplier.sourceUrl,
+                metadata: { csd_number: supplier.csdNumber, official_source: true },
+              },
+              p_record: {
+                source_record_id: supplier.sourceRecordId,
+                record_type: "award",
+                ocid: supplier.ocid,
+                tender_reference: supplier.tenderReference,
+                tender_title: supplier.tenderTitle,
+                tender_description: supplier.tenderDescription,
+                tender_category: supplier.tenderCategory,
+                tender_status: supplier.tenderStatus,
+                buyer_name: supplier.buyerName,
+                award_status: supplier.awardStatus,
+                award_value: supplier.awardValue,
+                award_currency: supplier.awardCurrency,
+                award_date: supplier.awardDate,
+                supplier_name: supplier.companyName,
+                supplier_size: supplier.supplierSize,
+                province: supplier.province,
+                source_url: supplier.sourceUrl,
+              },
+            });
+            if (error) { stats.skipped++; console.error("prospect-discovery-upsert", JSON.stringify({ ocid: supplier.ocid, message: error.message })); continue; }
+            if (data?.status === "created") stats.created++;
+            else if (data?.status === "updated") stats.updated++;
+            else stats.skipped++;
           }
         }
+        nextPage = page + 1;
+        if (result.releases.length < pageSize) break;
       }
+      stats.windowsCompleted++;
+      nextCursor = window.to;
+      nextPage = 1;
+      startPage = 1;
     }
-    const now=new Date().toISOString();
-    await sb.from("prospect_discovery_settings").update({next_page:page,last_run_at:now,last_success_at:now,last_error:null}).eq("source_name",SOURCE);
-    await sb.from("prospect_discovery_runs").update({status:"completed",completed_at:now,records_fetched:fetched,suppliers_seen:seen,prospects_created:created,prospects_updated:updated,skipped,metadata:{next_page:page}}).eq("id",runId);
-    return json({ok:true,run_id:runId,records_fetched:fetched,suppliers_seen:seen,prospects_created:created,prospects_updated:updated,skipped,next_page:page});
-  } catch(error) {
-    const message=error instanceof Error ? error.message : String(error);
-    console.error("prospect-discovery-sync",message);
-    const now=new Date().toISOString();
-    if(runId) await sb.from("prospect_discovery_runs").update({status:"failed",completed_at:now,error_message:message}).eq("id",runId);
-    await sb.from("prospect_discovery_settings").update({last_run_at:now,last_error:message}).eq("source_name",SOURCE);
-    return json({ok:false,error:"Discovery sync failed"},500);
+
+    const finishedAt = new Date().toISOString();
+    // A run that fetched at least one page made progress (the cursor moved).
+    const failed = stats.pages === 0 && !!stats.error;
+    const runStatus = failed ? "failed" : stats.error ? "partial" : "completed";
+    const consecutive = failed ? Number(source.consecutive_failures || 0) + 1 : 0;
+
+    await sb.from("prospect_discovery_runs").update({
+      status: runStatus,
+      completed_at: finishedAt,
+      records_fetched: stats.records,
+      suppliers_seen: stats.suppliers,
+      prospects_created: stats.created,
+      prospects_updated: stats.updated,
+      skipped: stats.skipped + stats.outOfScope,
+      error_message: stats.error,
+      metadata: { windows: windows.map((w) => w.from), windows_completed: stats.windowsCompleted, pages: stats.pages, failed_window: stats.failedWindow, out_of_scope: stats.outOfScope, next_cursor: nextCursor, next_page: nextPage, budget_reached: stats.budgetReached },
+    }).eq("id", runId);
+    await sb.from("prospect_discovery_settings").update({
+      window_cursor: nextCursor,
+      next_page: nextPage,
+      last_run_at: finishedAt,
+      ...(failed ? { last_error: stats.error } : { last_success_at: finishedAt, last_error: stats.error }),
+    }).eq("id", settings.id);
+    await sb.from("prospect_sources").update({
+      status: failed ? (consecutive >= 3 ? "failing" : "degraded") : runStatus === "partial" ? "degraded" : "healthy",
+      last_error: stats.error,
+      consecutive_failures: consecutive,
+      total_runs: Number(source.total_runs || 0) + 1,
+      total_failures: Number(source.total_failures || 0) + (failed ? 1 : 0),
+      records_discovered: Number(source.records_discovered || 0) + stats.suppliers,
+      prospects_created: Number(source.prospects_created || 0) + stats.created,
+      ...(failed ? {} : { last_success_at: finishedAt }),
+    }).eq("id", sourceId);
+
+    return jsonResponse(req, {
+      ok: !failed,
+      run_id: runId,
+      status: runStatus,
+      windows_scanned: stats.windowsCompleted,
+      records_fetched: stats.records,
+      suppliers_seen: stats.suppliers,
+      prospects_created: stats.created,
+      prospects_updated: stats.updated,
+      out_of_scope: stats.outOfScope,
+      skipped: stats.skipped,
+      pages_fetched: stats.pages,
+      next_cursor: nextCursor,
+      next_page: nextPage,
+      error: stats.error,
+    }, failed ? 502 : 200);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("prospect-discovery-sync", JSON.stringify({ message }));
+    const now = new Date().toISOString();
+    if (runId) await sb.from("prospect_discovery_runs").update({ status: "failed", completed_at: now, error_message: message }).eq("id", runId);
+    await sb.from("prospect_discovery_settings").update({ last_run_at: now, last_error: message }).eq("source_name", SOURCE_NAME);
+    if (sourceId) await sb.from("prospect_sources").update({ status: "degraded", last_error: message }).eq("id", sourceId);
+    return jsonResponse(req, { ok: false, error: "Discovery sync failed" }, 500);
   }
 });
