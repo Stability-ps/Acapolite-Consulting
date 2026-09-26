@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  BookOpen, Building2, Calculator, ChevronRight, CircleHelp, FileText,
-  Home, Landmark, Menu, MessageCircle, ReceiptText, ShieldCheck, UserCircle2, Users
+  BookOpen, Building2, Calculator, ChevronRight, FileText,
+  Home, Landmark, Menu, ReceiptText, ShieldCheck, UserCircle2, Users
 } from "lucide-react";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ export function NativeHome() {
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <div className="min-h-[100dvh] bg-[#f6f5f1] pb-[calc(88px+env(safe-area-inset-bottom))] text-[#102B46]">
+    <div className="min-h-[100dvh] bg-[#f6f5f1] pb-[calc(24px+env(safe-area-inset-bottom))] text-[#102B46]">
       <header className="native-safe-top sticky top-0 z-40 border-b border-black/5 bg-white/95 backdrop-blur">
         <div className="flex h-16 items-center justify-between px-5">
           <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
@@ -78,14 +78,6 @@ export function NativeHome() {
         </section>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-black/5 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-        <div className="mx-auto grid h-[68px] max-w-xl grid-cols-4">
-          <Link to="/" className="flex flex-col items-center justify-center gap-1 text-[#C49A22]"><Home className="h-5 w-5" /><span className="text-[10px] font-semibold">Home</span></Link>
-          <Link to="/request-tax-assistance?step=1" className="flex flex-col items-center justify-center gap-1 text-slate-500"><MessageCircle className="h-5 w-5" /><span className="text-[10px] font-semibold">Request</span></Link>
-          <Link to="/tax-guides" className="flex flex-col items-center justify-center gap-1 text-slate-500"><BookOpen className="h-5 w-5" /><span className="text-[10px] font-semibold">Guides</span></Link>
-          <button type="button" onClick={() => setMoreOpen(true)} className="flex flex-col items-center justify-center gap-1 text-slate-500"><CircleHelp className="h-5 w-5" /><span className="text-[10px] font-semibold">More</span></button>
-        </div>
-      </nav>
     </div>
   );
 }
