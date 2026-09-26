@@ -40,7 +40,7 @@ export default function Dashboard() {
       <div className="app-shell min-h-screen flex w-full">
         <AppSidebar />
         <div className={`flex min-w-0 flex-1 flex-col ${isWhatsAppQAWorkspace ? "h-screen overflow-hidden" : ""}`}>
-          <header className="sticky top-0 z-20 border-b border-border/70 bg-white/78 px-4 py-3 backdrop-blur-xl sm:px-6">
+          <header className="native-safe-top sticky top-0 z-20 border-b border-border/70 bg-white/78 px-4 py-3 backdrop-blur-xl sm:px-6">
             <div className="dashboard-page flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
                 <SidebarTrigger className="mt-1 mr-0 h-11 w-11 shrink-0 aspect-square gap-0 rounded-full border border-primary/30 bg-primary px-0 text-primary-foreground shadow-[0_12px_26px_rgba(15,23,42,0.25)] hover:bg-primary/95 sm:aspect-auto sm:w-auto sm:gap-2 sm:px-4">
