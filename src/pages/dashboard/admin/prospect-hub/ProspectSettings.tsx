@@ -86,9 +86,9 @@ export default function ProspectSettings() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <NumField label="Max new prospects per run" value={d.max_new_per_run} min={1} max={1000} onChange={(v) => setD({ ...d, max_new_per_run: num(v) })} />
-            <NumField label="Days scanned per run" value={d.windows_per_run} min={1} max={14} onChange={(v) => setD({ ...d, windows_per_run: num(v) })} />
-            <NumField label="Initial look-back (days)" value={d.lookback_days} min={1} max={365} onChange={(v) => setD({ ...d, lookback_days: num(v) })} />
-            <NumField label="Releases per API request" value={d.page_size} min={5} max={100} onChange={(v) => setD({ ...d, page_size: num(v) })} hint="The API is unreliable above 5." />
+            <NumField label="Days scanned per run" value={d.windows_per_run} min={1} max={31} onChange={(v) => setD({ ...d, windows_per_run: num(v) })} />
+            <NumField label="Initial look-back (days)" value={d.lookback_days} min={1} max={3650} onChange={(v) => setD({ ...d, lookback_days: num(v) })} />
+            <NumField label="Releases per API request" value={d.page_size} min={5} max={100} onChange={(v) => setD({ ...d, page_size: num(v) })} hint="Historical catch-up currently uses 25; the worker retries transient eTenders failures." />
           </div>
           <Button onClick={() => save.mutate({ table: "prospect_discovery_settings", row: d, fields: ["enabled", "provinces", "target_sectors", "max_new_per_run", "windows_per_run", "lookback_days", "page_size"] })}>Save discovery settings</Button>
         </fieldset>
