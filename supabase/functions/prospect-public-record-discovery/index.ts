@@ -57,9 +57,17 @@ function parseJsonArray(text: string): Hit[] {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function retryDelayMs(response: Response, attempt: number) {
+  const retryAfter = response.headers.get("retry-after");
+  const retryAfterMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : 0;
+  // Public-record discovery is background work. Respect rate limits rather than
+  // hammering the Responses API every 30 minutes and turning source health red.
+  return Math.max(retryAfterMs, Math.min(90_000, 10_000 * 2 ** attempt));
+}
+
 async function webSearch(query: string, maxResults: number): Promise<Hit[]> {
   let response: Response | null = null;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -83,9 +91,7 @@ STRICT RULES:
     });
     if (response.ok) break;
     if (response.status !== 429 && response.status < 500) break;
-    const retryAfter = Number(response.headers.get("retry-after") || 0);
-    const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(30000, 2000 * 2 ** attempt);
-    await sleep(delayMs);
+    await sleep(retryDelayMs(response, attempt));
   }
   if (!response || !response.ok) throw new Error(`OpenAI HTTP ${response?.status || "unknown"} after retries`);
   const data = await response.json();
