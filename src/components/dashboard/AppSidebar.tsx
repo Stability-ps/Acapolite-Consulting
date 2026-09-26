@@ -24,6 +24,11 @@ import {
   Megaphone,
   BookOpen,
   Target,
+  Radar,
+  CalendarClock,
+  Mail,
+  FileText,
+  Database,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -141,6 +146,7 @@ export function AppSidebar() {
   const { isPendingVerification } = usePractitionerVerificationGate();
   const [signingOut, setSigningOut] = useState(false);
   const [whatsAppMenuOpen, setWhatsAppMenuOpen] = useState(false);
+  const [prospectHubMenuOpen, setProspectHubMenuOpen] = useState(false);
   const { unreadBySection } = useNotifications();
   const { data: practitionerAccess } = useQuery({
     queryKey: ["sidebar-practitioner-lead-access", user?.id, role],
@@ -200,11 +206,16 @@ export function AppSidebar() {
     refetchInterval: 30_000,
   });
 
+  const isProspectHubActive = location.pathname.startsWith("/dashboard/staff/prospect-hub");
   const isWhatsAppQAActive = location.pathname === "/dashboard/staff/whatsapp-qa";
   const sectionParam = new URLSearchParams(location.search).get("section");
   const activeWhatsAppSection = whatsappSidebarSections.some((section) => section.key === sectionParam)
     ? sectionParam as WhatsAppSidebarSection
     : "inbox";
+
+  useEffect(() => {
+    if (isProspectHubActive && !collapsed) setProspectHubMenuOpen(true);
+  }, [collapsed, isProspectHubActive]);
 
   useEffect(() => {
     if (isWhatsAppQAActive && !collapsed) {
@@ -292,6 +303,79 @@ export function AppSidebar() {
             <SidebarMenu>
               {navigationItems.map((item) => {
                 const unreadCount = getUnreadCountForItem(item.title);
+
+                if (item.title === "Prospect Hub") {
+                  const prospectSections = [
+                    { title: "Dashboard", url: "/dashboard/staff/prospect-hub", icon: LayoutDashboard, end: true },
+                    { title: "Discover", url: "/dashboard/staff/prospect-hub/discover", icon: Radar },
+                    { title: "Prospects", url: "/dashboard/staff/prospect-hub/prospects", icon: Target },
+                    { title: "Leads", url: "/dashboard/staff/prospect-hub/leads", icon: UserRoundCheck },
+                    { title: "Follow-ups", url: "/dashboard/staff/prospect-hub/follow-ups", icon: CalendarClock },
+                    { title: "Campaigns", url: "/dashboard/staff/prospect-hub/campaigns", icon: Mail },
+                    { title: "Email Templates", url: "/dashboard/staff/prospect-hub/templates", icon: FileText },
+                    { title: "Sources", url: "/dashboard/staff/prospect-hub/sources", icon: Database },
+                    { title: "Analytics", url: "/dashboard/staff/prospect-hub/analytics", icon: BarChart3 },
+                    { title: "Settings", url: "/dashboard/staff/prospect-hub/settings", icon: Settings },
+                  ];
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <div className="flex items-center gap-1">
+                        <SidebarMenuButton asChild tooltip={item.title}>
+                          <NavLink
+                            to={item.url}
+                            end
+                            onClick={() => {
+                              setProspectHubMenuOpen(true);
+                              if (isMobile) setOpenMobile(false);
+                            }}
+                            className={cn(
+                              "rounded-xl hover:bg-sidebar-accent/80",
+                              isProspectHubActive && "bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-[0_10px_24px_rgba(184,150,46,0.22)]",
+                            )}
+                          >
+                            <item.icon className="mr-2 h-4 w-4 shrink-0" />
+                            {!collapsed && <span className="min-w-0 flex-1 truncate">{item.title}</span>}
+                          </NavLink>
+                        </SidebarMenuButton>
+                        {!collapsed ? (
+                          <button
+                            type="button"
+                            onClick={() => setProspectHubMenuOpen((open) => !open)}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/80 hover:text-sidebar-foreground"
+                            aria-label={prospectHubMenuOpen ? "Collapse Prospect Hub sections" : "Expand Prospect Hub sections"}
+                            aria-expanded={prospectHubMenuOpen}
+                          >
+                            <ChevronDown className={`h-4 w-4 transition-transform ${prospectHubMenuOpen ? "rotate-180" : ""}`} />
+                          </button>
+                        ) : null}
+                      </div>
+                      {!collapsed && prospectHubMenuOpen ? (
+                        <SidebarMenuSub className="mt-1">
+                          {prospectSections.map((section) => {
+                            const SectionIcon = section.icon;
+                            const active = section.end
+                              ? location.pathname === section.url
+                              : location.pathname.startsWith(section.url);
+                            return (
+                              <SidebarMenuSubItem key={section.title}>
+                                <SidebarMenuSubButton asChild size="sm" isActive={active}>
+                                  <NavLink
+                                    to={section.url}
+                                    end={section.end}
+                                    onClick={() => { if (isMobile) setOpenMobile(false); }}
+                                  >
+                                    <SectionIcon className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="truncate">{section.title}</span>
+                                  </NavLink>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
+                        </SidebarMenuSub>
+                      ) : null}
+                    </SidebarMenuItem>
+                  );
+                }
 
                 if (item.title === "WhatsApp QA") {
                   return (
