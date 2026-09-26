@@ -18,7 +18,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AcapoliteLogo } from "@/components/branding/AcapoliteLogo";
 import { SummaryCard } from "@/components/request-wizard/SummaryCard";
@@ -526,7 +526,9 @@ export default function RequestTaxAssistance() {
 
   const hardRedirect = (path: string) => {
     clearWizardDraft();
-    window.location.replace(path);
+    // Keep navigation inside React Router. window.location.replace() is unreliable
+    // inside the Capacitor WKWebView because the app is served from capacitor://localhost.
+    navigate(path, { replace: true });
   };
 
   const goHome = () => {
@@ -562,41 +564,32 @@ export default function RequestTaxAssistance() {
 
     if (requestSource) {
       return (
-        <Button
-          type="button"
-          variant="ghost"
-          className="rounded-full px-0 text-slate-600"
-          onClick={() => hardRedirect(requestSource.path)}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to {requestSource.label}
+        <Button asChild variant="ghost" className="rounded-full px-0 text-slate-600">
+          <Link to={requestSource.path} onClick={clearWizardDraft}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to {requestSource.label}
+          </Link>
         </Button>
       );
     }
 
     if (user) {
       return (
-        <Button
-          type="button"
-          variant="ghost"
-          className="rounded-full px-0 text-slate-600"
-          onClick={() => navigate(dashboardPath, { replace: true })}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
+        <Button asChild variant="ghost" className="rounded-full px-0 text-slate-600">
+          <Link to={dashboardPath}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Link>
         </Button>
       );
     }
 
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        className="rounded-full px-0 text-slate-600"
-        onClick={goHome}
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        {homeLabel}
+      <Button asChild variant="ghost" className="min-h-11 rounded-full px-2 text-slate-600">
+        <Link to="/" onClick={clearWizardDraft}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          {homeLabel}
+        </Link>
       </Button>
     );
   };
@@ -1066,7 +1059,7 @@ export default function RequestTaxAssistance() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF6] px-4 py-8 sm:px-6 lg:px-8">
+    <div className="native-safe-top min-h-[100dvh] bg-[#FAFAF6] px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <h1 className="sr-only">{REQUEST_TAX_ASSISTANCE_H1}</h1>
         <div className="flex flex-wrap items-center justify-between gap-4">
