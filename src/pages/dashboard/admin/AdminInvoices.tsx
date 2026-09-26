@@ -249,7 +249,10 @@ export default function AdminInvoices() {
         query = query.in("client_id", accessibleClientIds);
       }
 
-      const { data } = await query;
+      const { data, error } = await query;
+      if (error) {
+        throw error;
+      }
       return (data ?? []) as StaffInvoice[];
     },
     enabled: !hasRestrictedClientScope || !isLoadingAccessibleClientIds,
