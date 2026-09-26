@@ -36,7 +36,7 @@ export default function ProspectProfile() {
     queryKey: ["prospect-profile", id],
     enabled: !!id,
     queryFn: async () => {
-      const [p, notes, activities, followUps, records, contacts, recipients, publicSignals] = await Promise.all([
+      const [p, notes, activities, followUps, records, contacts, recipients, publicSignals, supplierProfile, cidbGrades, supplierRelationships, supplierPayments] = await Promise.all([
         prospectDb.from("prospects").select("*").eq("id", id).single(),
         prospectDb.from("prospect_notes").select("*").eq("prospect_id", id).order("created_at", { ascending: false }),
         prospectDb.from("prospect_activities").select("*").eq("prospect_id", id).order("occurred_at", { ascending: false }).limit(200),
@@ -45,10 +45,14 @@ export default function ProspectProfile() {
         prospectDb.from("prospect_contacts").select("*").eq("prospect_id", id).order("created_at", { ascending: false }),
         prospectDb.from("prospect_campaign_recipients").select("id,campaign_id,status,sent_at,replied_at,skip_reason,prospect_campaigns(name)").eq("prospect_id", id).order("created_at", { ascending: false }),
         prospectDb.from("prospect_public_signals").select("*").eq("prospect_id", id).order("signal_date", { ascending: false, nullsFirst: false }),
+        prospectDb.from("prospect_supplier_profiles").select("*").eq("prospect_id", id).maybeSingle(),
+        prospectDb.from("prospect_cidb_grades").select("*").eq("prospect_id", id).order("grade", { ascending: false }),
+        prospectDb.from("prospect_supplier_relationships").select("*").eq("prospect_id", id).order("created_at", { ascending: false }),
+        prospectDb.from("prospect_supplier_payments").select("*").eq("prospect_id", id).order("payment_date", { ascending: false, nullsFirst: false }),
       ]);
       if (p.error) throw p.error;
-      for (const r of [notes, activities, followUps, records, contacts, recipients, publicSignals]) if (r.error) throw r.error;
-      return { prospect: p.data, notes: notes.data ?? [], activities: activities.data ?? [], followUps: followUps.data ?? [], records: records.data ?? [], contacts: contacts.data ?? [], recipients: recipients.data ?? [], publicSignals: publicSignals.data ?? [] };
+      for (const r of [notes, activities, followUps, records, contacts, recipients, publicSignals, supplierProfile, cidbGrades, supplierRelationships, supplierPayments]) if (r.error) throw r.error;
+      return { prospect: p.data, notes: notes.data ?? [], activities: activities.data ?? [], followUps: followUps.data ?? [], records: records.data ?? [], contacts: contacts.data ?? [], recipients: recipients.data ?? [], publicSignals: publicSignals.data ?? [], supplierProfile: supplierProfile.data, cidbGrades: cidbGrades.data ?? [], supplierRelationships: supplierRelationships.data ?? [], supplierPayments: supplierPayments.data ?? [] };
     },
   });
   const refresh = () => { void qc.invalidateQueries({ queryKey: ["prospect-profile", id] }); void qc.invalidateQueries({ queryKey: ["prospect-list"] }); };
@@ -248,6 +252,22 @@ export default function ProspectProfile() {
                 </table>
               </div>
             ) : <p className="text-sm text-muted-foreground">No procurement records attached.</p>}
+          </Panel>
+
+          <Panel title="Supplier intelligence" description="Source-attributed CSD, CIDB and Treasury supplier information.">
+            {data.data!.supplierProfile || data.data!.cidbGrades.length || data.data!.supplierRelationships.length || data.data!.supplierPayments.length ? <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">CSD / MAAA</p><p className="font-medium">{data.data!.supplierProfile?.csd_supplier_number || "Not matched"}</p><p className="text-xs text-muted-foreground">{data.data!.supplierProfile?.csd_status || ""}</p></div>
+                <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">CIDB CRS</p><p className="font-medium">{data.data!.supplierProfile?.cidb_crs_number || "Not matched"}</p><p className="text-xs text-muted-foreground">{data.data!.supplierProfile?.cidb_status || ""}</p></div>
+                <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">B-BBEE</p><p className="font-medium">{data.data!.supplierProfile?.bbbee_level || data.data!.supplierProfile?.cidb_bbbee_status || "Not captured"}</p></div>
+                <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">Data quality</p><p className="font-medium">{data.data!.supplierProfile?.data_quality_score ?? 0}%</p></div>
+              </div>
+              {data.data!.cidbGrades.length ? <div><p className="mb-2 text-sm font-medium">CIDB grades & classes</p><div className="flex flex-wrap gap-2">{data.data!.cidbGrades.map((g:any)=><span key={g.id} className="rounded-full bg-muted px-3 py-1 text-xs">{g.grade}{g.class_code}{g.class_name ? " · "+g.class_name : ""}{g.expiry_date ? " · expires "+formatDate(g.expiry_date) : ""}</span>)}</div></div> : null}
+              {data.data!.supplierProfile?.commodities?.length ? <div><p className="text-sm font-medium">Commodities / services</p><p className="text-sm text-muted-foreground">{data.data!.supplierProfile.commodities.join(" · ")}</p></div> : null}
+              {data.data!.supplierProfile?.delivery_locations?.length ? <div><p className="text-sm font-medium">Delivery coverage</p><p className="text-sm text-muted-foreground">{data.data!.supplierProfile.delivery_locations.join(" · ")}</p></div> : null}
+              {data.data!.supplierRelationships.length ? <div><p className="mb-1 text-sm font-medium">Relationships & accreditations</p><ul className="text-sm text-muted-foreground">{data.data!.supplierRelationships.slice(0,20).map((r:any)=><li key={r.id}><span className="capitalize">{String(r.relationship_type).replace(/_/g," ")}</span>: {r.name}{r.role ? " · "+r.role : ""}</li>)}</ul></div> : null}
+              {data.data!.supplierPayments.length ? <div><p className="mb-1 text-sm font-medium">Public Treasury payment history</p><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th>Date</th><th>Government customer</th><th>Amount</th><th>Reference</th></tr></thead><tbody>{data.data!.supplierPayments.slice(0,30).map((x:any)=><tr key={x.id} className="border-t"><td className="py-2">{formatDate(x.payment_date)}</td><td>{x.payer_name||"—"}</td><td>{x.amount ? "R "+Number(x.amount).toLocaleString("en-ZA") : "—"}</td><td>{x.contract_reference||"—"}</td></tr>)}</tbody></table></div></div> : null}
+            </div> : <p className="text-sm text-muted-foreground">No CSD/CIDB/Treasury supplier enrichment has been matched yet.</p>}
           </Panel>
 
           <Panel title="Enrichment evidence" description="Every value found on a company website is recorded with the page it came from.">

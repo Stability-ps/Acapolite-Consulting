@@ -317,6 +317,7 @@ export function AppSidebar() {
                     { title: "Dashboard", url: "/dashboard/staff/prospect-hub", icon: LayoutDashboard, end: true },
                     { title: "Discover", url: "/dashboard/staff/prospect-hub/discover", icon: Radar },
                     { title: "Prospects", url: "/dashboard/staff/prospect-hub/prospects", icon: Target },
+                    { title: "Supplier Intelligence", url: "/dashboard/staff/prospect-hub/supplier-intelligence", icon: Database },
                     { title: "Leads", url: "/dashboard/staff/prospect-hub/leads", icon: UserRoundCheck },
                     { title: "Follow-ups", url: "/dashboard/staff/prospect-hub/follow-ups", icon: CalendarClock },
                     { title: "Campaigns", url: "/dashboard/staff/prospect-hub/campaigns", icon: Mail },
