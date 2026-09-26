@@ -223,6 +223,12 @@ export default function AdminInvoices() {
   const [resendingInvoice, setResendingInvoice] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [clientsFormValue, setClientsFormValue] = useState("");
+  const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("eft");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [recordingPayment, setRecordingPayment] = useState(false);
 
   const accessibleClientIdsKey = accessibleClientIds?.join(",") ?? "all";
   const canManageInvoices = hasStaffPermission("can_manage_invoices");
@@ -883,6 +889,55 @@ export default function AdminInvoices() {
     ]);
   };
 
+  const recordPayment = async () => {
+    if (!paymentInvoiceId || !user) return;
+    if (!canManageInvoices) {
+      toast.error("This profile cannot record invoice payments.");
+      return;
+    }
+
+    const invoice = invoices?.find((item) => item.id === paymentInvoiceId);
+    if (!invoice) return;
+
+    const amount = Number(paymentAmount);
+    const remainingBalance = Number(invoice.balance_due ?? invoice.total_amount ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid payment amount.");
+      return;
+    }
+    if (amount > remainingBalance) {
+      toast.error(`Payment cannot exceed the outstanding balance of ${formatCurrency(remainingBalance)}.`);
+      return;
+    }
+
+    setRecordingPayment(true);
+    const { error } = await supabase.from("invoice_payments").insert({
+      invoice_id: invoice.id,
+      amount,
+      payment_method: paymentMethod,
+      reference: paymentReference.trim() || null,
+      notes: paymentNotes.trim() || null,
+      recorded_by: user.id,
+    });
+    setRecordingPayment(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Payment recorded and invoice balance updated.");
+    setPaymentInvoiceId(null);
+    setPaymentAmount("");
+    setPaymentReference("");
+    setPaymentNotes("");
+    setPaymentMethod("eft");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["staff-invoices"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-business-analytics"] }),
+    ]);
+  };
+
   const resendInvoice = async () => {
     if (!selectedInvoice) return;
     if (!canManageInvoices) {
@@ -1318,12 +1373,12 @@ export default function AdminInvoices() {
                       className="rounded-full px-4"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setSelectedInvoiceId(invoice.id);
-                        setSelectedStatus("paid");
-                        void updateInvoice();
+                        setPaymentInvoiceId(invoice.id);
+                        setPaymentAmount(String(Number(invoice.balance_due ?? invoice.total_amount ?? 0)));
+                        setPaymentReference(invoice.invoice_number);
                       }}
                     >
-                      Mark as Paid
+                      Record Payment
                     </Button>
                   ) : null}
                   {invoice.status === "issued" || invoice.status === "overdue" ? (
@@ -1371,6 +1426,50 @@ export default function AdminInvoices() {
           </p>
         </div>
       )}
+
+      <DashboardItemDialog
+        open={!!paymentInvoiceId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPaymentInvoiceId(null);
+            setPaymentAmount("");
+            setPaymentReference("");
+            setPaymentNotes("");
+          }
+        }}
+        title="Record Invoice Payment"
+        description="Record an EFT, cash, card or other payment. Partial payments are supported and the invoice balance updates automatically."
+      >
+        <div className="space-y-4 pb-4">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-foreground">Amount received</label>
+            <Input type="number" min="0.01" step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-foreground">Payment method</label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="eft">EFT / Bank Transfer</SelectItem>
+                <SelectItem value="cash">Cash</SelectItem>
+                <SelectItem value="card">Card</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-foreground">Reference</label>
+            <Input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Bank or payment reference" />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-foreground">Notes</label>
+            <Textarea value={paymentNotes} onChange={(event) => setPaymentNotes(event.target.value)} placeholder="Optional payment note" />
+          </div>
+          <Button type="button" className="w-full" disabled={recordingPayment} onClick={() => void recordPayment()}>
+            {recordingPayment ? "Recording..." : "Record Payment"}
+          </Button>
+        </div>
+      </DashboardItemDialog>
 
       <DashboardItemDialog
         open={!!selectedInvoice}
