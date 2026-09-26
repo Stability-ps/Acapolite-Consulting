@@ -871,9 +871,9 @@ async function authorizeEmailRequest(params: {
       const invoiceId = trimString(payload.invoiceId);
       const clientProfileId = trimString(payload.clientProfileId);
 
-      if (!invoiceId || !clientProfileId) {
+      if (!invoiceId) {
         return {
-          error: jsonResponse(request, { error: "Invoice ID and client profile ID are required." }, 400),
+          error: jsonResponse(request, { error: "Invoice ID is required." }, 400),
         };
       }
 
@@ -889,29 +889,30 @@ async function authorizeEmailRequest(params: {
         };
       }
 
-      const { data: clientRow, error: clientError } = await adminClient
-        .from("clients")
-        .select("id, profile_id")
-        .eq("id", invoiceRow.client_id)
-        .maybeSingle();
+      if (clientProfileId) {
+        const { data: recipientClient, error: clientError } = await adminClient
+          .from("clients")
+          .select("id, profile_id")
+          .eq("profile_id", clientProfileId)
+          .maybeSingle();
 
-      if (clientError || !clientRow || clientRow.profile_id !== clientProfileId) {
-        return {
-          error: jsonResponse(request, { error: "Unable to validate this invoice notification request." }, 403),
-        };
-      }
-
-      if (payload.type === "invoice_created") {
-        const { profile } = await validateProfileEmail({
-          adminClient,
-          profileId: clientProfileId,
-          email: normalizeEmail(payload.clientEmail),
-        });
-
-        if (!profile) {
+        if (clientError || !recipientClient) {
           return {
-            error: jsonResponse(request, { error: "Unable to validate this invoice notification request." }, 403),
+            error: jsonResponse(request, { error: "Unable to validate this invoice recipient." }, 403),
           };
+        }
+
+        if (payload.type === "invoice_created") {
+          const { profile } = await validateProfileEmail({
+            adminClient,
+            profileId: clientProfileId,
+            email: normalizeEmail(payload.clientEmail),
+          });
+          if (!profile) {
+            return {
+              error: jsonResponse(request, { error: "Unable to validate this invoice recipient." }, 403),
+            };
+          }
         }
       }
 
@@ -2234,8 +2235,8 @@ function buildEmailContent(params: {
     const dueDate = trimString(payload.dueDate) || "Not set";
     const status = trimString(payload.status) || "Unpaid";
 
-    if (!invoiceId || !invoiceNumber || !clientProfileId || !clientEmail) {
-      throw new Error("Invoice ID, invoice number, client profile ID, and client email are required.");
+    if (!invoiceId || !invoiceNumber || !clientEmail) {
+      throw new Error("Invoice ID, invoice number, and recipient email are required.");
     }
 
     const safeInvoiceNumber = escapeHtml(invoiceNumber);
