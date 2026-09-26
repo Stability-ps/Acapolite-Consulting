@@ -850,7 +850,13 @@ export function clearWizardDraft() {
     return;
   }
 
-  Object.values(REQUEST_WIZARD_STORAGE_KEYS).forEach((key) => window.sessionStorage.removeItem(key));
+  // WebKit/Capacitor can deny sessionStorage access in some native contexts.
+  // Draft cleanup must never block navigation.
+  try {
+    Object.values(REQUEST_WIZARD_STORAGE_KEYS).forEach((key) => window.sessionStorage.removeItem(key));
+  } catch {
+    // Navigation is more important than clearing an optional local draft.
+  }
 }
 
 export function getStepFromSearchParam(value: string | null): WizardStep {
