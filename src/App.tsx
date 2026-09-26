@@ -88,6 +88,9 @@ const ProspectTemplates = lazy(() => import("./pages/dashboard/admin/prospect-hu
 const ProspectSources = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectSources"));
 const ProspectAnalytics = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectAnalytics"));
 const ProspectSettings = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectSettings"));
+const SarsOpportunityHubLayout = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityHubLayout"));
+const SarsOpportunityDashboard = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityDashboard"));
+const SarsOpportunityList = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityList"));
 const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
 
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -239,6 +242,12 @@ function AppRoutes() {
                     <Route path="sources" element={<ProspectSources />} />
                     <Route path="analytics" element={<ProspectAnalytics />} />
                     <Route path="settings" element={<ProspectSettings />} />
+                  </Route>
+                </Route>
+                <Route element={<RequireStaffPermission permission="can_view_prospect_hub" />}>
+                  <Route path="staff/sars-opportunity-hub" element={<SarsOpportunityHubLayout />}>
+                    <Route index element={<SarsOpportunityDashboard />} />
+                    <Route path="opportunities" element={<SarsOpportunityList />} />
                   </Route>
                 </Route>
                 <Route

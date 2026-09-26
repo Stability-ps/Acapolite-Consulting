@@ -29,6 +29,7 @@ import {
   Mail,
   FileText,
   Database,
+  Scale,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -106,6 +107,7 @@ const adminItems = [
   { title: "Staff Users", url: "/dashboard/staff/users", icon: UserPlus },
   { title: "Clients", url: "/dashboard/staff/clients", icon: Users, permission: "can_view_clients" as StaffPermissionKey },
   { title: "Prospect Hub", url: "/dashboard/staff/prospect-hub", icon: Target, permission: "can_view_prospect_hub" as StaffPermissionKey },
+  { title: "SARS Opportunity Hub", url: "/dashboard/staff/sars-opportunity-hub", icon: Scale, permission: "can_view_prospect_hub" as StaffPermissionKey },
   { title: "Service Requests", url: "/dashboard/staff/service-requests", icon: ClipboardList, permission: "can_view_clients" as StaffPermissionKey },
   { title: "Client 360", url: "/dashboard/staff/client-workspace", icon: UserRound, permission: "can_view_client_workspace" as StaffPermissionKey },
   { title: "Cases", url: "/dashboard/staff/cases", icon: FolderOpen, permission: "can_view_cases" as StaffPermissionKey },
@@ -147,6 +149,7 @@ export function AppSidebar() {
   const [signingOut, setSigningOut] = useState(false);
   const [whatsAppMenuOpen, setWhatsAppMenuOpen] = useState(false);
   const [prospectHubMenuOpen, setProspectHubMenuOpen] = useState(false);
+  const [sarsHubMenuOpen, setSarsHubMenuOpen] = useState(false);
   const { unreadBySection } = useNotifications();
   const { data: practitionerAccess } = useQuery({
     queryKey: ["sidebar-practitioner-lead-access", user?.id, role],
@@ -207,6 +210,7 @@ export function AppSidebar() {
   });
 
   const isProspectHubActive = location.pathname.startsWith("/dashboard/staff/prospect-hub");
+  const isSarsHubActive = location.pathname.startsWith("/dashboard/staff/sars-opportunity-hub");
   const isWhatsAppQAActive = location.pathname === "/dashboard/staff/whatsapp-qa";
   const sectionParam = new URLSearchParams(location.search).get("section");
   const activeWhatsAppSection = whatsappSidebarSections.some((section) => section.key === sectionParam)
@@ -216,6 +220,10 @@ export function AppSidebar() {
   useEffect(() => {
     if (isProspectHubActive && !collapsed) setProspectHubMenuOpen(true);
   }, [collapsed, isProspectHubActive]);
+
+  useEffect(() => {
+    if (isSarsHubActive && !collapsed) setSarsHubMenuOpen(true);
+  }, [collapsed, isSarsHubActive]);
 
   useEffect(() => {
     if (isWhatsAppQAActive && !collapsed) {
@@ -375,6 +383,22 @@ export function AppSidebar() {
                       ) : null}
                     </SidebarMenuItem>
                   );
+                }
+
+                if (item.title === "SARS Opportunity Hub") {
+                  const base="/dashboard/staff/sars-opportunity-hub";
+                  const sections=[
+                    ["Dashboard",base],["All Opportunities",base+"/opportunities"],["Court Judgments",base+"/opportunities?view=court"],
+                    ["SARS Debt & Enforcement",base+"/opportunities?view=debt"],["VAT & PAYE Cases",base+"/opportunities?view=vat_paye"],
+                    ["Tax Disputes / Appeals",base+"/opportunities?view=disputes"],["s163 Preservation Orders",base+"/opportunities?view=s163"],
+                    ["s164 Suspension",base+"/opportunities?view=s164"],["s200 Compromise",base+"/opportunities?view=s200"],
+                    ["Liquidation & Insolvency",base+"/opportunities?view=liquidation"],["Business Rescue",base+"/opportunities?view=business_rescue"],
+                    ["Review Queue",base+"/opportunities?view=review"],["Leads",base+"/opportunities?view=leads"]
+                  ];
+                  return <SidebarMenuItem key={item.title}>
+                    <div className="flex items-center gap-1"><SidebarMenuButton asChild tooltip={item.title}><NavLink to={item.url} end onClick={()=>{setSarsHubMenuOpen(true);if(isMobile)setOpenMobile(false)}} className={cn("rounded-xl hover:bg-sidebar-accent/80",isSarsHubActive&&"bg-sidebar-primary text-sidebar-primary-foreground font-semibold")}><item.icon className="mr-2 h-4 w-4"/>{!collapsed&&<span className="min-w-0 flex-1 truncate">{item.title}</span>}</NavLink></SidebarMenuButton>{!collapsed?<button type="button" onClick={()=>setSarsHubMenuOpen(v=>!v)} className="flex h-8 w-8 items-center justify-center rounded-xl"><ChevronDown className={`h-4 w-4 transition-transform ${sarsHubMenuOpen?"rotate-180":""}`}/></button>:null}</div>
+                    {!collapsed&&sarsHubMenuOpen?<SidebarMenuSub className="mt-1">{sections.map(([title,url])=><SidebarMenuSubItem key={title}><SidebarMenuSubButton asChild size="sm" isActive={location.pathname+location.search===url || (title==="Dashboard"&&location.pathname===url)}><NavLink to={url} end={title==="Dashboard"} onClick={()=>{if(isMobile)setOpenMobile(false)}}><span className="truncate">{title}</span></NavLink></SidebarMenuSubButton></SidebarMenuSubItem>)}</SidebarMenuSub>:null}
+                  </SidebarMenuItem>;
                 }
 
                 if (item.title === "WhatsApp QA") {
