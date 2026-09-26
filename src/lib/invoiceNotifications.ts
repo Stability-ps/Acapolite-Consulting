@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 type InvoiceNotificationInput = {
   invoiceId: string;
   invoiceNumber: string;
-  clientProfileId: string;
+  clientProfileId?: string | null;
   clientEmail?: string | null;
   clientName: string;
   serviceDescription: string;
@@ -56,7 +56,7 @@ export async function sendInvoiceCreatedNotification(
       type: "invoice_created",
       invoiceId: input.invoiceId,
       invoiceNumber: input.invoiceNumber,
-      clientProfileId: input.clientProfileId,
+      clientProfileId: input.clientProfileId || undefined,
       clientEmail,
       clientName: input.clientName,
       caseNumber: input.caseNumber?.trim() || "General Support",
