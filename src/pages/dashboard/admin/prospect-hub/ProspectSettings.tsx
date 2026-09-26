@@ -44,6 +44,12 @@ export default function ProspectSettings() {
 
   if (!d || !e || !c) return <p className="text-sm text-muted-foreground">Loading settings…</p>;
   const toggleIn = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+  const allProvinces = d.provinces.length === 0 || PROVINCES.every((p) => d.provinces.includes(p));
+  const toggleProvince = (province: string) => {
+    const current = allProvinces ? [...PROVINCES] : [...d.provinces];
+    const next = current.includes(province) ? current.filter((p) => p !== province) : [...current, province];
+    setD({ ...d, provinces: next.length === PROVINCES.length ? [] : next });
+  };
   const num = (v: string) => (v === "" ? 0 : Number(v));
 
   return (
@@ -51,8 +57,29 @@ export default function ProspectSettings() {
       <Panel title="Discovery (National Treasury eTenders)" description="Which awarded suppliers are imported. Changes apply from the next run.">
         <fieldset disabled={!perms.canManage} className="space-y-4">
           <label className="flex items-center gap-2 text-sm"><Switch checked={d.enabled} onCheckedChange={(v) => setD({ ...d, enabled: v })} />Discovery enabled</label>
-          <div><Label className="text-xs">Provinces (none selected = all)</Label>
-            <div className="mt-1 flex flex-wrap gap-3">{PROVINCES.map((p) => <label key={p} className="flex items-center gap-1.5 text-sm"><Checkbox checked={d.provinces.includes(p)} onCheckedChange={() => setD({ ...d, provinces: toggleIn(d.provinces, p) })} />{p}</label>)}</div>
+          <div>
+            <Label className="text-xs">Provinces</Label>
+            <div className="mt-2 rounded-xl border bg-muted/30 p-3">
+              <label className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                <Checkbox
+                  checked={allProvinces}
+                  onCheckedChange={(checked) => setD({ ...d, provinces: checked ? [] : [...PROVINCES] })}
+                />
+                All Provinces
+                {allProvinces ? <span className="text-xs font-normal text-muted-foreground">(recommended default)</span> : null}
+              </label>
+              <div className="flex flex-wrap gap-3">
+                {PROVINCES.map((p) => (
+                  <label key={p} className="flex items-center gap-1.5 text-sm">
+                    <Checkbox checked={allProvinces || d.provinces.includes(p)} onCheckedChange={() => toggleProvince(p)} />
+                    {p}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                All Provinces includes suppliers from every South African province, plus national/unspecified province records. Select individual provinces only if you want to restrict discovery.
+              </p>
+            </div>
           </div>
           <div><Label className="text-xs">Target sectors (none selected = all classified sectors)</Label>
             <div className="mt-1 flex flex-wrap gap-3">{SECTORS.map((s) => <label key={s} className="flex items-center gap-1.5 text-sm"><Checkbox checked={d.target_sectors.includes(s)} onCheckedChange={() => setD({ ...d, target_sectors: toggleIn(d.target_sectors, s) })} />{s}</label>)}</div>
