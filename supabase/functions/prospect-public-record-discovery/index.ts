@@ -55,8 +55,12 @@ function parseJsonArray(text: string): Hit[] {
   return Array.isArray(parsed) ? parsed : [];
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function webSearch(query: string, maxResults: number): Promise<Hit[]> {
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${requireEnv("OPENAI_API_KEY")}`,
@@ -75,9 +79,15 @@ STRICT RULES:
 - For liquidation/insolvency/business rescue, describe only the published proceeding; do not infer a SARS problem.
 - source_url must be the exact public record that supports the statement.
 - Prefer distinct companies. Do not repeat the same entity twice in one result set.`,
-    }),
-  });
-  if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}`);
+      }),
+    });
+    if (response.ok) break;
+    if (response.status !== 429 && response.status < 500) break;
+    const retryAfter = Number(response.headers.get("retry-after") || 0);
+    const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(30000, 2000 * 2 ** attempt);
+    await sleep(delayMs);
+  }
+  if (!response || !response.ok) throw new Error(`OpenAI HTTP ${response?.status || "unknown"} after retries`);
   const data = await response.json();
   const text = (data.output || [])
     .flatMap((o: any) => o.content || [])
@@ -178,6 +188,7 @@ async function processSource(sb: any, sourceKey: string, families: string[], sit
       totals.skipped += saved.skipped;
       totals.queries.push({ year, family, found: hits.length, created: saved.created });
       successfulSlices++;
+      await sleep(2500);
       const next = nextCursor(year, familyIndex, startYear, endYear, families);
       year = next.cursor_year;
       familyIndex = next.cursor_family_index;
@@ -222,12 +233,12 @@ Deno.serve(async (req: Request) => {
   const sb = createAdminClient();
   const results = [];
   try {
-    results.push(await processSource(sb, "saflii_sars_cases", TAX_FAMILIES, "site:saflii.org/za/cases South Africa", 2000, 4));
+    results.push(await processSource(sb, "saflii_sars_cases", TAX_FAMILIES, "site:saflii.org/za/cases South Africa", 2000, 1));
   } catch (e) {
     results.push({ sourceKey: "saflii_sars_cases", errors: [e instanceof Error ? e.message : String(e)] });
   }
   try {
-    results.push(await processSource(sb, "gov_gazette_insolvency", GAZETTE_FAMILIES, "site:gov.za/sites/default/files/gcis_document Government Gazette South Africa", 2000, 2));
+    results.push(await processSource(sb, "gov_gazette_insolvency", GAZETTE_FAMILIES, "site:gov.za/sites/default/files/gcis_document Government Gazette South Africa", 2000, 1));
   } catch (e) {
     results.push({ sourceKey: "gov_gazette_insolvency", errors: [e instanceof Error ? e.message : String(e)] });
   }
