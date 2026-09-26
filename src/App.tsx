@@ -88,6 +88,7 @@ const ProspectTemplates = lazy(() => import("./pages/dashboard/admin/prospect-hu
 const ProspectSources = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectSources"));
 const ProspectAnalytics = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectAnalytics"));
 const ProspectSettings = lazy(() => import("./pages/dashboard/admin/prospect-hub/ProspectSettings"));
+const SupplierIntelligence = lazy(() => import("./pages/dashboard/admin/prospect-hub/SupplierIntelligence"));
 const SarsOpportunityHubLayout = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityHubLayout"));
 const SarsOpportunityDashboard = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityDashboard"));
 const SarsOpportunityList = lazy(() => import("./pages/dashboard/admin/sars-opportunity-hub/SarsOpportunityList"));
@@ -233,6 +234,7 @@ function AppRoutes() {
                     <Route index element={<ProspectDashboard />} />
                     <Route path="discover" element={<ProspectDiscover />} />
                     <Route path="prospects" element={<ProspectList mode="prospects" />} />
+                    <Route path="supplier-intelligence" element={<SupplierIntelligence />} />
                     <Route path="prospects/:id" element={<ProspectProfile />} />
                     <Route path="leads" element={<ProspectList mode="leads" />} />
                     <Route path="follow-ups" element={<ProspectFollowUps />} />
