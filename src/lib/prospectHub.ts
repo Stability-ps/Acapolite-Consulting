@@ -100,6 +100,9 @@ export type ProspectFilters = {
   discoveredFrom?: string;
   discoveredTo?: string;
   leadsOnly?: boolean;
+  procurementAge?: "older" | "recent" | "any";
+  readyToContact?: boolean;
+  needsEnrichment?: boolean;
 };
 
 /** Removes characters that have meaning inside a PostgREST or() filter. */
@@ -149,6 +152,10 @@ export function applyProspectFilters<Q>(query: Q, f: ProspectFilters): Q {
   if (f.contacted === "not_contacted") q = q.is("last_contacted_at", null).eq("status", "new");
   if (f.contacted === "contacted") q = q.not("last_contacted_at", "is", null);
   if (f.procurement) q = q.gt("procurement_record_count", 0);
+  if (f.procurementAge === "older") q = q.gt("procurement_record_count", 0).lte("last_procurement_at", new Date(Date.now() - 730 * 86400000).toISOString());
+  if (f.procurementAge === "recent") q = q.gt("procurement_record_count", 0).gte("last_procurement_at", new Date(Date.now() - 365 * 86400000).toISOString());
+  if (f.readyToContact) q = q.not("email", "is", null).eq("do_not_contact", false).is("email_opt_out_at", null).is("last_contacted_at", null).eq("status", "new");
+  if (f.needsEnrichment) q = q.or("email.is.null,phone.is.null,website.is.null");
   if (f.discoveredFrom) q = q.gte("discovered_at", f.discoveredFrom);
   if (f.discoveredTo) q = q.lte("discovered_at", `${f.discoveredTo}T23:59:59`);
   return q as unknown as Q;
@@ -157,7 +164,7 @@ export function applyProspectFilters<Q>(query: Q, f: ProspectFilters): Q {
 export const PROSPECT_LIST_COLUMNS =
   "id,company_name,registration_number,sector,city,province,email,phone,website,contact_name,status,score,score_reasons," +
   "assigned_to,source_name,discovered_at,last_contacted_at,next_follow_up_at,do_not_contact,enrichment_status," +
-  "procurement_record_count,lead_at,converted_client_id";
+  "procurement_record_count,first_procurement_at,last_procurement_at,total_award_value,lead_at,converted_client_id";
 
 export type ProspectListRow = {
   id: string;
@@ -181,6 +188,9 @@ export type ProspectListRow = {
   do_not_contact: boolean;
   enrichment_status: string;
   procurement_record_count: number;
+  first_procurement_at: string | null;
+  last_procurement_at: string | null;
+  total_award_value: number | null;
   lead_at: string | null;
   converted_client_id: string | null;
 };
