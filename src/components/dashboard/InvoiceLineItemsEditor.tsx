@@ -66,21 +66,21 @@ export function InvoiceLineItemsEditor({
       <div className="overflow-hidden rounded-2xl border border-border">
         {/* Column headers — desktop only; mobile uses inline labels per field */}
         <div
-          className={`hidden gap-3 border-b border-border bg-accent/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground md:grid ${readOnly ? "md:grid-cols-[minmax(0,1.9fr)_110px_140px_140px]" : "md:grid-cols-[minmax(0,1.9fr)_110px_140px_140px_52px]"}`}
+          className={`hidden gap-2 border-b border-border bg-accent/20 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground md:grid ${readOnly ? "md:grid-cols-[minmax(140px,1fr)_72px_96px_110px]" : "md:grid-cols-[minmax(140px,1fr)_72px_96px_110px_36px]"}`}
         >
-          <p>Service Item</p>
-          <p>Quantity</p>
-          <p>Price</p>
-          <p>Total</p>
+          <p className="whitespace-nowrap">Service Item</p>
+          <p className="whitespace-nowrap">Quantity</p>
+          <p className="whitespace-nowrap">Price</p>
+          <p className="whitespace-nowrap">Total</p>
         </div>
         <div className="divide-y divide-border">
           {items?.map((item, index) => (
             <div
               key={getStableKey(item, index)}
-              className={`grid grid-cols-1 gap-3 px-4 py-4 md:gap-3 ${
+              className={`grid grid-cols-1 gap-3 px-4 py-4 md:gap-2 ${
                 readOnly
-                  ? "md:grid-cols-[minmax(0,1.9fr)_110px_140px_140px]"
-                  : "md:grid-cols-[minmax(0,1.9fr)_110px_140px_140px_52px]"
+                  ? "md:grid-cols-[minmax(140px,1fr)_72px_96px_110px]"
+                  : "md:grid-cols-[minmax(140px,1fr)_72px_96px_110px_36px]"
               }`}
             >
               {readOnly ? (
@@ -158,7 +158,7 @@ export function InvoiceLineItemsEditor({
                     <Button
                       type="button"
                       variant="ghost"
-                      className="h-10 rounded-xl px-3 text-destructive hover:text-destructive md:w-10 md:px-0"
+                      className="h-10 rounded-xl px-3 text-destructive hover:text-destructive md:w-9 md:px-0"
                       onClick={() => removeItem(index)}
                       disabled={items.length === 1}
                     >
