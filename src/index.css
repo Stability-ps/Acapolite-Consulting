@@ -168,7 +168,7 @@
 
 
 /* Capacitor native shell: respect device notches, Dynamic Island and home indicator. */
-html.capacitor-native {
+:root {
   --app-safe-top: env(safe-area-inset-top, 0px);
   --app-safe-right: env(safe-area-inset-right, 0px);
   --app-safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -182,15 +182,15 @@ html.capacitor-native body {
   -webkit-tap-highlight-color: transparent;
 }
 
-html.capacitor-native .native-safe-top {
+.native-safe-top {
   padding-top: max(0px, var(--app-safe-top));
 }
 
-html.capacitor-native .native-safe-bottom {
+.native-safe-bottom {
   padding-bottom: max(0px, var(--app-safe-bottom));
 }
 
-html.capacitor-native .native-sheet-safe {
+.native-sheet-safe {
   padding-top: max(12px, var(--app-safe-top));
   padding-bottom: max(12px, var(--app-safe-bottom));
 }
