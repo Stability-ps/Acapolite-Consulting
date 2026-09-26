@@ -54,6 +54,11 @@ export default function ProspectDashboard() {
         <StatCard label="Campaign emails sent" value={s.campaign_emails_sent ?? "…"} hint="Accepted by the email provider" icon={Mail} />
         <StatCard label="Replies logged" value={s.campaign_replies ?? "…"} hint="Recorded by staff" icon={TrendingUp} />
         <StatCard label="Possible duplicates" value={s.duplicates_pending ?? "…"} hint="Awaiting review in Sources" icon={AlertTriangle} tone={Number(s.duplicates_pending) > 0 ? "warn" : undefined} />
+        <StatCard label="Older suppliers" value={s.older_suppliers ?? "…"} hint="Last recorded procurement award was 2+ years ago; this does not imply non-compliance" icon={Building2} />
+        <StatCard label="Recently active suppliers" value={s.recent_suppliers ?? "…"} hint="Recorded procurement activity within 12 months" icon={TrendingUp} />
+        <StatCard label="Ready to contact" value={s.ready_to_contact ?? "…"} hint="Public email, not opted out, not previously contacted" icon={Mail} tone="good" />
+        <StatCard label="Needs enrichment" value={s.needs_enrichment ?? "…"} hint="Missing email, phone or website" icon={Sparkles} tone="warn" />
+        <StatCard label="Follow-up queue" value={s.follow_up_queue ?? "…"} icon={CalendarClock} />
         <StatCard label="Do not contact" value={s.do_not_contact ?? "…"} icon={Users} />
       </div>
 
