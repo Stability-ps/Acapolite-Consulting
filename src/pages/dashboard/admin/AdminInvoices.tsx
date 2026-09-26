@@ -1189,41 +1189,53 @@ export default function AdminInvoices() {
     }
 
     let notified = false;
+    const alternateClient = invoiceDeliveryMode === "existing_client"
+      ? (clients ?? []).find((client: any) => client.id === invoiceDeliveryClientId)
+      : null;
+    const primaryRecipient = invoiceDeliveryMode === "existing_client"
+      ? {
+          profileId: alternateClient?.profile_id || null,
+          email: alternateClient?.profiles?.email || "",
+          name: alternateClient?.company_name || alternateClient?.profiles?.full_name || [alternateClient?.first_name, alternateClient?.last_name].filter(Boolean).join(" ") || "Client",
+        }
+      : invoiceDeliveryMode === "custom"
+        ? { profileId: null, email: invoiceDeliveryEmail.trim(), name: invoiceDeliveryName.trim() || "Accounts" }
+        : {
+            profileId: selectedClient?.profile_id || null,
+            email: selectedClient?.profiles?.email || "",
+            name: selectedClient?.company_name || selectedClient?.profiles?.full_name || [selectedClient?.first_name, selectedClient?.last_name].filter(Boolean).join(" ") || selectedClient?.client_code || "Client",
+          };
 
-    if (selectedClient?.profile_id && data?.id) {
-      const notification = await sendInvoiceCreatedNotification({
-        invoiceId: data.id,
-        invoiceNumber: data.invoice_number,
-        clientProfileId: selectedClient.profile_id,
-        clientEmail: selectedClient.profiles?.email,
-        clientName:
-          selectedClient.company_name
-          || selectedClient.profiles?.full_name
-          || [selectedClient.first_name, selectedClient.last_name].filter(Boolean).join(" ")
-          || selectedClient.client_code
-          || "Client",
-        serviceDescription: invoiceTitle.trim() || invoiceDescription.trim() || "Professional tax services",
-        amount: totalAmount,
-        dueDate: data.due_date,
-        caseNumber: invoiceCaseId ? formatCaseReference(invoiceCaseId) : undefined,
-        status: data.status,
-      });
+    const recipientEmails = [
+      { ...primaryRecipient, key: "primary" },
+      ...invoiceCcEmails.split(/[,;\n]+/).map((email, index) => ({ profileId: null, email: email.trim(), name: primaryRecipient.name, key: `cc-${index + 1}` })).filter((recipient) => recipient.email),
+    ];
 
-      if (notification.error) {
-        console.error("Invoice email failed:", notification.error);
-        toast.error("Invoice created, but the client email notification could not be delivered.");
-      } else {
-        notified = !notification.skipped;
+    if (data?.id && recipientEmails.length) {
+      for (const recipient of recipientEmails) {
+        const notification = await sendInvoiceCreatedNotification({
+          invoiceId: data.id,
+          invoiceNumber: data.invoice_number,
+          clientProfileId: recipient.profileId,
+          clientEmail: recipient.email,
+          clientName: recipient.name,
+          serviceDescription: invoiceTitle.trim() || invoiceDescription.trim() || "Professional tax services",
+          amount: totalAmount,
+          dueDate: data.due_date,
+          caseNumber: invoiceCaseId ? formatCaseReference(invoiceCaseId) : undefined,
+          status: data.status,
+          notificationKey: `invoice_created:${data.id}:${recipient.key}:${recipient.email.toLowerCase()}`,
+        });
+        if (notification.error) {
+          console.error("Invoice email failed:", recipient.email, notification.error);
+          toast.error(`Invoice created, but delivery to ${recipient.email || "a recipient"} failed.`);
+        } else if (!notification.skipped) {
+          notified = true;
+        }
       }
     }
 
-    if (!selectedClient?.profile_id) {
-      toast.success("Invoice created");
-    } else if (notified) {
-      toast.success("Invoice created and client notified");
-    } else {
-      toast.success("Invoice created");
-    }
+    toast.success(notified ? "Invoice created and recipient(s) notified" : "Invoice created");
     if (user && role && data?.id) {
       await logSystemActivity({
         actorProfileId: user.id,
