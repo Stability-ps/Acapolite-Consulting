@@ -73,6 +73,13 @@ type InvoiceRow = {
   balance_due: number | null;
 };
 
+type PaymentRow = {
+  id: string;
+  invoice_id: string;
+  amount: number;
+  payment_date: string;
+};
+
 const RANGE_OPTIONS: Array<{ value: AnalyticsRange; label: string }> = [
   { value: "today", label: "Today" },
   { value: "7d", label: "7 Days" },
@@ -169,7 +176,7 @@ export function AdminBusinessAnalytics() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-business-analytics"],
     queryFn: async () => {
-      const [clientsResult, practitionersResult, requestsResult, casesResult, invoicesResult] =
+      const [clientsResult, practitionersResult, requestsResult, casesResult, invoicesResult, paymentsResult] =
         await Promise.all([
           supabase
             .from("clients")
@@ -188,6 +195,9 @@ export function AdminBusinessAnalytics() {
           supabase
             .from("invoices")
             .select("id, created_at, paid_at, issue_date, status, amount_paid, balance_due"),
+          supabase
+            .from("invoice_payments")
+            .select("id, invoice_id, amount, payment_date"),
         ]);
 
       const firstError =
@@ -195,7 +205,8 @@ export function AdminBusinessAnalytics() {
         practitionersResult.error ||
         requestsResult.error ||
         casesResult.error ||
-        invoicesResult.error;
+        invoicesResult.error ||
+        paymentsResult.error;
 
       if (firstError) throw firstError;
 
@@ -205,6 +216,7 @@ export function AdminBusinessAnalytics() {
         requests: (requestsResult.data ?? []) as ServiceRequestRow[],
         cases: (casesResult.data ?? []) as CaseRow[],
         invoices: (invoicesResult.data ?? []) as InvoiceRow[],
+        payments: (paymentsResult.data ?? []) as PaymentRow[],
       };
     },
     staleTime: 60_000,
@@ -216,6 +228,7 @@ export function AdminBusinessAnalytics() {
     const requests = data?.requests ?? [];
     const cases = data?.cases ?? [];
     const invoices = data?.invoices ?? [];
+    const payments = data?.payments ?? [];
 
     const currentClients = clients.filter((row) => inRange(row.created_at, start, end));
     const previousClients = clients.filter((row) => inRange(row.created_at, previousStart, previousEnd));
@@ -228,10 +241,10 @@ export function AdminBusinessAnalytics() {
     const currentInvoices = invoices.filter((row) => inRange(row.created_at, start, end));
     const previousInvoices = invoices.filter((row) => inRange(row.created_at, previousStart, previousEnd));
 
-    const currentPaid = invoices.filter((row) => inRange(row.paid_at, start, end));
-    const previousPaid = invoices.filter((row) => inRange(row.paid_at, previousStart, previousEnd));
-    const currentRevenue = currentPaid.reduce((sum, row) => sum + Number(row.amount_paid || 0), 0);
-    const previousRevenue = previousPaid.reduce((sum, row) => sum + Number(row.amount_paid || 0), 0);
+    const currentPayments = payments.filter((row) => inRange(row.payment_date, start, end));
+    const previousPayments = payments.filter((row) => inRange(row.payment_date, previousStart, previousEnd));
+    const currentRevenue = currentPayments.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const previousRevenue = previousPayments.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
     const convertedRequests = currentRequests.filter((row) => Boolean(row.converted_case_id)).length;
     const conversionRate = currentRequests.length
@@ -284,7 +297,7 @@ export function AdminBusinessAnalytics() {
         previous: previousRevenue,
         icon: WalletCards,
         display: formatCurrency(currentRevenue),
-        note: "Invoice-paid records; payment ledger upgrade planned",
+        note: "Recorded payment transactions in the selected period",
       },
       {
         label: "Request Conversion",
